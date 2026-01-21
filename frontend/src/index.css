@@ -1,0 +1,55 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #0f172a;
+  --primary: #1e293b;
+  --accent: #0ea5e9;
+  --mist: #f8fafc;
+}
+
+* {
+  font-family: "Manrope", system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+body {
+  color: var(--ink);
+  background: radial-gradient(1200px 600px at 10% 10%, #eef2ff 0%, transparent 55%),
+    radial-gradient(900px 500px at 85% 15%, #e2e8f0 0%, transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  min-height: 100vh;
+}
+
+.success-ring {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  animation: ringPulse 2.4s ease-out infinite;
+}
+
+.success-ring--inner {
+  width: 220px;
+  height: 220px;
+  border-color: rgba(16, 185, 129, 0.4);
+  animation-delay: 0.3s;
+}
+
+@keyframes ringPulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0;
+  }
+}

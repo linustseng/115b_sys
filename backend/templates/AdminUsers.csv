@@ -1,0 +1,2 @@
+id,name,email,role,passwordHash
+ADM-001,Admin User,admin@example.com,admin,REPLACE_WITH_SHA256

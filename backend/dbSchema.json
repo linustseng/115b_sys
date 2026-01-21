@@ -1,0 +1,65 @@
+{
+  "Event": {
+    "id": "string",
+    "title": "string",
+    "description": "string",
+    "startAt": "datetime",
+    "endAt": "datetime",
+    "location": "string",
+    "registrationOpenAt": "datetime",
+    "registrationCloseAt": "datetime",
+    "checkinOpenAt": "datetime",
+    "checkinCloseAt": "datetime",
+    "capacity": "number",
+    "status": "draft|open|closed",
+    "category": "gathering|meeting",
+    "formSchema": {
+      "fields": "array",
+      "presets": "object"
+    }
+  },
+  "Registration": {
+    "id": "string",
+    "eventId": "string",
+    "userName": "string",
+    "userEmail": "string",
+    "userPhone": "string",
+    "classYear": "string",
+    "customFields": "object",
+    "status": "registered|cancelled",
+    "createdAt": "datetime",
+    "updatedAt": "datetime"
+  },
+  "Checkin": {
+    "id": "string",
+    "eventId": "string",
+    "registrationId": "string",
+    "checkinAt": "datetime",
+    "checkinMethod": "qr|link|manual"
+  },
+  "AdminUser": {
+    "id": "string",
+    "name": "string",
+    "email": "string",
+    "role": "string"
+  },
+  "Student": {
+    "id": "string",
+    "name": "string",
+    "email": "string",
+    "studentNo": "string|null",
+    "phone": "string|null",
+    "company": "string",
+    "title": "string",
+    "dietaryPreference": "string|null",
+    "notes": "string|null"
+  },
+  "ShortLink": {
+    "id": "string",
+    "eventId": "string",
+    "type": "register|checkin",
+    "slug": "string",
+    "targetUrl": "string",
+    "createdAt": "datetime"
+  }
+}

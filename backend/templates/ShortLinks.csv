@@ -1,0 +1,3 @@
+id,eventId,type,slug,targetUrl,createdAt
+SL-REG-001,EVT-2024-10-18,register,reg-abc123,https://example.com/?eventId=EVT-2024-10-18&slug=reg-abc123,2024-09-20 10:00
+SL-CHK-001,EVT-2024-10-18,checkin,chk-xyz789,https://example.com/checkin?eventId=EVT-2024-10-18&slug=chk-xyz789,2024-10-18 17:00
