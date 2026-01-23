@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
 
 const gatheringFields = [
@@ -18,13 +18,7 @@ const gatheringFields = [
     id: "dietary",
     label: "飲食偏好",
     type: "select",
-    options: ["無", "素食", "不吃牛", "不吃豬", "清真"],
-  },
-  {
-    id: "seating",
-    label: "座位/同桌需求",
-    type: "text",
-    placeholder: "可填想同桌的同學姓名",
+    options: ["無禁忌", "素食但可海鮮", "不吃牛", "不吃羊", "素食"],
   },
   {
     id: "parking",
@@ -62,6 +56,7 @@ const meetingFields = [
 ];
 
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const EVENT_ID = "EVT-2024-10-18";
 const DEFAULT_EVENT = {
   title: "秋季聚餐",
@@ -109,6 +104,268 @@ function apiRequest(payload) {
   });
 }
 
+function waitForGoogleIdentity(timeoutMs = 6000) {
+  if (window.google && window.google.accounts && window.google.accounts.id) {
+    return Promise.resolve();
+  }
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const timer = setInterval(() => {
+      if (window.google && window.google.accounts && window.google.accounts.id) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      if (Date.now() - start > timeoutMs) {
+        clearInterval(timer);
+        reject(new Error("Google Identity script not ready"));
+      }
+    }, 50);
+  });
+}
+
+function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
+  const buttonRef = useRef(null);
+  const onLinkedRef = useRef(onLinkedStudent);
+  const [status, setStatus] = useState("idle");
+  const [error, setError] = useState("");
+  const [profile, setProfile] = useState(null);
+  const [idToken, setIdToken] = useState("");
+  const [linkedStudent, setLinkedStudent] = useState(null);
+  const [emailMatch, setEmailMatch] = useState(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [linkLoading, setLinkLoading] = useState(false);
+
+  useEffect(() => {
+    onLinkedRef.current = onLinkedStudent;
+  }, [onLinkedStudent]);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || !buttonRef.current) {
+      return;
+    }
+    if (buttonRef.current.childNodes && buttonRef.current.childNodes.length > 0) {
+      return;
+    }
+    let cancelled = false;
+    waitForGoogleIdentity()
+      .then(() => {
+        if (cancelled) {
+          return;
+        }
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          use_fedcm_for_prompt: true,
+          callback: async (response) => {
+            if (!response || !response.credential) {
+              return;
+            }
+            setStatus("verifying");
+            setError("");
+            setIdToken(response.credential);
+            try {
+              const { result } = await apiRequest({
+                action: "verifyGoogle",
+                idToken: response.credential,
+              });
+              if (!result.ok) {
+                throw new Error(result.error || "Google 驗證失敗");
+              }
+              const payload = result.data || {};
+              setProfile(payload.profile || null);
+              setLinkedStudent(payload.student || null);
+              setEmailMatch(payload.emailMatch || null);
+              if (payload.student) {
+                setStatus("linked");
+                onLinkedRef.current(payload.student, payload.profile || null);
+              } else {
+                setStatus("needs-link");
+              }
+            } catch (err) {
+              setStatus("error");
+              setError(err.message || "Google 驗證失敗");
+            }
+          },
+        });
+        window.google.accounts.id.renderButton(buttonRef.current, {
+          theme: "outline",
+          size: "large",
+          shape: "pill",
+          text: "signin_with",
+          width: 280,
+        });
+        window.google.accounts.id.prompt();
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError("Google 登入元件載入失敗");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profile || !query || query.trim().length < 2) {
+      setResults([]);
+      return;
+    }
+    let ignore = false;
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const { result } = await apiRequest({
+          action: "searchStudents",
+          query: query.trim(),
+          idToken: idToken,
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "搜尋失敗");
+        }
+        if (!ignore) {
+          setResults(result.data && result.data.students ? result.data.students : []);
+        }
+      } catch (err) {
+        if (!ignore) {
+          setResults([]);
+        }
+      } finally {
+        if (!ignore) {
+          setSearchLoading(false);
+        }
+      }
+    }, 350);
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [profile, query]);
+
+  const handleLink = async (studentId) => {
+    if (!idToken) {
+      setError("請先登入 Google");
+      return;
+    }
+    if (!studentId) {
+      setError("缺少學號");
+      return;
+    }
+    setLinkLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({
+        action: "linkGoogleStudent",
+        idToken: idToken,
+        studentId: studentId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "綁定失敗");
+      }
+      const student = result.data && result.data.student ? result.data.student : null;
+      setLinkedStudent(student);
+      setStatus("linked");
+      if (student) {
+        onLinkedRef.current(student, profile);
+      }
+    } catch (err) {
+      setError(err.message || "綁定失敗");
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
+  const resolvedTitle = title || "Google 登入";
+  const resolvedHelper = helperText || "登入後可快速帶入同學資料。";
+
+  return (
+    <div className="rounded-3xl border border-slate-200/80 bg-white/80 p-5 shadow-[0_20px_60px_-50px_rgba(15,23,42,0.7)] sm:p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">{resolvedTitle}</h3>
+          <p className="mt-1 text-xs text-slate-500">{resolvedHelper}</p>
+        </div>
+        <div ref={buttonRef} />
+      </div>
+
+      {!GOOGLE_CLIENT_ID ? (
+        <p className="mt-3 text-xs text-amber-600">尚未設定 Google Client ID。</p>
+      ) : null}
+
+      {status === "linked" && linkedStudent ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+          已綁定：{linkedStudent.name || "同學"} · {linkedStudent.email}
+        </div>
+      ) : null}
+
+      {status === "needs-link" && profile ? (
+        <div className="mt-4 space-y-3">
+          <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+            <p className="font-semibold">尚未綁定同學資料</p>
+            <p className="mt-1">請搜尋並點選你的資料進行綁定。</p>
+          </div>
+          {emailMatch ? (
+            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-800">找到相同 Email</p>
+                  <p className="text-slate-500">
+                    {emailMatch.name || "同學"} · {emailMatch.email}
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleLink(emailMatch.id)}
+                  disabled={linkLoading || !emailMatch.id}
+                  className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
+                >
+                  {!emailMatch.id ? "缺少學號" : linkLoading ? "綁定中..." : "一鍵綁定"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+          <div className="grid gap-2">
+            <label className="text-xs font-semibold text-slate-600" htmlFor="google-link-query">
+              搜尋同學姓名、Email 或 學號
+            </label>
+            <input
+              id="google-link-query"
+              type="text"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="輸入姓名 / Email"
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+            />
+            {searchLoading ? <p className="text-xs text-slate-400">搜尋中...</p> : null}
+          </div>
+          {results.length ? (
+            <div className="grid gap-2">
+              {results.map((item) => (
+                <button
+                  key={`${item.id || item.email}-${item.name}`}
+                  onClick={() => handleLink(item.id)}
+                  disabled={linkLoading || !item.id}
+                  className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm text-slate-700 transition hover:border-slate-300 disabled:opacity-60"
+                >
+                  <span>
+                    <span className="font-semibold text-slate-900">{item.name || "同學"}</span>
+                    {item.company ? ` · ${item.company}` : ""}
+                    {item.group ? ` · ${item.group}` : ""}
+                  </span>
+                  <span className="text-xs text-slate-500">{item.email}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? <p className="mt-3 text-xs text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
 export default function App() {
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");
@@ -143,6 +400,7 @@ function RegistrationPage() {
   const locationParam = params.get("location");
 
   const [email, setEmail] = useState("");
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(null);
   const [student, setStudent] = useState({
     name: "",
     company: "",
@@ -158,6 +416,31 @@ function RegistrationPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!googleLinkedStudent) {
+      return;
+    }
+    const hasEmail = Boolean(googleLinkedStudent.email);
+    setEmail(googleLinkedStudent.email || "");
+    setStudent({
+      name: googleLinkedStudent.name || "",
+      company: googleLinkedStudent.company || "",
+      title: googleLinkedStudent.title || "",
+      phone: googleLinkedStudent.phone || "",
+      dietaryPreference: googleLinkedStudent.dietaryPreference || "",
+    });
+    setCustomFields((prev) =>
+      prev.dietary
+        ? prev
+        : {
+            ...prev,
+            dietary: googleLinkedStudent.dietaryPreference || prev.dietary || "無禁忌",
+          }
+    );
+    setAutoFilled(hasEmail);
+    setLookupStatus(hasEmail ? "found" : "idle");
+  }, [googleLinkedStudent]);
 
   const handleEmailChange = (value) => {
     const normalized = value.toLowerCase();
@@ -238,7 +521,7 @@ function RegistrationPage() {
               ? prev
               : {
                   ...prev,
-                  dietary: match.dietaryPreference || prev.dietary || "無",
+                  dietary: match.dietaryPreference || prev.dietary || "無禁忌",
                 }
           );
           setAutoFilled(true);
@@ -313,9 +596,17 @@ function RegistrationPage() {
               {eventInfo.title} 報名
             </h1>
           </div>
-          <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
-            {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
-          </span>
+          <div className="flex items-center gap-3">
+            <a
+              href="/"
+              className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white sm:inline-flex"
+            >
+              返回報名列表
+            </a>
+            <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
+              {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
+            </span>
+          </div>
         </div>
       </header>
 
@@ -343,6 +634,11 @@ function RegistrationPage() {
           </div>
 
           <div className="mt-6 grid gap-6">
+            <GoogleSigninPanel
+              title="Google 登入"
+              helperText="登入後綁定同學資料，就不用再輸入 Email。"
+              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+            />
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="email">
                 Email
@@ -353,10 +649,13 @@ function RegistrationPage() {
                 value={email}
                 onChange={(event) => handleEmailChange(event.target.value)}
                 placeholder="you@emba115b.tw"
-                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
+                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
               />
               <p className="text-xs text-slate-500">
-                輸入後將自動帶入姓名與公司等資料。
+                {googleLinkedStudent && googleLinkedStudent.email
+                  ? "已透過 Google 綁定同學資料。"
+                  : "輸入後將自動帶入姓名與公司等資料。"}
               </p>
               {lookupStatus === "notfound" ? (
                 <p className="text-xs text-amber-600">查無資料，請確認 Email 是否正確或請承辦補登。</p>
@@ -571,12 +870,19 @@ function CheckinPage() {
   const eventId = params.get("eventId") || "";
   const slug = params.get("slug") || "";
   const [email, setEmail] = useState("");
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(null);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
   const errorDisplay = getCheckinErrorDisplay(error);
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.email) {
+      setEmail(googleLinkedStudent.email);
+    }
+  }, [googleLinkedStudent]);
 
   const handleSubmit = async () => {
     if (!email.trim()) {
@@ -636,6 +942,11 @@ function CheckinPage() {
           </p>
 
           <div className="mt-6 grid gap-4">
+            <GoogleSigninPanel
+              title="Google 登入"
+              helperText="登入後可直接帶入簽到 Email。"
+              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+            />
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="checkin-email">
                 Email
@@ -646,7 +957,8 @@ function CheckinPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@emba115b.tw"
-                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
+                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
               />
             </div>
             {errorDisplay ? (
@@ -842,13 +1154,8 @@ function AdminPage() {
   const [studentForm, setStudentForm] = useState({
     id: "",
     name: "",
-    email: "",
-    studentNo: "",
-    phone: "",
-    company: "",
-    title: "",
-    dietaryPreference: "",
-    notes: "",
+    googleSub: "",
+    googleEmail: "",
   });
   const [shortLinkForm, setShortLinkForm] = useState({
     id: "",
@@ -1018,7 +1325,11 @@ function AdminPage() {
     setSaving(true);
     setError("");
     try {
-      const action = studentForm.email ? "updateStudent" : "createStudent";
+      if (!studentForm.id.trim()) {
+        throw new Error("請先填寫學號。");
+      }
+      const exists = students.some((item) => String(item.id || "").trim() === studentForm.id.trim());
+      const action = exists ? "updateStudent" : "createStudent";
       const { result } = await apiRequest({ action: action, data: studentForm });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
@@ -1026,13 +1337,8 @@ function AdminPage() {
       setStudentForm({
         id: "",
         name: "",
-        email: "",
-        studentNo: "",
-        phone: "",
-        company: "",
-        title: "",
-        dietaryPreference: "",
-        notes: "",
+        googleSub: "",
+        googleEmail: "",
       });
       await loadStudents();
     } catch (err) {
@@ -1046,23 +1352,18 @@ function AdminPage() {
     setStudentForm({
       id: student.id || "",
       name: student.name || "",
-      email: student.email || "",
-      studentNo: student.studentNo || "",
-      phone: student.phone || "",
-      company: student.company || "",
-      title: student.title || "",
-      dietaryPreference: student.dietaryPreference || "",
-      notes: student.notes || "",
+      googleSub: student.googleSub || "",
+      googleEmail: student.googleEmail || "",
     });
   };
 
-  const handleStudentDelete = async (email) => {
-    if (!email) {
+  const handleStudentDelete = async (id) => {
+    if (!id) {
       return;
     }
     setSaving(true);
     try {
-      const { result } = await apiRequest({ action: "deleteStudent", email: email });
+      const { result } = await apiRequest({ action: "deleteStudent", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -1453,13 +1754,13 @@ function AdminPage() {
             <div className="mt-6 space-y-4">
               {students.map((item) => (
                 <div
-                  key={item.email}
+                  key={item.id || item.name}
                   className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
                 >
                   <div>
                     <p className="font-semibold text-slate-900">{item.name}</p>
                     <p className="text-xs text-slate-500">
-                      {item.email} · {item.company}
+                      {item.id} · {item.googleEmail || "-"}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1470,7 +1771,7 @@ function AdminPage() {
                       編輯
                     </button>
                     <button
-                      onClick={() => handleStudentDelete(item.email)}
+                      onClick={() => handleStudentDelete(item.id)}
                       disabled={saving}
                       className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
@@ -1688,10 +1989,10 @@ function AdminPage() {
             <h2 className="text-lg font-semibold text-slate-900">維護同學資料</h2>
             <form onSubmit={handleStudentSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">Email</label>
+                <label className="text-sm font-medium text-slate-700">學號</label>
                 <input
-                  value={studentForm.email}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, email: event.target.value }))}
+                  value={studentForm.id}
+                  onChange={(event) => setStudentForm((prev) => ({ ...prev, id: event.target.value }))}
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
                 />
               </div>
@@ -1704,46 +2005,19 @@ function AdminPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">公司</label>
+                <label className="text-sm font-medium text-slate-700">Google Email</label>
                 <input
-                  value={studentForm.company}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, company: event.target.value }))}
+                  value={studentForm.googleEmail}
+                  onChange={(event) => setStudentForm((prev) => ({ ...prev, googleEmail: event.target.value }))}
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
                 />
               </div>
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">職稱</label>
+                <label className="text-sm font-medium text-slate-700">Google Sub</label>
                 <input
-                  value={studentForm.title}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, title: event.target.value }))}
+                  value={studentForm.googleSub}
+                  onChange={(event) => setStudentForm((prev) => ({ ...prev, googleSub: event.target.value }))}
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">手機</label>
-                <input
-                  value={studentForm.phone}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, phone: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">飲食偏好</label>
-                <input
-                  value={studentForm.dietaryPreference}
-                  onChange={(event) =>
-                    setStudentForm((prev) => ({ ...prev, dietaryPreference: event.target.value }))
-                  }
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2 sm:col-span-2">
-                <label className="text-sm font-medium text-slate-700">備註</label>
-                <textarea
-                  value={studentForm.notes}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, notes: event.target.value }))}
-                  rows="3"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
                 />
               </div>
               <div className="flex items-center gap-3 sm:col-span-2">
@@ -1760,13 +2034,8 @@ function AdminPage() {
                     setStudentForm({
                       id: "",
                       name: "",
-                      email: "",
-                      studentNo: "",
-                      phone: "",
-                      company: "",
-                      title: "",
-                      dietaryPreference: "",
-                      notes: "",
+                      googleSub: "",
+                      googleEmail: "",
                     })
                   }
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
@@ -2073,7 +2342,7 @@ function DirectoryPage() {
             ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            支援欄位：Email、中文姓名、英文姓名、希望大家怎麼叫你、社群網址、行動電話、備用電話、緊急聯絡人姓名/關係/電話。
+            支援欄位：學號、組別、Email、中文姓名、英文姓名、稱呼、公司、職稱、社群網址、行動電話、備用電話、緊急聯絡人、緊急聯絡人電話。
           </p>
           <textarea
             value={importText}
@@ -2104,23 +2373,30 @@ function DirectoryPage() {
           <div className="mt-6 space-y-4">
             {directory.map((item) => (
               <div
-                key={item.email}
+                key={item.id || item.email}
                 className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <p className="font-semibold text-slate-900">{item.nameZh || "未命名"}</p>
-                    <p className="text-xs text-slate-500">{item.email}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.id || "-"} · {item.email}
+                    </p>
                   </div>
-                  <div className="text-xs text-slate-500">{item.mobile}</div>
+                  <div className="text-xs text-slate-500">
+                    {item.group ? `${item.group} · ` : ""}{item.mobile}
+                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
                   <div>英文姓名: {item.nameEn || "-"}</div>
                   <div>稱呼: {item.preferredName || "-"}</div>
+                  <div>公司: {item.company || "-"}</div>
+                  <div>職稱: {item.title || "-"}</div>
                   <div>社群: {item.socialUrl || "-"}</div>
                   <div>備用電話: {item.backupPhone || "-"}</div>
                   <div>緊急聯絡人: {item.emergencyContact || "-"}</div>
-                  <div>關係/電話: {item.emergencyRelation || "-"} · {item.emergencyPhone || "-"}</div>
+                  <div>緊急聯絡人電話: {item.emergencyPhone || "-"}</div>
+                  <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
                 </div>
               </div>
             ))}
@@ -2142,6 +2418,13 @@ function parseDirectoryImport_(text) {
   const delimiter = lines[0].includes("\t") ? "\t" : ",";
   const headers = lines[0].split(delimiter).map((header) => header.trim());
   const map = {
+    ID: "id",
+    Id: "id",
+    id: "id",
+    學號: "id",
+    同學ID: "id",
+    組別: "group",
+    Group: "group",
     "Email 信箱": "email",
     Email: "email",
     email: "email",
@@ -2149,6 +2432,11 @@ function parseDirectoryImport_(text) {
     "英文姓名": "nameEn",
     "希望大家怎麼叫妳/你（非必填）": "preferredName",
     "希望大家怎麼叫你": "preferredName",
+    稱呼: "preferredName",
+    公司: "company",
+    公司名稱: "company",
+    職稱: "title",
+    職位: "title",
     "FB/IG  社群網站網址 (非必填)": "socialUrl",
     "FB/IG 社群網站網址 (非必填)": "socialUrl",
     "FB/IG 社群網站網址": "socialUrl",
@@ -2157,7 +2445,11 @@ function parseDirectoryImport_(text) {
     "備用的連絡電話（公司或住家）": "backupPhone",
     "緊急聯絡人姓名（與您的關係)": "emergencyContact",
     "緊急聯絡人姓名": "emergencyContact",
+    "緊急聯絡人/關係": "emergencyContact",
+    "緊急聯絡人": "emergencyContact",
     "緊急聯絡人電話": "emergencyPhone",
+    飲食禁忌: "dietaryRestrictions",
+    飲食限制: "dietaryRestrictions",
   };
   const mapped = headers.map((header) => map[header] || "");
   return lines.slice(1).map((line) => {
@@ -2169,11 +2461,6 @@ function parseDirectoryImport_(text) {
       }
       record[key] = cols[index] || "";
     });
-    if (record.emergencyContact && record.emergencyContact.includes("（")) {
-      const parts = record.emergencyContact.split("（");
-      record.emergencyContact = parts[0];
-      record.emergencyRelation = parts[1] ? parts[1].replace("）", "") : "";
-    }
     if (!record.email) {
       return null;
     }

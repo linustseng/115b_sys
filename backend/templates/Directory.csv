@@ -1,2 +1,2 @@
-email,nameZh,nameEn,preferredName,socialUrl,mobile,backupPhone,emergencyContact,emergencyRelation,emergencyPhone
-student@example.com,王小明,Wang Xiao Ming,,https://instagram.com/example,0912-000-000,02-1234-5678,林大華,父子,0911-222-333
+id,group,email,nameZh,nameEn,preferredName,company,title,socialUrl,mobile,backupPhone,emergencyContact,emergencyPhone,dietaryRestrictions
+STU-001,商學,student@example.com,王小明,Wang Xiao Ming,,Sample Corp,Director,https://instagram.com/example,0912-000-000,02-1234-5678,林大華（父子）,0911-222-333,無禁忌

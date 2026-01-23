@@ -46,13 +46,24 @@
   "Student": {
     "id": "string",
     "name": "string",
+    "googleSub": "string|null",
+    "googleEmail": "string|null"
+  },
+  "Directory": {
+    "id": "string",
+    "group": "string|null",
     "email": "string",
-    "studentNo": "string|null",
-    "phone": "string|null",
-    "company": "string",
-    "title": "string",
-    "dietaryPreference": "string|null",
-    "notes": "string|null"
+    "nameZh": "string|null",
+    "nameEn": "string|null",
+    "preferredName": "string|null",
+    "company": "string|null",
+    "title": "string|null",
+    "socialUrl": "string|null",
+    "mobile": "string|null",
+    "backupPhone": "string|null",
+    "emergencyContact": "string|null",
+    "emergencyPhone": "string|null",
+    "dietaryRestrictions": "string|null"
   },
   "ShortLink": {
     "id": "string",

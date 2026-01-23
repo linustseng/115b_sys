@@ -44,11 +44,89 @@ function handleActionPayload_(payload) {
     if (!email) {
       return { ok: false, data: null, error: "Missing email" };
     }
-    const student = findStudentByEmail_(email);
+    const directory = findDirectoryByEmail_(email);
+    if (!directory) {
+      return { ok: false, data: null, error: "Student not found" };
+    }
+    const student = directory.id ? findStudentById_(directory.id) : null;
     if (!student) {
       return { ok: false, data: null, error: "Student not found" };
     }
-    return { ok: true, data: { student: student }, error: null };
+    return { ok: true, data: { student: buildStudentProfile_(student, directory, email) }, error: null };
+  }
+
+  if (payload.action === "verifyGoogle") {
+    const idToken = String(payload.idToken || "").trim();
+    if (!idToken) {
+      return { ok: false, data: null, error: "Missing idToken" };
+    }
+    const profile = verifyGoogleIdToken_(idToken);
+    const linkedStudent = findStudentByGoogleSub_(profile.sub);
+    const linkedDirectory = linkedStudent ? findDirectoryById_(linkedStudent.id) : null;
+    if (linkedStudent && (!linkedDirectory || !linkedDirectory.email)) {
+      return { ok: false, data: null, error: "Directory profile missing" };
+    }
+    const linkedProfile = linkedStudent
+      ? buildStudentProfile_(linkedStudent, linkedDirectory, profile.email)
+      : null;
+    let emailMatch = null;
+    if (!linkedStudent && profile.email) {
+      const directory = findDirectoryByEmail_(profile.email);
+      if (directory && directory.id) {
+        const student = findStudentById_(directory.id);
+        if (student) {
+          emailMatch = buildStudentProfile_(student, directory, profile.email);
+        }
+      }
+    }
+    return {
+      ok: true,
+      data: { profile: profile, student: linkedProfile, emailMatch: emailMatch },
+      error: null,
+    };
+  }
+
+  if (payload.action === "linkGoogleStudent") {
+    const idToken = String(payload.idToken || "").trim();
+    const studentId = String(payload.studentId || "").trim();
+    if (!idToken || !studentId) {
+      return { ok: false, data: null, error: "Missing idToken or studentId" };
+    }
+    const profile = verifyGoogleIdToken_(idToken);
+    const existingLinked = findStudentByGoogleSub_(profile.sub);
+    if (existingLinked && String(existingLinked.id || "").trim() !== studentId) {
+      return { ok: false, data: null, error: "Google account already linked" };
+    }
+    const target = findStudentById_(studentId);
+    if (!target) {
+      return { ok: false, data: null, error: "Student not found" };
+    }
+    if (target.googleSub && String(target.googleSub).trim() !== profile.sub) {
+      return { ok: false, data: null, error: "Student already linked" };
+    }
+    const updated = updateStudent_(studentId, {
+      googleSub: profile.sub,
+      googleEmail: profile.email,
+    });
+    const directory = findDirectoryById_(studentId);
+    if (!directory || !directory.email) {
+      return { ok: false, data: null, error: "Directory profile missing" };
+    }
+    const combined = buildStudentProfile_(updated || target, directory, profile.email);
+    return { ok: true, data: { student: combined }, error: null };
+  }
+
+  if (payload.action === "searchStudents") {
+    const idToken = String(payload.idToken || "").trim();
+    const query = String(payload.query || "").trim();
+    if (!idToken) {
+      return { ok: false, data: null, error: "Missing idToken" };
+    }
+    verifyGoogleIdToken_(idToken);
+    if (!query || query.length < 2) {
+      return { ok: true, data: { students: [] }, error: null };
+    }
+    return { ok: true, data: { students: searchStudents_(query, 10) }, error: null };
   }
 
   if (payload.action === "getEvent") {
@@ -112,11 +190,11 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "createStudent") {
     const data = payload.data || {};
-    const email = normalizeEmail_(data.email);
-    if (!email) {
-      return { ok: false, data: null, error: "Missing email" };
+    const studentId = String(data.id || "").trim();
+    if (!studentId) {
+      return { ok: false, data: null, error: "Missing id" };
     }
-    if (findStudentByEmail_(email)) {
+    if (findStudentById_(studentId)) {
       return { ok: false, data: null, error: "Student already exists" };
     }
     const created = appendStudent_(data);
@@ -125,11 +203,11 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "updateStudent") {
     const data = payload.data || {};
-    const email = normalizeEmail_(data.email);
-    if (!email) {
-      return { ok: false, data: null, error: "Missing email" };
+    const studentId = String(data.id || "").trim();
+    if (!studentId) {
+      return { ok: false, data: null, error: "Missing id" };
     }
-    const updated = updateStudent_(email, data);
+    const updated = updateStudent_(studentId, data);
     if (!updated) {
       return { ok: false, data: null, error: "Student not found" };
     }
@@ -137,15 +215,15 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "deleteStudent") {
-    const email = normalizeEmail_(payload.email);
-    if (!email) {
-      return { ok: false, data: null, error: "Missing email" };
+    const studentId = String(payload.id || "").trim();
+    if (!studentId) {
+      return { ok: false, data: null, error: "Missing id" };
     }
-    const removed = deleteStudent_(email);
+    const removed = deleteStudent_(studentId);
     if (!removed) {
       return { ok: false, data: null, error: "Student not found" };
     }
-    return { ok: true, data: { email: email }, error: null };
+    return { ok: true, data: { id: studentId }, error: null };
   }
 
   if (payload.action === "listRegistrations") {
@@ -438,18 +516,78 @@ function getDataRows_(sheet) {
   return sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
 }
 
-function findStudentByEmail_(email) {
+function findStudentById_(studentId) {
+  if (!studentId) {
+    return null;
+  }
   const sheet = getSheet_(SHEETS.students);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Students sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === studentId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findDirectoryById_(directoryId) {
+  if (!directoryId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.directory);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    return null;
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === directoryId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findDirectoryByEmail_(email) {
+  const sheet = getSheet_(SHEETS.directory);
   const headerMap = getHeaderMap_(sheet);
   const emailIndex = headerMap.email;
   if (emailIndex === undefined) {
-    throw new Error("Students sheet missing email column");
+    return null;
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowEmail = normalizeEmail_(row[emailIndex]);
     if (rowEmail === email) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findStudentByGoogleSub_(googleSub) {
+  if (!googleSub) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.students);
+  const headerMap = getHeaderMap_(sheet);
+  const subIndex = headerMap.googleSub;
+  if (subIndex === undefined) {
+    return null;
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[subIndex] || "").trim() === googleSub) {
       return mapRowToObject_(headerMap, row);
     }
   }
@@ -555,18 +693,17 @@ function appendStudent_(data) {
   return record;
 }
 
-function updateStudent_(email, data) {
+function updateStudent_(studentId, data) {
   const sheet = getSheet_(SHEETS.students);
   const headerMap = getHeaderMap_(sheet);
-  const emailIndex = headerMap.email;
-  if (emailIndex === undefined) {
-    throw new Error("Students sheet missing email column");
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Students sheet missing id column");
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowEmail = normalizeEmail_(row[emailIndex]);
-    if (rowEmail !== email) {
+    if (String(row[idIndex]).trim() !== studentId) {
       continue;
     }
     const record = normalizeStudentRecord_(Object.assign({}, mapRowToObject_(headerMap, row), data));
@@ -583,18 +720,17 @@ function updateStudent_(email, data) {
   return null;
 }
 
-function deleteStudent_(email) {
+function deleteStudent_(studentId) {
   const sheet = getSheet_(SHEETS.students);
   const headerMap = getHeaderMap_(sheet);
-  const emailIndex = headerMap.email;
-  if (emailIndex === undefined) {
-    throw new Error("Students sheet missing email column");
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Students sheet missing id column");
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowEmail = normalizeEmail_(row[emailIndex]);
-    if (rowEmail === email) {
+    if (String(row[idIndex]).trim() === studentId) {
       sheet.deleteRow(i + 2);
       return true;
     }
@@ -729,17 +865,27 @@ function deleteCheckin_(checkinId) {
 function upsertDirectoryBatch_(items) {
   const sheet = getSheet_(SHEETS.directory);
   const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
   const emailIndex = headerMap.email;
-  if (emailIndex === undefined) {
-    throw new Error("Directory sheet missing email column");
+  if (idIndex === undefined && emailIndex === undefined) {
+    throw new Error("Directory sheet missing id/email column");
   }
   const headers = getHeaders_(sheet);
   const rows = getDataRows_(sheet);
+  const indexById = {};
   const indexByEmail = {};
   for (var i = 0; i < rows.length; i++) {
-    const rowEmail = normalizeEmail_(rows[i][emailIndex]);
-    if (rowEmail) {
-      indexByEmail[rowEmail] = i;
+    if (idIndex !== undefined) {
+      const rowId = String(rows[i][idIndex] || "").trim();
+      if (rowId) {
+        indexById[rowId] = i;
+      }
+    }
+    if (emailIndex !== undefined) {
+      const rowEmail = normalizeEmail_(rows[i][emailIndex]);
+      if (rowEmail) {
+        indexByEmail[rowEmail] = i;
+      }
     }
   }
   var created = 0;
@@ -755,7 +901,12 @@ function upsertDirectoryBatch_(items) {
         values[index] = record[header];
       }
     });
-    const existingIndex = indexByEmail[record.email];
+    var existingIndex = undefined;
+    if (record.id && idIndex !== undefined && indexById.hasOwnProperty(record.id)) {
+      existingIndex = indexById[record.id];
+    } else if (record.email && emailIndex !== undefined && indexByEmail.hasOwnProperty(record.email)) {
+      existingIndex = indexByEmail[record.email];
+    }
     if (existingIndex !== undefined) {
       sheet.getRange(existingIndex + 2, 1, 1, headers.length).setValues([values]);
       updated += 1;
@@ -835,13 +986,8 @@ function normalizeStudentRecord_(data) {
   return {
     id: String(data.id || "").trim(),
     name: String(data.name || "").trim(),
-    email: normalizeEmail_(data.email),
-    studentNo: data.studentNo || "",
-    phone: data.phone || "",
-    company: String(data.company || "").trim(),
-    title: String(data.title || "").trim(),
-    dietaryPreference: data.dietaryPreference || "",
-    notes: data.notes || "",
+    googleSub: String(data.googleSub || "").trim(),
+    googleEmail: normalizeEmail_(data.googleEmail),
   };
 }
 
@@ -873,16 +1019,20 @@ function normalizeRegistrationRecord_(data) {
 
 function normalizeDirectoryRecord_(data) {
   return {
+    id: String(data.id || "").trim(),
+    group: String(data.group || "").trim(),
     email: normalizeEmail_(data.email),
     nameZh: String(data.nameZh || "").trim(),
     nameEn: String(data.nameEn || "").trim(),
     preferredName: String(data.preferredName || "").trim(),
+    company: String(data.company || "").trim(),
+    title: String(data.title || "").trim(),
     socialUrl: String(data.socialUrl || "").trim(),
     mobile: String(data.mobile || "").trim(),
     backupPhone: String(data.backupPhone || "").trim(),
     emergencyContact: String(data.emergencyContact || "").trim(),
-    emergencyRelation: String(data.emergencyRelation || "").trim(),
     emergencyPhone: String(data.emergencyPhone || "").trim(),
+    dietaryRestrictions: String(data.dietaryRestrictions || "").trim(),
   };
 }
 
@@ -1126,6 +1276,108 @@ function mapRowToObject_(headerMap, row) {
     result[key] = row[headerMap[key]];
   });
   return result;
+}
+
+function buildStudentProfile_(student, directory, fallbackEmail) {
+  const preferredName = directory ? (directory.preferredName || directory.nameZh || directory.nameEn) : "";
+  return {
+    id: String((student && student.id) || (directory && directory.id) || "").trim(),
+    name: String((student && student.name) || preferredName || "").trim(),
+    email: normalizeEmail_((directory && directory.email) || fallbackEmail),
+    company: String((directory && directory.company) || "").trim(),
+    title: String((directory && directory.title) || "").trim(),
+    phone: String((directory && directory.mobile) || "").trim(),
+    dietaryPreference: String((directory && directory.dietaryRestrictions) || "").trim(),
+    group: String((directory && directory.group) || "").trim(),
+  };
+}
+
+function searchStudents_(query, limit) {
+  const sheet = getSheet_(SHEETS.directory);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const normalizedQuery = String(query || "").toLowerCase();
+  const results = [];
+  for (var i = 0; i < rows.length; i++) {
+    const row = mapRowToObject_(headerMap, rows[i]);
+    const haystack = [
+      row.nameZh,
+      row.nameEn,
+      row.preferredName,
+      row.email,
+      row.company,
+      row.title,
+      row.group,
+      row.id,
+    ]
+      .map(function (value) {
+        return String(value || "").toLowerCase();
+      })
+      .join(" ");
+    if (haystack.indexOf(normalizedQuery) !== -1) {
+      results.push({
+        id: String(row.id || "").trim(),
+        name: row.preferredName || row.nameZh || row.nameEn || "",
+        email: row.email || "",
+        company: row.company || "",
+        title: row.title || "",
+        group: row.group || "",
+      });
+    }
+    if (results.length >= limit) {
+      break;
+    }
+  }
+  return results;
+}
+
+function verifyGoogleIdToken_(idToken) {
+  const url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(idToken);
+  const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  if (response.getResponseCode() !== 200) {
+    throw new Error("Invalid Google token");
+  }
+  const data = JSON.parse(response.getContentText());
+  const aud = String(data.aud || "").trim();
+  if (aud && !isAllowedGoogleClient_(aud)) {
+    throw new Error("Invalid Google client");
+  }
+  const exp = parseInt(data.exp || "0", 10);
+  if (exp && exp * 1000 < Date.now()) {
+    throw new Error("Google token expired");
+  }
+  if (String(data.email_verified || "").toLowerCase() !== "true") {
+    throw new Error("Google email not verified");
+  }
+  return {
+    sub: String(data.sub || "").trim(),
+    email: normalizeEmail_(data.email),
+    name: String(data.name || "").trim(),
+    picture: String(data.picture || "").trim(),
+  };
+}
+
+function isAllowedGoogleClient_(aud) {
+  const configured = getScriptProperty_("GOOGLE_CLIENT_ID");
+  if (!configured) {
+    return true;
+  }
+  const allowed = configured
+    .split(",")
+    .map(function (value) {
+      return String(value || "").trim();
+    })
+    .filter(function (value) {
+      return value;
+    });
+  if (!allowed.length) {
+    return true;
+  }
+  return allowed.indexOf(aud) !== -1;
+}
+
+function getScriptProperty_(key) {
+  return PropertiesService.getScriptProperties().getProperty(key);
 }
 
 function runBackendSelfTests() {
