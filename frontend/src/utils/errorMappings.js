@@ -20,8 +20,15 @@ export function getCheckinErrorDisplay(error) {
   if (normalized.includes("registration not found")) {
     return {
       title: "尚未完成報名",
-      message: "我們找不到你的報名紀錄。",
-      action: "請先完成報名或請承辦協助補登。",
+      message: "找不到你的報名紀錄，無法簽到。",
+      action: "請洽活動負責人協助處理。",
+    };
+  }
+  if (normalized.includes("not attending") || normalized.includes("attendance not confirmed")) {
+    return {
+      title: "無法簽到",
+      message: "目前回覆為不出席或尚未確認出席。",
+      action: "請洽活動負責人協助處理。",
     };
   }
   if (normalized.includes("already checked")) {

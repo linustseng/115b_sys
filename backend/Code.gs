@@ -230,6 +230,19 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { registrations: listRegistrations_() }, error: null };
   }
 
+  if (payload.action === "getRegistrationByEmail") {
+    const eventId = String(payload.eventId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    if (!eventId || !email) {
+      return { ok: false, data: null, error: "Missing eventId or email" };
+    }
+    const registration = findRegistrationByEmail_(eventId, email);
+    if (!registration) {
+      return { ok: false, data: null, error: "Registration not found" };
+    }
+    return { ok: true, data: { registration: registration }, error: null };
+  }
+
   if (payload.action === "updateRegistration") {
     const data = payload.data || {};
     const registrationId = String(data.id || "").trim();
@@ -277,7 +290,7 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "createShortLink") {
     const data = payload.data || {};
-    const slug = String(data.slug || "").trim();
+    let slug = String(data.slug || "").trim();
     if (!slug) {
       return { ok: false, data: null, error: "Missing slug" };
     }
@@ -407,12 +420,11 @@ function handleActionPayload_(payload) {
     }
 
     const slug = String(data.slug || "").trim();
-    if (!slug) {
-      return { ok: false, data: null, error: "Missing slug" };
-    }
-    const link = findShortLinkBySlug_(slug, "checkin");
-    if (!link || String(link.eventId || "").trim() !== eventId) {
-      return { ok: false, data: null, error: "QRCode expired" };
+    if (slug) {
+      const link = findShortLinkBySlug_(slug, "checkin");
+      if (!link || String(link.eventId || "").trim() !== eventId) {
+        return { ok: false, data: null, error: "QRCode expired" };
+      }
     }
 
     const event = findEventById_(eventId);
@@ -420,6 +432,9 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Event not found" };
     }
 
+    if (!event.checkinUrl) {
+      return { ok: false, data: null, error: "Check-in link not configured" };
+    }
     if (!isWithinWindow_(event.checkinOpenAt, event.checkinCloseAt)) {
       return { ok: false, data: null, error: "Check-in window closed" };
     }
@@ -429,12 +444,74 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Registration not found" };
     }
 
+    const customFields = parseCustomFields_(registration.customFields);
+    const attendance = String(customFields.attendance || "").trim();
+    if (!attendance) {
+      return { ok: false, data: null, error: "Attendance not confirmed" };
+    }
+    if (attendance !== "出席") {
+      return { ok: false, data: null, error: "Not attending" };
+    }
+
     if (isDuplicateCheckin_(eventId, registration.id)) {
       return { ok: false, data: null, error: "Already checked in" };
     }
 
-    appendCheckin_(eventId, registration.id);
-    return { ok: true, data: { userName: registration.userName || "" }, error: null };
+    const checkin = appendCheckin_(eventId, registration.id);
+    return {
+      ok: true,
+      data: {
+        userName: registration.userName || "",
+        checkinId: checkin.id,
+        checkinAt: checkin.checkinAt || "",
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listCheckinStatus") {
+    const email = normalizeEmail_(payload.email);
+    const eventIds = Array.isArray(payload.eventIds) ? payload.eventIds : [];
+    if (!email) {
+      return { ok: false, data: null, error: "Missing email" };
+    }
+    if (!eventIds.length) {
+      return { ok: true, data: { statuses: {} }, error: null };
+    }
+    const statuses = {};
+    for (var i = 0; i < eventIds.length; i++) {
+      const eventId = String(eventIds[i] || "").trim();
+      if (!eventId) {
+        continue;
+      }
+      const registration = findRegistrationByEmail_(eventId, email);
+      if (!registration) {
+        statuses[eventId] = { status: "not_registered" };
+        continue;
+      }
+      const customFields = parseCustomFields_(registration.customFields);
+      const attendance = String(customFields.attendance || "").trim();
+      if (!attendance) {
+        statuses[eventId] = { status: "attendance_unknown", attendance: "" };
+        continue;
+      }
+      if (attendance !== "出席") {
+        statuses[eventId] = { status: "not_attending", attendance: attendance };
+        continue;
+      }
+      const checkin = findCheckinByRegistration_(eventId, registration.id);
+      if (checkin) {
+        statuses[eventId] = {
+          status: "checked_in",
+          attendance: attendance,
+          checkinId: checkin.id || "",
+          checkinAt: checkin.checkinAt || "",
+        };
+      } else {
+        statuses[eventId] = { status: "not_checked_in", attendance: attendance };
+      }
+    }
+    return { ok: true, data: { statuses: statuses }, error: null };
   }
 
   return { ok: false, data: null, error: "Unsupported action" };
@@ -474,6 +551,35 @@ function jsonpResponse_(e, payload) {
 
 function normalizeEmail_(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function normalizePhoneValue_(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  var raw = String(value).trim();
+  if (!raw) {
+    return "";
+  }
+  if (/^\d{9}$/.test(raw) && raw.charAt(0) !== "0") {
+    return "0" + raw;
+  }
+  return raw;
+}
+
+function parseCustomFields_(value) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "object") {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
 }
 
 function getSheet_(name) {
@@ -971,10 +1077,13 @@ function normalizeEventRecord_(data) {
     startAt: data.startAt || "",
     endAt: data.endAt || "",
     location: String(data.location || "").trim(),
+    address: String(data.address || "").trim(),
     registrationOpenAt: data.registrationOpenAt || "",
     registrationCloseAt: data.registrationCloseAt || "",
     checkinOpenAt: data.checkinOpenAt || "",
     checkinCloseAt: data.checkinCloseAt || "",
+    registerUrl: String(data.registerUrl || "").trim(),
+    checkinUrl: String(data.checkinUrl || "").trim(),
     capacity: data.capacity || "",
     status: String(data.status || "draft").trim(),
     category: String(data.category || "gathering").trim(),
@@ -1113,6 +1222,7 @@ function findShortLinkBySlug_(slug, type) {
   }
   return null;
 }
+
 function countRegistrations_(eventId) {
   const sheet = getSheet_(SHEETS.registrations);
   const headerMap = getHeaderMap_(sheet);
@@ -1209,6 +1319,7 @@ function appendCheckin_(eventId, registrationId) {
     }
   });
   sheet.appendRow(values);
+  return record;
 }
 
 function findRegistrationByEmail_(eventId, email) {
@@ -1254,6 +1365,27 @@ function isDuplicateCheckin_(eventId, registrationId) {
   return false;
 }
 
+function findCheckinByRegistration_(eventId, registrationId) {
+  const sheet = getSheet_(SHEETS.checkins);
+  const headerMap = getHeaderMap_(sheet);
+  const eventIndex = headerMap.eventId;
+  const registrationIndex = headerMap.registrationId;
+  if (eventIndex === undefined || registrationIndex === undefined) {
+    throw new Error("Checkins sheet missing eventId or registrationId column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[eventIndex]).trim() !== eventId) {
+      continue;
+    }
+    if (String(row[registrationIndex]).trim() === registrationId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
 function isWithinWindow_(openAt, closeAt) {
   if (!openAt && !closeAt) {
     return true;
@@ -1284,9 +1416,12 @@ function buildStudentProfile_(student, directory, fallbackEmail) {
     id: String((student && student.id) || (directory && directory.id) || "").trim(),
     name: String((student && student.name) || preferredName || "").trim(),
     email: normalizeEmail_((directory && directory.email) || fallbackEmail),
+    nameZh: String((directory && directory.nameZh) || "").trim(),
+    nameEn: String((directory && directory.nameEn) || "").trim(),
+    preferredName: String((directory && directory.preferredName) || "").trim(),
     company: String((directory && directory.company) || "").trim(),
     title: String((directory && directory.title) || "").trim(),
-    phone: String((directory && directory.mobile) || "").trim(),
+    phone: normalizePhoneValue_(directory && directory.mobile),
     dietaryPreference: String((directory && directory.dietaryRestrictions) || "").trim(),
     group: String((directory && directory.group) || "").trim(),
   };

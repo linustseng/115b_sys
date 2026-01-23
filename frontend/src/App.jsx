@@ -21,6 +21,54 @@ const gatheringFields = [
     options: ["無禁忌", "素食但可海鮮", "不吃牛", "不吃羊", "素食"],
   },
   {
+    id: "redWineQty",
+    label: "紅酒數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
+    id: "whiteWineQty",
+    label: "白酒數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
+    id: "whiskyQty",
+    label: "威士忌數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
+    id: "kaoliangQty",
+    label: "高梁數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
+    id: "plumWineQty",
+    label: "梅酒數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
+    id: "otherDrink",
+    label: "其他酒水",
+    type: "text",
+    placeholder: "品項名稱",
+  },
+  {
+    id: "otherDrinkQty",
+    label: "其他酒水數量",
+    type: "combo",
+    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+    placeholder: "數量",
+  },
+  {
     id: "parking",
     label: "是否需要停車位",
     type: "select",
@@ -57,15 +105,143 @@ const meetingFields = [
 
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
 const EVENT_ID = "EVT-2024-10-18";
 const DEFAULT_EVENT = {
   title: "秋季聚餐",
   location: "大直 · 磺溪會館",
-  date: "2024/10/18 (五)",
-  time: "18:30 - 21:30",
+  address: "台北市中山區樂群二路199號",
+  startAt: "2024/10/18 18:30",
+  endAt: "2024/10/18 21:30",
   category: "gathering",
   capacity: 60,
   status: "open",
+};
+
+const buildGoogleMapsUrl_ = (address) => {
+  const normalized = String(address || "").trim();
+  if (!normalized) {
+    return "";
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(normalized)}`;
+};
+
+const normalizePhoneInputValue_ = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const raw = String(value).trim();
+  if (!raw) {
+    return "";
+  }
+  if (/^\d{9}$/.test(raw) && raw.charAt(0) !== "0") {
+    return `0${raw}`;
+  }
+  return raw;
+};
+
+const formatEventDateTime_ = (value) => {
+  if (!value) {
+    return "";
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const normalized =
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+      ? raw.replace(/\//g, "-").replace(" ", "T")
+      : raw;
+  const parsed = new Date(normalized);
+  if (isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
+    parsed.getDate()
+  )} ${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
+};
+
+const formatEventDate_ = (value) => {
+  if (!value) {
+    return "";
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const normalized =
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+      ? raw.replace(/\//g, "-").replace(" ", "T")
+      : raw;
+  const parsed = new Date(normalized);
+  if (isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(parsed.getDate())}`;
+};
+
+const formatEventTime_ = (value) => {
+  if (!value) {
+    return "";
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const normalized =
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+      ? raw.replace(/\//g, "-").replace(" ", "T")
+      : raw;
+  const parsed = new Date(normalized);
+  if (isNaN(parsed.getTime())) {
+    return raw;
+  }
+  return `${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
+};
+
+const formatEventSchedule_ = (startValue, endValue) => {
+  if (!startValue || !endValue) {
+    return {
+      dateLabel: formatEventDate_(startValue || endValue),
+      timeLabel: formatEventTime_(startValue || endValue),
+    };
+  }
+  const startRaw = String(startValue || "").trim();
+  const endRaw = String(endValue || "").trim();
+  const startParsed = new Date(
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(startRaw)
+      ? startRaw.replace(/\//g, "-").replace(" ", "T")
+      : startRaw
+  );
+  const endParsed = new Date(
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(endRaw)
+      ? endRaw.replace(/\//g, "-").replace(" ", "T")
+      : endRaw
+  );
+  if (isNaN(startParsed.getTime()) || isNaN(endParsed.getTime())) {
+    return {
+      dateLabel: startRaw,
+      timeLabel: endRaw ? `${startRaw} - ${endRaw}` : startRaw,
+    };
+  }
+  const sameDay =
+    startParsed.getFullYear() === endParsed.getFullYear() &&
+    startParsed.getMonth() === endParsed.getMonth() &&
+    startParsed.getDate() === endParsed.getDate();
+  if (sameDay) {
+    return {
+      dateLabel: formatEventDate_(startRaw),
+      timeLabel: `${formatEventTime_(startRaw)} - ${formatEventTime_(endRaw)}`,
+    };
+  }
+  return {
+    dateLabel: `${formatEventDateTime_(startRaw)} - ${formatEventDateTime_(endRaw)}`,
+    timeLabel: "",
+  };
+};
+
+const STORAGE_KEYS = {
+  googleStudent: "emba115b.googleStudent",
 };
 
 function apiRequest(payload) {
@@ -102,6 +278,34 @@ function apiRequest(payload) {
     script.src = url.toString();
     document.body.appendChild(script);
   });
+}
+
+function loadStoredGoogleStudent_() {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.googleStudent);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && parsed.student ? parsed.student : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function storeGoogleStudent_(student) {
+  try {
+    if (!student) {
+      window.localStorage.removeItem(STORAGE_KEYS.googleStudent);
+      return;
+    }
+    window.localStorage.setItem(
+      STORAGE_KEYS.googleStudent,
+      JSON.stringify({ student: student, savedAt: Date.now() })
+    );
+  } catch (error) {
+    // Ignore storage failures (private mode, quota).
+  }
 }
 
 function waitForGoogleIdentity(timeoutMs = 6000) {
@@ -180,6 +384,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               if (payload.student) {
                 setStatus("linked");
                 onLinkedRef.current(payload.student, payload.profile || null);
+                storeGoogleStudent_(payload.student);
               } else {
                 setStatus("needs-link");
               }
@@ -209,7 +414,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   }, []);
 
   useEffect(() => {
-    if (!profile || !query || query.trim().length < 2) {
+    if (!profile || !query || String(query || "").trim().length < 2) {
       setResults([]);
       return;
     }
@@ -219,7 +424,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       try {
         const { result } = await apiRequest({
           action: "searchStudents",
-          query: query.trim(),
+          query: String(query || "").trim(),
           idToken: idToken,
         });
         if (!result.ok) {
@@ -400,7 +605,7 @@ function RegistrationPage() {
   const locationParam = params.get("location");
 
   const [email, setEmail] = useState("");
-  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(null);
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [student, setStudent] = useState({
     name: "",
     company: "",
@@ -410,6 +615,9 @@ function RegistrationPage() {
   });
   const [customFields, setCustomFields] = useState({});
   const [notes, setNotes] = useState("");
+  const [existingRegistration, setExistingRegistration] = useState(null);
+  const [updatePromptOpen, setUpdatePromptOpen] = useState(false);
+  const [updateSubmitting, setUpdateSubmitting] = useState(false);
   const [autoFilled, setAutoFilled] = useState(false);
   const [lookupStatus, setLookupStatus] = useState("idle");
   const [eventInfo, setEventInfo] = useState(DEFAULT_EVENT);
@@ -427,7 +635,7 @@ function RegistrationPage() {
       name: googleLinkedStudent.name || "",
       company: googleLinkedStudent.company || "",
       title: googleLinkedStudent.title || "",
-      phone: googleLinkedStudent.phone || "",
+      phone: normalizePhoneInputValue_(googleLinkedStudent.phone),
       dietaryPreference: googleLinkedStudent.dietaryPreference || "",
     });
     setCustomFields((prev) =>
@@ -440,6 +648,96 @@ function RegistrationPage() {
     );
     setAutoFilled(hasEmail);
     setLookupStatus(hasEmail ? "found" : "idle");
+  }, [googleLinkedStudent]);
+
+  const parseCustomFields_ = (value) => {
+    if (!value) {
+      return {};
+    }
+    if (typeof value === "object") {
+      return value;
+    }
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  };
+
+  const loadExistingRegistration = async (emailValue) => {
+    const normalized = String(emailValue || "").trim().toLowerCase();
+    if (!normalized || !eventId) {
+      setExistingRegistration(null);
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "getRegistrationByEmail",
+        eventId: eventId,
+        email: normalized,
+      });
+      if (!result.ok || !result.data || !result.data.registration) {
+        setExistingRegistration(null);
+        return;
+      }
+      const registration = result.data.registration;
+      const storedFields = parseCustomFields_(registration.customFields);
+      const notesValue = storedFields.notes || "";
+      const { notes: _notes, ...restFields } = storedFields;
+      setExistingRegistration(registration);
+      setCustomFields((prev) => ({
+        ...prev,
+        ...restFields,
+      }));
+      setNotes(notesValue || "");
+      setStudent((prev) => ({
+        ...prev,
+        name: registration.userName || prev.name,
+        phone: normalizePhoneInputValue_(registration.userPhone || prev.phone),
+      }));
+    } catch (error) {
+      setExistingRegistration(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      return;
+    }
+    const needsDirectory =
+      !googleLinkedStudent.company &&
+      !googleLinkedStudent.title &&
+      !googleLinkedStudent.phone &&
+      !googleLinkedStudent.group;
+    if (!needsDirectory) {
+      return;
+    }
+    let ignore = false;
+    const fetchDirectory = async () => {
+      try {
+        const { result } = await apiRequest({
+          action: "lookupStudent",
+          email: String(googleLinkedStudent.email || "").trim().toLowerCase(),
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "Student not found");
+        }
+        if (!ignore && result.data && result.data.student) {
+          const enriched = result.data.student;
+          setGoogleLinkedStudent(enriched);
+          storeGoogleStudent_(enriched);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setLookupStatus((prev) => (prev === "idle" ? prev : "found"));
+        }
+      }
+    };
+    fetchDirectory();
+    return () => {
+      ignore = true;
+    };
   }, [googleLinkedStudent]);
 
   const handleEmailChange = (value) => {
@@ -468,8 +766,9 @@ function RegistrationPage() {
           setEventInfo({
             title: titleParam || event.title || DEFAULT_EVENT.title,
             location: locationParam || event.location || DEFAULT_EVENT.location,
-            date: event.startAt || DEFAULT_EVENT.date,
-            time: event.endAt ? `${event.startAt || ""} - ${event.endAt}` : DEFAULT_EVENT.time,
+            address: event.address || DEFAULT_EVENT.address,
+            startAt: event.startAt || DEFAULT_EVENT.startAt,
+            endAt: event.endAt || DEFAULT_EVENT.endAt,
             category: event.category || categoryParam || DEFAULT_EVENT.category,
             capacity: event.capacity || DEFAULT_EVENT.capacity,
             status: event.status || DEFAULT_EVENT.status,
@@ -481,6 +780,7 @@ function RegistrationPage() {
             ...prev,
             title: titleParam || prev.title,
             location: locationParam || prev.location,
+            address: prev.address,
             category: categoryParam || prev.category,
           }));
         }
@@ -502,7 +802,7 @@ function RegistrationPage() {
       try {
         const { result } = await apiRequest({
           action: "lookupStudent",
-          email: email.trim().toLowerCase(),
+          email: String(email || "").trim().toLowerCase(),
         });
         if (!result.ok) {
           throw new Error(result.error || "Student not found");
@@ -513,7 +813,7 @@ function RegistrationPage() {
             name: match.name || "",
             company: match.company || "",
             title: match.title || "",
-            phone: match.phone || "",
+            phone: normalizePhoneInputValue_(match.phone),
             dietaryPreference: match.dietaryPreference || "",
           });
           setCustomFields((prev) =>
@@ -526,12 +826,14 @@ function RegistrationPage() {
           );
           setAutoFilled(true);
           setLookupStatus("found");
+          await loadExistingRegistration(String(email || "").trim().toLowerCase());
         }
       } catch (error) {
         if (!ignore) {
           setAutoFilled(false);
           setLookupStatus("notfound");
           setStudent({ name: "", company: "", title: "", phone: "", dietaryPreference: "" });
+          setExistingRegistration(null);
         }
       }
     }, 500);
@@ -549,12 +851,20 @@ function RegistrationPage() {
   const handleRegister = async () => {
     setSubmitError("");
     setSubmitSuccess(false);
-    if (!email.trim()) {
+    if (!String(email || "").trim()) {
       setSubmitError("請先輸入 Email 以帶入同學資料。");
       return;
     }
-    if (!student.name.trim()) {
+    if (!String(student.name || "").trim()) {
       setSubmitError("請確認姓名資料是否正確。");
+      return;
+    }
+    if (!String(student.phone || "").trim()) {
+      setSubmitError("請填寫聯絡資訊。");
+      return;
+    }
+    if (existingRegistration) {
+      setUpdatePromptOpen(true);
       return;
     }
     setSubmitLoading(true);
@@ -564,12 +874,12 @@ function RegistrationPage() {
         data: {
           eventId: eventId,
           slug: slug,
-          userEmail: email.trim().toLowerCase(),
-          userName: student.name.trim(),
-          userPhone: student.phone.trim(),
+          userEmail: String(email || "").trim().toLowerCase(),
+          userName: String(student.name || "").trim(),
+          userPhone: String(student.phone || "").trim(),
           customFields: {
             ...customFields,
-            notes: notes.trim(),
+            notes: String(notes || "").trim(),
           },
         },
       });
@@ -578,9 +888,52 @@ function RegistrationPage() {
       }
       setSubmitSuccess(true);
     } catch (err) {
-      setSubmitError(mapRegistrationError(err.message || "報名失敗"));
+      const errorMessage = err.message || "報名失敗";
+      if (String(errorMessage).toLowerCase().includes("duplicate")) {
+        await loadExistingRegistration(String(email || "").trim().toLowerCase());
+        setUpdatePromptOpen(true);
+        return;
+      }
+      setSubmitError(mapRegistrationError(errorMessage));
     } finally {
       setSubmitLoading(false);
+    }
+  };
+
+  const handleUpdateRegistration = async () => {
+    if (!existingRegistration || !existingRegistration.id) {
+      setUpdatePromptOpen(false);
+      return;
+    }
+    setUpdateSubmitting(true);
+    setSubmitError("");
+    try {
+      const payloadCustomFields = {
+        ...customFields,
+        notes: String(notes || "").trim(),
+      };
+      const { result } = await apiRequest({
+        action: "updateRegistration",
+        data: {
+          id: existingRegistration.id,
+          eventId: eventId,
+          userName: String(student.name || "").trim(),
+          userEmail: String(email || "").trim().toLowerCase(),
+          userPhone: String(student.phone || "").trim(),
+          customFields: JSON.stringify(payloadCustomFields),
+          status: existingRegistration.status || "registered",
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      setUpdatePromptOpen(false);
+      setSubmitSuccess(true);
+      await loadExistingRegistration(String(email || "").trim().toLowerCase());
+    } catch (err) {
+      setSubmitError(err.message || "更新失敗");
+    } finally {
+      setUpdateSubmitting(false);
     }
   };
 
@@ -618,6 +971,10 @@ function RegistrationPage() {
               <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
                 已帶入同學資料
               </span>
+            ) : existingRegistration ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                已有報名資料
+              </span>
             ) : lookupStatus === "loading" ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                 搜尋中
@@ -634,11 +991,17 @@ function RegistrationPage() {
           </div>
 
           <div className="mt-6 grid gap-6">
-            <GoogleSigninPanel
-              title="Google 登入"
-              helperText="登入後綁定同學資料，就不用再輸入 Email。"
-              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
-            />
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+                已登入 Google：{googleLinkedStudent.email}
+              </div>
+            ) : (
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="登入後綁定同學資料，就不用再輸入 Email。"
+                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              />
+            )}
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="email">
                 Email
@@ -676,44 +1039,19 @@ function RegistrationPage() {
                   value={student.name}
                   placeholder="王小明"
                   onChange={(event) => setStudent({ ...student, name: event.target.value })}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="company">
-                  公司
-                </label>
-                <input
-                  id="company"
-                  type="text"
-                  value={student.company}
-                  placeholder="公司名稱"
-                  onChange={(event) => setStudent({ ...student, company: event.target.value })}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700" htmlFor="title">
-                  職稱
-                </label>
-                <input
-                  id="title"
-                  type="text"
-                  value={student.title}
-                  placeholder="職稱"
-                  onChange={(event) => setStudent({ ...student, title: event.target.value })}
+                  disabled={Boolean(student.name)}
                   className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                 />
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700" htmlFor="phone">
-                  手機 (選填)
+                  聯絡資訊
                 </label>
                 <input
                   id="phone"
-                  type="tel"
+                  type="text"
                   value={student.phone}
-                  placeholder="09xx-xxx-xxx"
+                  placeholder="手機或其他聯絡方式"
                   onChange={(event) => setStudent({ ...student, phone: event.target.value })}
                   className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                 />
@@ -748,6 +1086,29 @@ function RegistrationPage() {
                           </option>
                         ))}
                       </select>
+                    </div>
+                  );
+                }
+                if (field.type === "combo") {
+                  return (
+                    <div key={field.id} className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
+                        {field.label}
+                      </label>
+                      <input
+                        id={field.id}
+                        type="text"
+                        list={`${field.id}-options`}
+                        placeholder={field.placeholder || "數量"}
+                        value={customFields[field.id] || ""}
+                        onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
+                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                      />
+                      <datalist id={`${field.id}-options`}>
+                        {field.options.map((option) => (
+                          <option key={option} value={option} />
+                        ))}
+                      </datalist>
                     </div>
                   );
                 }
@@ -818,24 +1179,61 @@ function RegistrationPage() {
               {eventInfo.title} · {eventInfo.location}
             </h2>
             <div className="mt-5 space-y-3 text-sm text-slate-600">
+              {(() => {
+                const schedule = formatEventSchedule_(eventInfo.startAt, eventInfo.endAt);
+                return (
+                  <>
               <div className="flex items-center justify-between">
                 <span>日期</span>
-                <span className="font-medium text-slate-800">{eventInfo.date}</span>
+                <span className="font-medium text-slate-800">{schedule.dateLabel || "-"}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span>時間</span>
-                <span className="font-medium text-slate-800">{eventInfo.time}</span>
-              </div>
+              {schedule.timeLabel ? (
+                <div className="flex items-center justify-between">
+                  <span>時間</span>
+                  <span className="font-medium text-slate-800">{schedule.timeLabel}</span>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span>地點</span>
                 <span className="font-medium text-slate-800">{eventInfo.location}</span>
               </div>
+              {eventInfo.address ? (
+                <div className="flex items-center justify-between">
+                  <span>地址</span>
+                  <div className="flex items-center gap-2 text-right">
+                    <span className="font-medium text-slate-800">{eventInfo.address}</span>
+                    <a
+                      href={buildGoogleMapsUrl_(eventInfo.address)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="開啟 Google 地圖"
+                      aria-label="開啟 Google 地圖"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                      >
+                        <path d="M12 21s7-7.2 7-12a7 7 0 1 0-14 0c0 4.8 7 12 7 12z" />
+                        <circle cx="12" cy="9" r="2.5" />
+                      </svg>
+                    </a>
+                  </div>
+                </div>
+              ) : null}
               <div className="flex items-center justify-between">
                 <span>類別</span>
                 <span className="font-medium text-slate-800">
                   {eventInfo.category === "meeting" ? "開會" : "聚餐"}
                 </span>
               </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
@@ -861,6 +1259,35 @@ function RegistrationPage() {
           {submitLoading ? "送出中..." : "送出報名"}
         </button>
       </div>
+
+      {updatePromptOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-6">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 text-center shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+              Update Registration
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">已報名資料</h2>
+            <p className="mt-3 text-sm text-slate-500">
+              系統已找到你的報名紀錄，是否要更新報名資料？
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => setUpdatePromptOpen(false)}
+                className="rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleUpdateRegistration}
+                disabled={updateSubmitting}
+                className="rounded-full bg-[#1e293b] px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {updateSubmitting ? "更新中..." : "更新報名"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -870,11 +1297,15 @@ function CheckinPage() {
   const eventId = params.get("eventId") || "";
   const slug = params.get("slug") || "";
   const [email, setEmail] = useState("");
-  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(null);
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [eventTitle, setEventTitle] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [autoCloseAt, setAutoCloseAt] = useState(null);
+  const [checkinStatus, setCheckinStatus] = useState(null);
+  const [attendanceStatus, setAttendanceStatus] = useState("");
 
   const errorDisplay = getCheckinErrorDisplay(error);
 
@@ -884,13 +1315,82 @@ function CheckinPage() {
     }
   }, [googleLinkedStudent]);
 
+  useEffect(() => {
+    if (!email || !eventId) {
+      setCheckinStatus(null);
+      setAttendanceStatus("");
+      return;
+    }
+    let ignore = false;
+    const fetchStatus = async () => {
+      try {
+        const { result } = await apiRequest({
+          action: "listCheckinStatus",
+          email: String(email || "").trim().toLowerCase(),
+          eventIds: [eventId],
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "Status not available");
+        }
+        const statusEntry = result.data && result.data.statuses ? result.data.statuses[eventId] : null;
+        if (!ignore) {
+          setCheckinStatus(statusEntry ? statusEntry.status : null);
+          setAttendanceStatus(statusEntry && statusEntry.attendance ? statusEntry.attendance : "");
+        }
+      } catch (err) {
+        if (!ignore) {
+          setCheckinStatus(null);
+          setAttendanceStatus("");
+        }
+      }
+    };
+    fetchStatus();
+    return () => {
+      ignore = true;
+    };
+  }, [email, eventId]);
+
+  useEffect(() => {
+    if (!eventId) {
+      return;
+    }
+    let ignore = false;
+    const fetchEvent = async () => {
+      try {
+        const { result } = await apiRequest({ action: "getEvent", eventId: eventId });
+        if (!result.ok) {
+          throw new Error(result.error || "Event not found");
+        }
+        if (!ignore && result.data && result.data.event) {
+          setEventTitle(result.data.event.title || "");
+        }
+      } catch (err) {
+        if (!ignore) {
+          setEventTitle("");
+        }
+      }
+    };
+    fetchEvent();
+    return () => {
+      ignore = true;
+    };
+  }, [eventId]);
+
   const handleSubmit = async () => {
-    if (!email.trim()) {
+    if (!String(email || "").trim()) {
       setError("請輸入 Email 以完成簽到。");
       return;
     }
-    if (!eventId || !slug) {
-      setError("Missing slug");
+    if (!eventId) {
+      setError("Missing eventId");
+      return;
+    }
+    if (checkinStatus === "not_registered") {
+      setError("Registration not found");
+      return;
+    }
+    if (checkinStatus === "not_attending" || checkinStatus === "attendance_unknown") {
+      setError("Not attending");
       return;
     }
     setLoading(true);
@@ -901,7 +1401,7 @@ function CheckinPage() {
         data: {
           eventId: eventId,
           slug: slug,
-          userEmail: email.trim().toLowerCase(),
+          userEmail: String(email || "").trim().toLowerCase(),
         },
       });
       if (!result.ok) {
@@ -909,12 +1409,35 @@ function CheckinPage() {
       }
       setName(result.data && result.data.userName ? result.data.userName : "同學");
       setSuccess(true);
+      setAutoCloseAt(Date.now() + 4000);
     } catch (err) {
       setError(err.message || "簽到失敗");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!autoCloseAt) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setSuccess(false);
+      setAutoCloseAt(null);
+    }, Math.max(autoCloseAt - Date.now(), 0));
+    return () => clearTimeout(timer);
+  }, [autoCloseAt]);
+
+  const displayName =
+    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    "";
+
+  const isCheckinBlocked =
+    checkinStatus === "not_registered" ||
+    checkinStatus === "not_attending" ||
+    checkinStatus === "attendance_unknown" ||
+    checkinStatus === "checked_in";
 
   return (
     <div className="min-h-screen">
@@ -927,10 +1450,21 @@ function CheckinPage() {
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
               活動簽到
             </h1>
+            {eventTitle ? (
+              <p className="mt-2 text-sm text-slate-500">活動：{eventTitle}</p>
+            ) : null}
           </div>
-          <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
-            立即簽到
-          </span>
+          <div className="flex items-center gap-3">
+            <a
+              href="/"
+              className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white sm:inline-flex"
+            >
+              回到首頁
+            </a>
+            <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
+              立即簽到
+            </span>
+          </div>
         </div>
       </header>
 
@@ -938,15 +1472,39 @@ function CheckinPage() {
         <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
           <h2 className="text-lg font-semibold text-slate-900">確認簽到</h2>
           <p className="mt-2 text-sm text-slate-500">
-            請輸入 Email 以完成簽到。{eventId && `活動：${eventId}`}
+            請輸入 Email 以完成簽到。{eventId && `活動：${eventTitle || eventId}`}
           </p>
+          {displayName ? (
+            <p className="mt-2 text-xs text-slate-500">簽到人：{displayName}</p>
+          ) : null}
+          <div className="mt-3 text-xs text-slate-500">
+            是否出席:{" "}
+            {attendanceStatus
+              ? attendanceStatus
+              : checkinStatus === "attendance_unknown"
+              ? "未確認"
+              : "-"}
+          </div>
+          {checkinStatus === "not_attending" ||
+          checkinStatus === "attendance_unknown" ||
+          checkinStatus === "not_registered" ? (
+            <p className="mt-2 text-xs font-semibold text-rose-600">
+              無法簽到，請洽活動負責人。
+            </p>
+          ) : null}
 
           <div className="mt-6 grid gap-4">
-            <GoogleSigninPanel
-              title="Google 登入"
-              helperText="登入後可直接帶入簽到 Email。"
-              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
-            />
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+                已登入 Google：{googleLinkedStudent.email}
+              </div>
+            ) : (
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="登入後可直接帶入簽到 Email。"
+                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              />
+            )}
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="checkin-email">
                 Email
@@ -974,7 +1532,7 @@ function CheckinPage() {
 
           <button
             onClick={handleSubmit}
-            disabled={loading}
+            disabled={loading || isCheckinBlocked}
             className="mt-8 hidden w-full items-center justify-center gap-2 rounded-2xl bg-[#1e293b] px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
           >
             {loading ? "簽到中..." : "確認簽到"}
@@ -985,7 +1543,7 @@ function CheckinPage() {
       <div className="fixed bottom-5 left-4 right-4 z-20 sm:hidden">
         <button
           onClick={handleSubmit}
-          disabled={loading}
+          disabled={loading || isCheckinBlocked}
           className="flex w-full items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-4 text-base font-semibold text-white shadow-2xl shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {loading ? "簽到中..." : "確認簽到"}
@@ -1007,6 +1565,16 @@ function CheckinPage() {
               <h2 className="text-3xl font-semibold text-slate-900">{name}</h2>
               <p className="text-sm text-slate-500">歡迎蒞臨，我們已為您完成簽到。</p>
             </div>
+            <button
+              onClick={() => {
+                setSuccess(false);
+                setAutoCloseAt(null);
+              }}
+              className="mt-2 rounded-full border border-slate-200 px-6 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+            >
+              關閉提示
+            </button>
+            <p className="text-[11px] text-slate-400">提示會在幾秒後自動關閉。</p>
           </div>
         </div>
       ) : null}
@@ -1018,6 +1586,239 @@ function HomePage() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [lookupEmail, setLookupEmail] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState("");
+  const [myRegistrations, setMyRegistrations] = useState([]);
+  const [checkinStatuses, setCheckinStatuses] = useState({});
+  const [checkinTarget, setCheckinTarget] = useState(null);
+  const [checkinSubmitting, setCheckinSubmitting] = useState(false);
+  const [checkinError, setCheckinError] = useState("");
+  const [checkinSuccess, setCheckinSuccess] = useState("");
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
+  const [cancelError, setCancelError] = useState("");
+  const [cancelSuccess, setCancelSuccess] = useState("");
+
+  const normalizeEventId_ = (value) => String(value || "").trim();
+
+  const parseEventDateValue_ = (value) => {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value === "number") {
+      const parsedNumber = new Date(value);
+      return isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+    }
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const normalized =
+      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+        ? raw.replace(/\//g, "-").replace(" ", "T")
+        : raw;
+    const parsed = new Date(normalized);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const getCheckinWindowState_ = (event) => {
+    if (!event) {
+      return "unknown";
+    }
+    const openAt = parseEventDateValue_(event.checkinOpenAt);
+    const closeAt = parseEventDateValue_(event.checkinCloseAt);
+    const now = new Date();
+    if (openAt && now < openAt) {
+      return "upcoming";
+    }
+    if (closeAt && now > closeAt) {
+      return "closed";
+    }
+    return "open";
+  };
+
+  const handleStartCheckin = (event) => {
+    setCheckinError("");
+    setCheckinSuccess("");
+    setCheckinTarget(event);
+  };
+
+  const handleStartCancelCheckin = (event, checkinId) => {
+    setCancelError("");
+    setCancelSuccess("");
+    setCancelTarget({ event: event, checkinId: checkinId });
+  };
+
+  const handleConfirmCheckin = async () => {
+    if (!checkinTarget) {
+      return;
+    }
+    const userEmail = googleLinkedStudent && googleLinkedStudent.email;
+    if (!userEmail) {
+      setCheckinError("請先使用 Google 登入後再簽到。");
+      return;
+    }
+    setCheckinSubmitting(true);
+    setCheckinError("");
+    try {
+      const { result } = await apiRequest({
+        action: "checkin",
+        data: {
+          eventId: checkinTarget.id,
+          userEmail: String(userEmail || "").trim().toLowerCase(),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "簽到失敗");
+      }
+      const nameValue =
+        (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+        (googleLinkedStudent && googleLinkedStudent.name) ||
+        "";
+      if (result.data && result.data.checkinId) {
+        setCheckinStatuses((prev) => ({
+          ...prev,
+          [checkinTarget.id]: {
+            status: "checked_in",
+            checkinId: result.data.checkinId,
+            checkinAt: result.data.checkinAt || "",
+          },
+        }));
+      }
+      setCheckinSuccess(nameValue || "簽到成功");
+      setCheckinTarget(null);
+    } catch (err) {
+      setCheckinError(err.message || "簽到失敗");
+    } finally {
+      setCheckinSubmitting(false);
+    }
+  };
+
+  const handleConfirmCancelCheckin = async () => {
+    if (!cancelTarget || !cancelTarget.checkinId) {
+      return;
+    }
+    setCancelSubmitting(true);
+    setCancelError("");
+    try {
+      const { result } = await apiRequest({ action: "deleteCheckin", id: cancelTarget.checkinId });
+      if (!result.ok) {
+        throw new Error(result.error || "取消簽到失敗");
+      }
+      const eventId = normalizeEventId_(cancelTarget.event.id);
+      setCheckinStatuses((prev) => ({
+        ...prev,
+        [eventId]: { status: "not_checked_in" },
+      }));
+      setCancelSuccess("已取消簽到");
+      setCancelTarget(null);
+    } catch (err) {
+      setCancelError(err.message || "取消簽到失敗");
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const displayName =
+    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    "";
+
+  const formatCheckinTime_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    if (value instanceof Date) {
+      return value.toLocaleString();
+    }
+    if (typeof value === "number") {
+      const parsedNumber = new Date(value);
+      return isNaN(parsedNumber.getTime()) ? "" : parsedNumber.toLocaleString();
+    }
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const normalized =
+      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+        ? raw.replace(/\//g, "-").replace(" ", "T")
+        : raw;
+    const parsed = new Date(normalized);
+    return isNaN(parsed.getTime()) ? raw : parsed.toLocaleString();
+  };
+
+  const loadCheckinStatuses_ = async (emailValue, registrations) => {
+    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
+    if (!normalizedEmail) {
+      return;
+    }
+    const eventIds = (registrations || [])
+      .map((item) => normalizeEventId_(item.eventId))
+      .filter((value) => value);
+    if (!eventIds.length) {
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "listCheckinStatus",
+        email: normalizedEmail,
+        eventIds: eventIds,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "查詢失敗");
+      }
+      setCheckinStatuses(result.data && result.data.statuses ? result.data.statuses : {});
+    } catch (err) {
+      setCheckinStatuses({});
+    }
+  };
+
+  const handleLookup = async (emailValue) => {
+    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
+    if (!normalizedEmail) {
+      setLookupError("請先輸入 Email 以查詢報名紀錄。");
+      setMyRegistrations([]);
+      return;
+    }
+    setLookupLoading(true);
+    setLookupError("");
+    try {
+      const { result } = await apiRequest({ action: "listRegistrations" });
+      if (!result.ok) {
+        throw new Error(result.error || "查詢失敗");
+      }
+      const registrations = result.data && result.data.registrations ? result.data.registrations : [];
+      const matches = registrations.filter((item) => {
+        const email = String(item.userEmail || "").trim().toLowerCase();
+        const status = String(item.status || "").trim().toLowerCase();
+        return email === normalizedEmail && status !== "cancelled";
+      });
+      if (!matches.length) {
+        setMyRegistrations([]);
+        setCheckinStatuses({});
+        setLookupError("查無報名紀錄。");
+      } else {
+        setMyRegistrations(matches);
+        await loadCheckinStatuses_(normalizedEmail, matches);
+      }
+    } catch (err) {
+      setLookupError(err.message || "查詢失敗");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.email) {
+      setLookupEmail(googleLinkedStudent.email);
+      handleLookup(googleLinkedStudent.email);
+    }
+  }, [googleLinkedStudent]);
 
   useEffect(() => {
     let ignore = false;
@@ -1068,6 +1869,133 @@ function HomePage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-28 pt-10 sm:px-12">
+        <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
+            {lookupLoading ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                查詢中
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-6 grid gap-6 sm:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-5">
+              {googleLinkedStudent && googleLinkedStudent.email ? (
+                <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+                  已登入 Google：{googleLinkedStudent.email}
+                </div>
+              ) : (
+                <GoogleSigninPanel
+                  title="Google 登入"
+                  helperText="登入後可自動帶入 Email。"
+                  onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                />
+              )}
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700" htmlFor="lookup-email">
+                  Email
+                </label>
+                <input
+                  id="lookup-email"
+                  type="email"
+                  value={lookupEmail}
+                  onChange={(event) => setLookupEmail(event.target.value)}
+                  placeholder="you@emba115b.tw"
+                  disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
+                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                />
+              </div>
+              <button
+                onClick={() => handleLookup(lookupEmail)}
+                disabled={lookupLoading}
+                className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {lookupLoading ? "查詢中..." : "查詢我的報名"}
+              </button>
+              {lookupError ? (
+                <p className="text-xs font-semibold text-amber-600">{lookupError}</p>
+              ) : null}
+            </div>
+            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">簽到提醒</p>
+              <p className="mt-2 text-xs text-slate-500">
+                若活動開放簽到，系統會顯示對應的簽到連結。
+              </p>
+            </div>
+          </div>
+
+          {myRegistrations.length ? (
+            <div className="mt-6 space-y-4">
+              {myRegistrations.map((item) => {
+                const eventId = normalizeEventId_(item.eventId);
+                const event =
+                  events.find((evt) => normalizeEventId_(evt.id) === eventId) || null;
+                const checkinUrl = event ? String(event.checkinUrl || "").trim() : "";
+                const checkinState = getCheckinWindowState_(event);
+                const checkinStatus = checkinStatuses[eventId] || null;
+                const isCheckedIn = checkinStatus && checkinStatus.status === "checked_in";
+                const isNotAttending = checkinStatus && checkinStatus.status === "not_attending";
+                const isAttendanceUnknown =
+                  checkinStatus && checkinStatus.status === "attendance_unknown";
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-white p-4 text-sm text-slate-600"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {(event && event.title) || item.eventId}
+                      </p>
+                      <p className="text-xs text-slate-500">{eventId}</p>
+                    </div>
+                    {isCheckedIn ? (
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <span>
+                          已簽到
+                          {checkinStatus && checkinStatus.checkinAt
+                            ? ` · ${formatCheckinTime_(checkinStatus.checkinAt)}`
+                            : ""}
+                        </span>
+                        <button
+                          onClick={() =>
+                            handleStartCancelCheckin(event, checkinStatus.checkinId || "")
+                          }
+                          className="rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          取消簽到
+                        </button>
+                      </div>
+                    ) : isNotAttending ? (
+                      <span className="text-xs text-rose-500">
+                        已回覆不出席，無法簽到，請洽活動負責人
+                      </span>
+                    ) : isAttendanceUnknown ? (
+                      <span className="text-xs text-rose-500">
+                        未確認出席，無法簽到，請洽活動負責人
+                      </span>
+                    ) : checkinUrl && checkinState === "open" ? (
+                      <button
+                        onClick={() => handleStartCheckin(event)}
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                      >
+                        立即簽到
+                      </button>
+                    ) : event && checkinState === "upcoming" ? (
+                      <span className="text-xs text-slate-400">簽到尚未開放</span>
+                    ) : event && checkinState === "closed" ? (
+                      <span className="text-xs text-slate-400">簽到已截止</span>
+                    ) : event ? (
+                      <span className="text-xs text-slate-400">簽到尚未開放</span>
+                    ) : (
+                      <span className="text-xs text-slate-400">活動資料載入中</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+
         <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">近期活動</h2>
@@ -1104,6 +2032,16 @@ function HomePage() {
                     </div>
                     <h3 className="mt-3 text-lg font-semibold text-slate-900">{event.title}</h3>
                     <p className="mt-2 text-sm text-slate-500">{event.location}</p>
+                    {event.address ? (
+                      <a
+                        href={buildGoogleMapsUrl_(event.address)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                      >
+                        {event.address}
+                      </a>
+                    ) : null}
                     <p className="mt-2 text-xs text-slate-400">
                       {event.startAt} - {event.endAt}
                     </p>
@@ -1120,6 +2058,118 @@ function HomePage() {
           </div>
         </div>
       </main>
+
+      {checkinTarget ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-6">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 text-center shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+              Check-In
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+              {checkinTarget.title || checkinTarget.id}
+            </h2>
+            {displayName ? (
+              <p className="mt-2 text-sm text-slate-500">簽到人：{displayName}</p>
+            ) : null}
+            <p className="mt-4 text-sm text-slate-500">確定要完成簽到嗎？</p>
+            {checkinError ? (
+              <p className="mt-3 text-xs font-semibold text-rose-600">{checkinError}</p>
+            ) : null}
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => {
+                  setCheckinTarget(null);
+                  setCheckinError("");
+                }}
+                className="rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                取消簽到
+              </button>
+              <button
+                onClick={handleConfirmCheckin}
+                disabled={checkinSubmitting}
+                className="rounded-full bg-[#1e293b] px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {checkinSubmitting ? "簽到中..." : "確認簽到"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {cancelTarget ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-6">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 text-center shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+              Cancel Check-In
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">
+              {(cancelTarget.event && (cancelTarget.event.title || cancelTarget.event.id)) || "活動"}
+            </h2>
+            {displayName ? (
+              <p className="mt-2 text-sm text-slate-500">簽到人：{displayName}</p>
+            ) : null}
+            <p className="mt-4 text-sm text-slate-500">確定要取消簽到嗎？</p>
+            {cancelError ? (
+              <p className="mt-3 text-xs font-semibold text-rose-600">{cancelError}</p>
+            ) : null}
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <button
+                onClick={() => {
+                  setCancelTarget(null);
+                  setCancelError("");
+                }}
+                className="rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                保留簽到
+              </button>
+              <button
+                onClick={handleConfirmCancelCheckin}
+                disabled={cancelSubmitting}
+                className="rounded-full bg-rose-600 px-5 py-2 text-xs font-semibold text-white shadow-lg shadow-rose-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cancelSubmitting ? "取消中..." : "確認取消"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {checkinSuccess ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-6">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 text-center shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-500">
+              Check-In Complete
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">{checkinSuccess}</h2>
+            <p className="mt-2 text-sm text-slate-500">歡迎蒞臨，我們已為您完成簽到。</p>
+            <button
+              onClick={() => setCheckinSuccess("")}
+              className="mt-6 rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+            >
+              回到首頁
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {cancelSuccess ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/70 px-6">
+          <div className="w-full max-w-lg rounded-[2rem] bg-white p-8 text-center shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-rose-500">
+              Check-In Cancelled
+            </p>
+            <h2 className="mt-3 text-2xl font-semibold text-slate-900">{cancelSuccess}</h2>
+            <p className="mt-2 text-sm text-slate-500">已取消簽到，可重新簽到。</p>
+            <button
+              onClick={() => setCancelSuccess("")}
+              className="mt-6 rounded-full border border-slate-200 px-5 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+            >
+              回到首頁
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1143,10 +2193,13 @@ function AdminPage() {
     startAt: "",
     endAt: "",
     location: "",
+    address: "",
     registrationOpenAt: "",
     registrationCloseAt: "",
     checkinOpenAt: "",
     checkinCloseAt: "",
+    registerUrl: "",
+    checkinUrl: "",
     capacity: "",
     status: "draft",
     category: "gathering",
@@ -1169,6 +2222,46 @@ function AdminPage() {
     id: "",
     status: "registered",
   });
+  const [copyStatus, setCopyStatus] = useState("");
+  const [registerCopyStatus, setRegisterCopyStatus] = useState("");
+
+  const normalizeBaseUrl_ = (value) => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) {
+      return "";
+    }
+    return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+  };
+
+  const normalizeEventDateTimeValue_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    if (value instanceof Date) {
+      return toLocalInputValue_(value);
+    }
+    if (typeof value === "number") {
+      const parsedNumber = new Date(value);
+      return isNaN(parsedNumber.getTime()) ? "" : toLocalInputValue_(parsedNumber);
+    }
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const normalized =
+      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+        ? raw.replace(/\//g, "-").replace(" ", "T")
+        : raw;
+    const parsed = parseLocalInputDate_(normalized);
+    if (parsed) {
+      return toLocalInputValue_(parsed);
+    }
+    const isoMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}T${isoMatch[2]}`;
+    }
+    return normalized;
+  };
 
   const buildDefaultForm = (items) => {
     const baseDate = addDays_(new Date(), 10);
@@ -1179,6 +2272,9 @@ function AdminPage() {
     const checkinOpenAt = toLocalInput_(baseDate, 18, 0);
     const checkinCloseAt = toLocalInput_(baseDate, 20, 30);
     const eventId = generateEventId_(baseDate, "gathering", items, seedTimestamp);
+    const baseUrl = normalizeBaseUrl_(PUBLIC_SITE_URL) || window.location.origin;
+    const registerUrl = `${baseUrl}/register?eventId=${encodeURIComponent(eventId)}`;
+    const checkinUrl = `${baseUrl}/checkin?eventId=${encodeURIComponent(eventId)}`;
     return {
       id: eventId,
       title: "",
@@ -1186,10 +2282,13 @@ function AdminPage() {
       startAt: startAt,
       endAt: endAt,
       location: "",
+      address: "",
       registrationOpenAt: registrationOpenAt,
       registrationCloseAt: registrationCloseAt,
       checkinOpenAt: checkinOpenAt,
       checkinCloseAt: checkinCloseAt,
+      registerUrl: registerUrl,
+      checkinUrl: checkinUrl,
       capacity: "60",
       status: "draft",
       category: "gathering",
@@ -1243,13 +2342,16 @@ function AdminPage() {
       id: event.id || "",
       title: event.title || "",
       description: event.description || "",
-      startAt: event.startAt || "",
-      endAt: event.endAt || "",
+      startAt: normalizeEventDateTimeValue_(event.startAt),
+      endAt: normalizeEventDateTimeValue_(event.endAt),
       location: event.location || "",
-      registrationOpenAt: event.registrationOpenAt || "",
-      registrationCloseAt: event.registrationCloseAt || "",
-      checkinOpenAt: event.checkinOpenAt || "",
-      checkinCloseAt: event.checkinCloseAt || "",
+      address: event.address || "",
+      registrationOpenAt: normalizeEventDateTimeValue_(event.registrationOpenAt),
+      registrationCloseAt: normalizeEventDateTimeValue_(event.registrationCloseAt),
+      checkinOpenAt: normalizeEventDateTimeValue_(event.checkinOpenAt),
+      checkinCloseAt: normalizeEventDateTimeValue_(event.checkinCloseAt),
+      registerUrl: event.registerUrl || "",
+      checkinUrl: event.checkinUrl || "",
       capacity: event.capacity || "",
       status: event.status || "draft",
       category: event.category || "gathering",
@@ -1325,10 +2427,12 @@ function AdminPage() {
     setSaving(true);
     setError("");
     try {
-      if (!studentForm.id.trim()) {
+      if (!String(studentForm.id || "").trim()) {
         throw new Error("請先填寫學號。");
       }
-      const exists = students.some((item) => String(item.id || "").trim() === studentForm.id.trim());
+      const exists = students.some(
+        (item) => String(item.id || "").trim() === String(studentForm.id || "").trim()
+      );
       const action = exists ? "updateStudent" : "createStudent";
       const { result } = await apiRequest({ action: action, data: studentForm });
       if (!result.ok) {
@@ -1430,6 +2534,21 @@ function AdminPage() {
     }
   };
 
+  const buildShortLinkUrl = (link) => {
+    if (!link || !link.eventId) {
+      return "";
+    }
+    if (link.type === "checkin") {
+      return `${window.location.origin}/checkin?eventId=${encodeURIComponent(link.eventId)}`;
+    }
+    if (!link.slug) {
+      return "";
+    }
+    return `${window.location.origin}/?eventId=${encodeURIComponent(
+      link.eventId
+    )}&slug=${encodeURIComponent(link.slug)}`;
+  };
+
   const handleRegistrationEdit = (registration) => {
     setRegistrationForm({
       id: registration.id || "",
@@ -1526,6 +2645,12 @@ function AdminPage() {
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
+      if (result.data && result.data.event) {
+        const updatedEvent = result.data.event;
+        setEvents((prev) =>
+          prev.map((item) => (item.id === updatedEvent.id ? { ...item, ...updatedEvent } : item))
+        );
+      }
       setActiveId("");
       setForm(buildDefaultForm(events));
       await loadEvents();
@@ -1537,7 +2662,78 @@ function AdminPage() {
   };
 
   const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === "id" && !activeId) {
+        const baseUrl = normalizeBaseUrl_(PUBLIC_SITE_URL) || window.location.origin;
+        return {
+          ...prev,
+          id: value,
+          registerUrl: value
+            ? `${baseUrl}/register?eventId=${encodeURIComponent(value)}`
+            : prev.registerUrl,
+          checkinUrl: value
+            ? `${baseUrl}/checkin?eventId=${encodeURIComponent(value)}`
+            : prev.checkinUrl,
+        };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const handleCopyCheckinUrl = async () => {
+    const value = String(form.checkinUrl || "").trim();
+    if (!value) {
+      setCopyStatus("請先填寫簽到連結");
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopyStatus("已複製簽到連結");
+    } catch (err) {
+      setCopyStatus("複製失敗");
+    } finally {
+      setTimeout(() => setCopyStatus(""), 1800);
+    }
+  };
+
+  const handleCopyRegisterUrl = async () => {
+    const value = String(form.registerUrl || "").trim();
+    if (!value) {
+      setRegisterCopyStatus("請先填寫報名連結");
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setRegisterCopyStatus("已複製報名連結");
+    } catch (err) {
+      setRegisterCopyStatus("複製失敗");
+    } finally {
+      setTimeout(() => setRegisterCopyStatus(""), 1800);
+    }
   };
 
   const handleCategoryChange = (value) => {
@@ -1546,6 +2742,7 @@ function AdminPage() {
       if (!activeId) {
         const fallbackDate = parseLocalInputDate_(prev.startAt) || addDays_(new Date(), 10);
         next.id = generateEventId_(fallbackDate, value, events, seedTimestamp);
+        next.checkinUrl = `${baseUrl}/checkin?eventId=${encodeURIComponent(next.id)}`;
       }
       return next;
     });
@@ -1570,6 +2767,9 @@ function AdminPage() {
       };
       if (!activeId) {
         next.id = generateEventId_(startDate, prev.category, events, seedTimestamp);
+        const baseUrl = normalizeBaseUrl_(PUBLIC_SITE_URL) || window.location.origin;
+        next.registerUrl = `${baseUrl}/register?eventId=${encodeURIComponent(next.id)}`;
+        next.checkinUrl = `${window.location.origin}/checkin?eventId=${encodeURIComponent(next.id)}`;
       }
       return next;
     });
@@ -1795,7 +2995,28 @@ function AdminPage() {
                     <p className="text-xs text-slate-500">
                       {item.eventId} · {item.type}
                     </p>
+                    {buildShortLinkUrl(item) ? (
+                      <a
+                        href={buildShortLinkUrl(item)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 block text-xs font-medium text-slate-500 hover:text-slate-700"
+                      >
+                        {buildShortLinkUrl(item)}
+                      </a>
+                    ) : null}
                   </div>
+                  {item.type === "checkin" && buildShortLinkUrl(item) ? (
+                    <div className="flex items-center gap-3">
+                      <img
+                        alt="Check-in QR Code"
+                        className="h-20 w-20 rounded-xl border border-slate-200 bg-white p-1"
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                          buildShortLinkUrl(item)
+                        )}`}
+                      />
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => handleShortLinkEdit(item)}
@@ -1880,6 +3101,24 @@ function AdminPage() {
               />
             </div>
             <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">地址</label>
+              <input
+                value={form.address}
+                onChange={(event) => handleChange("address", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              />
+              {form.address ? (
+                <a
+                  href={buildGoogleMapsUrl_(form.address)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  開啟 Google 地圖
+                </a>
+              ) : null}
+            </div>
+            <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">名額</label>
               <input
                 value={form.capacity}
@@ -1926,6 +3165,164 @@ function AdminPage() {
                 placeholder="2024-10-18 20:30"
                 className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
               />
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">報名連結</label>
+              <input
+                value={form.registerUrl}
+                onChange={(event) => handleChange("registerUrl", event.target.value)}
+                placeholder="https://your-domain/register?eventId=EVT-..."
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              />
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleChange(
+                      "registerUrl",
+                      `${window.location.origin}/register?eventId=${encodeURIComponent(form.id || "")}`
+                    )
+                  }
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                >
+                  使用目前網域產生
+                </button>
+                {PUBLIC_SITE_URL ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleChange(
+                        "registerUrl",
+                        `${normalizeBaseUrl_(PUBLIC_SITE_URL)}/register?eventId=${encodeURIComponent(
+                          form.id || ""
+                        )}`
+                      )
+                    }
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  >
+                    使用正式網域產生
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleCopyRegisterUrl}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                >
+                  複製報名連結
+                </button>
+                {form.registerUrl ? (
+                  <a
+                    href={form.registerUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-slate-700"
+                  >
+                    開啟報名連結
+                  </a>
+                ) : null}
+                {registerCopyStatus ? (
+                  <span className="text-slate-400">{registerCopyStatus}</span>
+                ) : null}
+              </div>
+              {form.registerUrl ? (
+                <div className="mt-2 flex flex-wrap items-center gap-4">
+                  <img
+                    alt="Register QR Code"
+                    className="h-24 w-24 rounded-2xl border border-slate-200 bg-white p-1"
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(
+                      form.registerUrl
+                    )}`}
+                  />
+                  <a
+                    href={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(
+                      form.registerUrl
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  >
+                    開啟 QRCode 圖檔
+                  </a>
+                </div>
+              ) : null}
+            </div>
+            <div className="grid gap-2 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">簽到連結</label>
+              <input
+                value={form.checkinUrl}
+                onChange={(event) => handleChange("checkinUrl", event.target.value)}
+                placeholder="https://your-domain/checkin?eventId=EVT-..."
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              />
+              <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleChange(
+                      "checkinUrl",
+                      `${window.location.origin}/checkin?eventId=${encodeURIComponent(form.id || "")}`
+                    )
+                  }
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                >
+                  使用目前網域產生
+                </button>
+                {PUBLIC_SITE_URL ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleChange(
+                        "checkinUrl",
+                        `${normalizeBaseUrl_(PUBLIC_SITE_URL)}/checkin?eventId=${encodeURIComponent(
+                          form.id || ""
+                        )}`
+                      )
+                    }
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  >
+                    使用正式網域產生
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleCopyCheckinUrl}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                >
+                  複製簽到連結
+                </button>
+                {form.checkinUrl ? (
+                  <a
+                    href={form.checkinUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-slate-700"
+                  >
+                    開啟簽到連結
+                  </a>
+                ) : null}
+                {copyStatus ? <span className="text-slate-400">{copyStatus}</span> : null}
+              </div>
+              {form.checkinUrl ? (
+                <div className="mt-2 flex flex-wrap items-center gap-4">
+                  <img
+                    alt="Check-in QR Code"
+                    className="h-24 w-24 rounded-2xl border border-slate-200 bg-white p-1"
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=192x192&data=${encodeURIComponent(
+                      form.checkinUrl
+                    )}`}
+                  />
+                  <a
+                    href={`https://api.qrserver.com/v1/create-qr-code/?size=600x600&data=${encodeURIComponent(
+                      form.checkinUrl
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                  >
+                    開啟 QRCode 圖檔
+                  </a>
+                </div>
+              ) : null}
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">狀態</label>
@@ -2075,7 +3472,6 @@ function AdminPage() {
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
                 >
                   <option value="register">報名</option>
-                  <option value="checkin">簽到</option>
                 </select>
               </div>
               <div className="grid gap-2">
@@ -2180,7 +3576,7 @@ function DirectoryPage() {
     try {
       const { result } = await apiRequest({
         action: "login",
-        email: email.trim().toLowerCase(),
+        email: String(email || "").trim().toLowerCase(),
         password: password,
       });
       if (!result.ok) {

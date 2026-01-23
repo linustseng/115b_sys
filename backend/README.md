@@ -12,7 +12,7 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - AdminUsers
 
 ## Required Columns
-- Events: id, title, description, startAt, endAt, location, registrationOpenAt, registrationCloseAt, checkinOpenAt, checkinCloseAt, capacity, status, category, formSchema
+- Events: id, title, description, startAt, endAt, location, address, registrationOpenAt, registrationCloseAt, checkinOpenAt, checkinCloseAt, registerUrl, checkinUrl, capacity, status, category, formSchema
 - Registrations: id, eventId, userName, userEmail, userPhone, classYear, customFields, status, createdAt, updatedAt
 - Students: id, name, googleSub, googleEmail
 - Checkins: id, eventId, registrationId, checkinAt, checkinMethod
@@ -21,6 +21,8 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - AdminUsers: id, name, email, role, passwordHash
 
 `Students.id` should match `Directory.id` so the login can resolve profile details.
+
+活動簽到需要在 Events 設定 `checkinUrl`，未設定會回傳 `Check-in link not configured`。
 
 ## Apps Script
 Deploy as Web App and copy the URL into `frontend/.env` as `VITE_API_URL`.
@@ -33,8 +35,7 @@ Set Script Properties:
 
 ## Short Links
 - 報名連結: `/?eventId=EVT-...&slug=reg-...`
-- 簽到連結: `/checkin?eventId=EVT-...&slug=chk-...`
-ShortLinks 的 `type` 必須為 `register` 或 `checkin`，`slug` 需唯一。
+ShortLinks 目前用於報名連結。報名/簽到也可直接從 `Events.registerUrl` / `Events.checkinUrl` 取得。
 
 ## API Actions
 - lookupStudent
