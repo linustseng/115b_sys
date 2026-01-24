@@ -286,6 +286,35 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { id: checkinId }, error: null };
   }
 
+  if (payload.action === "uploadBase64") {
+    const eventId = String(payload.eventId || "").trim();
+    const fileName = String(payload.fileName || "file").trim();
+    const fileData = String(payload.fileData || "").trim();
+    if (!eventId || !fileData) {
+      return { ok: false, data: null, error: "Missing eventId or fileData" };
+    }
+    const bytes = Utilities.base64Decode(fileData);
+    if (bytes.length > 5 * 1024 * 1024) {
+      return { ok: false, data: null, error: "File exceeds 5MB limit" };
+    }
+    const event = findEventById_(eventId);
+    if (!event) {
+      return { ok: false, data: null, error: "Event not found" };
+    }
+    const file = DriveApp.createFile(bytes, fileName);
+    file.setName(eventId + "-" + file.getName());
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    const attachment = {
+      name: file.getName(),
+      url: file.getUrl(),
+      fileId: file.getId(),
+    };
+    const attachments = parseAttachments_(event.attachments);
+    attachments.push(attachment);
+    updateEvent_(eventId, { attachments: JSON.stringify(attachments) });
+    return { ok: true, data: { attachment: attachment }, error: null };
+  }
+
   if (payload.action === "login") {
     const email = normalizeEmail_(payload.email);
     const password = String(payload.password || "");
@@ -1020,6 +1049,21 @@ function normalizeStudentRecord_(data) {
     googleSub: String(data.googleSub || "").trim(),
     googleEmail: normalizeEmail_(data.googleEmail),
   };
+}
+
+function parseAttachments_(value) {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
 }
 
 function normalizeRegistrationRecord_(data) {

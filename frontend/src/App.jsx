@@ -2586,9 +2586,7 @@ function AdminPage() {
   const [attachmentUrlInput, setAttachmentUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const uploadFormRef = useRef(null);
   const uploadFileRef = useRef(null);
-  const uploadCompletedRef = useRef(false);
 
   const normalizeEventId_ = (value) => String(value || "").trim();
 
@@ -2777,47 +2775,6 @@ function AdminPage() {
       setCheckinEventId(events[0].id || "");
     }
   }, [events, registrationEventId, checkinEventId]);
-
-  useEffect(() => {
-    const handler = (event) => {
-      if (!event || !event.data || event.data.type !== "uploadResult") {
-        return;
-      }
-      if (
-        event.origin &&
-        !/script\.google\.com|googleusercontent\.com/.test(String(event.origin))
-      ) {
-        return;
-      }
-      const payload = event.data.payload || {};
-      if (!payload.ok) {
-        setUploadError(payload.error || "上傳失敗");
-        setUploading(false);
-        uploadCompletedRef.current = true;
-        return;
-      }
-      const data = payload.data || {};
-      setForm((prev) => {
-        const current = parseEventAttachments_(prev.attachments);
-        const next = current.concat([
-          {
-            name: data.name || "檔案",
-            url: data.url || "",
-            fileId: data.fileId || "",
-          },
-        ]);
-        return { ...prev, attachments: JSON.stringify(next) };
-      });
-      setUploading(false);
-      setUploadError("");
-      uploadCompletedRef.current = true;
-      if (uploadFileRef.current) {
-        uploadFileRef.current.value = "";
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, []);
 
   const handleEdit = (event) => {
     setActiveId(event.id || "");
@@ -3174,13 +3131,70 @@ function AdminPage() {
 
   const handleUploadChange = (event) => {
     const file = event.target.files && event.target.files[0];
-    if (!file || !uploadFormRef.current) {
+    if (!file) {
       return;
     }
-    uploadCompletedRef.current = false;
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("檔案超過 5MB 上限");
+      if (uploadFileRef.current) {
+        uploadFileRef.current.value = "";
+      }
+      return;
+    }
     setUploading(true);
     setUploadError("");
-    uploadFormRef.current.submit();
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",")[1] : result;
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            action: "uploadBase64",
+            eventId: form.id,
+            fileName: file.name,
+            fileData: base64,
+          }),
+        });
+        setTimeout(async () => {
+          try {
+            const { result: check } = await apiRequest({ action: "getEvent", eventId: form.id });
+            if (check.ok && check.data && check.data.event) {
+              setForm((prev) => ({
+                ...prev,
+                attachments: check.data.event.attachments || prev.attachments,
+              }));
+              setUploading(false);
+              setUploadError("");
+            } else {
+              setUploading(false);
+              setUploadError("上傳完成但未更新，請稍後重整");
+            }
+          } catch (error) {
+            setUploading(false);
+            setUploadError("上傳完成但未更新，請稍後重整");
+          }
+        }, 1200);
+      } catch (error) {
+        setUploading(false);
+        setUploadError("上傳失敗");
+      } finally {
+        if (uploadFileRef.current) {
+          uploadFileRef.current.value = "";
+        }
+      }
+    };
+    reader.onerror = () => {
+      setUploading(false);
+      setUploadError("讀取檔案失敗");
+      if (uploadFileRef.current) {
+        uploadFileRef.current.value = "";
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleStartAtChange = (value) => {
@@ -3677,25 +3691,15 @@ function AdminPage() {
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <form
-                  ref={uploadFormRef}
-                  action={API_URL}
-                  method="post"
-                  encType="multipart/form-data"
-                  target="upload-frame"
-                >
-                  <input type="hidden" name="eventId" value={form.id} />
-                  <label className="inline-flex h-11 cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300">
-                    上傳檔案
-                    <input
-                      ref={uploadFileRef}
-                      type="file"
-                      name="file"
-                      className="hidden"
-                      onChange={handleUploadChange}
-                    />
-                  </label>
-                </form>
+                <label className="inline-flex h-11 cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300">
+                  上傳檔案
+                  <input
+                    ref={uploadFileRef}
+                    type="file"
+                    className="hidden"
+                    onChange={handleUploadChange}
+                  />
+                </label>
                 {uploading ? <span className="text-xs text-slate-500">上傳中...</span> : null}
                 {uploadError ? <span className="text-xs text-rose-600">{uploadError}</span> : null}
               </div>
@@ -3727,18 +3731,6 @@ function AdminPage() {
               ) : (
                 <p className="text-xs text-slate-400">尚未加入任何參考檔案。</p>
               )}
-              <iframe
-                name="upload-frame"
-                title="upload-frame"
-                className="hidden"
-                onLoad={() => {
-                  if (!uploading || uploadCompletedRef.current) {
-                    return;
-                  }
-                  setUploading(false);
-                  setUploadError("上傳完成但未收到回應，請確認 Apps Script 已重新部署");
-                }}
-              />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">開始時間</label>
