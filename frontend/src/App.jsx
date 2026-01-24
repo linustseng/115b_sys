@@ -4840,6 +4840,14 @@ function HomePage() {
           </span>
         </div>
       </header>
+      <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
+        <a
+          href="/"
+          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
+        >
+          回首頁
+        </a>
+      </div>
 
       <main className="mx-auto max-w-6xl px-6 pb-28 pt-10 sm:px-12">
         <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
