@@ -114,7 +114,7 @@ const meetingFields = [
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
-const EVENT_ID = "EVT-2024-10-18";
+const EVENT_ID = "24101801";
 const DEFAULT_EVENT = {
   title: "秋季聚餐",
   location: "大直 · 磺溪會館",
@@ -124,6 +124,17 @@ const DEFAULT_EVENT = {
   category: "gathering",
   capacity: 60,
   status: "open",
+};
+
+const EVENT_CATEGORIES = [
+  { value: "gathering", label: "聚餐" },
+  { value: "meeting", label: "會議" },
+  { value: "softball", label: "壘球練習" },
+];
+
+const getCategoryLabel_ = (value) => {
+  const match = EVENT_CATEGORIES.find((item) => item.value === value);
+  return match ? match.label : "聚餐";
 };
 
 const buildGoogleMapsUrl_ = (address) => {
@@ -262,10 +273,13 @@ const hasDrinkSelection_ = (fields) => {
   });
 };
 
-const normalizeCustomFieldsForSubmit_ = (fields) => {
+const normalizeCustomFieldsForSubmit_ = (fields, studentId) => {
   const source = fields || {};
   const bringDrinksValue = source.bringDrinks || (hasDrinkSelection_(source) ? "攜帶" : "");
   const normalized = { ...source, bringDrinks: bringDrinksValue };
+  if (studentId && !normalized.studentId) {
+    normalized.studentId = studentId;
+  }
   if (bringDrinksValue === "不攜帶") {
     DRINK_FIELD_IDS.forEach((id) => {
       normalized[id] = "";
@@ -851,11 +865,12 @@ function RegistrationPage() {
             dietaryPreference: match.dietaryPreference || "",
           });
           setCustomFields((prev) =>
-            prev.dietary
+            prev.dietary && prev.studentId
               ? prev
               : {
                   ...prev,
                   dietary: match.dietaryPreference || prev.dietary || "無禁忌",
+                  studentId: match.id || prev.studentId || "",
                 }
           );
           setAutoFilled(true);
@@ -915,12 +930,20 @@ function RegistrationPage() {
     }
     setSubmitLoading(true);
     try {
-      const payloadCustomFields = normalizeCustomFieldsForSubmit_(customFields);
+      const linkedStudentId =
+        googleLinkedStudent && googleLinkedStudent.id
+          ? String(googleLinkedStudent.id || "").trim()
+          : "";
+      const payloadCustomFields = normalizeCustomFieldsForSubmit_(
+        customFields,
+        linkedStudentId
+      );
       const { result } = await apiRequest({
         action: "register",
         data: {
           eventId: eventId,
           slug: slug,
+          studentId: linkedStudentId,
           userEmail: String(email || "").trim().toLowerCase(),
           userName: String(student.name || "").trim(),
           userPhone: String(student.phone || "").trim(),
@@ -955,8 +978,12 @@ function RegistrationPage() {
     setUpdateSubmitting(true);
     setSubmitError("");
     try {
+      const linkedStudentId =
+        googleLinkedStudent && googleLinkedStudent.id
+          ? String(googleLinkedStudent.id || "").trim()
+          : "";
       const payloadCustomFields = {
-        ...normalizeCustomFieldsForSubmit_(customFields),
+        ...normalizeCustomFieldsForSubmit_(customFields, linkedStudentId),
         notes: String(notes || "").trim(),
       };
       const { result } = await apiRequest({
@@ -964,6 +991,7 @@ function RegistrationPage() {
         data: {
           id: existingRegistration.id,
           eventId: eventId,
+          studentId: linkedStudentId,
           userName: String(student.name || "").trim(),
           userEmail: String(email || "").trim().toLowerCase(),
           userPhone: String(student.phone || "").trim(),
@@ -1152,7 +1180,7 @@ function RegistrationPage() {
 
           <div className="mt-10 border-t border-slate-200/70 pt-8">
             <h3 className="text-base font-semibold text-slate-900">
-              {eventInfo.category === "meeting" ? "開會自訂欄位" : "聚餐自訂欄位"}
+              {getCategoryLabel_(eventInfo.category)} 自訂欄位
             </h3>
             {eventInfo.category === "meeting" ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -1425,7 +1453,7 @@ function RegistrationPage() {
               <div className="flex items-center justify-between">
                 <span>類別</span>
                 <span className="font-medium text-slate-800">
-                  {eventInfo.category === "meeting" ? "開會" : "聚餐"}
+              {getCategoryLabel_(eventInfo.category)}
                 </span>
               </div>
                   </>
@@ -2355,7 +2383,7 @@ function HomePage() {
                     >
                       <div>
                         <div className="flex items-center justify-between text-xs text-slate-500">
-                          <span>{event.category === "meeting" ? "開會" : "聚餐"}</span>
+                          <span>{getCategoryLabel_(event.category)}</span>
                           <span>{statusLabel}</span>
                         </div>
                         <h3 className="mt-3 text-lg font-semibold text-slate-900">{event.title}</h3>
@@ -2513,9 +2541,9 @@ function HomePage() {
 function AdminPage() {
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
+  const [directory, setDirectory] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [checkins, setCheckins] = useState([]);
-  const [shortLinks, setShortLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2539,20 +2567,7 @@ function AdminPage() {
     capacity: "",
     status: "draft",
     category: "gathering",
-  });
-  const [studentForm, setStudentForm] = useState({
-    id: "",
-    name: "",
-    googleSub: "",
-    googleEmail: "",
-  });
-  const [shortLinkForm, setShortLinkForm] = useState({
-    id: "",
-    eventId: "",
-    type: "register",
-    slug: "",
-    targetUrl: "",
-    createdAt: "",
+    attachments: "[]",
   });
   const [registrationForm, setRegistrationForm] = useState({
     id: "",
@@ -2560,6 +2575,85 @@ function AdminPage() {
   });
   const [copyStatus, setCopyStatus] = useState("");
   const [registerCopyStatus, setRegisterCopyStatus] = useState("");
+  const [registrationEventId, setRegistrationEventId] = useState("");
+  const [checkinEventId, setCheckinEventId] = useState("");
+  const [studentsQuery, setStudentsQuery] = useState("");
+  const [unregisteredQuery, setUnregisteredQuery] = useState("");
+  const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
+  const [directoryToken, setDirectoryToken] = useState(
+    () => localStorage.getItem("directoryToken") || ""
+  );
+  const [attachmentUrlInput, setAttachmentUrlInput] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const uploadFormRef = useRef(null);
+  const uploadFileRef = useRef(null);
+  const uploadCompletedRef = useRef(false);
+
+  const normalizeEventId_ = (value) => String(value || "").trim();
+
+  const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
+
+  const normalizeName_ = (value) => String(value || "").trim();
+
+  const getDisplayName_ = (student) =>
+    String(
+      (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
+    ).trim();
+
+  const parseEventAttachments_ = (value) => {
+    if (!value) {
+      return [];
+    }
+    if (Array.isArray(value)) {
+      return value;
+    }
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  const matchesStudentQuery_ = (item, query) => {
+    const needle = String(query || "").trim().toLowerCase();
+    if (!needle) {
+      return true;
+    }
+    const haystack = [
+      item.id,
+      item.email,
+      item.googleEmail,
+      item.name,
+      item.nameZh,
+      item.nameEn,
+      item.preferredName,
+      item.company,
+      item.title,
+      item.dietaryRestrictions,
+      item.group,
+      item.googleSub,
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(needle);
+  };
+
+  const parseCustomFields_ = (value) => {
+    if (!value) {
+      return {};
+    }
+    if (typeof value === "object") {
+      return value;
+    }
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (error) {
+      return {};
+    }
+  };
 
   const normalizeBaseUrl_ = (value) => {
     const trimmed = String(value || "").trim();
@@ -2628,6 +2722,7 @@ function AdminPage() {
       capacity: "60",
       status: "draft",
       category: "gathering",
+      attachments: "[]",
     };
   };
 
@@ -2652,17 +2747,19 @@ function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "students") {
-      loadStudents();
-    }
     if (activeTab === "registrations") {
       loadRegistrations();
+      loadStudents();
+      loadDirectoryAdmin();
     }
     if (activeTab === "checkins") {
       loadCheckins();
+      loadRegistrations();
+      loadDirectoryAdmin();
     }
-    if (activeTab === "shortlinks") {
-      loadShortLinks();
+    if (activeTab === "students") {
+      loadStudents();
+      loadDirectoryAdmin();
     }
   }, [activeTab]);
 
@@ -2671,6 +2768,56 @@ function AdminPage() {
       setForm(buildDefaultForm(events));
     }
   }, [activeId, events, seedTimestamp]);
+
+  useEffect(() => {
+    if (!registrationEventId && events.length) {
+      setRegistrationEventId(events[0].id || "");
+    }
+    if (!checkinEventId && events.length) {
+      setCheckinEventId(events[0].id || "");
+    }
+  }, [events, registrationEventId, checkinEventId]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      if (!event || !event.data || event.data.type !== "uploadResult") {
+        return;
+      }
+      if (
+        event.origin &&
+        !/script\.google\.com|googleusercontent\.com/.test(String(event.origin))
+      ) {
+        return;
+      }
+      const payload = event.data.payload || {};
+      if (!payload.ok) {
+        setUploadError(payload.error || "上傳失敗");
+        setUploading(false);
+        uploadCompletedRef.current = true;
+        return;
+      }
+      const data = payload.data || {};
+      setForm((prev) => {
+        const current = parseEventAttachments_(prev.attachments);
+        const next = current.concat([
+          {
+            name: data.name || "檔案",
+            url: data.url || "",
+            fileId: data.fileId || "",
+          },
+        ]);
+        return { ...prev, attachments: JSON.stringify(next) };
+      });
+      setUploading(false);
+      setUploadError("");
+      uploadCompletedRef.current = true;
+      if (uploadFileRef.current) {
+        uploadFileRef.current.value = "";
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
 
   const handleEdit = (event) => {
     setActiveId(event.id || "");
@@ -2691,6 +2838,7 @@ function AdminPage() {
       capacity: event.capacity || "",
       status: event.status || "draft",
       category: event.category || "gathering",
+      attachments: event.attachments || "[]",
     });
   };
 
@@ -2705,6 +2853,31 @@ function AdminPage() {
       setStudents(result.data && result.data.students ? result.data.students : []);
     } catch (err) {
       setError("同學名單載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDirectoryAdmin = async () => {
+    const storedToken = localStorage.getItem("directoryToken") || "";
+    if (storedToken && storedToken !== directoryToken) {
+      setDirectoryToken(storedToken);
+    }
+    const activeToken = storedToken || directoryToken;
+    if (!activeToken) {
+      setDirectory([]);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listDirectory", authToken: activeToken });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setDirectory(result.data && result.data.directory ? result.data.directory : []);
+    } catch (err) {
+      setDirectory([]);
     } finally {
       setLoading(false);
     }
@@ -2742,149 +2915,6 @@ function AdminPage() {
     }
   };
 
-  const loadShortLinks = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { result } = await apiRequest({ action: "listShortLinks" });
-      if (!result.ok) {
-        throw new Error(result.error || "載入失敗");
-      }
-      setShortLinks(result.data && result.data.shortLinks ? result.data.shortLinks : []);
-    } catch (err) {
-      setError("短鏈結載入失敗。");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStudentSubmit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      if (!String(studentForm.id || "").trim()) {
-        throw new Error("請先填寫學號。");
-      }
-      const exists = students.some(
-        (item) => String(item.id || "").trim() === String(studentForm.id || "").trim()
-      );
-      const action = exists ? "updateStudent" : "createStudent";
-      const { result } = await apiRequest({ action: action, data: studentForm });
-      if (!result.ok) {
-        throw new Error(result.error || "儲存失敗");
-      }
-      setStudentForm({
-        id: "",
-        name: "",
-        googleSub: "",
-        googleEmail: "",
-      });
-      await loadStudents();
-    } catch (err) {
-      setError(err.message || "儲存失敗");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleStudentEdit = (student) => {
-    setStudentForm({
-      id: student.id || "",
-      name: student.name || "",
-      googleSub: student.googleSub || "",
-      googleEmail: student.googleEmail || "",
-    });
-  };
-
-  const handleStudentDelete = async (id) => {
-    if (!id) {
-      return;
-    }
-    setSaving(true);
-    try {
-      const { result } = await apiRequest({ action: "deleteStudent", id: id });
-      if (!result.ok) {
-        throw new Error(result.error || "刪除失敗");
-      }
-      await loadStudents();
-    } catch (err) {
-      setError(err.message || "刪除失敗");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleShortLinkSubmit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const action = shortLinkForm.slug ? "updateShortLink" : "createShortLink";
-      const { result } = await apiRequest({ action: action, data: shortLinkForm });
-      if (!result.ok) {
-        throw new Error(result.error || "儲存失敗");
-      }
-      setShortLinkForm({
-        id: "",
-        eventId: "",
-        type: "register",
-        slug: "",
-        targetUrl: "",
-        createdAt: "",
-      });
-      await loadShortLinks();
-    } catch (err) {
-      setError(err.message || "儲存失敗");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleShortLinkEdit = (link) => {
-    setShortLinkForm({
-      id: link.id || "",
-      eventId: link.eventId || "",
-      type: link.type || "register",
-      slug: link.slug || "",
-      targetUrl: link.targetUrl || "",
-      createdAt: link.createdAt || "",
-    });
-  };
-
-  const handleShortLinkDelete = async (slug) => {
-    if (!slug) {
-      return;
-    }
-    setSaving(true);
-    try {
-      const { result } = await apiRequest({ action: "deleteShortLink", slug: slug });
-      if (!result.ok) {
-        throw new Error(result.error || "刪除失敗");
-      }
-      await loadShortLinks();
-    } catch (err) {
-      setError(err.message || "刪除失敗");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const buildShortLinkUrl = (link) => {
-    if (!link || !link.eventId) {
-      return "";
-    }
-    if (link.type === "checkin") {
-      return `${window.location.origin}/checkin?eventId=${encodeURIComponent(link.eventId)}`;
-    }
-    if (!link.slug) {
-      return "";
-    }
-    return `${window.location.origin}/?eventId=${encodeURIComponent(
-      link.eventId
-    )}&slug=${encodeURIComponent(link.slug)}`;
-  };
-
   const handleRegistrationEdit = (registration) => {
     setRegistrationForm({
       id: registration.id || "",
@@ -2894,19 +2924,53 @@ function AdminPage() {
 
   const handleRegistrationSubmit = async (event) => {
     event.preventDefault();
-    if (!registrationForm.id) {
-      setError("請先選擇報名紀錄。");
+    const inputValue = String(registrationForm.id || "").trim();
+    if (!inputValue) {
+      setError("請先輸入報名 ID、學號或姓名。");
       return;
     }
     setSaving(true);
     setError("");
+    setRegistrationStatusMessage("");
     try {
-      const { result } = await apiRequest({ action: "updateRegistration", data: registrationForm });
+      let targetRegistration = null;
+      if (inputValue.toUpperCase().startsWith("P")) {
+        targetRegistration =
+          registrations.find(
+            (item) =>
+              String(item.studentId || "").trim() === inputValue ||
+              String(parseCustomFields_(item.customFields).studentId || "").trim() === inputValue
+          ) || null;
+      } else {
+        const nameMatches = registrations.filter(
+          (item) => normalizeName_(item.userName) === inputValue
+        );
+        if (nameMatches.length > 1) {
+          throw new Error("找到多筆同名報名，請改用報名 ID 或學號。");
+        }
+        targetRegistration = nameMatches[0] || null;
+      }
+      if (!targetRegistration) {
+        const directMatch = registrations.find(
+          (item) => String(item.id || "").trim() === inputValue
+        );
+        targetRegistration = directMatch || null;
+      }
+      if (!targetRegistration) {
+        throw new Error("找不到對應報名，請確認報名 ID/學號/姓名。");
+      }
+
+      const payload = {
+        id: targetRegistration.id,
+        status: registrationForm.status || "registered",
+      };
+      const { result } = await apiRequest({ action: "updateRegistration", data: payload });
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
       setRegistrationForm({ id: "", status: "registered" });
       await loadRegistrations();
+      setRegistrationStatusMessage("已更新報名狀態");
     } catch (err) {
       setError(err.message || "更新失敗");
     } finally {
@@ -3084,6 +3148,41 @@ function AdminPage() {
     });
   };
 
+  const attachments = parseEventAttachments_(form.attachments);
+
+  const handleAddAttachmentLink = () => {
+    const url = String(attachmentUrlInput || "").trim();
+    if (!url) {
+      return;
+    }
+    const name = url.replace(/^https?:\/\//, "");
+    setForm((prev) => {
+      const current = parseEventAttachments_(prev.attachments);
+      const next = current.concat([{ name: name, url: url, fileId: "" }]);
+      return { ...prev, attachments: JSON.stringify(next) };
+    });
+    setAttachmentUrlInput("");
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setForm((prev) => {
+      const current = parseEventAttachments_(prev.attachments);
+      const next = current.filter((_, idx) => idx !== index);
+      return { ...prev, attachments: JSON.stringify(next) };
+    });
+  };
+
+  const handleUploadChange = (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file || !uploadFormRef.current) {
+      return;
+    }
+    uploadCompletedRef.current = false;
+    setUploading(true);
+    setUploadError("");
+    uploadFormRef.current.submit();
+  };
+
   const handleStartAtChange = (value) => {
     const startDate = parseLocalInputDate_(value);
     if (!startDate) {
@@ -3130,6 +3229,91 @@ function AdminPage() {
     setForm(buildDefaultForm(events));
   };
 
+  const registrationsByEvent = registrations.reduce((acc, registration) => {
+    const eventId = normalizeEventId_(registration.eventId);
+    if (!eventId) {
+      return acc;
+    }
+    if (!acc[eventId]) {
+      acc[eventId] = [];
+    }
+    acc[eventId].push(registration);
+    return acc;
+  }, {});
+
+  const checkinsByEvent = checkins.reduce((acc, checkin) => {
+    const eventId = normalizeEventId_(checkin.eventId);
+    if (!eventId) {
+      return acc;
+    }
+    if (!acc[eventId]) {
+      acc[eventId] = [];
+    }
+    acc[eventId].push(checkin);
+    return acc;
+  }, {});
+
+  const registrationList = registrationEventId
+    ? registrationsByEvent[normalizeEventId_(registrationEventId)] || []
+    : registrations;
+  const registeredStudentIdSet = new Set(
+    registrationList
+      .map((item) => {
+        const fields = parseCustomFields_(item.customFields);
+        return String(item.studentId || fields.studentId || "").trim();
+      })
+      .filter((value) => value)
+  );
+  const registeredNameSet = new Set(
+    registrationList
+      .map((item) => normalizeName_(item.userName))
+      .filter((value) => value)
+  );
+
+  const displayStudents = directory.length ? directory : students;
+  const totalStudents = displayStudents.length;
+  const registeredCount =
+    registeredStudentIdSet.size || registeredNameSet.size ? registrationList.length : 0;
+  const unregisteredCount = totalStudents
+    ? Math.max(totalStudents - registeredCount, 0)
+    : 0;
+
+  const filteredStudents = displayStudents.filter((item) =>
+    matchesStudentQuery_(item, studentsQuery)
+  );
+  const filteredStudentsForRegistrations = displayStudents.filter((item) =>
+    matchesStudentQuery_(item, unregisteredQuery)
+  );
+
+  const checkinList = checkinEventId
+    ? checkinsByEvent[normalizeEventId_(checkinEventId)] || []
+    : checkins;
+  const checkinRegistrationSet = new Set(
+    checkinList.map((item) => String(item.registrationId || "").trim())
+  );
+  const checkinStatusByRegistrationId = checkinList.reduce((acc, item) => {
+    const registrationId = String(item.registrationId || "").trim();
+    if (registrationId) {
+      acc[registrationId] = item;
+    }
+    return acc;
+  }, {});
+
+  const pendingCheckins = checkinEventId
+    ? (registrationsByEvent[normalizeEventId_(checkinEventId)] || []).filter((registration) => {
+        if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
+          return false;
+        }
+        const attendance = String(parseCustomFields_(registration.customFields).attendance || "")
+          .trim();
+        if (attendance && attendance !== "出席") {
+          return false;
+        }
+        const registrationId = String(registration.id || "").trim();
+        return registrationId && !checkinRegistrationSet.has(registrationId);
+      })
+    : [];
+
   return (
     <div className="min-h-screen">
       <header className="px-6 pt-8 sm:px-12">
@@ -3156,7 +3340,6 @@ function AdminPage() {
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
               { id: "students", label: "同學" },
-              { id: "shortlinks", label: "短鏈結" },
             ].map((item) => (
               <button
                 key={item.id}
@@ -3180,9 +3363,7 @@ function AdminPage() {
                 ? "報名名單"
                 : activeTab === "checkins"
                 ? "簽到名單"
-                : activeTab === "students"
-                ? "同學名單"
-                : "短鏈結"}
+                : "同學名單"}
             </h2>
             {loading ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -3229,149 +3410,204 @@ function AdminPage() {
           ) : null}
 
           {activeTab === "registrations" ? (
-            <div className="mt-6 space-y-4">
-              {registrations.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.userName}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.eventId} · {item.userEmail}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleRegistrationEdit(item)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      更新狀態
-                    </button>
-                    <button
-                      onClick={() => handleRegistrationDelete(item.id)}
-                      disabled={saving}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      刪除
-                    </button>
+            <div className="mt-6 space-y-6">
+              <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+                <div className="grid gap-2 text-sm">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    選擇活動
+                  </label>
+                  <select
+                    value={registrationEventId}
+                    onChange={(event) => setRegistrationEventId(event.target.value)}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  >
+                    {events.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.title} · {event.id}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                      已報名 {registeredCount}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">
+                      未報名 {unregisteredCount}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                      總數 {totalStudents}
+                    </span>
                   </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+                  <span>報名狀態</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-xs text-slate-500">
+                    色塊提示報名狀態：綠色＝已報名，灰色＝未報名。
+                  </p>
+                  <input
+                    value={unregisteredQuery}
+                    onChange={(event) => setUnregisteredQuery(event.target.value)}
+                    placeholder="搜尋姓名、Email、學號..."
+                    className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                {filteredStudentsForRegistrations.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {filteredStudentsForRegistrations.map((student) => {
+                      const studentId = String(student.id || "").trim();
+                      const displayName = getDisplayName_(student);
+                      const normalizedName = normalizeName_(displayName);
+                      const isRegistered =
+                        (studentId && registeredStudentIdSet.has(studentId)) ||
+                        (normalizedName && registeredNameSet.has(normalizedName));
+                      return (
+                        <span
+                          key={student.id || student.googleEmail || student.email}
+                          title={student.googleEmail || student.email || ""}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+                            isRegistered
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-slate-50 text-slate-600"
+                          }`}
+                        >
+                          {displayName || "未命名"}
+                          {student.id ? `· ${student.id}` : ""}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">目前沒有資料。</p>
+                )}
+              </div>
             </div>
           ) : null}
 
           {activeTab === "checkins" ? (
-            <div className="mt-6 space-y-4">
-              {checkins.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.registrationId}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.eventId} · {item.checkinAt}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleCheckinDelete(item.id)}
-                    disabled={saving}
-                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+            <div className="mt-6 space-y-6">
+              <div className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+                <div className="grid gap-2 text-sm">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    選擇活動
+                  </label>
+                  <select
+                    value={checkinEventId}
+                    onChange={(event) => setCheckinEventId(event.target.value)}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                   >
-                    刪除
-                  </button>
+                    {events.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.title} · {event.id}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                      已簽到 {checkinList.length}
+                    </span>
+                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                      未簽到 {pendingCheckins.length}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                      總數 {checkinList.length + pendingCheckins.length}
+                    </span>
+                  </div>
                 </div>
-              ))}
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
+                  <span>簽到狀態</span>
+                </div>
+                <p className="text-xs text-slate-500">
+                  色塊提示簽到狀態：綠色＝已簽到，琥珀＝未簽到。
+                </p>
+                {registrationList.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {registrationList.map((registration) => {
+                      const registrationId = String(registration.id || "").trim();
+                      const checkin = checkinStatusByRegistrationId[registrationId] || null;
+                      const studentId = registration.studentId;
+                      return (
+                        <span
+                          key={registrationId || registration.userEmail}
+                          title={checkin && checkin.checkinAt ? checkin.checkinAt : ""}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+                            checkin
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-amber-200 bg-amber-50 text-amber-800"
+                          }`}
+                        >
+                          {registration.userName || "未命名"}
+                          {studentId ? `· ${studentId}` : ""}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">目前沒有資料。</p>
+                )}
+              </div>
             </div>
           ) : null}
 
           {activeTab === "students" ? (
             <div className="mt-6 space-y-4">
-              {students.map((item) => (
+              {!directory.length ? (
+                <p className="text-xs text-amber-600">
+                  目前顯示 Students 基本資料。若要顯示完整欄位，請先到 /directory 登入。
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-slate-500">共 {filteredStudents.length} 筆</p>
+                <input
+                  value={studentsQuery}
+                  onChange={(event) => setStudentsQuery(event.target.value)}
+                  placeholder="搜尋姓名、Email、學號..."
+                  className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                />
+              </div>
+              {filteredStudents.map((item) => (
                 <div
-                  key={item.id || item.name}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                  key={item.id || item.googleEmail}
+                  className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.name}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.id} · {item.googleEmail || "-"}
-                    </p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {getDisplayName_(item) || "未命名"}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        <span className="tabular-nums">{item.id || "-"}</span> · {item.googleEmail || item.email || "-"}
+                      </p>
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {item.nameEn ? `EN: ${item.nameEn}` : item.googleSub || "-"}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleStudentEdit(item)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      編輯
-                    </button>
-                    <button
-                      onClick={() => handleStudentDelete(item.id)}
-                      disabled={saving}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      刪除
-                    </button>
-                  </div>
+                  {item.company ||
+                  item.title ||
+                  item.dietaryRestrictions ||
+                  item.preferredName ||
+                  item.nameEn ? (
+                    <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                      <div>稱呼: {item.preferredName || "-"}</div>
+                      <div>英文姓名: {item.nameEn || "-"}</div>
+                      <div>公司: {item.company || "-"}</div>
+                      <div>職稱: {item.title || "-"}</div>
+                      <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
           ) : null}
 
-          {activeTab === "shortlinks" ? (
-            <div className="mt-6 space-y-4">
-              {shortLinks.map((item) => (
-                <div
-                  key={item.slug}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                >
-                  <div>
-                    <p className="font-semibold text-slate-900">{item.slug}</p>
-                    <p className="text-xs text-slate-500">
-                      {item.eventId} · {item.type}
-                    </p>
-                    {buildShortLinkUrl(item) ? (
-                      <a
-                        href={buildShortLinkUrl(item)}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 block text-xs font-medium text-slate-500 hover:text-slate-700"
-                      >
-                        {buildShortLinkUrl(item)}
-                      </a>
-                    ) : null}
-                  </div>
-                  {item.type === "checkin" && buildShortLinkUrl(item) ? (
-                    <div className="flex items-center gap-3">
-                      <img
-                        alt="Check-in QR Code"
-                        className="h-20 w-20 rounded-xl border border-slate-200 bg-white p-1"
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                          buildShortLinkUrl(item)
-                        )}`}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleShortLinkEdit(item)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      編輯
-                    </button>
-                    <button
-                      onClick={() => handleShortLinkDelete(item.slug)}
-                      disabled={saving}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      刪除
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
         </section>
 
         {activeTab === "events" ? (
@@ -3381,14 +3617,28 @@ function AdminPage() {
             </h2>
             <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">活動類別</label>
+              <select
+                value={form.category}
+                onChange={(event) => handleCategoryChange(event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              >
+                {EVENT_CATEGORIES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">活動 ID</label>
               <input
                 value={form.id}
-                onChange={(event) => handleChange("id", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                readOnly
+                className="h-11 cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-100 px-4 text-sm text-slate-700 shadow-sm outline-none"
               />
               <p className="text-xs text-slate-400">
-                建議格式: EVT-YYYYMMDD-###，系統會自動預填。
+                系統自動產生，格式為 YYMMDDNN。
               </p>
             </div>
             <div className="grid gap-2">
@@ -3406,6 +3656,88 @@ function AdminPage() {
                 onChange={(event) => handleChange("description", event.target.value)}
                 rows="3"
                 className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              />
+            </div>
+            <div className="grid gap-3 sm:col-span-2">
+              <label className="text-sm font-medium text-slate-700">參考檔案</label>
+              <div className="flex flex-wrap gap-3">
+                <input
+                  type="text"
+                  value={attachmentUrlInput}
+                  onChange={(event) => setAttachmentUrlInput(event.target.value)}
+                  placeholder="貼上檔案分享連結"
+                  className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAttachmentLink}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  加入連結
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <form
+                  ref={uploadFormRef}
+                  action={API_URL}
+                  method="post"
+                  encType="multipart/form-data"
+                  target="upload-frame"
+                >
+                  <input type="hidden" name="eventId" value={form.id} />
+                  <label className="inline-flex h-11 cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300">
+                    上傳檔案
+                    <input
+                      ref={uploadFileRef}
+                      type="file"
+                      name="file"
+                      className="hidden"
+                      onChange={handleUploadChange}
+                    />
+                  </label>
+                </form>
+                {uploading ? <span className="text-xs text-slate-500">上傳中...</span> : null}
+                {uploadError ? <span className="text-xs text-rose-600">{uploadError}</span> : null}
+              </div>
+              {attachments.length ? (
+                <div className="space-y-2">
+                  {attachments.map((item, index) => (
+                    <div
+                      key={`${item.url}-${index}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs text-slate-600"
+                    >
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-slate-700 hover:text-slate-900"
+                      >
+                        {item.name || item.url}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(index)}
+                        className="text-xs font-semibold text-rose-600"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">尚未加入任何參考檔案。</p>
+              )}
+              <iframe
+                name="upload-frame"
+                title="upload-frame"
+                className="hidden"
+                onLoad={() => {
+                  if (!uploading || uploadCompletedRef.current) {
+                    return;
+                  }
+                  setUploading(false);
+                  setUploadError("上傳完成但未收到回應，請確認 Apps Script 已重新部署");
+                }}
               />
             </div>
             <div className="grid gap-2">
@@ -3504,12 +3836,12 @@ function AdminPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">報名連結</label>
-              <input
-                value={form.registerUrl}
-                onChange={(event) => handleChange("registerUrl", event.target.value)}
-                placeholder="https://your-domain/register?eventId=EVT-..."
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-              />
+                <input
+                  value={form.registerUrl}
+                  onChange={(event) => handleChange("registerUrl", event.target.value)}
+                  placeholder="https://your-domain/register?eventId=24011801"
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                />
               <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
                 <button
                   type="button"
@@ -3584,12 +3916,12 @@ function AdminPage() {
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <label className="text-sm font-medium text-slate-700">簽到連結</label>
-              <input
-                value={form.checkinUrl}
-                onChange={(event) => handleChange("checkinUrl", event.target.value)}
-                placeholder="https://your-domain/checkin?eventId=EVT-..."
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-              />
+                <input
+                  value={form.checkinUrl}
+                  onChange={(event) => handleChange("checkinUrl", event.target.value)}
+                  placeholder="https://your-domain/checkin?eventId=24011801"
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                />
               <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
                 <button
                   type="button"
@@ -3672,17 +4004,6 @@ function AdminPage() {
                 <option value="closed">已結束</option>
               </select>
             </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">活動類別</label>
-              <select
-                value={form.category}
-                onChange={(event) => handleCategoryChange(event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-              >
-                <option value="gathering">聚餐</option>
-                <option value="meeting">開會</option>
-              </select>
-            </div>
             <div className="flex items-center gap-3 sm:col-span-2">
               <button
                 type="submit"
@@ -3719,139 +4040,10 @@ function AdminPage() {
 
         {activeTab === "students" ? (
           <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">維護同學資料</h2>
-            <form onSubmit={handleStudentSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">學號</label>
-                <input
-                  value={studentForm.id}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, id: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">姓名</label>
-                <input
-                  value={studentForm.name}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, name: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">Google Email</label>
-                <input
-                  value={studentForm.googleEmail}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, googleEmail: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">Google Sub</label>
-                <input
-                  value={studentForm.googleSub}
-                  onChange={(event) => setStudentForm((prev) => ({ ...prev, googleSub: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="flex items-center gap-3 sm:col-span-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? "儲存中..." : "儲存同學資料"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setStudentForm({
-                      id: "",
-                      name: "",
-                      googleSub: "",
-                      googleEmail: "",
-                    })
-                  }
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
-                >
-                  清除表單
-                </button>
-              </div>
-            </form>
-          </section>
-        ) : null}
-
-        {activeTab === "shortlinks" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">維護短鏈結</h2>
-            <form onSubmit={handleShortLinkSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">Slug</label>
-                <input
-                  value={shortLinkForm.slug}
-                  onChange={(event) => setShortLinkForm((prev) => ({ ...prev, slug: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">活動 ID</label>
-                <input
-                  value={shortLinkForm.eventId}
-                  onChange={(event) => setShortLinkForm((prev) => ({ ...prev, eventId: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">類型</label>
-                <select
-                  value={shortLinkForm.type}
-                  onChange={(event) => setShortLinkForm((prev) => ({ ...prev, type: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                >
-                  <option value="register">報名</option>
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">Target URL</label>
-                <input
-                  value={shortLinkForm.targetUrl}
-                  onChange={(event) => setShortLinkForm((prev) => ({ ...prev, targetUrl: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="grid gap-2 sm:col-span-2">
-                <label className="text-sm font-medium text-slate-700">建立時間</label>
-                <input
-                  value={shortLinkForm.createdAt}
-                  onChange={(event) => setShortLinkForm((prev) => ({ ...prev, createdAt: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              <div className="flex items-center gap-3 sm:col-span-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? "儲存中..." : "儲存短鏈結"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShortLinkForm({
-                      id: "",
-                      eventId: "",
-                      type: "register",
-                      slug: "",
-                      targetUrl: "",
-                      createdAt: "",
-                    })
-                  }
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
-                >
-                  清除表單
-                </button>
-              </div>
-            </form>
+            <h2 className="text-lg font-semibold text-slate-900">同學列表</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              此處顯示 Students 名單，提供未報名統計與快速查詢。
+            </p>
           </section>
         ) : null}
 
@@ -3864,6 +4056,7 @@ function AdminPage() {
                 <input
                   value={registrationForm.id}
                   onChange={(event) => setRegistrationForm((prev) => ({ ...prev, id: event.target.value }))}
+                  placeholder="輸入報名 ID / 學號 (P...) / 姓名"
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
                 />
               </div>
@@ -3886,6 +4079,11 @@ function AdminPage() {
                 >
                   {saving ? "更新中..." : "更新狀態"}
                 </button>
+                {registrationStatusMessage ? (
+                  <span className="text-xs font-semibold text-emerald-600">
+                    {registrationStatusMessage}
+                  </span>
+                ) : null}
               </div>
             </form>
           </section>
@@ -3904,6 +4102,36 @@ function DirectoryPage() {
   const [loading, setLoading] = useState(false);
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState("");
+  const [directoryQuery, setDirectoryQuery] = useState("");
+
+  const matchesDirectoryQuery_ = (item, query) => {
+    const needle = String(query || "").trim().toLowerCase();
+    if (!needle) {
+      return true;
+    }
+    const haystack = [
+      item.id,
+      item.email,
+      item.nameZh,
+      item.nameEn,
+      item.preferredName,
+      item.group,
+      item.company,
+      item.title,
+      item.mobile,
+      item.backupPhone,
+      item.emergencyContact,
+      item.emergencyPhone,
+      item.dietaryRestrictions,
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(needle);
+  };
+
+  const filteredDirectory = directory.filter((item) =>
+    matchesDirectoryQuery_(item, directoryQuery)
+  );
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -4100,10 +4328,18 @@ function DirectoryPage() {
         <section className="mt-6 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">同學列表</h2>
-            <span className="text-xs text-slate-400">共 {directory.length} 筆</span>
+            <span className="text-xs text-slate-400">共 {filteredDirectory.length} 筆</span>
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <input
+              value={directoryQuery}
+              onChange={(event) => setDirectoryQuery(event.target.value)}
+              placeholder="搜尋姓名、Email、公司、分組..."
+              className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+            />
           </div>
           <div className="mt-6 space-y-4">
-            {directory.map((item) => (
+            {filteredDirectory.map((item) => (
               <div
                 key={item.id || item.email}
                 className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
@@ -4239,21 +4475,20 @@ function addMinutes_(date, minutes) {
 }
 
 function generateEventId_(date, category, events, seed) {
-  const prefix = "EVT";
-  const ymd = `${date.getFullYear()}${pad2_(date.getMonth() + 1)}${pad2_(date.getDate())}`;
-  const categoryCode = category === "meeting" ? "M" : "G";
-  const base = `${prefix}-${ymd}-${categoryCode}`;
+  const yymmdd = `${String(date.getFullYear()).slice(-2)}${pad2_(date.getMonth() + 1)}${pad2_(
+    date.getDate()
+  )}`;
   const suffixes = (events || [])
     .map((event) => String(event.id || ""))
-    .filter((id) => id.startsWith(base))
-    .map((id) => id.split("-").slice(-1)[0])
+    .filter((id) => id.startsWith(yymmdd))
+    .map((id) => id.slice(yymmdd.length))
     .map((value) => parseInt(value, 10))
     .filter((value) => !isNaN(value));
   const seedValue = seed ? new Date(seed) : new Date();
-  const seedDay = `${seedValue.getFullYear()}${pad2_(seedValue.getMonth() + 1)}${pad2_(
-    seedValue.getDate()
-  )}`;
+  const seedDay = `${String(seedValue.getFullYear()).slice(-2)}${pad2_(
+    seedValue.getMonth() + 1
+  )}${pad2_(seedValue.getDate())}`;
   const baseIndex = parseInt(seedDay.slice(-2), 10) % 99;
   const next = suffixes.length ? Math.max.apply(null, suffixes) + 1 : baseIndex + 1;
-  return `${base}-${String(next).padStart(2, "0")}`;
+  return `${yymmdd}${String(next).padStart(2, "0")}`;
 }

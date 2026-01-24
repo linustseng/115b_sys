@@ -1,2 +1,2 @@
-id,title,description,startAt,endAt,location,address,registrationOpenAt,registrationCloseAt,checkinOpenAt,checkinCloseAt,registerUrl,checkinUrl,capacity,status,category,formSchema
-EVT-2024-10-18,Autumn Gathering,Class gathering event,2024-10-18 18:30,2024-10-18 21:30,Huangxi Hall,台北市中山區樂群二路199號,2024-09-20 09:00,2024-10-10 23:00,2024-10-18 18:00,2024-10-18 20:30,https://example.com/register?eventId=EVT-2024-10-18,https://example.com/checkin?eventId=EVT-2024-10-18,60,open,gathering,"{}"
+id,title,description,startAt,endAt,location,address,registrationOpenAt,registrationCloseAt,checkinOpenAt,checkinCloseAt,registerUrl,checkinUrl,capacity,status,category,attachments,formSchema
+24101801,Autumn Gathering,Class gathering event,2024-10-18 18:30,2024-10-18 21:30,Huangxi Hall,台北市中山區樂群二路199號,2024-09-20 09:00,2024-10-10 23:00,2024-10-18 18:00,2024-10-18 20:30,https://example.com/register?eventId=24101801,https://example.com/checkin?eventId=24101801,60,open,gathering,"[]","{}"

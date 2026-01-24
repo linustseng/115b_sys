@@ -3,13 +3,15 @@ const SHEETS = {
   registrations: "Registrations",
   students: "Students",
   checkins: "Checkins",
-  shortLinks: "ShortLinks",
   directory: "Directory",
   admins: "AdminUsers",
 };
 
 function doPost(e) {
   try {
+    if (e && e.postData && e.postData.type && e.postData.type.indexOf("multipart/form-data") === 0) {
+      return handleUpload_(e);
+    }
     const payload = parsePayload_(e);
     if (!payload.action) {
       return jsonResponse(400, null, "Missing action");
@@ -284,48 +286,6 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { id: checkinId }, error: null };
   }
 
-  if (payload.action === "listShortLinks") {
-    return { ok: true, data: { shortLinks: listShortLinks_() }, error: null };
-  }
-
-  if (payload.action === "createShortLink") {
-    const data = payload.data || {};
-    let slug = String(data.slug || "").trim();
-    if (!slug) {
-      return { ok: false, data: null, error: "Missing slug" };
-    }
-    if (findShortLinkBySlug_(slug)) {
-      return { ok: false, data: null, error: "ShortLink already exists" };
-    }
-    const created = appendShortLink_(data);
-    return { ok: true, data: { shortLink: created }, error: null };
-  }
-
-  if (payload.action === "updateShortLink") {
-    const data = payload.data || {};
-    const slug = String(data.slug || "").trim();
-    if (!slug) {
-      return { ok: false, data: null, error: "Missing slug" };
-    }
-    const updated = updateShortLink_(slug, data);
-    if (!updated) {
-      return { ok: false, data: null, error: "ShortLink not found" };
-    }
-    return { ok: true, data: { shortLink: updated }, error: null };
-  }
-
-  if (payload.action === "deleteShortLink") {
-    const slug = String(payload.slug || "").trim();
-    if (!slug) {
-      return { ok: false, data: null, error: "Missing slug" };
-    }
-    const removed = deleteShortLink_(slug);
-    if (!removed) {
-      return { ok: false, data: null, error: "ShortLink not found" };
-    }
-    return { ok: true, data: { slug: slug }, error: null };
-  }
-
   if (payload.action === "login") {
     const email = normalizeEmail_(payload.email);
     const password = String(payload.password || "");
@@ -541,6 +501,37 @@ function jsonResponse(statusCode, data, errorMessage) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+function handleUpload_(e) {
+  const blob = e && e.parameter ? e.parameter.file : null;
+  if (!blob) {
+    return ContentService.createTextOutput(
+      "<script>window.parent.postMessage({type:'uploadResult',payload:{ok:false,error:'Missing file'}},'*');</script>"
+    ).setMimeType(ContentService.MimeType.HTML);
+  }
+  const eventId = String((e && e.parameter && e.parameter.eventId) || "").trim();
+  const folderId = String((e && e.parameter && e.parameter.folderId) || "").trim();
+  var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
+  var file = folder.createFile(blob);
+  if (eventId) {
+    file.setName(eventId + "-" + file.getName());
+  }
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  var payload = {
+    ok: true,
+    data: {
+      fileId: file.getId(),
+      name: file.getName(),
+      url: file.getUrl(),
+    },
+    error: null,
+  };
+  var html =
+    "<script>window.parent.postMessage({type:'uploadResult',payload:" +
+    JSON.stringify(payload) +
+    "},'*');</script>";
+  return ContentService.createTextOutput(html).setMimeType(ContentService.MimeType.HTML);
+}
+
 function jsonpResponse_(e, payload) {
   const callback = e && e.parameter ? e.parameter.callback : null;
   const body = callback ? callback + "(" + JSON.stringify(payload) + ")" : JSON.stringify(payload);
@@ -753,15 +744,6 @@ function listCheckins_() {
   });
 }
 
-function listShortLinks_() {
-  const sheet = getSheet_(SHEETS.shortLinks);
-  const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet);
-  return rows.map(function (row) {
-    return mapRowToObject_(headerMap, row);
-  });
-}
-
 function listDirectory_() {
   const sheet = getSheet_(SHEETS.directory);
   const headerMap = getHeaderMap_(sheet);
@@ -837,67 +819,6 @@ function deleteStudent_(studentId) {
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (String(row[idIndex]).trim() === studentId) {
-      sheet.deleteRow(i + 2);
-      return true;
-    }
-  }
-  return false;
-}
-
-function appendShortLink_(data) {
-  const sheet = getSheet_(SHEETS.shortLinks);
-  const headers = getHeaders_(sheet);
-  const record = normalizeShortLinkRecord_(data);
-  const values = new Array(headers.length).fill("");
-  headers.forEach(function (header, index) {
-    if (record.hasOwnProperty(header)) {
-      values[index] = record[header];
-    }
-  });
-  sheet.appendRow(values);
-  return record;
-}
-
-function updateShortLink_(slug, data) {
-  const sheet = getSheet_(SHEETS.shortLinks);
-  const headerMap = getHeaderMap_(sheet);
-  const slugIndex = headerMap.slug;
-  if (slugIndex === undefined) {
-    throw new Error("ShortLinks sheet missing slug column");
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowSlug = String(row[slugIndex]).trim();
-    if (rowSlug !== slug) {
-      continue;
-    }
-    const record = normalizeShortLinkRecord_(Object.assign({}, mapRowToObject_(headerMap, row), data));
-    const headers = getHeaders_(sheet);
-    const values = new Array(headers.length).fill("");
-    headers.forEach(function (header, index) {
-      if (record.hasOwnProperty(header)) {
-        values[index] = record[header];
-      }
-    });
-    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
-    return record;
-  }
-  return null;
-}
-
-function deleteShortLink_(slug) {
-  const sheet = getSheet_(SHEETS.shortLinks);
-  const headerMap = getHeaderMap_(sheet);
-  const slugIndex = headerMap.slug;
-  if (slugIndex === undefined) {
-    throw new Error("ShortLinks sheet missing slug column");
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowSlug = String(row[slugIndex]).trim();
-    if (rowSlug === slug) {
       sheet.deleteRow(i + 2);
       return true;
     }
@@ -1087,6 +1008,7 @@ function normalizeEventRecord_(data) {
     capacity: data.capacity || "",
     status: String(data.status || "draft").trim(),
     category: String(data.category || "gathering").trim(),
+    attachments: data.attachments || "",
     formSchema: data.formSchema || "",
   };
 }
@@ -1100,21 +1022,11 @@ function normalizeStudentRecord_(data) {
   };
 }
 
-function normalizeShortLinkRecord_(data) {
-  return {
-    id: String(data.id || "").trim(),
-    eventId: String(data.eventId || "").trim(),
-    type: String(data.type || "").trim(),
-    slug: String(data.slug || "").trim(),
-    targetUrl: String(data.targetUrl || "").trim(),
-    createdAt: data.createdAt || "",
-  };
-}
-
 function normalizeRegistrationRecord_(data) {
   return {
     id: String(data.id || "").trim(),
     eventId: String(data.eventId || "").trim(),
+    studentId: String(data.studentId || "").trim(),
     userName: String(data.userName || "").trim(),
     userEmail: normalizeEmail_(data.userEmail),
     userPhone: data.userPhone || "",
@@ -1195,32 +1107,6 @@ function requireAuth_(payload) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
   return { ok: true, data: { email: email }, error: null };
-}
-
-function findShortLinkBySlug_(slug, type) {
-  const sheet = getSheet_(SHEETS.shortLinks);
-  const headerMap = getHeaderMap_(sheet);
-  const slugIndex = headerMap.slug;
-  const typeIndex = headerMap.type;
-  if (slugIndex === undefined) {
-    throw new Error("ShortLinks sheet missing slug column");
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowSlug = String(row[slugIndex]).trim();
-    if (rowSlug !== slug) {
-      continue;
-    }
-    if (typeIndex !== undefined && type) {
-      const rowType = String(row[typeIndex]).trim();
-      if (rowType && rowType !== type) {
-        continue;
-      }
-    }
-    return mapRowToObject_(headerMap, row);
-  }
-  return null;
 }
 
 function countRegistrations_(eventId) {

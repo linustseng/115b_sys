@@ -1,2 +1,0 @@
-id,eventId,type,slug,targetUrl,createdAt
-SL-REG-001,EVT-2024-10-18,register,reg-abc123,https://example.com/?eventId=EVT-2024-10-18&slug=reg-abc123,2024-09-20 10:00

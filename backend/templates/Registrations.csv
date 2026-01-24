@@ -1,2 +1,2 @@
-id,eventId,userName,userEmail,userPhone,classYear,customFields,status,createdAt,updatedAt
-REG-001,EVT-2024-10-18,Sample User,user@example.com,0912-000-000,,"{\"attendance\":\"出席\"}",registered,2024-09-20 10:00,2024-09-20 10:00
+id,eventId,studentId,userName,userEmail,userPhone,classYear,customFields,status,createdAt,updatedAt
+REG-001,24101801,STU-001,Sample User,user@example.com,0912-000-000,,"{\"attendance\":\"出席\",\"studentId\":\"STU-001\"}",registered,2024-09-20 10:00,2024-09-20 10:00
