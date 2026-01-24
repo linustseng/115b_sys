@@ -53,3 +53,34 @@ body {
     opacity: 0;
   }
 }
+
+@keyframes riseIn {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.entrance {
+  animation: riseIn 0.8s ease-out both;
+}
+
+.entrance-delay-1 {
+  animation-delay: 0.08s;
+}
+
+.entrance-delay-2 {
+  animation-delay: 0.16s;
+}
+
+.entrance-delay-3 {
+  animation-delay: 0.24s;
+}
+
+.entrance-delay-4 {
+  animation-delay: 0.32s;
+}

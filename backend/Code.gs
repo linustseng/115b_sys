@@ -5,6 +5,14 @@ const SHEETS = {
   checkins: "Checkins",
   directory: "Directory",
   admins: "AdminUsers",
+  orderPlans: "OrderPlans",
+  orderResponses: "OrderResponses",
+  softballPlayers: "SoftballPlayers",
+  softballPractices: "SoftballPractices",
+  softballAttendance: "SoftballAttendance",
+  softballFields: "SoftballFields",
+  softballGear: "SoftballGear",
+  softballConfig: "SoftballConfig",
 };
 
 function doPost(e) {
@@ -146,6 +154,241 @@ function handleActionPayload_(payload) {
   if (payload.action === "listEvents") {
     const events = listEvents_();
     return { ok: true, data: { events: events }, error: null };
+  }
+
+  if (payload.action === "listOrderPlans") {
+    const plans = listOrderPlans_();
+    return { ok: true, data: { plans: plans }, error: null };
+  }
+
+  if (payload.action === "createOrderPlan") {
+    const data = payload.data || {};
+    if (!data.date) {
+      return { ok: false, data: null, error: "Missing date" };
+    }
+    const created = createOrderPlan_(data);
+    if (!created) {
+      return { ok: false, data: null, error: "Order plan already exists" };
+    }
+    return { ok: true, data: { plan: created }, error: null };
+  }
+
+  if (payload.action === "updateOrderPlan") {
+    const planId = String(payload.id || payload.orderId || "").trim();
+    if (!planId) {
+      return { ok: false, data: null, error: "Missing order plan id" };
+    }
+    const updated = updateOrderPlan_(planId, payload.data || {});
+    if (!updated) {
+      return { ok: false, data: null, error: "Order plan not found" };
+    }
+    return { ok: true, data: { plan: updated }, error: null };
+  }
+
+  if (payload.action === "listOrderResponses") {
+    const orderId = String(payload.orderId || "").trim();
+    const responses = listOrderResponses_(orderId);
+    return { ok: true, data: { responses: responses }, error: null };
+  }
+
+  if (payload.action === "listOrderResponsesByStudent") {
+    const studentId = String(payload.studentId || "").trim();
+    if (!studentId) {
+      return { ok: false, data: null, error: "Missing student id" };
+    }
+    const responses = listOrderResponsesByStudent_(studentId);
+    return { ok: true, data: { responses: responses }, error: null };
+  }
+
+  if (payload.action === "submitOrderResponse") {
+    const data = payload.data || {};
+    const orderId = String(data.orderId || "").trim();
+    const studentId = String(data.studentId || "").trim();
+    const choice = String(data.choice || "").trim();
+    if (!orderId || !studentId || !choice) {
+      return { ok: false, data: null, error: "Missing orderId/studentId/choice" };
+    }
+    const plan = findOrderPlanById_(orderId);
+    if (!plan) {
+      return { ok: false, data: null, error: "Order plan not found" };
+    }
+    if (isOrderPlanClosed_(plan)) {
+      return { ok: false, data: null, error: "Order plan closed" };
+    }
+    const response = upsertOrderResponse_(orderId, data);
+    return { ok: true, data: { response: response }, error: null };
+  }
+
+  if (payload.action === "listSoftballPlayers") {
+    return { ok: true, data: { players: listSoftballPlayers_() }, error: null };
+  }
+
+  if (payload.action === "listSoftballConfig") {
+    return { ok: true, data: { config: getSoftballConfig_() }, error: null };
+  }
+
+  if (payload.action === "updateSoftballConfig") {
+    const data = payload.data || {};
+    const updated = updateSoftballConfig_(data);
+    return { ok: true, data: { config: updated }, error: null };
+  }
+
+  if (payload.action === "createSoftballPlayer") {
+    const data = payload.data || {};
+    const created = upsertSoftballPlayer_(data, false);
+    if (!created.ok) {
+      return { ok: false, data: null, error: created.error };
+    }
+    return { ok: true, data: { player: created.player }, error: null };
+  }
+
+  if (payload.action === "updateSoftballPlayer") {
+    const data = payload.data || {};
+    const created = upsertSoftballPlayer_(data, true);
+    if (!created.ok) {
+      return { ok: false, data: null, error: created.error };
+    }
+    return { ok: true, data: { player: created.player }, error: null };
+  }
+
+  if (payload.action === "deleteSoftballPlayer") {
+    const playerId = String(payload.id || "").trim();
+    if (!playerId) {
+      return { ok: false, data: null, error: "Missing player id" };
+    }
+    const removed = deleteSoftballPlayer_(playerId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Player not found" };
+    }
+    return { ok: true, data: { id: playerId }, error: null };
+  }
+
+  if (payload.action === "listSoftballPractices") {
+    return { ok: true, data: { practices: listSoftballPractices_() }, error: null };
+  }
+
+  if (payload.action === "createSoftballPractice") {
+    const data = payload.data || {};
+    if (!data.date) {
+      return { ok: false, data: null, error: "Missing date" };
+    }
+    const created = createSoftballPractice_(data);
+    return { ok: true, data: { practice: created }, error: null };
+  }
+
+  if (payload.action === "updateSoftballPractice") {
+    const practiceId = String(payload.id || payload.practiceId || "").trim();
+    if (!practiceId) {
+      return { ok: false, data: null, error: "Missing practice id" };
+    }
+    const updated = updateSoftballPractice_(practiceId, payload.data || {});
+    if (!updated) {
+      return { ok: false, data: null, error: "Practice not found" };
+    }
+    return { ok: true, data: { practice: updated }, error: null };
+  }
+
+  if (payload.action === "deleteSoftballPractice") {
+    const practiceId = String(payload.id || "").trim();
+    if (!practiceId) {
+      return { ok: false, data: null, error: "Missing practice id" };
+    }
+    const removed = deleteSoftballPractice_(practiceId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Practice not found" };
+    }
+    return { ok: true, data: { id: practiceId }, error: null };
+  }
+
+  if (payload.action === "listSoftballFields") {
+    return { ok: true, data: { fields: listSoftballFields_() }, error: null };
+  }
+
+  if (payload.action === "createSoftballField") {
+    const data = payload.data || {};
+    if (!data.name) {
+      return { ok: false, data: null, error: "Missing field name" };
+    }
+    const created = createSoftballField_(data);
+    return { ok: true, data: { field: created }, error: null };
+  }
+
+  if (payload.action === "updateSoftballField") {
+    const fieldId = String(payload.id || "").trim();
+    if (!fieldId) {
+      return { ok: false, data: null, error: "Missing field id" };
+    }
+    const updated = updateSoftballField_(fieldId, payload.data || {});
+    if (!updated) {
+      return { ok: false, data: null, error: "Field not found" };
+    }
+    return { ok: true, data: { field: updated }, error: null };
+  }
+
+  if (payload.action === "deleteSoftballField") {
+    const fieldId = String(payload.id || "").trim();
+    if (!fieldId) {
+      return { ok: false, data: null, error: "Missing field id" };
+    }
+    const removed = deleteSoftballField_(fieldId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Field not found" };
+    }
+    return { ok: true, data: { id: fieldId }, error: null };
+  }
+
+  if (payload.action === "listSoftballGear") {
+    return { ok: true, data: { gear: listSoftballGear_() }, error: null };
+  }
+
+  if (payload.action === "createSoftballGear") {
+    const data = payload.data || {};
+    if (!data.name) {
+      return { ok: false, data: null, error: "Missing gear name" };
+    }
+    const created = createSoftballGear_(data);
+    return { ok: true, data: { gear: created }, error: null };
+  }
+
+  if (payload.action === "updateSoftballGear") {
+    const gearId = String(payload.id || "").trim();
+    if (!gearId) {
+      return { ok: false, data: null, error: "Missing gear id" };
+    }
+    const updated = updateSoftballGear_(gearId, payload.data || {});
+    if (!updated) {
+      return { ok: false, data: null, error: "Gear not found" };
+    }
+    return { ok: true, data: { gear: updated }, error: null };
+  }
+
+  if (payload.action === "deleteSoftballGear") {
+    const gearId = String(payload.id || "").trim();
+    if (!gearId) {
+      return { ok: false, data: null, error: "Missing gear id" };
+    }
+    const removed = deleteSoftballGear_(gearId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Gear not found" };
+    }
+    return { ok: true, data: { id: gearId }, error: null };
+  }
+
+  if (payload.action === "listSoftballAttendance") {
+    const practiceId = String(payload.practiceId || "").trim();
+    const items = listSoftballAttendance_(practiceId);
+    return { ok: true, data: { attendance: items }, error: null };
+  }
+
+  if (payload.action === "submitSoftballAttendance") {
+    const data = payload.data || {};
+    const practiceId = String(data.practiceId || "").trim();
+    const studentId = String(data.studentId || "").trim();
+    if (!practiceId || !studentId) {
+      return { ok: false, data: null, error: "Missing practiceId/studentId" };
+    }
+    const record = upsertSoftballAttendance_(data);
+    return { ok: true, data: { attendance: record }, error: null };
   }
 
   if (payload.action === "createEvent") {
@@ -545,6 +788,14 @@ function handleUpload_(e) {
     file.setName(eventId + "-" + file.getName());
   }
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  if (eventId) {
+    var eventRecord = findEventById_(eventId);
+    if (eventRecord) {
+      var attachments = parseAttachments_(eventRecord.attachments);
+      attachments.push({ name: file.getName(), url: file.getUrl(), fileId: file.getId() });
+      updateEvent_(eventId, { attachments: JSON.stringify(attachments) });
+    }
+  }
   var payload = {
     ok: true,
     data: {
@@ -737,12 +988,227 @@ function findEventById_(eventId) {
   return null;
 }
 
+function findOrderPlanById_(orderId) {
+  const sheet = getSheet_(SHEETS.orderPlans);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("OrderPlans sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === orderId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findSoftballPlayerById_(playerId) {
+  const sheet = getSheet_(SHEETS.softballPlayers);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPlayers sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === playerId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findSoftballPracticeById_(practiceId) {
+  const sheet = getSheet_(SHEETS.softballPractices);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPractices sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === practiceId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findSoftballFieldById_(fieldId) {
+  const sheet = getSheet_(SHEETS.softballFields);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballFields sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === fieldId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findSoftballGearById_(gearId) {
+  const sheet = getSheet_(SHEETS.softballGear);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballGear sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === gearId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
 function listEvents_() {
   const sheet = getSheet_(SHEETS.events);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
   return rows.map(function (row) {
     return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listOrderPlans_() {
+  const sheet = getSheet_(SHEETS.orderPlans);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listSoftballPlayers_() {
+  const sheet = getSheet_(SHEETS.softballPlayers);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listSoftballPractices_() {
+  const sheet = getSheet_(SHEETS.softballPractices);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listSoftballAttendance_(practiceId) {
+  const sheet = getSheet_(SHEETS.softballAttendance);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet).map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  if (!practiceId) {
+    return rows;
+  }
+  const target = String(practiceId).trim();
+  return rows.filter(function (row) {
+    return String(row.practiceId || "").trim() === target;
+  });
+}
+
+function listSoftballFields_() {
+  const sheet = getSheet_(SHEETS.softballFields);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listSoftballGear_() {
+  const sheet = getSheet_(SHEETS.softballGear);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function getSoftballConfig_() {
+  const sheet = getSheet_(SHEETS.softballConfig);
+  const rows = getDataRows_(sheet);
+  const config = {};
+  rows.forEach(function (row) {
+    const key = String(row[0] || "").trim();
+    if (!key) {
+      return;
+    }
+    config[key] = String(row[1] || "").trim();
+  });
+  return config;
+}
+
+function updateSoftballConfig_(data) {
+  const sheet = getSheet_(SHEETS.softballConfig);
+  const headers = getHeaders_(sheet);
+  if (headers.length < 2) {
+    throw new Error("SoftballConfig sheet missing key/value columns");
+  }
+  const rows = getDataRows_(sheet);
+  const indexByKey = {};
+  rows.forEach(function (row, index) {
+    const key = String(row[0] || "").trim();
+    if (key) {
+      indexByKey[key] = index;
+    }
+  });
+  Object.keys(data || {}).forEach(function (key) {
+    const value = String(data[key] || "").trim();
+    if (!key) {
+      return;
+    }
+    if (indexByKey.hasOwnProperty(key)) {
+      const rowIndex = indexByKey[key] + 2;
+      sheet.getRange(rowIndex, 2).setValue(value);
+    } else {
+      sheet.appendRow([key, value]);
+    }
+  });
+  return getSoftballConfig_();
+}
+
+function listOrderResponses_(orderId) {
+  const sheet = getSheet_(SHEETS.orderResponses);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet).map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  if (!orderId) {
+    return rows;
+  }
+  const targetId = String(orderId).trim();
+  return rows.filter(function (row) {
+    return String(row.orderId || "").trim() === targetId;
+  });
+}
+
+function listOrderResponsesByStudent_(studentId) {
+  const sheet = getSheet_(SHEETS.orderResponses);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet).map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  const targetId = String(studentId || "").trim();
+  return rows.filter(function (row) {
+    return String(row.studentId || "").trim() === targetId;
   });
 }
 
@@ -786,6 +1252,34 @@ function appendEvent_(data) {
   const sheet = getSheet_(SHEETS.events);
   const headers = getHeaders_(sheet);
   const record = normalizeEventRecord_(data);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendOrderPlan_(data) {
+  const sheet = getSheet_(SHEETS.orderPlans);
+  const headers = getHeaders_(sheet);
+  const record = normalizeOrderPlanRecord_(data);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendSoftballRecord_(sheetName, data, normalizer) {
+  const sheet = getSheet_(sheetName);
+  const headers = getHeaders_(sheet);
+  const record = normalizer(data);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -1001,6 +1495,397 @@ function updateEvent_(eventId, data) {
   return null;
 }
 
+function upsertSoftballPlayer_(data, mustExist) {
+  const sheet = getSheet_(SHEETS.softballPlayers);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPlayers sheet missing id column");
+  }
+  const playerId = String(data.id || data.studentId || "").trim();
+  if (!playerId) {
+    return { ok: false, error: "Missing player id" };
+  }
+  const existingRows = getDataRows_(sheet);
+  const jerseyNumber = String(data.jerseyNumber || "").trim();
+  if (jerseyNumber) {
+    for (var j = 0; j < existingRows.length; j++) {
+      const row = existingRows[j];
+      const rowId = String(row[idIndex] || "").trim();
+      if (rowId === playerId) {
+        continue;
+      }
+      const rowRecord = mapRowToObject_(headerMap, row);
+      if (String(rowRecord.jerseyNumber || "").trim() === jerseyNumber) {
+        return { ok: false, error: "Jersey number already used" };
+      }
+    }
+  }
+  const nowIso = new Date().toISOString();
+  for (var i = 0; i < existingRows.length; i++) {
+    const row = existingRows[i];
+    if (String(row[idIndex]).trim() !== playerId) {
+      continue;
+    }
+    const record = normalizeSoftballPlayerRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, { id: playerId, updatedAt: nowIso })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return { ok: true, player: record };
+  }
+  if (mustExist) {
+    return { ok: false, error: "Player not found" };
+  }
+  const record = normalizeSoftballPlayerRecord_(
+    Object.assign({}, data, { id: playerId, createdAt: nowIso, updatedAt: nowIso })
+  );
+  const created = appendSoftballRecord_(SHEETS.softballPlayers, record, normalizeSoftballPlayerRecord_);
+  return { ok: true, player: created };
+}
+
+function deleteSoftballPlayer_(playerId) {
+  const sheet = getSheet_(SHEETS.softballPlayers);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPlayers sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === playerId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function createSoftballPractice_(data) {
+  const existing = listSoftballPractices_();
+  const practiceId = String(data.id || generateSoftballPracticeId_(data.date, existing)).trim();
+  if (findSoftballPracticeById_(practiceId)) {
+    return null;
+  }
+  const nowIso = new Date().toISOString();
+  return appendSoftballRecord_(
+    SHEETS.softballPractices,
+    Object.assign({}, data, { id: practiceId, createdAt: nowIso, updatedAt: nowIso }),
+    normalizeSoftballPracticeRecord_
+  );
+}
+
+function updateSoftballPractice_(practiceId, data) {
+  const sheet = getSheet_(SHEETS.softballPractices);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPractices sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== practiceId) {
+      continue;
+    }
+    const record = normalizeSoftballPracticeRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, { id: practiceId, updatedAt: new Date().toISOString() })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  return null;
+}
+
+function deleteSoftballPractice_(practiceId) {
+  const sheet = getSheet_(SHEETS.softballPractices);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballPractices sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === practiceId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function createSoftballField_(data) {
+  const nowIso = new Date().toISOString();
+  return appendSoftballRecord_(
+    SHEETS.softballFields,
+    Object.assign({}, data, { id: generateSoftballId_("FIELD"), createdAt: nowIso, updatedAt: nowIso }),
+    normalizeSoftballFieldRecord_
+  );
+}
+
+function updateSoftballField_(fieldId, data) {
+  const sheet = getSheet_(SHEETS.softballFields);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballFields sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() !== fieldId) {
+      continue;
+    }
+    const record = normalizeSoftballFieldRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, rows[i]), data, { id: fieldId, updatedAt: new Date().toISOString() })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  return null;
+}
+
+function deleteSoftballField_(fieldId) {
+  const sheet = getSheet_(SHEETS.softballFields);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballFields sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === fieldId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function createSoftballGear_(data) {
+  const nowIso = new Date().toISOString();
+  return appendSoftballRecord_(
+    SHEETS.softballGear,
+    Object.assign({}, data, { id: generateSoftballId_("GEAR"), createdAt: nowIso, updatedAt: nowIso }),
+    normalizeSoftballGearRecord_
+  );
+}
+
+function updateSoftballGear_(gearId, data) {
+  const sheet = getSheet_(SHEETS.softballGear);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballGear sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() !== gearId) {
+      continue;
+    }
+    const record = normalizeSoftballGearRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, rows[i]), data, { id: gearId, updatedAt: new Date().toISOString() })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  return null;
+}
+
+function deleteSoftballGear_(gearId) {
+  const sheet = getSheet_(SHEETS.softballGear);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("SoftballGear sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === gearId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function upsertSoftballAttendance_(data) {
+  const sheet = getSheet_(SHEETS.softballAttendance);
+  const headerMap = getHeaderMap_(sheet);
+  const practiceIndex = headerMap.practiceId;
+  const studentIndex = headerMap.studentId;
+  if (practiceIndex === undefined || studentIndex === undefined) {
+    throw new Error("SoftballAttendance sheet missing practiceId/studentId");
+  }
+  const rows = getDataRows_(sheet);
+  const practiceId = String(data.practiceId || "").trim();
+  const studentId = String(data.studentId || "").trim();
+  const nowIso = new Date().toISOString();
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (
+      String(row[practiceIndex] || "").trim() === practiceId &&
+      String(row[studentIndex] || "").trim() === studentId
+    ) {
+      const record = normalizeSoftballAttendanceRecord_(
+        Object.assign({}, mapRowToObject_(headerMap, row), data, { updatedAt: nowIso })
+      );
+      const headers = getHeaders_(sheet);
+      const values = new Array(headers.length).fill("");
+      headers.forEach(function (header, index) {
+        if (record.hasOwnProperty(header)) {
+          values[index] = record[header];
+        }
+      });
+      sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+      return record;
+    }
+  }
+  const record = normalizeSoftballAttendanceRecord_(
+    Object.assign({}, data, { id: practiceId + "-" + studentId, createdAt: nowIso, updatedAt: nowIso })
+  );
+  const headers = getHeaders_(sheet);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function createOrderPlan_(data) {
+  const existing = listOrderPlans_();
+  const orderId = String(data.id || generateOrderPlanId_(data.date, existing)).trim();
+  if (findOrderPlanById_(orderId)) {
+    return null;
+  }
+  const nowIso = new Date().toISOString();
+  return appendOrderPlan_(Object.assign({}, data, { id: orderId, createdAt: nowIso, updatedAt: nowIso }));
+}
+
+function updateOrderPlan_(orderId, data) {
+  const sheet = getSheet_(SHEETS.orderPlans);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("OrderPlans sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== orderId) {
+      continue;
+    }
+    const nextData = Object.assign({}, mapRowToObject_(headerMap, row), data, {
+      updatedAt: new Date().toISOString(),
+    });
+    const record = normalizeOrderPlanRecord_(nextData);
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  return null;
+}
+
+function upsertOrderResponse_(orderId, data) {
+  const sheet = getSheet_(SHEETS.orderResponses);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  const orderIdIndex = headerMap.orderId;
+  const studentIdIndex = headerMap.studentId;
+  if (orderIdIndex === undefined || studentIdIndex === undefined) {
+    throw new Error("OrderResponses sheet missing orderId or studentId column");
+  }
+  const rows = getDataRows_(sheet);
+  const nowIso = new Date().toISOString();
+  const studentId = String(data.studentId || "").trim();
+  let studentName = String(data.studentName || "").trim();
+  let studentEmail = String(data.studentEmail || "").trim();
+  if (!studentName || !studentEmail) {
+    const directory = findDirectoryById_(studentId);
+    const student = findStudentById_(studentId);
+    if (!studentName) {
+      studentName = String((directory && (directory.nameZh || directory.nameEn)) || (student && student.name) || "").trim();
+    }
+    if (!studentEmail) {
+      studentEmail = String((directory && directory.email) || "").trim();
+    }
+  }
+  const payload = Object.assign({}, data, {
+    id: String(data.id || orderId + "-" + studentId).trim(),
+    orderId: orderId,
+    studentId: studentId,
+    studentName: studentName,
+    studentEmail: studentEmail,
+    updatedAt: nowIso,
+  });
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowOrderId = String(row[orderIdIndex] || "").trim();
+    const rowStudentId = String(row[studentIdIndex] || "").trim();
+    if (rowOrderId !== orderId || rowStudentId !== studentId) {
+      continue;
+    }
+    const record = normalizeOrderResponseRecord_(Object.assign({}, mapRowToObject_(headerMap, row), payload));
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  if (idIndex !== undefined) {
+    payload.createdAt = payload.createdAt || nowIso;
+  }
+  const record = normalizeOrderResponseRecord_(Object.assign({}, payload, { createdAt: nowIso }));
+  const headers = getHeaders_(sheet);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
 function deleteEvent_(eventId) {
   const sheet = getSheet_(SHEETS.events);
   const headerMap = getHeaderMap_(sheet);
@@ -1040,6 +1925,191 @@ function normalizeEventRecord_(data) {
     attachments: data.attachments || "",
     formSchema: data.formSchema || "",
   };
+}
+
+function normalizeOrderPlanRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    date: String(data.date || "").trim(),
+    title: String(data.title || "").trim(),
+    optionA: String(data.optionA || "").trim(),
+    optionB: String(data.optionB || "").trim(),
+    optionAImage: String(data.optionAImage || "").trim(),
+    optionBImage: String(data.optionBImage || "").trim(),
+    cutoffAt: String(data.cutoffAt || "").trim(),
+    status: String(data.status || "open").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeOrderResponseRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    orderId: String(data.orderId || "").trim(),
+    studentId: String(data.studentId || "").trim(),
+    studentName: String(data.studentName || "").trim(),
+    studentEmail: normalizeEmail_(data.studentEmail),
+    choice: String(data.choice || "").trim().toUpperCase(),
+    comment: String(data.comment || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeSoftballPlayerRecord_(data) {
+  return {
+    id: String(data.id || data.studentId || "").trim(),
+    name: String(data.name || "").trim(),
+    nameEn: String(data.nameEn || "").trim(),
+    preferredName: String(data.preferredName || "").trim(),
+    email: normalizeEmail_(data.email),
+    phone: String(data.phone || "").trim(),
+    jerseyNumber: String(data.jerseyNumber || "").trim(),
+    jerseyChoices: String(data.jerseyChoices || "").trim(),
+    positions: String(data.positions || "").trim(),
+    bats: String(data.bats || "").trim(),
+    throws: String(data.throws || "").trim(),
+    role: String(data.role || "").trim(),
+    status: String(data.status || "active").trim(),
+    jerseyRequest: String(data.jerseyRequest || "").trim(),
+    positionRequest: String(data.positionRequest || "").trim(),
+    requestStatus: String(data.requestStatus || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeSoftballPracticeRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    date: String(data.date || "").trim(),
+    startAt: String(data.startAt || "").trim(),
+    endAt: String(data.endAt || "").trim(),
+    fieldId: String(data.fieldId || "").trim(),
+    title: String(data.title || "").trim(),
+    focus: String(data.focus || "").trim(),
+    logSummary: String(data.logSummary || "").trim(),
+    nextPlan: String(data.nextPlan || "").trim(),
+    status: String(data.status || "scheduled").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeSoftballAttendanceRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    practiceId: String(data.practiceId || "").trim(),
+    studentId: String(data.studentId || "").trim(),
+    status: String(data.status || "unknown").trim(),
+    note: String(data.note || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeSoftballFieldRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    name: String(data.name || "").trim(),
+    address: String(data.address || "").trim(),
+    mapUrl: String(data.mapUrl || "").trim(),
+    parking: String(data.parking || "").trim(),
+    fee: String(data.fee || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeSoftballGearRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    name: String(data.name || "").trim(),
+    category: String(data.category || "").trim(),
+    quantity: String(data.quantity || "").trim(),
+    owner: String(data.owner || "").trim(),
+    status: String(data.status || "available").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function generateOrderPlanId_(dateValue, existingPlans) {
+  var date = new Date(dateValue);
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  var base =
+    pad2_(date.getFullYear() % 100) + pad2_(date.getMonth() + 1) + pad2_(date.getDate());
+  var seq = 1;
+  if (existingPlans && existingPlans.length) {
+    var count = 0;
+    existingPlans.forEach(function (plan) {
+      if (String(plan.id || "").indexOf(base) === 0) {
+        count += 1;
+      }
+    });
+    seq = count + 1;
+  }
+  return base + pad2_(seq);
+}
+
+function generateSoftballPracticeId_(dateValue, existing) {
+  var date = new Date(dateValue);
+  if (isNaN(date.getTime())) {
+    date = new Date();
+  }
+  var base =
+    pad2_(date.getFullYear() % 100) + pad2_(date.getMonth() + 1) + pad2_(date.getDate());
+  var count = 0;
+  (existing || []).forEach(function (item) {
+    if (String(item.id || "").indexOf(base) === 0) {
+      count += 1;
+    }
+  });
+  return base + pad2_(count + 1);
+}
+
+function generateSoftballId_(prefix) {
+  var now = new Date();
+  return (
+    String(prefix || "SB") +
+    "-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
+}
+
+function pad2_(value) {
+  var text = String(value || "");
+  return text.length < 2 ? "0" + text : text;
+}
+
+function isOrderPlanClosed_(plan) {
+  if (!plan) {
+    return true;
+  }
+  var status = String(plan.status || "").trim().toLowerCase();
+  if (status === "closed") {
+    return true;
+  }
+  if (plan.cutoffAt) {
+    var cutoff = new Date(String(plan.cutoffAt));
+    if (!isNaN(cutoff.getTime()) && new Date() > cutoff) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function normalizeStudentRecord_(data) {

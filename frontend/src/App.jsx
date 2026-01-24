@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
+import emblem115b from "./assets/115b_icon.png";
 
 const gatheringFieldConfig = {
   attendance: {
@@ -196,7 +197,10 @@ const formatEventDate_ = (value) => {
   if (isNaN(parsed.getTime())) {
     return raw;
   }
-  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(parsed.getDate())}`;
+  const weekday = ["日", "一", "二", "三", "四", "五", "六"][parsed.getDay()];
+  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
+    parsed.getDate()
+  )} (${weekday})`;
 };
 
 const formatEventTime_ = (value) => {
@@ -624,6 +628,10 @@ export default function App() {
   const isCheckinPage = pathname.includes("checkin");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
+  const isEventsPage = pathname.includes("events");
+  const isOrderingPage = pathname.includes("ordering");
+  const isSoftballPlayerPage = pathname.includes("softball/player");
+  const isSoftballPage = pathname.includes("softball");
 
   if (isCheckinPage) {
     return <CheckinPage />;
@@ -641,7 +649,23 @@ export default function App() {
     return <RegistrationPage />;
   }
 
-  return <HomePage />;
+  if (isEventsPage) {
+    return <HomePage />;
+  }
+
+  if (isOrderingPage) {
+    return <OrderingPage />;
+  }
+
+  if (isSoftballPlayerPage) {
+    return <SoftballPlayerPage />;
+  }
+
+  if (isSoftballPage) {
+    return <SoftballPage />;
+  }
+
+  return <LandingPage />;
 }
 
 function RegistrationPage() {
@@ -1057,7 +1081,10 @@ function RegistrationPage() {
   );
 
   return (
-    <div className="min-h-screen">
+    <div className="relative min-h-screen overflow-hidden bg-[#f8f5f0]">
+      <div className="pointer-events-none absolute -left-40 top-[-180px] h-[380px] w-[380px] rounded-full bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.2),rgba(59,130,246,0))]" />
+      <div className="pointer-events-none absolute right-[-140px] top-[120px] h-[320px] w-[320px] rounded-full bg-[radial-gradient(circle_at_center,rgba(245,158,11,0.25),rgba(245,158,11,0))]" />
+      <div className="pointer-events-none absolute bottom-[-220px] left-1/3 h-[420px] w-[420px] rounded-full bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.18),rgba(16,185,129,0))]" />
       <header className="px-6 pt-8 sm:px-12">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div>
@@ -1517,6 +1544,2652 @@ function RegistrationPage() {
   );
 }
 
+function LandingPage() {
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const displayName =
+    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    "";
+  const [loginCollapsed, setLoginCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    return window.innerWidth < 768;
+  });
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12 entrance">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-4">
+              <img
+                src={emblem115b}
+                alt="NTU EMBA 115B"
+                className="h-12 w-12 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+              />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                  NTU EMBA 115B
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+                  班級系統入口
+                </h1>
+              </div>
+            </div>
+            <p className="mt-3 text-sm text-slate-500">
+              一次登入，進入活動、訂餐、壘球三個系統。
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <div>
+                <p className="font-semibold text-slate-900">
+                  {displayName ? `${displayName} 已登入` : "已登入"}
+                </p>
+                <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
+              </div>
+            ) : (
+              <p className="font-semibold text-slate-600">尚未登入 Google</p>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200/70 bg-slate-50/70 px-5 py-4 text-xs text-slate-600">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white">
+                115B
+              </span>
+              <span className="font-semibold text-slate-700">共學 · 共餐 · 共練</span>
+              <span className="text-slate-500">2026-2028 and forever</span>
+            </div>
+            <span className="text-slate-500">Class Systems Hub</span>
+          </div>
+        </section>
+
+        <section className="grid gap-6 lg:grid-cols-3">
+          <a
+            href="/events"
+            className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+                  System 01
+                </p>
+                <img
+                  src={emblem115b}
+                  alt="NTU EMBA 115B"
+                  className="h-10 w-10 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+                />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理系統</h3>
+              <p className="mt-3 text-sm text-slate-500">
+                報名、簽到與活動資訊一站完成。
+              </p>
+            </div>
+            <span className="mt-6 inline-flex items-center text-sm font-semibold text-slate-700">
+              前往活動
+              <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+            </span>
+          </a>
+
+          <a
+            href="/ordering"
+            className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-amber-200/70 bg-amber-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(120,53,15,0.4)] transition hover:-translate-y-1 hover:shadow-lg"
+          >
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600/70">
+                  System 02
+                </p>
+                <img
+                  src={emblem115b}
+                  alt="NTU EMBA 115B"
+                  className="h-10 w-10 rounded-2xl border border-amber-200 bg-white p-1 shadow-sm"
+                />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐系統</h3>
+              <p className="mt-3 text-sm text-amber-900/80">
+                週末與特別課程訂餐，前一日 23:59 截止。
+              </p>
+            </div>
+            <span className="mt-6 inline-flex items-center text-sm font-semibold text-amber-700">
+              前往訂餐
+              <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+            </span>
+          </a>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-emerald-200/70 bg-emerald-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(16,185,129,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600/70">
+                  System 03
+                </p>
+                <img
+                  src={emblem115b}
+                  alt="NTU EMBA 115B"
+                  className="h-10 w-10 rounded-2xl border border-emerald-200 bg-white p-1 shadow-sm"
+                />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">壘球隊管理</h3>
+              <p className="mt-3 text-sm text-emerald-900/80">練習排程、點名與出席統計。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/softball"
+                className="inline-flex items-center rounded-full border border-emerald-300 bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm hover:border-emerald-400"
+              >
+                前往管理
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              <a
+                href="/softball/player"
+                className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-emerald-500/30 hover:bg-emerald-500"
+              >
+                球員入口
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section className="entrance entrance-delay-2 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
+            <div className="flex items-center gap-3">
+              {googleLinkedStudent && googleLinkedStudent.email ? (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                  已登入
+                </span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setLoginCollapsed((prev) => !prev)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              >
+                {loginCollapsed ? "展開 ▼" : "收合 ▲"}
+              </button>
+            </div>
+          </div>
+          {!loginCollapsed ? (
+            <>
+              <div className="mt-4">
+                {googleLinkedStudent && googleLinkedStudent.email ? (
+                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-2 text-xs text-emerald-700">
+                    已登入 Google：{googleLinkedStudent.email}
+                  </div>
+                ) : (
+                  <GoogleSigninPanel
+                    title="Google 登入"
+                    helperText="登入後可直接進入各系統，不需再登入。"
+                    onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                  />
+                )}
+              </div>
+              <p className="mt-3 text-[11px] text-slate-500">
+                登入後會儲存在本機，後續進入活動、訂餐與壘球系統會自動帶入。
+              </p>
+            </>
+          ) : null}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function OrderingPage() {
+  const [plans, setPlans] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState({});
+  const [submitMessage, setSubmitMessage] = useState({});
+  const [responsesByOrderId, setResponsesByOrderId] = useState({});
+  const [choiceDrafts, setChoiceDrafts] = useState({});
+  const [commentDrafts, setCommentDrafts] = useState({});
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [loginExpanded, setLoginExpanded] = useState(false);
+
+  const normalizeOrderId_ = (value) => String(value || "").trim();
+
+  const parseOrderDate_ = (value) => {
+    if (!value) {
+      return null;
+    }
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatOrderDateLabel_ = (value) => {
+    const date = parseOrderDate_(value);
+    if (!date) {
+      return value || "-";
+    }
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][date.getDay()];
+    return `${date.getFullYear()}/${pad2_(date.getMonth() + 1)}/${pad2_(date.getDate())} (週${weekday})`;
+  };
+
+  const getOrderCutoffAt_ = (plan) => {
+    if (plan && plan.cutoffAt) {
+      return parseOrderDate_(plan.cutoffAt);
+    }
+    const baseDate = parseOrderDate_(plan && plan.date);
+    if (!baseDate) {
+      return null;
+    }
+    const cutoff = addDays_(baseDate, -1);
+    cutoff.setHours(23, 59, 0, 0);
+    return cutoff;
+  };
+
+  const isPlanClosed_ = (plan) => {
+    if (!plan) {
+      return true;
+    }
+    if (String(plan.status || "").trim().toLowerCase() === "closed") {
+      return true;
+    }
+    const cutoff = getOrderCutoffAt_(plan);
+    if (cutoff && new Date() > cutoff) {
+      return true;
+    }
+    return false;
+  };
+
+  const loadPlans = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listOrderPlans" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setPlans(result.data && result.data.plans ? result.data.plans : []);
+    } catch (err) {
+      setError("訂餐資料載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadResponsesByStudent = async (studentId) => {
+    if (!studentId) {
+      setResponsesByOrderId({});
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "listOrderResponsesByStudent",
+        studentId: studentId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const responses = result.data && result.data.responses ? result.data.responses : [];
+      const map = responses.reduce((acc, item) => {
+        const key = normalizeOrderId_(item.orderId);
+        if (key) {
+          acc[key] = item;
+        }
+        return acc;
+      }, {});
+      setResponsesByOrderId(map);
+    } catch (err) {
+      setResponsesByOrderId({});
+    }
+  };
+
+  useEffect(() => {
+    loadPlans();
+  }, []);
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.id) {
+      loadResponsesByStudent(googleLinkedStudent.id);
+    }
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    setChoiceDrafts((prev) => {
+      const next = { ...prev };
+      plans.forEach((plan) => {
+        const planId = normalizeOrderId_(plan.id);
+        if (!planId || next[planId]) {
+          return;
+        }
+        const existing = responsesByOrderId[planId];
+        next[planId] = existing ? String(existing.choice || "").toUpperCase() : "";
+      });
+      return next;
+    });
+    setCommentDrafts((prev) => {
+      const next = { ...prev };
+      plans.forEach((plan) => {
+        const planId = normalizeOrderId_(plan.id);
+        if (!planId || next[planId] !== undefined) {
+          return;
+        }
+        const existing = responsesByOrderId[planId];
+        next[planId] = existing ? String(existing.comment || "") : "";
+      });
+      return next;
+    });
+  }, [plans, responsesByOrderId]);
+
+  const handleChoiceChange = (planId, choice) => {
+    setChoiceDrafts((prev) => ({ ...prev, [planId]: choice }));
+    setSubmitMessage((prev) => ({ ...prev, [planId]: "" }));
+  };
+
+  const handleCommentChange = (planId, value) => {
+    setCommentDrafts((prev) => ({ ...prev, [planId]: value }));
+  };
+
+  const handleSubmitOrder = async (plan) => {
+    const planId = normalizeOrderId_(plan.id);
+    if (!planId) {
+      return;
+    }
+    if (!googleLinkedStudent || !googleLinkedStudent.id) {
+      setSubmitMessage((prev) => ({ ...prev, [planId]: "請先使用 Google 登入。" }));
+      return;
+    }
+    if (isPlanClosed_(plan)) {
+      setSubmitMessage((prev) => ({ ...prev, [planId]: "訂餐已截止。" }));
+      return;
+    }
+    const choice = String(choiceDrafts[planId] || "").trim().toUpperCase();
+    if (!choice) {
+      setSubmitMessage((prev) => ({ ...prev, [planId]: "請先選擇餐點。" }));
+      return;
+    }
+    setSaving((prev) => ({ ...prev, [planId]: true }));
+    setSubmitMessage((prev) => ({ ...prev, [planId]: "" }));
+    try {
+      const { result } = await apiRequest({
+        action: "submitOrderResponse",
+        data: {
+          orderId: planId,
+          studentId: googleLinkedStudent.id,
+          studentName:
+            googleLinkedStudent.preferredName || googleLinkedStudent.nameZh || googleLinkedStudent.name || "",
+          studentEmail: googleLinkedStudent.email || "",
+          choice: choice,
+          comment: String(commentDrafts[planId] || "").trim(),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "送出失敗");
+      }
+      if (result.data && result.data.response) {
+        setResponsesByOrderId((prev) => ({
+          ...prev,
+          [planId]: result.data.response,
+        }));
+      }
+      setSubmitMessage((prev) => ({ ...prev, [planId]: "已更新訂餐選擇" }));
+    } catch (err) {
+      setSubmitMessage((prev) => ({ ...prev, [planId]: err.message || "送出失敗" }));
+    } finally {
+      setSaving((prev) => ({ ...prev, [planId]: false }));
+    }
+  };
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+            NTU EMBA 115B
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">訂餐系統</h1>
+          <p className="mt-3 text-sm text-slate-500">週末與特別活動訂餐，前一日 23:59 截止。</p>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_25px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+            <span className="font-semibold text-slate-900">Google 登入</span>
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                {googleLinkedStudent.email}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginExpanded((prev) => !prev)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              >
+                {loginExpanded ? "收合" : "登入"}
+              </button>
+            )}
+          </div>
+          {!googleLinkedStudent && loginExpanded ? (
+            <div className="mt-4">
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="登入後即可選擇訂餐，不需再登入。"
+                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-slate-900">本週訂餐</h2>
+            {loading ? (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                載入中
+              </span>
+            ) : null}
+          </div>
+
+          {error ? (
+            <div className="mt-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+              <p className="font-semibold">載入失敗</p>
+              <p className="mt-1 text-amber-600">{error}</p>
+            </div>
+          ) : null}
+
+          {!loading && !plans.length && !error ? (
+            <p className="mt-6 text-sm text-slate-500">目前沒有開放訂餐的日期。</p>
+          ) : null}
+
+          <div className="mt-6 grid gap-5 lg:grid-cols-2">
+            {plans.map((plan) => {
+              const planId = normalizeOrderId_(plan.id);
+              const cutoff = getOrderCutoffAt_(plan);
+              const closed = isPlanClosed_(plan);
+              const choice = choiceDrafts[planId] || "";
+              const response = responsesByOrderId[planId];
+              return (
+                <div
+                  key={planId}
+                  className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm"
+                >
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>{formatOrderDateLabel_(plan.date)}</span>
+                    <span>{closed ? "已截止" : "開放中"}</span>
+                  </div>
+                  <h3 className="mt-3 text-lg font-semibold text-slate-900">
+                    {plan.title || "午餐訂購"}
+                  </h3>
+                  <p className="mt-2 text-xs text-slate-400">
+                    截止時間：{cutoff ? cutoff.toLocaleString() : "前一日 23:59"}
+                  </p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    {[
+                      {
+                        value: "A",
+                        label: plan.optionA || "A 餐",
+                        image: plan.optionAImage,
+                      },
+                      {
+                        value: "B",
+                        label: plan.optionB || "B 餐",
+                        image: plan.optionBImage,
+                      },
+                      { value: "NONE", label: "不吃", image: "" },
+                    ].map((item) => (
+                      <button
+                        key={`${planId}-${item.value}`}
+                        type="button"
+                        disabled={closed || !googleLinkedStudent}
+                        onClick={() => handleChoiceChange(planId, item.value)}
+                        className={`overflow-hidden rounded-2xl border text-left text-xs font-semibold transition ${
+                          choice === item.value
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                        } ${closed || !googleLinkedStudent ? "opacity-60" : ""}`}
+                      >
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.label}
+                            className="h-20 w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-20 items-center justify-center bg-slate-100 text-[11px] text-slate-400">
+                            無圖片
+                          </div>
+                        )}
+                        <div className="px-3 py-2">
+                          <span className="block">{item.label}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <textarea
+                    value={commentDrafts[planId] || ""}
+                    onChange={(event) => handleCommentChange(planId, event.target.value)}
+                    placeholder="匿名意見（可選）"
+                    rows="2"
+                    disabled={closed || !googleLinkedStudent}
+                    className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
+                  />
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-xs text-slate-400">
+                      {response && response.updatedAt ? `已更新：${response.updatedAt}` : "尚未選擇"}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={closed || !googleLinkedStudent || saving[planId]}
+                      onClick={() => handleSubmitOrder(plan)}
+                      className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {saving[planId] ? "送出中..." : "更新選擇"}
+                    </button>
+                  </div>
+                  {submitMessage[planId] ? (
+                    <p className="mt-3 text-xs font-semibold text-amber-600">
+                      {submitMessage[planId]}
+                    </p>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+        >
+          回首頁
+        </a>
+      </main>
+    </div>
+  );
+}
+
+function SoftballPage() {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [players, setPlayers] = useState([]);
+  const [practices, setPractices] = useState([]);
+  const [fields, setFields] = useState([]);
+  const [gear, setGear] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [softballConfig, setSoftballConfig] = useState({});
+  const [jerseyDeadline, setJerseyDeadline] = useState("");
+  const [activePracticeId, setActivePracticeId] = useState("");
+  const [playerForm, setPlayerForm] = useState({
+    id: "",
+    name: "",
+    nameEn: "",
+    preferredName: "",
+    email: "",
+    phone: "",
+    jerseyNumber: "",
+    positions: "",
+    bats: "",
+    throws: "",
+    role: "",
+    status: "active",
+    jerseyRequest: "",
+    positionRequest: "",
+    requestStatus: "",
+    notes: "",
+  });
+  const [practiceForm, setPracticeForm] = useState({
+    id: "",
+    date: "",
+    startAt: "",
+    endAt: "",
+    fieldId: "",
+    title: "",
+    focus: "",
+    logSummary: "",
+    nextPlan: "",
+    status: "scheduled",
+    notes: "",
+  });
+  const [fieldForm, setFieldForm] = useState({
+    id: "",
+    name: "",
+    address: "",
+    mapUrl: "",
+    parking: "",
+    fee: "",
+    notes: "",
+  });
+  const [gearForm, setGearForm] = useState({
+    id: "",
+    name: "",
+    category: "",
+    quantity: "",
+    owner: "",
+    status: "available",
+    notes: "",
+  });
+  const [playerQuery, setPlayerQuery] = useState("");
+  const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+  const [statusMessage, setStatusMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [loginExpanded, setLoginExpanded] = useState(false);
+
+  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "工具人"];
+  const ROLE_OPTIONS = ["隊長", "副隊長", "器材", "出勤", "後勤", "教練"];
+
+  const normalizeId_ = (value) => String(value || "").trim();
+
+  const formatPracticeDate_ = (value) => {
+    const parsed = parseLocalInputDate_(value);
+    if (!parsed) {
+      return value || "-";
+    }
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][parsed.getDay()];
+    return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
+      parsed.getDate()
+    )} (${weekday})`;
+  };
+
+  const loadPlayers = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listSoftballPlayers" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setPlayers(result.data && result.data.players ? result.data.players : []);
+    } catch (err) {
+      setError("球員資料載入失敗。");
+    }
+  };
+
+  const loadPractices = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listSoftballPractices" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const list = result.data && result.data.practices ? result.data.practices : [];
+      const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+      setPractices(sorted);
+    } catch (err) {
+      setError("練習資料載入失敗。");
+    }
+  };
+
+  const loadFields = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listSoftballFields" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setFields(result.data && result.data.fields ? result.data.fields : []);
+    } catch (err) {
+      setError("球場資料載入失敗。");
+    }
+  };
+
+  const loadGear = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listSoftballGear" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setGear(result.data && result.data.gear ? result.data.gear : []);
+    } catch (err) {
+      setError("器材資料載入失敗。");
+    }
+  };
+
+  const loadAttendance = async (practiceId) => {
+    if (!practiceId) {
+      setAttendance([]);
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "listSoftballAttendance",
+        practiceId: practiceId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setAttendance(result.data && result.data.attendance ? result.data.attendance : []);
+    } catch (err) {
+      setError("出席資料載入失敗。");
+    }
+  };
+
+  const loadSoftballConfig = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listSoftballConfig" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const config = result.data && result.data.config ? result.data.config : {};
+      setSoftballConfig(config);
+      setJerseyDeadline(config.jerseyDeadline || "");
+    } catch (err) {
+      setSoftballConfig({});
+    }
+  };
+
+  useEffect(() => {
+    let ignore = false;
+    const loadAll = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        await Promise.all([loadPlayers(), loadPractices(), loadFields(), loadGear(), loadSoftballConfig()]);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+    loadAll();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activePracticeId) {
+      loadAttendance(activePracticeId);
+    }
+  }, [activePracticeId]);
+
+  useEffect(() => {
+    if (!activePracticeId && practices.length) {
+      setActivePracticeId(normalizeId_(practices[0].id));
+    }
+  }, [activePracticeId, practices]);
+
+  useEffect(() => {
+    const selected = practices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId));
+    if (selected) {
+      setPracticeForm({
+        id: selected.id || "",
+        date: selected.date || "",
+        startAt: selected.startAt || "",
+        endAt: selected.endAt || "",
+        fieldId: selected.fieldId || "",
+        title: selected.title || "",
+        focus: selected.focus || "",
+        logSummary: selected.logSummary || "",
+        nextPlan: selected.nextPlan || "",
+        status: selected.status || "scheduled",
+        notes: selected.notes || "",
+      });
+    }
+  }, [activePracticeId, practices]);
+
+  const handlePlayerFormChange = (key, value) => {
+    setPlayerForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handlePracticeFormChange = (key, value) => {
+    setPracticeForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleFieldFormChange = (key, value) => {
+    setFieldForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleGearFormChange = (key, value) => {
+    setGearForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetPlayerForm = () => {
+    setPlayerForm({
+      id: "",
+      name: "",
+      nameEn: "",
+      preferredName: "",
+      email: "",
+      phone: "",
+      jerseyNumber: "",
+      jerseyChoices: "",
+      positions: "",
+      bats: "",
+      throws: "",
+      role: "",
+      status: "active",
+      jerseyRequest: "",
+      positionRequest: "",
+      requestStatus: "",
+      notes: "",
+    });
+  };
+
+  const handleSaveConfig = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "updateSoftballConfig",
+        data: {
+          jerseyDeadline: jerseyDeadline,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      setSoftballConfig(result.data && result.data.config ? result.data.config : {});
+      setStatusMessage("已更新背號截止日");
+    } catch (err) {
+      setStatusMessage(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetPracticeForm = () => {
+    setPracticeForm({
+      id: "",
+      date: "",
+      startAt: "",
+      endAt: "",
+      fieldId: "",
+      title: "",
+      focus: "",
+      logSummary: "",
+      nextPlan: "",
+      status: "scheduled",
+      notes: "",
+    });
+  };
+
+  const resetFieldForm = () => {
+    setFieldForm({
+      id: "",
+      name: "",
+      address: "",
+      mapUrl: "",
+      parking: "",
+      fee: "",
+      notes: "",
+    });
+  };
+
+  const resetGearForm = () => {
+    setGearForm({
+      id: "",
+      name: "",
+      category: "",
+      quantity: "",
+      owner: "",
+      status: "available",
+      notes: "",
+    });
+  };
+
+  const handleReviewRequest = async (player, decision) => {
+    if (!player || !player.id) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const payload = {
+        id: player.id,
+        requestStatus: decision,
+      };
+      if (decision === "approved") {
+        if (player.jerseyRequest) {
+          payload.jerseyNumber = player.jerseyRequest;
+          payload.jerseyRequest = "";
+        }
+        if (player.positionRequest) {
+          payload.positions = player.positionRequest;
+          payload.positionRequest = "";
+        }
+      }
+      if (decision === "rejected") {
+        payload.jerseyRequest = player.jerseyRequest || "";
+        payload.positionRequest = player.positionRequest || "";
+      }
+      const { result } = await apiRequest({ action: "updateSoftballPlayer", data: payload });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      await loadPlayers();
+      setStatusMessage(decision === "approved" ? "已核准申請" : "已退回申請");
+    } catch (err) {
+      setStatusMessage(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePlayer = async (event) => {
+    event.preventDefault();
+    if (!playerForm.id) {
+      setStatusMessage("請先填學號/ID");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = players.find((item) => normalizeId_(item.id) === normalizeId_(playerForm.id))
+        ? "updateSoftballPlayer"
+        : "createSoftballPlayer";
+      const { result } = await apiRequest({ action: action, data: playerForm });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadPlayers();
+      setStatusMessage("已更新球員資料");
+      resetPlayerForm();
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePractice = async (event) => {
+    event.preventDefault();
+    if (!practiceForm.date) {
+      setStatusMessage("請先選日期");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = practiceForm.id ? "updateSoftballPractice" : "createSoftballPractice";
+      const payload = practiceForm.id
+        ? { action: action, id: practiceForm.id, data: practiceForm }
+        : { action: action, data: practiceForm };
+      const { result } = await apiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadPractices();
+      if (result.data && result.data.practice && result.data.practice.id) {
+        setActivePracticeId(result.data.practice.id);
+      }
+      setStatusMessage("已更新練習");
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveField = async (event) => {
+    event.preventDefault();
+    if (!fieldForm.name) {
+      setStatusMessage("請先填球場名稱");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = fieldForm.id ? "updateSoftballField" : "createSoftballField";
+      const payload = fieldForm.id
+        ? { action: action, id: fieldForm.id, data: fieldForm }
+        : { action: action, data: fieldForm };
+      const { result } = await apiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadFields();
+      setStatusMessage("已更新球場");
+      resetFieldForm();
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveGear = async (event) => {
+    event.preventDefault();
+    if (!gearForm.name) {
+      setStatusMessage("請先填器材名稱");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = gearForm.id ? "updateSoftballGear" : "createSoftballGear";
+      const payload = gearForm.id
+        ? { action: action, id: gearForm.id, data: gearForm }
+        : { action: action, data: gearForm };
+      const { result } = await apiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadGear();
+      setStatusMessage("已更新器材");
+      resetGearForm();
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePlayer = async (id) => {
+    if (!id) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteSoftballPlayer", id: id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadPlayers();
+      setStatusMessage("已刪除球員");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeletePractice = async (id) => {
+    if (!id) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteSoftballPractice", id: id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadPractices();
+      setStatusMessage("已刪除練習");
+      if (activePracticeId === id) {
+        setActivePracticeId("");
+      }
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteField = async (id) => {
+    if (!id) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteSoftballField", id: id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadFields();
+      setStatusMessage("已刪除球場");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteGear = async (id) => {
+    if (!id) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteSoftballGear", id: id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadGear();
+      setStatusMessage("已刪除器材");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAttendanceStatus = async (studentId, status) => {
+    if (!activePracticeId) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "submitSoftballAttendance",
+        data: {
+          practiceId: activePracticeId,
+          studentId: studentId,
+          status: status,
+          note: String(attendanceNoteMap[studentId] || "").trim(),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      await loadAttendance(activePracticeId);
+    } catch (err) {
+      setStatusMessage(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const filteredPlayers = players.filter((player) => {
+    if (!playerQuery) {
+      return true;
+    }
+    const needle = String(playerQuery).trim().toLowerCase();
+    const haystack = [
+      player.id,
+      player.name,
+      player.nameEn,
+      player.preferredName,
+      player.email,
+      player.jerseyNumber,
+      player.positions,
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(needle);
+  });
+
+  const pendingRequests = players.filter(
+    (player) => String(player.requestStatus || "").toLowerCase() === "pending"
+  );
+
+  const attendanceByStudent = attendance.reduce((acc, item) => {
+    const key = normalizeId_(item.studentId);
+    if (key) {
+      acc[key] = item;
+    }
+    return acc;
+  }, {});
+
+  const attendanceStats = attendance.reduce(
+    (acc, item) => {
+      const status = String(item.status || "").toLowerCase();
+      if (status === "attend") {
+        acc.attend += 1;
+      } else if (status === "late") {
+        acc.late += 1;
+      } else if (status === "absent") {
+        acc.absent += 1;
+      } else {
+        acc.unknown += 1;
+      }
+      acc.total += 1;
+      return acc;
+    },
+    { total: 0, attend: 0, late: 0, absent: 0, unknown: 0 }
+  );
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+            NTU EMBA 115B
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">壘球隊管理</h1>
+          <p className="mt-3 text-sm text-slate-500">
+            職業等級的隊務管理：球員、練習、場地、出席、器材與日誌。
+          </p>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_25px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+            <span className="font-semibold text-slate-900">Google 登入</span>
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                {googleLinkedStudent.email}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginExpanded((prev) => !prev)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              >
+                {loginExpanded ? "收合" : "登入"}
+              </button>
+            )}
+          </div>
+          {!googleLinkedStudent && loginExpanded ? (
+            <div className="mt-4">
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="登入後可點名與更新球員資訊。"
+                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              />
+            </div>
+          ) : null}
+        </section>
+        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
+            {[
+              { id: "overview", label: "總覽" },
+              { id: "practices", label: "練習排程" },
+              { id: "attendance", label: "點名" },
+              { id: "players", label: "球員" },
+              { id: "fields", label: "球場" },
+              { id: "gear", label: "器材" },
+              { id: "stats", label: "統計" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`rounded-xl px-4 py-2 ${
+                  activeTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {statusMessage ? (
+          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            {statusMessage}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mb-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        {activeTab === "overview" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: "球員人數", value: players.length },
+                { label: "練習場次", value: practices.length },
+                { label: "球場數", value: fields.length },
+                { label: "器材項目", value: gear.length },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs text-slate-400">{item.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-600">
+                <p className="font-semibold text-slate-900">下一次練習</p>
+                {practices.length ? (
+                  <p className="mt-3">
+                    {formatPracticeDate_(practices[0].date)} · {practices[0].title || "練習"}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-slate-400">尚未安排練習。</p>
+                )}
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-600">
+                <p className="font-semibold text-slate-900">管理提醒</p>
+                <p className="mt-3 text-xs text-slate-500">
+                  請至「點名」分頁更新出席狀態與備註。
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "practices" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-slate-900">練習列表</h3>
+                  <button
+                    onClick={resetPracticeForm}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    新增
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {practices.length ? (
+                    practices.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => setActivePracticeId(normalizeId_(item.id))}
+                        className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          normalizeId_(activePracticeId) === normalizeId_(item.id)
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-semibold">{formatPracticeDate_(item.date)}</p>
+                          <p className="text-xs opacity-70">{item.title || "練習"} · {item.status || "scheduled"}</p>
+                        </div>
+                        <span className="text-xs opacity-70">{item.id}</span>
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-xs text-slate-400">尚未建立練習。</p>
+                  )}
+                </div>
+              </div>
+              <form onSubmit={handleSavePractice} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">日期</label>
+                  <input
+                    type="date"
+                    value={practiceForm.date}
+                    onChange={(event) => handlePracticeFormChange("date", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">開始時間</label>
+                    <input
+                      type="time"
+                      value={practiceForm.startAt}
+                      onChange={(event) => handlePracticeFormChange("startAt", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">結束時間</label>
+                    <input
+                      type="time"
+                      value={practiceForm.endAt}
+                      onChange={(event) => handlePracticeFormChange("endAt", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">球場</label>
+                  <select
+                    value={practiceForm.fieldId}
+                    onChange={(event) => handlePracticeFormChange("fieldId", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="">選擇球場</option>
+                    {fields.map((field) => (
+                      <option key={field.id} value={field.id}>
+                        {field.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">標題</label>
+                  <input
+                    value={practiceForm.title}
+                    onChange={(event) => handlePracticeFormChange("title", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">練習重點</label>
+                  <input
+                    value={practiceForm.focus}
+                    onChange={(event) => handlePracticeFormChange("focus", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">練習日誌</label>
+                  <textarea
+                    value={practiceForm.logSummary}
+                    onChange={(event) => handlePracticeFormChange("logSummary", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">下次計畫</label>
+                  <textarea
+                    value={practiceForm.nextPlan}
+                    onChange={(event) => handlePracticeFormChange("nextPlan", event.target.value)}
+                    rows="2"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">狀態</label>
+                    <select
+                      value={practiceForm.status}
+                      onChange={(event) => handlePracticeFormChange("status", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    >
+                      <option value="scheduled">已排程</option>
+                      <option value="closed">結束</option>
+                      <option value="cancelled">取消</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <input
+                      value={practiceForm.notes}
+                      onChange={(event) => handlePracticeFormChange("notes", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "儲存中..." : practiceForm.id ? "更新練習" : "新增練習"}
+                  </button>
+                  {practiceForm.id ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePractice(practiceForm.id)}
+                      className="rounded-2xl border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                    >
+                      刪除
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "attendance" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">練習點名</h3>
+                <p className="text-xs text-slate-500">
+                  {activePracticeId ? `練習編號 ${activePracticeId}` : "請選擇練習"}
+                </p>
+              </div>
+              <select
+                value={activePracticeId}
+                onChange={(event) => setActivePracticeId(event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              >
+                <option value="">選擇練習</option>
+                {practices.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {formatPracticeDate_(item.date)} {item.title || "練習"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-6 grid gap-4 sm:grid-cols-4">
+              {[
+                { label: "出席", value: attendanceStats.attend },
+                { label: "遲到", value: attendanceStats.late },
+                { label: "缺席", value: attendanceStats.absent },
+                { label: "未回覆", value: attendanceStats.unknown },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs text-slate-400">{item.label}</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {filteredPlayers.length ? (
+                filteredPlayers.map((player) => {
+                  const record = attendanceByStudent[normalizeId_(player.id)] || {};
+                  const currentStatus = String(record.status || "unknown").toLowerCase();
+                  return (
+                    <div
+                      key={player.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {player.preferredName || player.name || player.id}
+                          {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {player.positions || "-"} · {player.role || "球員"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {[
+                          { value: "attend", label: "出席" },
+                          { value: "late", label: "遲到" },
+                          { value: "absent", label: "缺席" },
+                          { value: "unknown", label: "未定" },
+                        ].map((item) => (
+                          <button
+                            key={`${player.id}-${item.value}`}
+                            onClick={() => handleAttendanceStatus(player.id, item.value)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              currentStatus === item.value
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        <input
+                          value={attendanceNoteMap[player.id] || record.note || ""}
+                          onChange={(event) =>
+                            setAttendanceNoteMap((prev) => ({ ...prev, [player.id]: event.target.value }))
+                          }
+                          placeholder="備註"
+                          className="h-8 w-40 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-xs text-slate-400">尚未建立球員。</p>
+              )}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "players" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h3 className="text-lg font-semibold text-slate-900">球員管理</h3>
+              <input
+                value={playerQuery}
+                onChange={(event) => setPlayerQuery(event.target.value)}
+                placeholder="搜尋姓名、學號、背號"
+                className="h-10 w-56 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+              />
+            </div>
+            <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-3">
+                {pendingRequests.length ? (
+                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4 text-xs text-amber-700">
+                    <p className="font-semibold text-amber-900">待審核申請</p>
+                    <div className="mt-2 space-y-2">
+                      {pendingRequests.map((player) => (
+                        <div
+                          key={`pending-${player.id}`}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white px-3 py-2"
+                        >
+                          <span className="font-semibold text-slate-800">
+                            {player.preferredName || player.name || player.id}
+                          </span>
+                          <span className="text-amber-700">
+                            背號：{player.jerseyRequest || "-"} · 位置：
+                            {player.positionRequest || "-"}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleReviewRequest(player, "approved")}
+                              className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 hover:border-emerald-300"
+                            >
+                              核准
+                            </button>
+                            <button
+                              onClick={() => handleReviewRequest(player, "rejected")}
+                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                            >
+                              退回
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-900">背號截止日</p>
+                    <form onSubmit={handleSaveConfig} className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={jerseyDeadline}
+                        onChange={(event) => setJerseyDeadline(event.target.value)}
+                        className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        儲存
+                      </button>
+                    </form>
+                  </div>
+                  <p className="mt-2 text-[11px] text-slate-400">
+                    截止日前號碼為暫時保留，截止後由隊務一次核准。
+                  </p>
+                </div>
+                {filteredPlayers.map((player) => (
+                  <div
+                    key={player.id}
+                    className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {player.preferredName || player.name || player.id}
+                          {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {player.positions || "-"} · {player.role || "球員"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() =>
+                            setPlayerForm({
+                              ...player,
+                              jerseyChoices: player.jerseyChoices || "",
+                              requestStatus: player.requestStatus || "",
+                              jerseyRequest: player.jerseyRequest || "",
+                              positionRequest: player.positionRequest || "",
+                            })
+                          }
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          編輯
+                        </button>
+                        <button
+                          onClick={() => handleDeletePlayer(player.id)}
+                          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={handleSavePlayer} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">學號 / ID</label>
+                  <input
+                    value={playerForm.id}
+                    onChange={(event) => handlePlayerFormChange("id", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">姓名</label>
+                    <input
+                      value={playerForm.name}
+                      onChange={(event) => handlePlayerFormChange("name", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">英文名</label>
+                    <input
+                      value={playerForm.nameEn}
+                      onChange={(event) => handlePlayerFormChange("nameEn", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">稱呼</label>
+                    <input
+                      value={playerForm.preferredName}
+                      onChange={(event) => handlePlayerFormChange("preferredName", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">Email</label>
+                    <input
+                      value={playerForm.email}
+                      onChange={(event) => handlePlayerFormChange("email", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">聯絡電話</label>
+                    <input
+                      value={playerForm.phone}
+                      onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">背號</label>
+                    <input
+                      value={playerForm.jerseyNumber}
+                      onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">守備位置</label>
+                  <div className="flex flex-wrap gap-2">
+                    {POSITION_OPTIONS.map((item) => {
+                      const current = String(playerForm.positions || "");
+                      const active = current.split(",").map((value) => value.trim()).includes(item);
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => {
+                            const selected = current
+                              ? current.split(",").map((value) => value.trim()).filter(Boolean)
+                              : [];
+                            const next = active
+                              ? selected.filter((value) => value !== item)
+                              : selected.concat(item);
+                            handlePlayerFormChange("positions", next.join(", "));
+                          }}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                            active
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">打擊</label>
+                    <select
+                      value={playerForm.bats}
+                      onChange={(event) => handlePlayerFormChange("bats", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      <option value="">未設定</option>
+                      <option value="R">右打</option>
+                      <option value="L">左打</option>
+                      <option value="S">左右開弓</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">投球/傳球</label>
+                    <select
+                      value={playerForm.throws}
+                      onChange={(event) => handlePlayerFormChange("throws", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      <option value="">未設定</option>
+                      <option value="R">右投</option>
+                      <option value="L">左投</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">角色</label>
+                    <select
+                      value={playerForm.role}
+                      onChange={(event) => handlePlayerFormChange("role", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      <option value="">球員</option>
+                      {ROLE_OPTIONS.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">狀態</label>
+                    <select
+                      value={playerForm.status}
+                      onChange={(event) => handlePlayerFormChange("status", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      <option value="active">可出席</option>
+                      <option value="injured">傷兵</option>
+                      <option value="inactive">暫停</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={playerForm.notes}
+                    onChange={(event) => handlePlayerFormChange("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "儲存中..." : "儲存球員"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetPlayerForm}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "fields" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+              <div className="space-y-3">
+                {fields.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="text-xs text-slate-500">{item.address || "-"}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setFieldForm({ ...item })}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => handleDeleteField(item.id)}
+                        className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={handleSaveField} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">球場名稱</label>
+                  <input
+                    value={fieldForm.name}
+                    onChange={(event) => handleFieldFormChange("name", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">地址</label>
+                  <input
+                    value={fieldForm.address}
+                    onChange={(event) => handleFieldFormChange("address", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">地圖連結</label>
+                  <input
+                    value={fieldForm.mapUrl}
+                    onChange={(event) => handleFieldFormChange("mapUrl", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">停車</label>
+                    <input
+                      value={fieldForm.parking}
+                      onChange={(event) => handleFieldFormChange("parking", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">費用</label>
+                    <input
+                      value={fieldForm.fee}
+                      onChange={(event) => handleFieldFormChange("fee", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={fieldForm.notes}
+                    onChange={(event) => handleFieldFormChange("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "儲存中..." : "儲存球場"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFieldForm}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "gear" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+              <div className="space-y-3">
+                {gear.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                  >
+                    <div>
+                      <p className="font-semibold text-slate-900">{item.name}</p>
+                      <p className="text-xs text-slate-500">
+                        {item.category || "-"} · {item.quantity || "0"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setGearForm({ ...item })}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        編輯
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGear(item.id)}
+                        className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <form onSubmit={handleSaveGear} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">器材名稱</label>
+                  <input
+                    value={gearForm.name}
+                    onChange={(event) => handleGearFormChange("name", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">分類</label>
+                    <input
+                      value={gearForm.category}
+                      onChange={(event) => handleGearFormChange("category", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">數量</label>
+                    <input
+                      value={gearForm.quantity}
+                      onChange={(event) => handleGearFormChange("quantity", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">保管人</label>
+                    <input
+                      value={gearForm.owner}
+                      onChange={(event) => handleGearFormChange("owner", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">狀態</label>
+                    <select
+                      value={gearForm.status}
+                      onChange={(event) => handleGearFormChange("status", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      <option value="available">可用</option>
+                      <option value="borrowed">借出</option>
+                      <option value="repair">維修</option>
+                      <option value="lost">遺失</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={gearForm.notes}
+                    onChange={(event) => handleGearFormChange("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "儲存中..." : "儲存器材"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetGearForm}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "stats" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <h3 className="text-lg font-semibold text-slate-900">出席統計</h3>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { label: "總出席", value: attendanceStats.attend },
+                { label: "遲到", value: attendanceStats.late },
+                { label: "缺席", value: attendanceStats.absent },
+                { label: "未回覆", value: attendanceStats.unknown },
+              ].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs text-slate-400">{item.label}</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-6 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+              <p className="font-semibold text-slate-900">備註</p>
+              <p className="mt-2 text-xs text-slate-500">
+                統計基於目前選擇的練習。後續可加入跨場次出席率與球員歷史趨勢。
+              </p>
+            </div>
+          </section>
+        ) : null}
+
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+        >
+          回首頁
+        </a>
+      </main>
+    </div>
+  );
+}
+
+function SoftballPlayerPage() {
+  const [activeTab, setActiveTab] = useState("profile");
+  const [players, setPlayers] = useState([]);
+  const [practices, setPractices] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [softballConfig, setSoftballConfig] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [loginExpanded, setLoginExpanded] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    id: "",
+    name: "",
+    preferredName: "",
+    email: "",
+    phone: "",
+    bats: "",
+    throws: "",
+    positions: "",
+    jerseyChoices: "",
+    jerseyRequest: "",
+    positionRequest: "",
+    notes: "",
+  });
+  const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+
+  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "工具人"];
+
+  const normalizeId_ = (value) => String(value || "").trim();
+
+  const formatJerseyLabel_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    return value.padStart(2, "0");
+  };
+
+  const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
+
+  const loadPlayers = async () => {
+    const { result } = await apiRequest({ action: "listSoftballPlayers" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    setPlayers(result.data && result.data.players ? result.data.players : []);
+  };
+
+  const loadPractices = async () => {
+    const { result } = await apiRequest({ action: "listSoftballPractices" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    const list = result.data && result.data.practices ? result.data.practices : [];
+    const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+    setPractices(sorted);
+  };
+
+  const loadAttendance = async (studentId) => {
+    if (!studentId) {
+      setAttendance([]);
+      return;
+    }
+    const { result } = await apiRequest({ action: "listSoftballAttendance" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    const list = result.data && result.data.attendance ? result.data.attendance : [];
+    setAttendance(list.filter((item) => normalizeId_(item.studentId) === normalizeId_(studentId)));
+  };
+
+  useEffect(() => {
+    let ignore = false;
+    const loadAll = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        await loadPlayers();
+        await loadPractices();
+        const { result } = await apiRequest({ action: "listSoftballConfig" });
+        if (result.ok) {
+          setSoftballConfig(result.data && result.data.config ? result.data.config : {});
+        }
+      } catch (err) {
+        if (!ignore) {
+          setError("壘球資料載入失敗。");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+    loadAll();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.id) {
+      loadAttendance(googleLinkedStudent.id);
+    }
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (!googleLinkedStudent || !googleLinkedStudent.id) {
+      return;
+    }
+    const match = players.find(
+      (item) => normalizeId_(item.id) === normalizeId_(googleLinkedStudent.id)
+    );
+    if (match) {
+      setProfileForm({
+        id: match.id || googleLinkedStudent.id,
+        name: match.name || googleLinkedStudent.name || "",
+        preferredName: match.preferredName || googleLinkedStudent.preferredName || "",
+        email: match.email || googleLinkedStudent.email || "",
+        phone: match.phone || "",
+        bats: match.bats || "",
+        throws: match.throws || "",
+        positions: match.positions || "",
+        jerseyChoices: match.jerseyChoices || "",
+        jerseyRequest: match.jerseyRequest || "",
+        positionRequest: match.positionRequest || "",
+        notes: match.notes || "",
+      });
+    } else {
+      setProfileForm((prev) => ({
+        ...prev,
+        id: googleLinkedStudent.id,
+        name: googleLinkedStudent.name || "",
+        preferredName: googleLinkedStudent.preferredName || "",
+        email: googleLinkedStudent.email || "",
+      }));
+    }
+  }, [players, googleLinkedStudent]);
+
+  const handleProfileChange = (key, value) => {
+    setProfileForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmitProfile = async (event) => {
+    event.preventDefault();
+    if (!googleLinkedStudent || !googleLinkedStudent.id) {
+      setStatusMessage("請先登入 Google");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const exists = players.some(
+        (item) => normalizeId_(item.id) === normalizeId_(googleLinkedStudent.id)
+      );
+      const action = exists ? "updateSoftballPlayer" : "createSoftballPlayer";
+      const payload = {
+        ...profileForm,
+        id: googleLinkedStudent.id,
+        jerseyChoices: profileForm.jerseyChoices,
+        requestStatus: profileForm.jerseyRequest || profileForm.positionRequest ? "pending" : "",
+      };
+      const { result } = await apiRequest({ action: action, data: payload });
+      if (!result.ok) {
+        throw new Error(result.error || "送出失敗");
+      }
+      await loadPlayers();
+      setStatusMessage("已送出資料");
+    } catch (err) {
+      setStatusMessage(err.message || "送出失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAttendanceStatus = async (practiceId, status) => {
+    if (!googleLinkedStudent || !googleLinkedStudent.id) {
+      setStatusMessage("請先登入 Google");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "submitSoftballAttendance",
+        data: {
+          practiceId: practiceId,
+          studentId: googleLinkedStudent.id,
+          status: status,
+          note: String(attendanceNoteMap[practiceId] || "").trim(),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      await loadAttendance(googleLinkedStudent.id);
+    } catch (err) {
+      setStatusMessage(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const attendanceByPractice = attendance.reduce((acc, item) => {
+    const key = normalizeId_(item.practiceId);
+    if (key) {
+      acc[key] = item;
+    }
+    return acc;
+  }, {});
+
+  const jerseyTakenSet = new Set(
+    players.map((player) => formatJerseyLabel_(String(player.jerseyNumber || ""))).filter(Boolean)
+  );
+  const jerseyReservedSet = new Set(
+    players
+      .map((player) => String(player.jerseyRequest || "").trim())
+      .filter((value) => value)
+      .map((value) => formatJerseyLabel_(value))
+  );
+  const myReserved =
+    profileForm.jerseyRequest && formatJerseyLabel_(profileForm.jerseyRequest);
+  const jerseyChoices = profileForm.jerseyChoices
+    ? profileForm.jerseyChoices.split(",").map((value) => formatJerseyLabel_(value.trim())).filter(Boolean)
+    : [];
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+            NTU EMBA 115B
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+            壘球隊 · 球員入口
+          </h1>
+          <p className="mt-3 text-sm text-slate-500">背號申請、位置偏好、練習出席回覆。</p>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
+            {[
+              { id: "profile", label: "我的資料" },
+              { id: "attendance", label: "練習回覆" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`rounded-xl px-4 py-2 ${
+                  activeTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {statusMessage ? (
+          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            {statusMessage}
+          </div>
+        ) : null}
+
+        {error ? (
+          <div className="mb-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        {activeTab === "profile" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+              <span className="font-semibold text-slate-900">Google 登入</span>
+              {googleLinkedStudent && googleLinkedStudent.email ? (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                  {googleLinkedStudent.email}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setLoginExpanded((prev) => !prev)}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  {loginExpanded ? "收合" : "登入"}
+                </button>
+              )}
+            </div>
+            {!googleLinkedStudent && loginExpanded ? (
+              <div className="mt-4">
+                <GoogleSigninPanel
+                  title="Google 登入"
+                  helperText="登入後可申請背號與更新資料。"
+                  onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                />
+              </div>
+            ) : null}
+            <form onSubmit={handleSubmitProfile} className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">學號 / ID</label>
+                <input
+                  value={profileForm.id}
+                  readOnly
+                  className="h-11 rounded-2xl border border-slate-200 bg-slate-100 px-4 text-sm text-slate-700"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">姓名</label>
+                <input
+                  value={profileForm.name}
+                  onChange={(event) => handleProfileChange("name", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">稱呼</label>
+                <input
+                  value={profileForm.preferredName}
+                  onChange={(event) => handleProfileChange("preferredName", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">Email</label>
+                <input
+                  value={profileForm.email}
+                  onChange={(event) => handleProfileChange("email", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">聯絡電話</label>
+                <input
+                  value={profileForm.phone}
+                  onChange={(event) => handleProfileChange("phone", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">背號申請</label>
+                  <input
+                    value={profileForm.jerseyRequest}
+                    readOnly
+                    placeholder="請從下方志願中選擇"
+                    className="h-11 rounded-2xl border border-slate-200 bg-slate-100 px-4 text-sm text-slate-700"
+                  />
+                  <p className="text-xs text-slate-400">
+                    可選 00-99，截止日為 {softballConfig.jerseyDeadline || "待公告"}
+                  </p>
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">位置偏好</label>
+                <div className="flex flex-wrap gap-2">
+                  {POSITION_OPTIONS.map((item) => {
+                    const current = String(profileForm.positionRequest || "");
+                    const active = current.split(",").map((value) => value.trim()).includes(item);
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => {
+                          const selected = current
+                            ? current.split(",").map((value) => value.trim()).filter(Boolean)
+                            : [];
+                          const next = active
+                            ? selected.filter((value) => value !== item)
+                            : selected.concat(item);
+                          handleProfileChange("positionRequest", next.join(", "));
+                        }}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          active
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">背號志願（最多 3 個）</label>
+                <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+                  {jerseyNumbers.map((number) => {
+                    const isTaken = jerseyTakenSet.has(number);
+                    const isReserved = jerseyReservedSet.has(number);
+                    const isMine = myReserved === number;
+                    const isSelected = jerseyChoices.includes(number);
+                    const disabled = isTaken || (isReserved && !isMine);
+                    return (
+                      <button
+                        key={`jersey-${number}`}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => {
+                          if (disabled) {
+                            return;
+                          }
+                          let next = jerseyChoices.slice();
+                          if (isSelected) {
+                            next = next.filter((value) => value !== number);
+                          } else if (next.length < 3) {
+                            next = next.concat(number);
+                          }
+                          handleProfileChange("jerseyChoices", next.join(","));
+                          handleProfileChange("jerseyRequest", next[0] || "");
+                        }}
+                        className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${
+                          isTaken
+                            ? "border-slate-200 bg-slate-100 text-slate-400"
+                            : isReserved && !isMine
+                            ? "border-amber-200 bg-amber-50 text-amber-600"
+                            : isSelected
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        {number}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-slate-400">
+                  <span>已選：{jerseyChoices.join(", ") || "-"}</span>
+                  <span>已占用：灰色</span>
+                  <span>暫保留：橘色</span>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 sm:col-span-2">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">打擊</label>
+                  <select
+                    value={profileForm.bats}
+                    onChange={(event) => handleProfileChange("bats", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    <option value="">未設定</option>
+                    <option value="R">右打</option>
+                    <option value="L">左打</option>
+                    <option value="S">左右開弓</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">投球/傳球</label>
+                  <select
+                    value={profileForm.throws}
+                    onChange={(event) => handleProfileChange("throws", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    <option value="">未設定</option>
+                    <option value="R">右投</option>
+                    <option value="L">左投</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">備註</label>
+                <textarea
+                  value={profileForm.notes}
+                  onChange={(event) => handleProfileChange("notes", event.target.value)}
+                  rows="3"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                />
+              </div>
+              <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? "送出中..." : "送出申請"}
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {activeTab === "attendance" ? (
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+            <h3 className="text-lg font-semibold text-slate-900">練習出席回覆</h3>
+            {practices.length ? (
+              <div className="mt-6 space-y-3">
+                {practices.map((practice) => {
+                  const record = attendanceByPractice[normalizeId_(practice.id)] || {};
+                  const currentStatus = String(record.status || "unknown").toLowerCase();
+                  return (
+                    <div
+                      key={practice.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {formatEventDate_(practice.date)} · {practice.title || "練習"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {practice.startAt || "-"} - {practice.endAt || "-"}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {[
+                          { value: "attend", label: "出席" },
+                          { value: "late", label: "遲到" },
+                          { value: "absent", label: "缺席" },
+                          { value: "unknown", label: "未定" },
+                        ].map((item) => (
+                          <button
+                            key={`${practice.id}-${item.value}`}
+                            onClick={() => handleAttendanceStatus(practice.id, item.value)}
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              currentStatus === item.value
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                        <input
+                          value={attendanceNoteMap[practice.id] || record.note || ""}
+                          onChange={(event) =>
+                            setAttendanceNoteMap((prev) => ({ ...prev, [practice.id]: event.target.value }))
+                          }
+                          placeholder="備註"
+                          className="h-8 w-36 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">目前沒有練習。</p>
+            )}
+          </section>
+        ) : null}
+
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+        >
+          回首頁
+        </a>
+      </main>
+    </div>
+  );
+}
+
 function CheckinPage() {
   const params = new URLSearchParams(window.location.search);
   const eventId = params.get("eventId") || "";
@@ -1827,6 +4500,7 @@ function HomePage() {
   const [cancelSuccess, setCancelSuccess] = useState("");
 
   const normalizeEventId_ = (value) => String(value || "").trim();
+  const normalizeOrderId_ = (value) => String(value || "").trim();
 
   const parseCustomFields_ = (value) => {
     if (!value) {
@@ -2544,6 +5218,9 @@ function AdminPage() {
   const [directory, setDirectory] = useState([]);
   const [registrations, setRegistrations] = useState([]);
   const [checkins, setCheckins] = useState([]);
+  const [orderPlans, setOrderPlans] = useState([]);
+  const [orderResponses, setOrderResponses] = useState([]);
+  const [orderActiveId, setOrderActiveId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2577,6 +5254,19 @@ function AdminPage() {
   const [registerCopyStatus, setRegisterCopyStatus] = useState("");
   const [registrationEventId, setRegistrationEventId] = useState("");
   const [checkinEventId, setCheckinEventId] = useState("");
+  const [orderStatusMessage, setOrderStatusMessage] = useState("");
+  const [orderForm, setOrderForm] = useState({
+    id: "",
+    date: "",
+    title: "",
+    optionA: "A 餐",
+    optionB: "B 餐",
+    optionAImage: "",
+    optionBImage: "",
+    cutoffAt: "",
+    status: "open",
+    notes: "",
+  });
   const [studentsQuery, setStudentsQuery] = useState("");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
@@ -2586,9 +5276,12 @@ function AdminPage() {
   const [attachmentUrlInput, setAttachmentUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const uploadFormRef = useRef(null);
   const uploadFileRef = useRef(null);
+  const uploadCompletedRef = useRef(false);
 
   const normalizeEventId_ = (value) => String(value || "").trim();
+  const normalizeOrderId_ = (value) => String(value || "").trim();
 
   const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
 
@@ -2691,6 +5384,69 @@ function AdminPage() {
     return normalized;
   };
 
+  const formatOrderDateLabel_ = (value) => {
+    const parsed = parseLocalInputDate_(value);
+    if (!parsed) {
+      return value || "-";
+    }
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][parsed.getDay()];
+    return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
+      parsed.getDate()
+    )} (${weekday})`;
+  };
+
+  const normalizeDateInput_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    const parsed = parseLocalInputDate_(value);
+    return parsed ? toDateInputValue_(parsed) : String(value || "");
+  };
+
+  const normalizeDateTimeInput_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    const parsed = parseLocalInputDate_(value);
+    return parsed ? toLocalInputValue_(parsed) : String(value || "");
+  };
+
+  const toDateInputValue_ = (date) => {
+    if (!date) {
+      return "";
+    }
+    return `${date.getFullYear()}-${pad2_(date.getMonth() + 1)}-${pad2_(date.getDate())}`;
+  };
+
+  const getNextWeekendDate_ = () => {
+    const base = new Date();
+    for (let step = 1; step <= 14; step += 1) {
+      const next = addDays_(base, step);
+      if (next.getDay() === 6 || next.getDay() === 0) {
+        return next;
+      }
+    }
+    return addDays_(base, 7);
+  };
+
+  const buildDefaultOrderForm = () => {
+    const baseDate = getNextWeekendDate_();
+    const dateValue = toDateInputValue_(baseDate);
+    const cutoffAt = toLocalInput_(addDays_(baseDate, -1), 23, 59);
+    return {
+      id: "",
+      date: dateValue,
+      title: dateValue ? `訂餐 ${dateValue}` : "",
+      optionA: "A 餐",
+      optionB: "B 餐",
+      optionAImage: "",
+      optionBImage: "",
+      cutoffAt: cutoffAt,
+      status: "open",
+      notes: "",
+    };
+  };
+
   const buildDefaultForm = (items) => {
     const baseDate = addDays_(new Date(), 10);
     const startAt = toLocalInput_(baseDate, 19, 0);
@@ -2759,6 +5515,9 @@ function AdminPage() {
       loadStudents();
       loadDirectoryAdmin();
     }
+    if (activeTab === "ordering") {
+      loadOrderPlans();
+    }
   }, [activeTab]);
 
   useEffect(() => {
@@ -2775,6 +5534,77 @@ function AdminPage() {
       setCheckinEventId(events[0].id || "");
     }
   }, [events, registrationEventId, checkinEventId]);
+
+  useEffect(() => {
+    if (activeTab !== "ordering") {
+      return;
+    }
+    if (!orderActiveId && orderPlans.length) {
+      setOrderActiveId(normalizeOrderId_(orderPlans[0].id));
+      return;
+    }
+    if (!orderActiveId && !orderPlans.length) {
+      setOrderForm(buildDefaultOrderForm());
+    }
+  }, [activeTab, orderActiveId, orderPlans]);
+
+  useEffect(() => {
+    if (activeTab !== "ordering") {
+      return;
+    }
+    if (orderActiveId) {
+      const normalizedId = normalizeOrderId_(orderActiveId);
+      loadOrderResponses(normalizedId);
+      const selected = orderPlans.find(
+        (plan) => normalizeOrderId_(plan.id) === normalizedId
+      );
+      if (selected) {
+        setOrderForm({
+          id: selected.id || "",
+          date: normalizeDateInput_(selected.date),
+          title: selected.title || "",
+          optionA: selected.optionA || "A 餐",
+          optionB: selected.optionB || "B 餐",
+          optionAImage: selected.optionAImage || "",
+          optionBImage: selected.optionBImage || "",
+          cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
+          status: selected.status || "open",
+          notes: selected.notes || "",
+        });
+      }
+    }
+  }, [activeTab, orderActiveId, orderPlans]);
+
+  useEffect(() => {
+    const handleUploadMessage = (event) => {
+      if (!event || !event.data || event.data.type !== "uploadResult") {
+        return;
+      }
+      if (uploadCompletedRef.current) {
+        return;
+      }
+      const payload = event.data.payload || {};
+      uploadCompletedRef.current = true;
+      setUploading(false);
+      if (!payload.ok) {
+        setUploadError(payload.error || "上傳失敗");
+        return;
+      }
+      const attachment = payload.data || {};
+      if (attachment.url) {
+        setForm((prev) => {
+          const current = parseEventAttachments_(prev.attachments);
+          const next = current.concat([
+            { name: attachment.name || attachment.url, url: attachment.url, fileId: attachment.fileId || "" },
+          ]);
+          return { ...prev, attachments: JSON.stringify(next) };
+        });
+      }
+      setUploadError("");
+    };
+    window.addEventListener("message", handleUploadMessage);
+    return () => window.removeEventListener("message", handleUploadMessage);
+  }, []);
 
   const handleEdit = (event) => {
     setActiveId(event.id || "");
@@ -2872,6 +5702,44 @@ function AdminPage() {
     }
   };
 
+  const loadOrderPlans = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listOrderPlans" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const items = result.data && result.data.plans ? result.data.plans : [];
+      const sorted = items.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+      setOrderPlans(sorted);
+    } catch (err) {
+      setError("訂餐設定載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadOrderResponses = async (orderId) => {
+    if (!orderId) {
+      setOrderResponses([]);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listOrderResponses", orderId: orderId });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setOrderResponses(result.data && result.data.responses ? result.data.responses : []);
+    } catch (err) {
+      setError("訂餐名單載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleRegistrationEdit = (registration) => {
     setRegistrationForm({
       id: registration.id || "",
@@ -2930,6 +5798,101 @@ function AdminPage() {
       setRegistrationStatusMessage("已更新報名狀態");
     } catch (err) {
       setError(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleOrderFormChange = (key, value) => {
+    if ((key === "optionAImage" || key === "optionBImage") && String(value || "").startsWith("data:")) {
+      setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
+      return;
+    }
+    setOrderForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleOrderImageDrop = (key, event) => {
+    event.preventDefault();
+    if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length) {
+      setOrderStatusMessage("請改用圖片網址，目前不支援直接拖檔上傳。");
+      return;
+    }
+    const uri = event.dataTransfer.getData("text/uri-list");
+    const text = event.dataTransfer.getData("text/plain");
+    const value = String(uri || text || "").trim();
+    if (value && value.startsWith("data:")) {
+      setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
+      return;
+    }
+    if (value) {
+      setOrderForm((prev) => ({ ...prev, [key]: value }));
+    }
+  };
+
+  const handleOrderDateChange = (value) => {
+    const parsed = parseLocalInputDate_(value);
+    setOrderForm((prev) => {
+      const next = { ...prev, date: value };
+      if (parsed) {
+        next.cutoffAt = toLocalInput_(addDays_(parsed, -1), 23, 59);
+        if (!prev.title || prev.title.startsWith("訂餐")) {
+          next.title = `訂餐 ${value}`;
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleOrderReset = () => {
+    setOrderActiveId("");
+    setOrderForm(buildDefaultOrderForm());
+    setOrderResponses([]);
+    setOrderStatusMessage("");
+  };
+
+  const handleOrderSave = async (event) => {
+    event.preventDefault();
+    if (!orderForm.date) {
+      setOrderStatusMessage("請先選擇日期。");
+      return;
+    }
+    if (
+      String(orderForm.optionAImage || "").startsWith("data:") ||
+      String(orderForm.optionBImage || "").startsWith("data:")
+    ) {
+      setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      let result = null;
+      if (orderForm.id) {
+        const response = await apiRequest({
+          action: "updateOrderPlan",
+          id: orderForm.id,
+          data: orderForm,
+        });
+        result = response.result;
+      } else {
+        const response = await apiRequest({
+          action: "createOrderPlan",
+          data: orderForm,
+        });
+        result = response.result;
+      }
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      const plan = result.data && result.data.plan ? result.data.plan : null;
+      await loadOrderPlans();
+      if (plan && plan.id) {
+        setOrderActiveId(normalizeOrderId_(plan.id));
+      }
+      setOrderStatusMessage("已更新訂餐設定");
+    } catch (err) {
+      setOrderStatusMessage(err.message || "儲存失敗");
     } finally {
       setSaving(false);
     }
@@ -3134,6 +6097,13 @@ function AdminPage() {
     if (!file) {
       return;
     }
+    if (!form.id) {
+      setUploadError("請先儲存活動後再上傳");
+      if (uploadFileRef.current) {
+        uploadFileRef.current.value = "";
+      }
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       setUploadError("檔案超過 5MB 上限");
       if (uploadFileRef.current) {
@@ -3141,60 +6111,14 @@ function AdminPage() {
       }
       return;
     }
+    if (!uploadFormRef.current) {
+      setUploadError("上傳表單未初始化");
+      return;
+    }
     setUploading(true);
     setUploadError("");
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const result = String(reader.result || "");
-      const base64 = result.includes(",") ? result.split(",")[1] : result;
-      try {
-        await fetch(API_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({
-            action: "uploadBase64",
-            eventId: form.id,
-            fileName: file.name,
-            fileData: base64,
-          }),
-        });
-        setTimeout(async () => {
-          try {
-            const { result: check } = await apiRequest({ action: "getEvent", eventId: form.id });
-            if (check.ok && check.data && check.data.event) {
-              setForm((prev) => ({
-                ...prev,
-                attachments: check.data.event.attachments || prev.attachments,
-              }));
-              setUploading(false);
-              setUploadError("");
-            } else {
-              setUploading(false);
-              setUploadError("上傳完成但未更新，請稍後重整");
-            }
-          } catch (error) {
-            setUploading(false);
-            setUploadError("上傳完成但未更新，請稍後重整");
-          }
-        }, 1200);
-      } catch (error) {
-        setUploading(false);
-        setUploadError("上傳失敗");
-      } finally {
-        if (uploadFileRef.current) {
-          uploadFileRef.current.value = "";
-        }
-      }
-    };
-    reader.onerror = () => {
-      setUploading(false);
-      setUploadError("讀取檔案失敗");
-      if (uploadFileRef.current) {
-        uploadFileRef.current.value = "";
-      }
-    };
-    reader.readAsDataURL(file);
+    uploadCompletedRef.current = false;
+    uploadFormRef.current.submit();
   };
 
   const handleStartAtChange = (value) => {
@@ -3313,6 +6237,26 @@ function AdminPage() {
     return acc;
   }, {});
 
+  const orderStats = orderResponses.reduce(
+    (acc, item) => {
+      const choice = String(item.choice || "").toUpperCase();
+      if (choice === "A") {
+        acc.A += 1;
+      } else if (choice === "B") {
+        acc.B += 1;
+      } else {
+        acc.NONE += 1;
+      }
+      acc.total += 1;
+      return acc;
+    },
+    { A: 0, B: 0, NONE: 0, total: 0 }
+  );
+
+  const orderComments = orderResponses
+    .map((item) => String(item.comment || "").trim())
+    .filter((value) => value);
+
   const pendingCheckins = checkinEventId
     ? (registrationsByEvent[normalizeEventId_(checkinEventId)] || []).filter((registration) => {
         if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
@@ -3351,6 +6295,7 @@ function AdminPage() {
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
               { id: "events", label: "活動" },
+              { id: "ordering", label: "訂餐" },
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
               { id: "students", label: "同學" },
@@ -3373,6 +6318,8 @@ function AdminPage() {
             <h2 className="text-lg font-semibold text-slate-900">
               {activeTab === "events"
                 ? "活動列表"
+                : activeTab === "ordering"
+                ? "訂餐管理"
                 : activeTab === "registrations"
                 ? "報名名單"
                 : activeTab === "checkins"
@@ -3420,6 +6367,249 @@ function AdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {activeTab === "ordering" ? (
+            <div className="mt-6 space-y-6">
+              <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-slate-900">訂餐日期</h3>
+                    <button
+                      onClick={handleOrderReset}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      新增
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {orderPlans.length ? (
+                      orderPlans.map((plan) => (
+                        <button
+                          key={plan.id}
+                          onClick={() => setOrderActiveId(normalizeOrderId_(plan.id))}
+                          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                            normalizeOrderId_(orderActiveId) === normalizeOrderId_(plan.id)
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                          }`}
+                        >
+                          <div>
+                            <p className="font-semibold">{formatOrderDateLabel_(plan.date)}</p>
+                            <p className="text-xs opacity-70">
+                              {plan.title || "訂餐"} · {plan.status || "open"}
+                            </p>
+                          </div>
+                          <span className="text-xs opacity-70">{plan.id}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400">尚未建立訂餐日期。</p>
+                    )}
+                  </div>
+                </div>
+
+                <form onSubmit={handleOrderSave} className="space-y-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">日期</label>
+                    <input
+                      type="date"
+                      value={orderForm.date}
+                      onChange={(event) => handleOrderDateChange(event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">標題</label>
+                    <input
+                      value={orderForm.title}
+                      onChange={(event) => handleOrderFormChange("title", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">選項 A</label>
+                      <input
+                        value={orderForm.optionA}
+                        onChange={(event) => handleOrderFormChange("optionA", event.target.value)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">選項 B</label>
+                      <input
+                        value={orderForm.optionB}
+                        onChange={(event) => handleOrderFormChange("optionB", event.target.value)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div
+                      className="grid gap-2"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => handleOrderImageDrop("optionAImage", event)}
+                    >
+                      <label className="text-sm font-medium text-slate-700">A 餐圖片</label>
+                      <input
+                        value={orderForm.optionAImage}
+                        onChange={(event) =>
+                          handleOrderFormChange("optionAImage", event.target.value)
+                        }
+                        placeholder="貼上圖片網址或拖曳圖片"
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      />
+                      <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
+                      {orderForm.optionAImage ? (
+                        <img
+                          src={orderForm.optionAImage}
+                          alt="A 餐"
+                          className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+                    <div
+                      className="grid gap-2"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => handleOrderImageDrop("optionBImage", event)}
+                    >
+                      <label className="text-sm font-medium text-slate-700">B 餐圖片</label>
+                      <input
+                        value={orderForm.optionBImage}
+                        onChange={(event) =>
+                          handleOrderFormChange("optionBImage", event.target.value)
+                        }
+                        placeholder="貼上圖片網址或拖曳圖片"
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      />
+                      <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
+                      {orderForm.optionBImage ? (
+                        <img
+                          src={orderForm.optionBImage}
+                          alt="B 餐"
+                          className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">截止時間</label>
+                      <input
+                        type="datetime-local"
+                        value={orderForm.cutoffAt}
+                        onChange={(event) => handleOrderFormChange("cutoffAt", event.target.value)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">狀態</label>
+                      <select
+                        value={orderForm.status}
+                        onChange={(event) => handleOrderFormChange("status", event.target.value)}
+                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      >
+                        <option value="open">開放</option>
+                        <option value="closed">關閉</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <textarea
+                      value={orderForm.notes}
+                      onChange={(event) => handleOrderFormChange("notes", event.target.value)}
+                      rows="3"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={saving}
+                      className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {saving ? "儲存中..." : orderForm.id ? "更新訂餐" : "新增訂餐"}
+                    </button>
+                    {orderStatusMessage ? (
+                      <span className="text-xs font-semibold text-amber-600">
+                        {orderStatusMessage}
+                      </span>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="font-semibold text-slate-900">訂餐統計</p>
+                  <span className="text-xs text-slate-400">
+                    {orderActiveId ? `訂餐編號 ${orderActiveId}` : "尚未選擇訂餐日期"}
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">總數</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">A 餐</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.A}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">B 餐</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.B}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">不吃</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.NONE}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold text-slate-600">訂餐名單</p>
+                    <div className="mt-3 space-y-2 text-xs text-slate-600">
+                      {orderResponses.length ? (
+                        orderResponses.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
+                          >
+                            <span className="font-semibold text-slate-800">
+                              {item.studentName || item.studentId}
+                            </span>
+                            <span className="text-xs text-slate-500">{item.choice}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">目前尚無訂餐資料。</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold text-slate-600">匿名意見</p>
+                    <div className="mt-3 space-y-2 text-xs text-slate-600">
+                      {orderComments.length ? (
+                        orderComments.map((comment, index) => (
+                          <div
+                            key={`${comment}-${index}`}
+                            className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
+                          >
+                            {comment}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">目前沒有留言。</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           ) : null}
 
@@ -3629,6 +6819,23 @@ function AdminPage() {
             <h2 className="text-lg font-semibold text-slate-900">
               {activeId ? "編輯活動" : "新增活動"}
             </h2>
+            <form
+              ref={uploadFormRef}
+              action={API_URL}
+              method="post"
+              encType="multipart/form-data"
+              target="upload-frame"
+              className="hidden"
+            >
+              <input type="hidden" name="eventId" value={form.id} />
+              <input
+                ref={uploadFileRef}
+                id="event-upload-file"
+                type="file"
+                name="file"
+                onChange={handleUploadChange}
+              />
+            </form>
             <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">活動類別</label>
@@ -3691,14 +6898,11 @@ function AdminPage() {
                 </button>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <label className="inline-flex h-11 cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300">
+                <label
+                  htmlFor="event-upload-file"
+                  className="inline-flex h-11 cursor-pointer items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 hover:border-slate-300"
+                >
                   上傳檔案
-                  <input
-                    ref={uploadFileRef}
-                    type="file"
-                    className="hidden"
-                    onChange={handleUploadChange}
-                  />
                 </label>
                 {uploading ? <span className="text-xs text-slate-500">上傳中...</span> : null}
                 {uploadError ? <span className="text-xs text-rose-600">{uploadError}</span> : null}
@@ -3731,6 +6935,7 @@ function AdminPage() {
               ) : (
                 <p className="text-xs text-slate-400">尚未加入任何參考檔案。</p>
               )}
+              <iframe name="upload-frame" title="upload-frame" className="hidden" />
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">開始時間</label>
