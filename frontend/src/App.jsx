@@ -3676,7 +3676,7 @@ function SoftballPlayerPage() {
     if (!value) {
       return "";
     }
-    return value.padStart(2, "0");
+    return String(value).padStart(2, "0");
   };
 
   const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
