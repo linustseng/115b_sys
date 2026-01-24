@@ -1,80 +1,87 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
 
-const gatheringFields = [
-  {
+const gatheringFieldConfig = {
+  attendance: {
     id: "attendance",
     label: "是否出席",
-    type: "select",
     options: ["出席", "不出席", "尚未確定"],
   },
-  {
+  companions: {
     id: "companions",
     label: "攜伴人數",
     type: "number",
     placeholder: "0",
   },
-  {
+  dietary: {
     id: "dietary",
     label: "飲食偏好",
     type: "select",
     options: ["無禁忌", "素食但可海鮮", "不吃牛", "不吃羊", "素食"],
   },
-  {
-    id: "redWineQty",
-    label: "紅酒數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
-    id: "whiteWineQty",
-    label: "白酒數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
-    id: "whiskyQty",
-    label: "威士忌數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
-    id: "kaoliangQty",
-    label: "高梁數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
-    id: "plumWineQty",
-    label: "梅酒數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
-    id: "otherDrink",
-    label: "其他酒水",
-    type: "text",
-    placeholder: "品項名稱",
-  },
-  {
-    id: "otherDrinkQty",
-    label: "其他酒水數量",
-    type: "combo",
-    options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
-    placeholder: "數量",
-  },
-  {
+  parking: {
     id: "parking",
     label: "是否需要停車位",
-    type: "select",
     options: ["需要", "不需要"],
   },
-];
+  drinks: {
+    toggle: {
+      id: "bringDrinks",
+      label: "攜帶酒水",
+      options: ["不攜帶", "攜帶"],
+    },
+    items: [
+      {
+        id: "redWineQty",
+        label: "紅酒數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+      {
+        id: "whiteWineQty",
+        label: "白酒數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+      {
+        id: "whiskyQty",
+        label: "威士忌數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+      {
+        id: "kaoliangQty",
+        label: "高梁數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+      {
+        id: "plumWineQty",
+        label: "梅酒數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+      {
+        id: "otherDrink",
+        label: "其他酒水",
+        type: "text",
+        placeholder: "品項名稱",
+      },
+      {
+        id: "otherDrinkQty",
+        label: "其他酒水數量",
+        type: "combo",
+        options: ["0", "1", "2", "3", "4", "5", "6", "8", "10"],
+        placeholder: "數量",
+      },
+    ],
+  },
+};
 
 const meetingFields = [
   {
@@ -82,6 +89,7 @@ const meetingFields = [
     label: "是否出席",
     type: "select",
     options: ["出席", "不出席", "尚未確定"],
+    control: "buttons",
   },
   {
     id: "proxy",
@@ -238,6 +246,32 @@ const formatEventSchedule_ = (startValue, endValue) => {
     dateLabel: `${formatEventDateTime_(startRaw)} - ${formatEventDateTime_(endRaw)}`,
     timeLabel: "",
   };
+};
+
+const DRINK_FIELD_IDS = gatheringFieldConfig.drinks.items.map((item) => item.id);
+
+const hasDrinkSelection_ = (fields) => {
+  const source = fields || {};
+  return DRINK_FIELD_IDS.some((id) => {
+    const value = source[id];
+    if (value === null || value === undefined) {
+      return false;
+    }
+    const normalized = String(value).trim();
+    return normalized !== "" && normalized !== "0";
+  });
+};
+
+const normalizeCustomFieldsForSubmit_ = (fields) => {
+  const source = fields || {};
+  const bringDrinksValue = source.bringDrinks || (hasDrinkSelection_(source) ? "攜帶" : "");
+  const normalized = { ...source, bringDrinks: bringDrinksValue };
+  if (bringDrinksValue === "不攜帶") {
+    DRINK_FIELD_IDS.forEach((id) => {
+      normalized[id] = "";
+    });
+  }
+  return normalized;
 };
 
 const STORAGE_KEYS = {
@@ -848,6 +882,18 @@ function RegistrationPage() {
     setCustomFields((prev) => ({ ...prev, [fieldId]: value }));
   };
 
+  const handleBringDrinksChange = (value) => {
+    setCustomFields((prev) => {
+      const next = { ...prev, bringDrinks: value };
+      if (value === "不攜帶") {
+        DRINK_FIELD_IDS.forEach((id) => {
+          next[id] = "";
+        });
+      }
+      return next;
+    });
+  };
+
   const handleRegister = async () => {
     setSubmitError("");
     setSubmitSuccess(false);
@@ -869,6 +915,7 @@ function RegistrationPage() {
     }
     setSubmitLoading(true);
     try {
+      const payloadCustomFields = normalizeCustomFieldsForSubmit_(customFields);
       const { result } = await apiRequest({
         action: "register",
         data: {
@@ -878,7 +925,7 @@ function RegistrationPage() {
           userName: String(student.name || "").trim(),
           userPhone: String(student.phone || "").trim(),
           customFields: {
-            ...customFields,
+            ...payloadCustomFields,
             notes: String(notes || "").trim(),
           },
         },
@@ -909,7 +956,7 @@ function RegistrationPage() {
     setSubmitError("");
     try {
       const payloadCustomFields = {
-        ...customFields,
+        ...normalizeCustomFieldsForSubmit_(customFields),
         notes: String(notes || "").trim(),
       };
       const { result } = await apiRequest({
@@ -936,6 +983,50 @@ function RegistrationPage() {
       setUpdateSubmitting(false);
     }
   };
+
+  const bringDrinksValue =
+    customFields.bringDrinks || (hasDrinkSelection_(customFields) ? "攜帶" : "");
+
+  const renderOptionButtons = (field, selectedValue, onChange) => (
+    <div className="flex flex-wrap gap-2">
+      {field.options.map((option) => {
+        const isActive = selectedValue === option;
+        return (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+              isActive
+                ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+            }`}
+          >
+            {option}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderComboField = (field, value, onChange) => (
+    <>
+      <input
+        id={field.id}
+        type="text"
+        list={`${field.id}-options`}
+        placeholder={field.placeholder || "數量"}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+      />
+      <datalist id={`${field.id}-options`}>
+        {field.options.map((option) => (
+          <option key={option} value={option} />
+        ))}
+      </datalist>
+    </>
+  );
 
   return (
     <div className="min-h-screen">
@@ -1063,33 +1154,46 @@ function RegistrationPage() {
             <h3 className="text-base font-semibold text-slate-900">
               {eventInfo.category === "meeting" ? "開會自訂欄位" : "聚餐自訂欄位"}
             </h3>
-            <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              {(eventInfo.category === "meeting" ? meetingFields : gatheringFields).map((field) => {
-                if (field.type === "select") {
-                  return (
-                    <div key={field.id} className="grid gap-2">
+            {eventInfo.category === "meeting" ? (
+              <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                {meetingFields.map((field) => {
+                  const value = customFields[field.id] || "";
+                  if (field.control === "buttons") {
+                    return (
+                      <div key={field.id} className="grid gap-2 sm:col-span-2">
+                        <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
+                          {field.label}
+                        </label>
+                        {renderOptionButtons(field, value, (next) =>
+                          handleCustomFieldChange(field.id, next)
+                        )}
+                      </div>
+                    );
+                  }
+                  if (field.type === "select") {
+                    return (
+                      <div key={field.id} className="grid gap-2">
                         <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
                           {field.label}
                         </label>
                         <select
                           id={field.id}
-                          value={customFields[field.id] || ""}
+                          value={value}
                           onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
                           className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                         >
                           <option value="" disabled>
                             請選擇
                           </option>
-                        {field.options.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                }
-                if (field.type === "combo") {
+                          {field.options.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={field.id} className="grid gap-2">
                       <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
@@ -1097,39 +1201,132 @@ function RegistrationPage() {
                       </label>
                       <input
                         id={field.id}
-                        type="text"
-                        list={`${field.id}-options`}
-                        placeholder={field.placeholder || "數量"}
-                        value={customFields[field.id] || ""}
+                        type={field.type}
+                        placeholder={field.placeholder}
+                        value={value}
                         onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
                         className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                       />
-                      <datalist id={`${field.id}-options`}>
-                        {field.options.map((option) => (
-                          <option key={option} value={option} />
-                        ))}
-                      </datalist>
                     </div>
                   );
-                }
-
-                return (
-                  <div key={field.id} className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
-                      {field.label}
+                })}
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="attendance">
+                      {gatheringFieldConfig.attendance.label}
+                    </label>
+                    {renderOptionButtons(
+                      gatheringFieldConfig.attendance,
+                      customFields.attendance || "",
+                      (next) => handleCustomFieldChange(gatheringFieldConfig.attendance.id, next)
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="companions">
+                      {gatheringFieldConfig.companions.label}
                     </label>
                     <input
-                      id={field.id}
-                      type={field.type}
-                      placeholder={field.placeholder}
-                      value={customFields[field.id] || ""}
-                      onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
+                      id="companions"
+                      type="number"
+                      placeholder={gatheringFieldConfig.companions.placeholder}
+                      value={customFields.companions || ""}
+                      onChange={(event) =>
+                        handleCustomFieldChange(
+                          gatheringFieldConfig.companions.id,
+                          event.target.value
+                        )
+                      }
                       className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                     />
                   </div>
-                );
-              })}
-            </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
+                      {gatheringFieldConfig.dietary.label}
+                    </label>
+                    <select
+                      id="dietary"
+                      value={customFields.dietary || ""}
+                      onChange={(event) =>
+                        handleCustomFieldChange(
+                          gatheringFieldConfig.dietary.id,
+                          event.target.value
+                        )
+                      }
+                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                    >
+                      <option value="" disabled>
+                        請選擇
+                      </option>
+                      {gatheringFieldConfig.dietary.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="parking">
+                      {gatheringFieldConfig.parking.label}
+                    </label>
+                    {renderOptionButtons(
+                      gatheringFieldConfig.parking,
+                      customFields.parking || "",
+                      (next) => handleCustomFieldChange(gatheringFieldConfig.parking.id, next)
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">
+                        {gatheringFieldConfig.drinks.toggle.label}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        若會攜帶酒水，請填寫品項與數量。
+                      </p>
+                    </div>
+                    {renderOptionButtons(
+                      gatheringFieldConfig.drinks.toggle,
+                      bringDrinksValue,
+                      (next) => handleBringDrinksChange(next)
+                    )}
+                  </div>
+                  {bringDrinksValue === "攜帶" ? (
+                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                      {gatheringFieldConfig.drinks.items.map((field) => (
+                        <div key={field.id} className="grid gap-2">
+                          <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
+                            {field.label}
+                          </label>
+                          {field.type === "combo" ? (
+                            renderComboField(field, customFields[field.id] || "", (next) =>
+                              handleCustomFieldChange(field.id, next)
+                            )
+                          ) : (
+                            <input
+                              id={field.id}
+                              type={field.type}
+                              placeholder={field.placeholder}
+                              value={customFields[field.id] || ""}
+                              onChange={(event) =>
+                                handleCustomFieldChange(field.id, event.target.value)
+                              }
+                              className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-400">目前未攜帶酒水。</p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-10 border-t border-slate-200/70 pt-8">
@@ -2020,6 +2217,7 @@ function HomePage() {
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
             {events.map((event) => {
               const statusLabel = event.status === "open" ? "報名進行中" : "報名狀態更新";
+              const schedule = formatEventSchedule_(event.startAt, event.endAt);
               return (
                 <div
                   key={event.id}
@@ -2042,9 +2240,10 @@ function HomePage() {
                         {event.address}
                       </a>
                     ) : null}
-                    <p className="mt-2 text-xs text-slate-400">
-                      {event.startAt} - {event.endAt}
-                    </p>
+                    <div className="mt-2 space-y-1 text-xs text-slate-400">
+                      <p>{schedule.dateLabel || "-"}</p>
+                      {schedule.timeLabel ? <p>{schedule.timeLabel}</p> : null}
+                    </div>
                   </div>
                   <a
                     href={`/register?eventId=${event.id}`}
