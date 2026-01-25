@@ -9,6 +9,7 @@ const SHEETS = {
   orderResponses: "OrderResponses",
   financeRequests: "FinanceRequests",
   financeActions: "FinanceActions",
+  classRoles: "ClassRoles",
   softballPlayers: "SoftballPlayers",
   softballPractices: "SoftballPractices",
   softballAttendance: "SoftballAttendance",
@@ -103,6 +104,28 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing request id" };
     }
     return { ok: true, data: { actions: listFinanceActions_(requestId) }, error: null };
+  }
+
+  if (payload.action === "listClassRoles") {
+    return { ok: true, data: { roles: listClassRoles_() }, error: null };
+  }
+
+  if (payload.action === "upsertClassRole") {
+    const data = payload.data || {};
+    const updated = upsertClassRole_(data);
+    return { ok: true, data: { role: updated }, error: null };
+  }
+
+  if (payload.action === "deleteClassRole") {
+    const roleId = String(payload.id || "").trim();
+    if (!roleId) {
+      return { ok: false, data: null, error: "Missing role id" };
+    }
+    const removed = deleteClassRole_(roleId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Role not found" };
+    }
+    return { ok: true, data: { id: roleId }, error: null };
   }
 
   if (payload.action === "verifyGoogle") {
@@ -1323,6 +1346,19 @@ function listFinanceActions_(requestId) {
   });
 }
 
+function listClassRoles_() {
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .sort(function (a, b) {
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+}
+
 function appendEvent_(data) {
   const sheet = getSheet_(SHEETS.events);
   const headers = getHeaders_(sheet);
@@ -1388,6 +1424,29 @@ function appendFinanceAction_(data) {
   }
   base.createdAt = base.createdAt || nowIso;
   const record = normalizeFinanceActionRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendClassRole_(data) {
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  const roleId = String(base.id || base.email || "").trim();
+  if (!roleId) {
+    throw new Error("Missing role id");
+  }
+  base.id = roleId;
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeClassRoleRecord_(base);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -2034,6 +2093,107 @@ function updateFinanceRequestFlow_(requestId, payload) {
   return updated;
 }
 
+function upsertClassRole_(data) {
+  const roleId = String(data.id || data.email || "").trim();
+  if (!roleId) {
+    throw new Error("Missing role id");
+  }
+  const existing = findClassRoleById_(roleId);
+  if (!existing) {
+    return appendClassRole_(data);
+  }
+  return updateClassRole_(roleId, data);
+}
+
+function updateClassRole_(roleId, data) {
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("ClassRoles sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== roleId) {
+      continue;
+    }
+    const record = normalizeClassRoleRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, {
+        id: roleId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Role not found");
+}
+
+function deleteClassRole_(roleId) {
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("ClassRoles sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === roleId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function findClassRoleById_(roleId) {
+  if (!roleId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("ClassRoles sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === roleId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function findClassRoleByEmail_(email) {
+  if (!email) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.classRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const emailIndex = headerMap.email;
+  if (emailIndex === undefined) {
+    throw new Error("ClassRoles sheet missing email column");
+  }
+  const rows = getDataRows_(sheet);
+  const normalized = normalizeEmail_(email);
+  for (var i = 0; i < rows.length; i++) {
+    if (normalizeEmail_(rows[i][emailIndex]) === normalized) {
+      return mapRowToObject_(headerMap, rows[i]);
+    }
+  }
+  return null;
+}
+
 function upsertOrderResponse_(orderId, data) {
   const sheet = getSheet_(SHEETS.orderResponses);
   const headerMap = getHeaderMap_(sheet);
@@ -2213,6 +2373,21 @@ function normalizeFinanceActionRecord_(data) {
     fromStatus: String(data.fromStatus || "").trim(),
     toStatus: String(data.toStatus || "").trim(),
     createdAt: String(data.createdAt || "").trim(),
+  };
+}
+
+function normalizeClassRoleRecord_(data) {
+  return {
+    id: String(data.id || data.email || "").trim(),
+    name: String(data.name || "").trim(),
+    email: normalizeEmail_(data.email),
+    groups: String(data.groups || "").trim(),
+    leadGroups: String(data.leadGroups || "").trim(),
+    deputyGroups: String(data.deputyGroups || "").trim(),
+    roles: String(data.roles || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
   };
 }
 

@@ -171,6 +171,27 @@ const FINANCE_ROLE_LABELS = {
   auditor: "監察人",
 };
 
+const CLASS_GROUPS = [
+  { id: "A", label: "班代組" },
+  { id: "B", label: "公關組" },
+  { id: "C", label: "活動組" },
+  { id: "D", label: "財會組" },
+  { id: "E", label: "資訊組" },
+  { id: "F", label: "學藝組" },
+  { id: "G", label: "醫療組" },
+  { id: "H", label: "體育主將組" },
+  { id: "I", label: "美食組" },
+  { id: "J", label: "班董" },
+];
+
+const CLASS_ROLE_OPTIONS = [
+  { id: "rep", label: "班代" },
+  { id: "vice_rep", label: "副班代" },
+  { id: "accounting", label: "會計" },
+  { id: "cashier", label: "出納" },
+  { id: "auditor", label: "監察人" },
+];
+
 const getCategoryLabel_ = (value) => {
   const match = EVENT_CATEGORIES.find((item) => item.value === value);
   return match ? match.label : "聚餐";
@@ -289,6 +310,14 @@ const buildFinanceDraft_ = () => ({
   applicantRole: "",
   applicantDepartment: "",
 });
+
+const parseCommaList_ = (value) =>
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const joinCommaList_ = (values) => (values && values.length ? values.join(", ") : "");
 
 const formatEventTime_ = (value) => {
   if (!value) {
@@ -824,7 +853,12 @@ export default function App() {
   }
 
   if (isAdminPage) {
-    return <AdminPage initialTab="registrations" allowedTabs={["registrations", "checkins", "students"]} />;
+    return (
+      <AdminPage
+        initialTab="registrations"
+        allowedTabs={["registrations", "checkins", "students", "roles"]}
+      />
+    );
   }
 
   if (pathname.includes("directory")) {
@@ -2371,6 +2405,7 @@ function FinancePage() {
   const [form, setForm] = useState(buildFinanceDraft_());
   const [editingId, setEditingId] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [classRole, setClassRole] = useState(null);
 
   const applicantName =
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -2397,11 +2432,44 @@ function FinancePage() {
     }
   };
 
+  const loadClassRole = async (email) => {
+    if (!email) {
+      setClassRole(null);
+      return;
+    }
+    try {
+      const { result } = await apiRequest({ action: "listClassRoles" });
+      if (!result.ok) {
+        return;
+      }
+      const roles = result.data && result.data.roles ? result.data.roles : [];
+      const normalized = String(email || "").trim().toLowerCase();
+      const match =
+        roles.find((item) => String(item.email || "").trim().toLowerCase() === normalized) || null;
+      setClassRole(match);
+    } catch (err) {
+      setClassRole(null);
+    }
+  };
+
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
       loadRequests(googleLinkedStudent.email);
+      loadClassRole(googleLinkedStudent.email);
     }
   }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (!classRole) {
+      return;
+    }
+    if (!form.applicantDepartment) {
+      const groups = parseCommaList_(classRole.groups);
+      if (groups.length) {
+        setForm((prev) => ({ ...prev, applicantDepartment: groups[0] }));
+      }
+    }
+  }, [classRole, form.applicantDepartment]);
 
   useEffect(() => {
     if (form.type === "pettycash" && form.paymentMethod !== "pettycash") {
@@ -2522,6 +2590,10 @@ function FinancePage() {
     }
     if (!form.title) {
       setError("請填寫項目名稱");
+      return;
+    }
+    if (!form.applicantDepartment) {
+      setError("請選擇申請組別");
       return;
     }
     const isPurchase = form.type === "purchase";
@@ -2687,15 +2759,30 @@ function FinancePage() {
                   ))}
                 </select>
               </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">職務</label>
-                <input
-                  value={form.applicantRole}
-                  onChange={(event) => handleFormChange("applicantRole", event.target.value)}
-                  placeholder="職務/部門/姓名"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                />
-              </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">職務</label>
+              <input
+                value={form.applicantRole}
+                onChange={(event) => handleFormChange("applicantRole", event.target.value)}
+                placeholder="職務/部門/姓名"
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">申請組別</label>
+              <select
+                value={form.applicantDepartment}
+                onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+              >
+                <option value="">請選擇</option>
+                {CLASS_GROUPS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">項目名稱</label>
                 <input
@@ -2971,6 +3058,9 @@ function FinanceAdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [classRoles, setClassRoles] = useState([]);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminProfile, setAdminProfile] = useState(null);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -2985,6 +3075,17 @@ function FinanceAdminPage() {
       setError(err.message || "載入失敗");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadClassRoles = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listClassRoles" });
+      if (result.ok) {
+        setClassRoles(result.data && result.data.roles ? result.data.roles : []);
+      }
+    } catch (err) {
+      setClassRoles([]);
     }
   };
 
@@ -3005,7 +3106,20 @@ function FinanceAdminPage() {
 
   useEffect(() => {
     loadRequests();
+    loadClassRoles();
   }, []);
+
+  useEffect(() => {
+    const normalized = String(adminEmail || "").trim().toLowerCase();
+    if (!normalized) {
+      setAdminProfile(null);
+      return;
+    }
+    const match =
+      classRoles.find((item) => String(item.email || "").trim().toLowerCase() === normalized) ||
+      null;
+    setAdminProfile(match);
+  }, [adminEmail, classRoles]);
 
   useEffect(() => {
     loadActions(selectedId);
@@ -3019,19 +3133,62 @@ function FinanceAdminPage() {
     cashier: "pending_cashier",
   };
 
+  const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
+
+  const adminGroups = adminProfile ? parseCommaList_(adminProfile.groups) : [];
+  const adminLeadGroups = adminProfile ? parseCommaList_(adminProfile.leadGroups) : [];
+  const adminDeputyGroups = adminProfile ? parseCommaList_(adminProfile.deputyGroups) : [];
+  const adminRoles = adminProfile ? parseCommaList_(adminProfile.roles) : [];
+
+  const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
+  const hasRepPrivilege = adminRoles.includes("rep");
+  const hasCommitteePrivilege =
+    hasLeadPrivilege || adminRoles.includes("rep") || adminRoles.includes("vice_rep");
+  const hasAccountingPrivilege = adminRoles.includes("accounting");
+  const hasCashierPrivilege = adminRoles.includes("cashier");
+  const hasAuditorPrivilege = adminRoles.includes("auditor");
+
+  const availableRoles = [
+    hasLeadPrivilege ? "lead" : null,
+    hasRepPrivilege ? "rep" : null,
+    hasCommitteePrivilege ? "committee" : null,
+    hasAccountingPrivilege ? "accounting" : null,
+    hasCashierPrivilege ? "cashier" : null,
+    hasAuditorPrivilege ? "auditor" : null,
+  ].filter((value) => value);
+
+  useEffect(() => {
+    if (!availableRoles.length) {
+      return;
+    }
+    if (!availableRoles.includes(role)) {
+      setRole(availableRoles[0]);
+    }
+  }, [availableRoles, role]);
+
   const filteredRequests = requests.filter((item) => {
     if (role === "auditor") {
       return true;
     }
     const targetStatus = roleStatusMap[role];
-    return item.status === targetStatus;
+    if (item.status !== targetStatus) {
+      return false;
+    }
+    if (role === "lead") {
+      const group = String(item.applicantDepartment || "").trim();
+      return adminLeadGroups.includes(group) || adminDeputyGroups.includes(group);
+    }
+    return true;
   });
 
   const selectedRequest = requests.find((item) => item.id === selectedId) || null;
   const canAct =
     selectedRequest &&
     role !== "auditor" &&
-    selectedRequest.status === roleStatusMap[role];
+    selectedRequest.status === roleStatusMap[role] &&
+    (role !== "lead" ||
+      adminLeadGroups.includes(String(selectedRequest.applicantDepartment || "").trim()) ||
+      adminDeputyGroups.includes(String(selectedRequest.applicantDepartment || "").trim()));
 
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id) {
@@ -3087,22 +3244,37 @@ function FinanceAdminPage() {
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
         <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(FINANCE_ROLE_LABELS).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setRole(key)}
-                  className={`rounded-xl px-4 py-2 ${
-                    role === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3">
+              <input
+                value={adminEmail}
+                onChange={(event) => setAdminEmail(event.target.value)}
+                placeholder="管理者 Email"
+                className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700"
+              />
+              {availableRoles.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {availableRoles.map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => setRole(key)}
+                      className={`rounded-xl px-4 py-2 ${
+                        role === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {FINANCE_ROLE_LABELS[key]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-xs text-slate-400">未匹配到班務角色</span>
+              )}
             </div>
             <button
               type="button"
-              onClick={loadRequests}
+              onClick={() => {
+                loadRequests();
+                loadClassRoles();
+              }}
               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
             >
               重新整理
@@ -3176,14 +3348,19 @@ function FinanceAdminPage() {
                     {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
                   </p>
                 </div>
-                <div className="grid gap-2 text-xs text-slate-500">
-                  <div>
-                    申請人：{selectedRequest.applicantName || "-"} · {selectedRequest.applicantRole || "-"}
-                  </div>
-                  <div>
-                    類型：
-                    {FINANCE_TYPES.find((type) => type.value === selectedRequest.type)?.label || "-"}
-                  </div>
+                  <div className="grid gap-2 text-xs text-slate-500">
+                    <div>
+                      申請人：{selectedRequest.applicantName || "-"} · {selectedRequest.applicantRole || "-"}
+                    </div>
+                    <div>
+                      組別：
+                      {CLASS_GROUPS.find((item) => item.id === selectedRequest.applicantDepartment)
+                        ?.label || "-"}
+                    </div>
+                    <div>
+                      類型：
+                      {FINANCE_TYPES.find((type) => type.value === selectedRequest.type)?.label || "-"}
+                    </div>
                   <div>
                     金額：
                     {formatFinanceAmount_(
@@ -6487,6 +6664,17 @@ function AdminPage({
   const [studentsQuery, setStudentsQuery] = useState("");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
+  const [classRoles, setClassRoles] = useState([]);
+  const [roleForm, setRoleForm] = useState({
+    id: "",
+    name: "",
+    email: "",
+    groups: [],
+    leadGroups: [],
+    deputyGroups: [],
+    roles: [],
+    notes: "",
+  });
   const [directoryToken, setDirectoryToken] = useState(
     () => localStorage.getItem("directoryToken") || ""
   );
@@ -6503,6 +6691,19 @@ function AdminPage({
   const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
 
   const normalizeName_ = (value) => String(value || "").trim();
+
+  const resetRoleForm_ = () => {
+    setRoleForm({
+      id: "",
+      name: "",
+      email: "",
+      groups: [],
+      leadGroups: [],
+      deputyGroups: [],
+      roles: [],
+      notes: "",
+    });
+  };
 
   const getDisplayName_ = (student) =>
     String(
@@ -6748,6 +6949,9 @@ function AdminPage({
     if (activeTab === "ordering") {
       loadOrderPlans();
     }
+    if (activeTab === "roles") {
+      loadClassRoles();
+    }
   }, [activeTab]);
 
   useEffect(() => {
@@ -6911,6 +7115,22 @@ function AdminPage({
       setRegistrations(result.data && result.data.registrations ? result.data.registrations : []);
     } catch (err) {
       setError("報名名單載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadClassRoles = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listClassRoles" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setClassRoles(result.data && result.data.roles ? result.data.roles : []);
+    } catch (err) {
+      setError(err.message || "班務角色載入失敗。");
     } finally {
       setLoading(false);
     }
@@ -7123,6 +7343,105 @@ function AdminPage({
       setOrderStatusMessage("已更新訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleListValue_ = (list, value) => {
+    if (list.includes(value)) {
+      return list.filter((item) => item !== value);
+    }
+    return list.concat(value);
+  };
+
+  const handleRoleFormChange_ = (key, value) => {
+    setRoleForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleRoleToggle_ = (key, value) => {
+    setRoleForm((prev) => {
+      const current = prev[key] || [];
+      const isAdding = !current.includes(value);
+      if (key === "groups" && isAdding && current.length >= 3) {
+        setError("最多只能選擇 3 個組別");
+        return prev;
+      }
+      return {
+        ...prev,
+        [key]: toggleListValue_(current, value),
+      };
+    });
+  };
+
+  const handleEditRole_ = (item) => {
+    if (!item) {
+      return;
+    }
+    setRoleForm({
+      id: item.id || "",
+      name: item.name || "",
+      email: item.email || "",
+      groups: parseCommaList_(item.groups),
+      leadGroups: parseCommaList_(item.leadGroups),
+      deputyGroups: parseCommaList_(item.deputyGroups),
+      roles: parseCommaList_(item.roles),
+      notes: item.notes || "",
+    });
+  };
+
+  const handleSaveRole_ = async (event) => {
+    event.preventDefault();
+    setError("");
+    setRegistrationStatusMessage("");
+    if (!roleForm.id && !roleForm.email) {
+      setError("請填寫學號或 Email");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { result } = await apiRequest({
+        action: "upsertClassRole",
+        data: {
+          id: roleForm.id,
+          name: roleForm.name,
+          email: roleForm.email,
+          groups: joinCommaList_(roleForm.groups),
+          leadGroups: joinCommaList_(roleForm.leadGroups),
+          deputyGroups: joinCommaList_(roleForm.deputyGroups),
+          roles: joinCommaList_(roleForm.roles),
+          notes: roleForm.notes,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      resetRoleForm_();
+      await loadClassRoles();
+    } catch (err) {
+      setError(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRole_ = async (roleId) => {
+    if (!roleId) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "deleteClassRole", id: roleId });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      if (roleForm.id === roleId) {
+        resetRoleForm_();
+      }
+      await loadClassRoles();
+    } catch (err) {
+      setError(err.message || "刪除失敗");
     } finally {
       setSaving(false);
     }
@@ -7537,6 +7856,7 @@ function AdminPage({
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
               { id: "students", label: "同學" },
+              { id: "roles", label: "班務角色" },
             ]
               .filter((item) => allowedTabs.includes(item.id))
               .map((item) => (
@@ -8051,6 +8371,193 @@ function AdminPage({
                   ) : null}
                 </div>
               ))}
+            </div>
+          ) : null}
+
+          {activeTab === "roles" ? (
+            <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-slate-700">
+                    班務角色與分組 (最多 3 組)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={resetRoleForm_}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    新增
+                  </button>
+                </div>
+                {classRoles.length ? (
+                  classRoles.map((item) => (
+                    <div
+                      key={item.id || item.email}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {item.name || item.email || item.id}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {item.email || "-"} · 組別: {item.groups || "-"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          組長: {item.leadGroups || "-"} · 副組長: {item.deputyGroups || "-"}
+                        </p>
+                        <p className="text-xs text-slate-500">角色: {item.roles || "-"}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditRole_(item)}
+                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          編輯
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRole_(item.id)}
+                          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">尚未建立班務角色。</p>
+                )}
+              </div>
+              <form onSubmit={handleSaveRole_} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">學號 / ID</label>
+                  <input
+                    value={roleForm.id}
+                    onChange={(event) => handleRoleFormChange_("id", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">姓名</label>
+                    <input
+                      value={roleForm.name}
+                      onChange={(event) => handleRoleFormChange_("name", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">Email</label>
+                    <input
+                      value={roleForm.email}
+                      onChange={(event) => handleRoleFormChange_("email", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">組別</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CLASS_GROUPS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleRoleToggle_("groups", item.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          roleForm.groups.includes(item.id)
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">組長</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CLASS_GROUPS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleRoleToggle_("leadGroups", item.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          roleForm.leadGroups.includes(item.id)
+                            ? "border-emerald-600 bg-emerald-600 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">副組長</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CLASS_GROUPS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleRoleToggle_("deputyGroups", item.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          roleForm.deputyGroups.includes(item.id)
+                            ? "border-amber-500 bg-amber-500 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">班務角色</label>
+                  <div className="flex flex-wrap gap-2">
+                    {CLASS_ROLE_OPTIONS.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => handleRoleToggle_("roles", item.id)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                          roleForm.roles.includes(item.id)
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={roleForm.notes}
+                    onChange={(event) => handleRoleFormChange_("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "儲存中..." : "儲存角色"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetRoleForm_}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
             </div>
           ) : null}
 
