@@ -7,6 +7,8 @@ const SHEETS = {
   admins: "AdminUsers",
   orderPlans: "OrderPlans",
   orderResponses: "OrderResponses",
+  financeRequests: "FinanceRequests",
+  financeActions: "FinanceActions",
   softballPlayers: "SoftballPlayers",
   softballPractices: "SoftballPractices",
   softballAttendance: "SoftballAttendance",
@@ -63,6 +65,44 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Student not found" };
     }
     return { ok: true, data: { student: buildStudentProfile_(student, directory, email) }, error: null };
+  }
+
+  if (payload.action === "listFinanceRequests") {
+    return { ok: true, data: { requests: listFinanceRequests_(payload) }, error: null };
+  }
+
+  if (payload.action === "createFinanceRequest") {
+    const data = payload.data || {};
+    const created = appendFinanceRequest_(data);
+    if (created.status !== "draft") {
+      appendFinanceAction_({
+        requestId: created.id,
+        action: "submit",
+        actorRole: String(data.actorRole || "applicant"),
+        actorName: String(data.actorName || created.applicantName || "").trim(),
+        note: String(data.actorNote || "").trim(),
+        fromStatus: "",
+        toStatus: created.status,
+      });
+    }
+    return { ok: true, data: { request: created }, error: null };
+  }
+
+  if (payload.action === "updateFinanceRequest") {
+    const requestId = String(payload.id || "").trim();
+    if (!requestId) {
+      return { ok: false, data: null, error: "Missing request id" };
+    }
+    const updated = updateFinanceRequestFlow_(requestId, payload);
+    return { ok: true, data: { request: updated }, error: null };
+  }
+
+  if (payload.action === "listFinanceActions") {
+    const requestId = String(payload.requestId || "").trim();
+    if (!requestId) {
+      return { ok: false, data: null, error: "Missing request id" };
+    }
+    return { ok: true, data: { actions: listFinanceActions_(requestId) }, error: null };
   }
 
   if (payload.action === "verifyGoogle") {
@@ -1248,6 +1288,41 @@ function listDirectory_() {
   });
 }
 
+function listFinanceRequests_(payload) {
+  const sheet = getSheet_(SHEETS.financeRequests);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const applicantEmail = normalizeEmail_(payload && payload.applicantEmail);
+  const list = rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  const filtered = applicantEmail
+    ? list.filter(function (item) {
+        return normalizeEmail_(item.applicantEmail) === applicantEmail;
+      })
+    : list;
+  return filtered.sort(function (a, b) {
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
+function listFinanceActions_(requestId) {
+  const sheet = getSheet_(SHEETS.financeActions);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const id = String(requestId || "").trim();
+  const list = rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .filter(function (item) {
+      return String(item.requestId || "").trim() === id;
+    });
+  return list.sort(function (a, b) {
+    return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+  });
+}
+
 function appendEvent_(data) {
   const sheet = getSheet_(SHEETS.events);
   const headers = getHeaders_(sheet);
@@ -1266,6 +1341,53 @@ function appendOrderPlan_(data) {
   const sheet = getSheet_(SHEETS.orderPlans);
   const headers = getHeaders_(sheet);
   const record = normalizeOrderPlanRecord_(data);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFinanceRequest_(data) {
+  const sheet = getSheet_(SHEETS.financeRequests);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFinanceId_();
+  }
+  if (!base.status || String(base.status).trim() === "") {
+    base.status = "pending_lead";
+  }
+  if (String(base.status) !== "draft" && !base.submittedAt) {
+    base.submittedAt = nowIso;
+  }
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeFinanceRequestRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFinanceAction_(data) {
+  const sheet = getSheet_(SHEETS.financeActions);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFinanceActionId_();
+  }
+  base.createdAt = base.createdAt || nowIso;
+  const record = normalizeFinanceActionRecord_(base);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -1821,6 +1943,97 @@ function updateOrderPlan_(orderId, data) {
   return null;
 }
 
+function findFinanceRequestById_(requestId) {
+  if (!requestId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.financeRequests);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceRequests sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === requestId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function updateFinanceRequest_(requestId, data) {
+  const sheet = getSheet_(SHEETS.financeRequests);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceRequests sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== requestId) {
+      continue;
+    }
+    const record = normalizeFinanceRequestRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, { id: requestId })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Finance request not found");
+}
+
+function updateFinanceRequestFlow_(requestId, payload) {
+  const existing = findFinanceRequestById_(requestId);
+  if (!existing) {
+    throw new Error("Finance request not found");
+  }
+  const nowIso = new Date().toISOString();
+  const action = String(payload.requestAction || payload.flowAction || payload.actionType || "")
+    .trim()
+    .toLowerCase();
+  const actorRole = String(payload.actorRole || "").trim();
+  const actorName = String(payload.actorName || "").trim();
+  const actorNote = String(payload.actorNote || "").trim();
+  const data = payload.data || {};
+  const merged = Object.assign({}, existing, data);
+  let nextStatus = String(merged.status || existing.status || "").trim();
+  if (action === "submit") {
+    nextStatus = "pending_lead";
+    merged.submittedAt = nowIso;
+  } else if (action === "withdraw") {
+    nextStatus = "withdrawn";
+  } else if (action === "return") {
+    nextStatus = "returned";
+  } else if (action === "approve") {
+    nextStatus = resolveFinanceNextStatus_(merged, actorRole);
+  }
+  merged.status = nextStatus || merged.status || existing.status;
+  merged.updatedAt = nowIso;
+  const updated = updateFinanceRequest_(requestId, merged);
+  if (action) {
+    appendFinanceAction_({
+      requestId: requestId,
+      action: action,
+      actorRole: actorRole,
+      actorName: actorName,
+      note: actorNote,
+      fromStatus: existing.status || "",
+      toStatus: updated.status || "",
+    });
+  }
+  return updated;
+}
+
 function upsertOrderResponse_(orderId, data) {
   const sheet = getSheet_(SHEETS.orderResponses);
   const headerMap = getHeaderMap_(sheet);
@@ -1958,6 +2171,52 @@ function normalizeOrderResponseRecord_(data) {
   };
 }
 
+function normalizeFinanceRequestRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    type: String(data.type || "").trim(),
+    title: String(data.title || "").trim(),
+    description: String(data.description || "").trim(),
+    categoryType: String(data.categoryType || "").trim(),
+    categoryClause: String(data.categoryClause || "").trim(),
+    amountEstimated: String(data.amountEstimated || "").trim(),
+    amountActual: String(data.amountActual || "").trim(),
+    currency: String(data.currency || "TWD").trim(),
+    paymentMethod: String(data.paymentMethod || "").trim(),
+    vendorName: String(data.vendorName || "").trim(),
+    payeeName: String(data.payeeName || "").trim(),
+    payeeBank: String(data.payeeBank || "").trim(),
+    payeeAccount: String(data.payeeAccount || "").trim(),
+    relatedPurchaseId: String(data.relatedPurchaseId || "").trim(),
+    noPurchaseReason: String(data.noPurchaseReason || "").trim(),
+    expectedClearDate: String(data.expectedClearDate || "").trim(),
+    attachments: String(data.attachments || "").trim(),
+    status: String(data.status || "").trim(),
+    applicantId: String(data.applicantId || "").trim(),
+    applicantName: String(data.applicantName || "").trim(),
+    applicantRole: String(data.applicantRole || "").trim(),
+    applicantDepartment: String(data.applicantDepartment || "").trim(),
+    applicantEmail: normalizeEmail_(data.applicantEmail),
+    submittedAt: String(data.submittedAt || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeFinanceActionRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    requestId: String(data.requestId || "").trim(),
+    action: String(data.action || "").trim(),
+    actorRole: String(data.actorRole || "").trim(),
+    actorName: String(data.actorName || "").trim(),
+    note: String(data.note || "").trim(),
+    fromStatus: String(data.fromStatus || "").trim(),
+    toStatus: String(data.toStatus || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+  };
+}
+
 function normalizeSoftballPlayerRecord_(data) {
   return {
     id: String(data.id || data.studentId || "").trim(),
@@ -2039,6 +2298,107 @@ function normalizeSoftballGearRecord_(data) {
     createdAt: String(data.createdAt || "").trim(),
     updatedAt: String(data.updatedAt || "").trim(),
   };
+}
+
+function parseFinanceAmount_(value) {
+  var raw = String(value || "").replace(/,/g, "").trim();
+  var parsed = parseFloat(raw);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+function isPettyCashRequest_(record) {
+  var type = String(record.type || "").trim().toLowerCase();
+  var method = String(record.paymentMethod || "").trim().toLowerCase();
+  return type === "pettycash" || method === "pettycash";
+}
+
+function isPurchaseRequest_(record) {
+  return String(record.type || "").trim().toLowerCase() === "purchase";
+}
+
+function requiresRepresentative_(record) {
+  return parseFinanceAmount_(record.amountActual || record.amountEstimated) > 50000;
+}
+
+function requiresCommittee_(record) {
+  var amount = parseFinanceAmount_(record.amountActual || record.amountEstimated);
+  var categoryType = String(record.categoryType || "").trim().toLowerCase();
+  return amount >= 200000 || categoryType === "special";
+}
+
+function resolveFinanceNextStatus_(record, actorRole) {
+  var role = String(actorRole || "").trim().toLowerCase();
+  var status = String(record.status || "").trim().toLowerCase();
+  var needsRep = requiresRepresentative_(record);
+  var needsCommittee = requiresCommittee_(record);
+  var isPettyCash = isPettyCashRequest_(record);
+  var isPurchase = isPurchaseRequest_(record);
+
+  if (role === "lead") {
+    if (needsRep || needsCommittee) {
+      return "pending_rep";
+    }
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "rep") {
+    if (needsCommittee) {
+      return "pending_committee";
+    }
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "committee") {
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "accounting") {
+    return isPettyCash ? "closed" : "pending_cashier";
+  }
+
+  if (role === "cashier") {
+    if (status === "pending_cashier" && isPettyCash) {
+      return "pending_accounting";
+    }
+    return "closed";
+  }
+
+  return record.status || "";
+}
+
+function generateFinanceId_() {
+  var now = new Date();
+  return (
+    "FIN-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
+}
+
+function generateFinanceActionId_() {
+  var now = new Date();
+  return (
+    "FIN-ACT-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
 }
 
 function generateOrderPlanId_(dateValue, existingPlans) {

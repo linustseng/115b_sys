@@ -133,6 +133,44 @@ const EVENT_CATEGORIES = [
   { value: "softball", label: "壘球練習" },
 ];
 
+const FINANCE_TYPES = [
+  { value: "purchase", label: "請購" },
+  { value: "payment", label: "請款" },
+  { value: "pettycash", label: "零用金" },
+];
+
+const FINANCE_PAYMENT_METHODS = [
+  { value: "reimbursement", label: "代墊報銷" },
+  { value: "transfer", label: "財務直接轉帳給廠商" },
+  { value: "pettycash", label: "零用金" },
+];
+
+const FINANCE_CATEGORY_TYPES = [
+  { value: "general", label: "一般性班務" },
+  { value: "special", label: "特殊性班務" },
+];
+
+const FINANCE_STATUS_LABELS = {
+  draft: "草稿",
+  pending_lead: "待組長審核",
+  pending_rep: "待班代覆核",
+  pending_committee: "待幹部審核",
+  pending_accounting: "待會計作帳",
+  pending_cashier: "待出納付款/發放",
+  returned: "退回補件",
+  closed: "已結案",
+  withdrawn: "已撤回",
+};
+
+const FINANCE_ROLE_LABELS = {
+  lead: "組長",
+  rep: "班代",
+  committee: "幹部",
+  accounting: "會計",
+  cashier: "出納",
+  auditor: "監察人",
+};
+
 const getCategoryLabel_ = (value) => {
   const match = EVENT_CATEGORIES.find((item) => item.value === value);
   return match ? match.label : "聚餐";
@@ -202,6 +240,56 @@ const formatEventDate_ = (value) => {
     parsed.getDate()
   )} (${weekday})`;
 };
+
+const parseFinanceAmount_ = (value) => {
+  const raw = String(value || "").replace(/,/g, "").trim();
+  const parsed = Number(raw);
+  return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const formatFinanceAmount_ = (value) => {
+  const amount = parseFinanceAmount_(value);
+  return amount ? `NT$ ${amount.toLocaleString("en-US")}` : "NT$ 0";
+};
+
+const parseFinanceAttachments_ = (value) => {
+  if (!value) {
+    return [];
+  }
+  if (Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+};
+
+const buildFinanceDraft_ = () => ({
+  id: "",
+  type: "purchase",
+  title: "",
+  description: "",
+  categoryType: "general",
+  categoryClause: "",
+  amountEstimated: "",
+  amountActual: "",
+  currency: "TWD",
+  paymentMethod: "reimbursement",
+  vendorName: "",
+  payeeName: "",
+  payeeBank: "",
+  payeeAccount: "",
+  relatedPurchaseId: "",
+  noPurchaseReason: "",
+  expectedClearDate: "",
+  attachments: [],
+  status: "draft",
+  applicantRole: "",
+  applicantDepartment: "",
+});
 
 const formatEventTime_ = (value) => {
   if (!value) {
@@ -706,10 +794,12 @@ export default function App() {
   const isCheckinPage = pathname.includes("checkin");
   const isAdminEventsPage = pathname.includes("admin/events");
   const isAdminOrderingPage = pathname.includes("admin/ordering");
+  const isAdminFinancePage = pathname.includes("admin/finance");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
   const isEventsPage = pathname.includes("events");
   const isOrderingPage = pathname.includes("ordering");
+  const isFinancePage = pathname.includes("finance");
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
 
@@ -730,6 +820,10 @@ export default function App() {
     return <AdminPage initialTab="ordering" allowedTabs={["ordering"]} />;
   }
 
+  if (isAdminFinancePage) {
+    return <FinanceAdminPage />;
+  }
+
   if (isAdminPage) {
     return <AdminPage initialTab="registrations" allowedTabs={["registrations", "checkins", "students"]} />;
   }
@@ -748,6 +842,10 @@ export default function App() {
 
   if (isOrderingPage) {
     return <OrderingPage />;
+  }
+
+  if (isFinancePage) {
+    return <FinancePage />;
   }
 
   if (isSoftballPlayerPage) {
@@ -1726,7 +1824,7 @@ function LandingPage() {
           </section>
         ) : null}
 
-        <section className="grid gap-4 sm:gap-5 lg:grid-cols-3">
+        <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg">
             <div>
               <div className="flex items-center justify-between">
@@ -1795,11 +1893,45 @@ function LandingPage() {
             </div>
           </div>
 
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-sky-200/70 bg-sky-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(14,116,144,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-600/70">
+                  System 03
+                </p>
+                <img
+                  src={emblem115b}
+                  alt="NTU EMBA 115B"
+                  className="h-10 w-10 rounded-2xl border border-sky-200 bg-white p-1 shadow-sm"
+                />
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">財務管理</h3>
+              <p className="mt-3 text-sm text-sky-900/80">
+                班費請購、請款與零用金申請。
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/finance"
+                className="inline-flex items-center rounded-full border border-sky-300 bg-white px-4 py-1.5 text-sm font-semibold text-sky-700 shadow-sm hover:border-sky-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              <a
+                href="/admin/finance"
+                className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-sky-500/30 hover:bg-sky-500"
+              >
+                財務管理
+              </a>
+            </div>
+          </div>
+
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-emerald-200/70 bg-emerald-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(16,185,129,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600/70">
-                  System 03
+                  System 04
                 </p>
                 <img
                   src={emblem115b}
@@ -2225,6 +2357,943 @@ function OrderingPage() {
         >
           回首頁
         </a>
+      </main>
+    </div>
+  );
+}
+
+function FinancePage() {
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [loginExpanded, setLoginExpanded] = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [form, setForm] = useState(buildFinanceDraft_());
+  const [editingId, setEditingId] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState("");
+
+  const applicantName =
+    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    "";
+
+  const loadRequests = async (email) => {
+    if (!email) {
+      setRequests([]);
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listFinanceRequests", applicantEmail: email });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setRequests(result.data && result.data.requests ? result.data.requests : []);
+    } catch (err) {
+      setError(err.message || "載入失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.email) {
+      loadRequests(googleLinkedStudent.email);
+    }
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (form.type === "pettycash" && form.paymentMethod !== "pettycash") {
+      setForm((prev) => ({ ...prev, paymentMethod: "pettycash" }));
+    }
+    if (form.type === "purchase" && !form.paymentMethod) {
+      setForm((prev) => ({ ...prev, paymentMethod: "reimbursement" }));
+    }
+  }, [form.type, form.paymentMethod]);
+
+  const resetForm = () => {
+    setForm(buildFinanceDraft_());
+    setEditingId("");
+    setAttachmentUrl("");
+  };
+
+  const handleFormChange = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleAddAttachment = () => {
+    const trimmed = String(attachmentUrl || "").trim();
+    if (!trimmed) {
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).concat([{ name: trimmed, url: trimmed }]),
+    }));
+    setAttachmentUrl("");
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      attachments: (prev.attachments || []).filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const handleEditRequest = (item) => {
+    if (!item) {
+      return;
+    }
+    setEditingId(item.id || "");
+    setForm({
+      id: item.id || "",
+      type: item.type || "purchase",
+      title: item.title || "",
+      description: item.description || "",
+      categoryType: item.categoryType || "general",
+      categoryClause: item.categoryClause || "",
+      amountEstimated: item.amountEstimated || "",
+      amountActual: item.amountActual || "",
+      currency: item.currency || "TWD",
+      paymentMethod: item.paymentMethod || "reimbursement",
+      vendorName: item.vendorName || "",
+      payeeName: item.payeeName || "",
+      payeeBank: item.payeeBank || "",
+      payeeAccount: item.payeeAccount || "",
+      relatedPurchaseId: item.relatedPurchaseId || "",
+      noPurchaseReason: item.noPurchaseReason || "",
+      expectedClearDate: item.expectedClearDate || "",
+      attachments: parseFinanceAttachments_(item.attachments),
+      status: item.status || "draft",
+      applicantRole: item.applicantRole || "",
+      applicantDepartment: item.applicantDepartment || "",
+    });
+    setStatusMessage("");
+    setError("");
+  };
+
+  const handleSaveDraft = async () => {
+    setStatusMessage("");
+    setError("");
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      setError("請先登入 Google");
+      return;
+    }
+    const payload = {
+      ...form,
+      attachments: JSON.stringify(form.attachments || []),
+      status: "draft",
+      applicantId: googleLinkedStudent.id || "",
+      applicantName: applicantName,
+      applicantEmail: googleLinkedStudent.email || "",
+    };
+    setLoading(true);
+    try {
+      const response = editingId
+        ? await apiRequest({
+            action: "updateFinanceRequest",
+            id: editingId,
+            data: payload,
+            requestAction: "update",
+            actorRole: "applicant",
+            actorName: applicantName,
+          })
+        : await apiRequest({ action: "createFinanceRequest", data: payload });
+      if (!response.result.ok) {
+        throw new Error(response.result.error || "儲存失敗");
+      }
+      setStatusMessage("已儲存草稿");
+      resetForm();
+      await loadRequests(googleLinkedStudent.email);
+    } catch (err) {
+      setError(err.message || "儲存失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setStatusMessage("");
+    setError("");
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      setError("請先登入 Google");
+      return;
+    }
+    if (!form.title) {
+      setError("請填寫項目名稱");
+      return;
+    }
+    const isPurchase = form.type === "purchase";
+    const isPayment = form.type === "payment";
+    const isPettyCash = form.type === "pettycash";
+    const amountValue = isPurchase ? form.amountEstimated : form.amountActual;
+    if (!amountValue || parseFinanceAmount_(amountValue) <= 0) {
+      setError("請填寫金額");
+      return;
+    }
+    if (isPayment && !form.relatedPurchaseId && !form.noPurchaseReason) {
+      setError("請填寫對應請購或未經請購原因");
+      return;
+    }
+    if (!form.applicantRole) {
+      setError("請填寫職務");
+      return;
+    }
+    const payload = {
+      ...form,
+      attachments: JSON.stringify(form.attachments || []),
+      status: "pending_lead",
+      applicantId: googleLinkedStudent.id || "",
+      applicantName: applicantName,
+      applicantEmail: googleLinkedStudent.email || "",
+    };
+    if (isPettyCash) {
+      payload.paymentMethod = "pettycash";
+    }
+    setLoading(true);
+    try {
+      const response = editingId
+        ? await apiRequest({
+            action: "updateFinanceRequest",
+            id: editingId,
+            data: payload,
+            requestAction: "submit",
+            actorRole: "applicant",
+            actorName: applicantName,
+          })
+        : await apiRequest({ action: "createFinanceRequest", data: payload });
+      if (!response.result.ok) {
+        throw new Error(response.result.error || "送出失敗");
+      }
+      setStatusMessage("已送出申請");
+      resetForm();
+      await loadRequests(googleLinkedStudent.email);
+    } catch (err) {
+      setError(err.message || "送出失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWithdraw = async (item) => {
+    if (!item || !item.id) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({
+        action: "updateFinanceRequest",
+        id: item.id,
+        requestAction: "withdraw",
+        actorRole: "applicant",
+        actorName: applicantName,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "撤回失敗");
+      }
+      await loadRequests(googleLinkedStudent.email);
+    } catch (err) {
+      setError(err.message || "撤回失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isPurchase = form.type === "purchase";
+  const isPayment = form.type === "payment";
+  const isPettyCash = form.type === "pettycash";
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+            NTU EMBA 115B
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+            財務管理 · 同學入口
+          </h1>
+          <p className="mt-3 text-sm text-slate-500">請購、請款與零用金申請。</p>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+            <span className="font-semibold text-slate-900">Google 登入</span>
+            {googleLinkedStudent && googleLinkedStudent.email ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+                {googleLinkedStudent.email}
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLoginExpanded((prev) => !prev)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              >
+                {loginExpanded ? "收合" : "登入"}
+              </button>
+            )}
+          </div>
+          {!googleLinkedStudent && loginExpanded ? (
+            <div className="mt-4">
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="登入後可提交財務申請。"
+                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              />
+            </div>
+          ) : null}
+        </section>
+
+        {statusMessage ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+            {statusMessage}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="mt-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">新建申請</h2>
+              {editingId ? (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  編輯中 {editingId}
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">申請類型</label>
+                <select
+                  value={form.type}
+                  onChange={(event) => handleFormChange("type", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                >
+                  {FINANCE_TYPES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">職務</label>
+                <input
+                  value={form.applicantRole}
+                  onChange={(event) => handleFormChange("applicantRole", event.target.value)}
+                  placeholder="職務/部門/姓名"
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">項目名稱</label>
+                <input
+                  value={form.title}
+                  onChange={(event) => handleFormChange("title", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2 sm:col-span-2">
+                <label className="text-sm font-medium text-slate-700">說明/活動內容</label>
+                <textarea
+                  value={form.description}
+                  onChange={(event) => handleFormChange("description", event.target.value)}
+                  rows="3"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">班務性質</label>
+                <select
+                  value={form.categoryType}
+                  onChange={(event) => handleFormChange("categoryType", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                >
+                  {FINANCE_CATEGORY_TYPES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">條款</label>
+                <input
+                  value={form.categoryClause}
+                  onChange={(event) => handleFormChange("categoryClause", event.target.value)}
+                  placeholder="例如 4-1-1"
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">
+                  {isPurchase ? "預估金額" : "實際金額"}
+                </label>
+                <input
+                  value={isPurchase ? form.amountEstimated : form.amountActual}
+                  onChange={(event) =>
+                    handleFormChange(isPurchase ? "amountEstimated" : "amountActual", event.target.value)
+                  }
+                  placeholder="NT$"
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+              </div>
+              {isPayment ? (
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">請款方式</label>
+                  <select
+                    value={form.paymentMethod}
+                    onChange={(event) => handleFormChange("paymentMethod", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FINANCE_PAYMENT_METHODS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {isPettyCash ? (
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">預計核銷日期</label>
+                  <input
+                    type="date"
+                    value={form.expectedClearDate}
+                    onChange={(event) => handleFormChange("expectedClearDate", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+              ) : null}
+              {isPayment ? (
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">對應請購</label>
+                  <input
+                    value={form.relatedPurchaseId}
+                    onChange={(event) => handleFormChange("relatedPurchaseId", event.target.value)}
+                    placeholder="請購單號 (可選)"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+              ) : null}
+              {isPayment ? (
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">未經請購原因</label>
+                  <textarea
+                    value={form.noPurchaseReason}
+                    onChange={(event) => handleFormChange("noPurchaseReason", event.target.value)}
+                    rows="2"
+                    placeholder="若未事先請購請填寫原因"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+              ) : null}
+              {isPayment ? (
+                <>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">廠商/收款人</label>
+                    <input
+                      value={form.payeeName}
+                      onChange={(event) => handleFormChange("payeeName", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">銀行/帳號</label>
+                    <input
+                      value={form.payeeAccount}
+                      onChange={(event) => handleFormChange("payeeAccount", event.target.value)}
+                      placeholder="轉帳帳號"
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                </>
+              ) : null}
+              {isPurchase ? (
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">廠商/採購來源</label>
+                  <input
+                    value={form.vendorName}
+                    onChange={(event) => handleFormChange("vendorName", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-6 space-y-3">
+              <label className="text-sm font-medium text-slate-700">附件</label>
+              <div className="flex flex-wrap gap-3">
+                <input
+                  value={attachmentUrl}
+                  onChange={(event) => setAttachmentUrl(event.target.value)}
+                  placeholder="貼上發票/報價單連結"
+                  className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddAttachment}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600"
+                >
+                  加入
+                </button>
+              </div>
+              {form.attachments && form.attachments.length ? (
+                <div className="space-y-2">
+                  {form.attachments.map((item, index) => (
+                    <div
+                      key={`${item.url}-${index}`}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs text-slate-600"
+                    >
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-semibold text-slate-700 hover:text-slate-900"
+                      >
+                        {item.name || item.url}
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(index)}
+                        className="text-xs font-semibold text-rose-600"
+                      >
+                        移除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">尚未加入附件。</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? "送出中..." : "送出申請"}
+              </button>
+              <button
+                type="button"
+                disabled={loading}
+                onClick={handleSaveDraft}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
+              >
+                儲存草稿
+              </button>
+              <button
+                type="button"
+                onClick={resetForm}
+                className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
+              >
+                清空
+              </button>
+            </div>
+          </form>
+
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">我的申請</h2>
+              {loading ? (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  載入中
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-4 space-y-3">
+              {requests.length ? (
+                requests.map((item) => {
+                  const statusLabel = FINANCE_STATUS_LABELS[item.status] || item.status || "-";
+                  const amount =
+                    item.type === "purchase" ? item.amountEstimated : item.amountActual;
+                  const canEdit = item.status === "draft" || item.status === "returned";
+                  const canWithdraw = String(item.status || "").startsWith("pending");
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.title || "未命名"}</p>
+                          <p className="text-xs text-slate-500">
+                            {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
+                            {formatFinanceAmount_(amount)} · {statusLabel}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {canEdit ? (
+                            <button
+                              type="button"
+                              onClick={() => handleEditRequest(item)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            >
+                              編輯
+                            </button>
+                          ) : null}
+                          {canWithdraw ? (
+                            <button
+                              type="button"
+                              onClick={() => handleWithdraw(item)}
+                              className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                            >
+                              撤回
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-slate-500">尚無申請紀錄。</p>
+              )}
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function FinanceAdminPage() {
+  const [requests, setRequests] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
+  const [role, setRole] = useState("lead");
+  const [actorName, setActorName] = useState("");
+  const [actorNote, setActorNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+
+  const loadRequests = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listFinanceRequests" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setRequests(result.data && result.data.requests ? result.data.requests : []);
+    } catch (err) {
+      setError(err.message || "載入失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadActions = async (requestId) => {
+    if (!requestId) {
+      setActions([]);
+      return;
+    }
+    try {
+      const { result } = await apiRequest({ action: "listFinanceActions", requestId: requestId });
+      if (result.ok) {
+        setActions(result.data && result.data.actions ? result.data.actions : []);
+      }
+    } catch (err) {
+      setActions([]);
+    }
+  };
+
+  useEffect(() => {
+    loadRequests();
+  }, []);
+
+  useEffect(() => {
+    loadActions(selectedId);
+  }, [selectedId]);
+
+  const roleStatusMap = {
+    lead: "pending_lead",
+    rep: "pending_rep",
+    committee: "pending_committee",
+    accounting: "pending_accounting",
+    cashier: "pending_cashier",
+  };
+
+  const filteredRequests = requests.filter((item) => {
+    if (role === "auditor") {
+      return true;
+    }
+    const targetStatus = roleStatusMap[role];
+    return item.status === targetStatus;
+  });
+
+  const selectedRequest = requests.find((item) => item.id === selectedId) || null;
+  const canAct =
+    selectedRequest &&
+    role !== "auditor" &&
+    selectedRequest.status === roleStatusMap[role];
+
+  const handleAction = async (actionType) => {
+    if (!selectedRequest || !selectedRequest.id) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "updateFinanceRequest",
+        id: selectedRequest.id,
+        requestAction: actionType,
+        actorRole: role,
+        actorName: actorName,
+        actorNote: actorNote,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      setStatusMessage("已更新狀態");
+      setActorNote("");
+      await loadRequests();
+      await loadActions(selectedRequest.id);
+    } catch (err) {
+      setError(err.message || "更新失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto flex max-w-6xl items-center justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              NTU EMBA 115B
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+              財務管理 · 後台
+            </h1>
+          </div>
+          <a
+            href="/"
+            className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm hover:border-slate-300 sm:inline-flex"
+          >
+            回首頁
+          </a>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(FINANCE_ROLE_LABELS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setRole(key)}
+                  className={`rounded-xl px-4 py-2 ${
+                    role === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={loadRequests}
+              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+            >
+              重新整理
+            </button>
+          </div>
+        </section>
+
+        {statusMessage ? (
+          <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+            {statusMessage}
+          </div>
+        ) : null}
+        {error ? (
+          <div className="mt-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
+              {loading ? (
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                  載入中
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-4 space-y-3">
+              {filteredRequests.length ? (
+                filteredRequests.map((item) => {
+                  const amount =
+                    item.type === "purchase" ? item.amountEstimated : item.amountActual;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedId(item.id)}
+                      className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                        selectedId === item.id
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{item.title || "未命名"}</p>
+                          <p className="text-xs opacity-70">
+                            {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
+                            {formatFinanceAmount_(amount)}
+                          </p>
+                        </div>
+                        <span className="text-xs opacity-70">{item.id}</span>
+                      </div>
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-slate-500">目前沒有待處理案件。</p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <h2 className="text-lg font-semibold text-slate-900">案件細節</h2>
+            {selectedRequest ? (
+              <div className="mt-4 space-y-4 text-sm text-slate-600">
+                <div>
+                  <p className="font-semibold text-slate-900">{selectedRequest.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {selectedRequest.id} ·{" "}
+                    {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
+                  </p>
+                </div>
+                <div className="grid gap-2 text-xs text-slate-500">
+                  <div>
+                    申請人：{selectedRequest.applicantName || "-"} · {selectedRequest.applicantRole || "-"}
+                  </div>
+                  <div>
+                    類型：
+                    {FINANCE_TYPES.find((type) => type.value === selectedRequest.type)?.label || "-"}
+                  </div>
+                  <div>
+                    金額：
+                    {formatFinanceAmount_(
+                      selectedRequest.type === "purchase"
+                        ? selectedRequest.amountEstimated
+                        : selectedRequest.amountActual
+                    )}
+                  </div>
+                  <div>說明：{selectedRequest.description || "-"}</div>
+                  <div>
+                    班務性質：
+                    {FINANCE_CATEGORY_TYPES.find((item) => item.value === selectedRequest.categoryType)
+                      ?.label || "-"}{" "}
+                    {selectedRequest.categoryClause ? `(${selectedRequest.categoryClause})` : ""}
+                  </div>
+                </div>
+                {selectedRequest.attachments ? (
+                  <div>
+                    <p className="text-xs font-semibold text-slate-600">附件</p>
+                    <div className="mt-2 space-y-2">
+                      {parseFinanceAttachments_(selectedRequest.attachments).map((item, index) => (
+                        <a
+                          key={`${item.url}-${index}`}
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:border-slate-300"
+                        >
+                          {item.name || item.url}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="grid gap-2">
+                  <label className="text-xs font-semibold text-slate-600">審核人</label>
+                  <input
+                    value={actorName}
+                    onChange={(event) => setActorName(event.target.value)}
+                    placeholder="姓名"
+                    className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-xs text-slate-700"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-xs font-semibold text-slate-600">備註</label>
+                  <textarea
+                    value={actorNote}
+                    onChange={(event) => setActorNote(event.target.value)}
+                    rows="2"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700"
+                  />
+                </div>
+
+                {canAct ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => handleAction("approve")}
+                      className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      核准
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loading}
+                      onClick={() => handleAction("return")}
+                      className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      退回
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">此角色目前無可核准案件。</p>
+                )}
+
+                {actions.length ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
+                    <p className="font-semibold text-slate-900">流程紀錄</p>
+                    <div className="mt-2 space-y-2">
+                      {actions.map((item) => (
+                        <div key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+                          <span>
+                            {item.action} · {FINANCE_ROLE_LABELS[item.actorRole] || item.actorRole || "-"}{" "}
+                            {item.actorName || ""}
+                          </span>
+                          <span className="text-slate-400">{item.createdAt}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">請先選擇案件。</p>
+            )}
+          </div>
+        </section>
       </main>
     </div>
   );
