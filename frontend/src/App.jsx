@@ -360,6 +360,31 @@ function storeGoogleStudent_(student) {
   }
 }
 
+function getLineInAppInfo_() {
+  if (typeof window === "undefined") {
+    return { isLineInApp: false, openExternalUrl: "", currentUrl: "" };
+  }
+  const ua = navigator.userAgent || "";
+  const isLineInApp = /Line/i.test(ua);
+  if (!isLineInApp) {
+    return { isLineInApp: false, openExternalUrl: "", currentUrl: "" };
+  }
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const currentUrl = window.location.href;
+  let openExternalUrl = currentUrl;
+  if (isAndroid) {
+    const url = new URL(currentUrl);
+    openExternalUrl = `intent://${url.host}${url.pathname}${url.search}#Intent;scheme=${url.protocol.replace(
+      ":",
+      ""
+    )};package=com.android.chrome;end`;
+  } else if (isIOS) {
+    openExternalUrl = `https://line.me/R/openExternal?url=${encodeURIComponent(currentUrl)}`;
+  }
+  return { isLineInApp, openExternalUrl, currentUrl, isAndroid, isIOS };
+}
+
 function waitForGoogleIdentity(timeoutMs = 6000) {
   if (window.google && window.google.accounts && window.google.accounts.id) {
     return Promise.resolve();
@@ -393,12 +418,18 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const [results, setResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
+  const [copyStatus, setCopyStatus] = useState("");
+  const lineInfo = getLineInAppInfo_();
+  const isLineInApp = lineInfo.isLineInApp;
 
   useEffect(() => {
     onLinkedRef.current = onLinkedStudent;
   }, [onLinkedStudent]);
 
   useEffect(() => {
+    if (isLineInApp) {
+      return;
+    }
     if (!GOOGLE_CLIENT_ID || !buttonRef.current) {
       return;
     }
@@ -463,7 +494,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isLineInApp]);
 
   useEffect(() => {
     if (!profile || !query || String(query || "").trim().length < 2) {
@@ -537,6 +568,20 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const resolvedTitle = title || "Google 登入";
   const resolvedHelper = helperText || "登入後可快速帶入同學資料。";
 
+  const handleCopyLink = async () => {
+    if (!lineInfo.currentUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(lineInfo.currentUrl);
+      setCopyStatus("copied");
+    } catch (copyError) {
+      setCopyStatus("failed");
+    } finally {
+      window.setTimeout(() => setCopyStatus(""), 2000);
+    }
+  };
+
   return (
     <div className="rounded-3xl border border-slate-200/80 bg-white/80 p-5 shadow-[0_20px_60px_-50px_rgba(15,23,42,0.7)] sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -544,8 +589,41 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
           <h3 className="text-base font-semibold text-slate-900">{resolvedTitle}</h3>
           <p className="mt-1 text-xs text-slate-500">{resolvedHelper}</p>
         </div>
-        <div ref={buttonRef} />
+        {isLineInApp ? null : <div ref={buttonRef} />}
       </div>
+
+      {isLineInApp ? (
+        <div className="mt-4 rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+          <p className="font-semibold">LINE 內建瀏覽器無法完成 Google 登入</p>
+          <p className="mt-1">
+            {lineInfo.isIOS
+              ? "請點右上角「…」選擇用 Safari 開啟，再進行登入。"
+              : "請用手機預設瀏覽器開啟此頁，再進行登入。"}
+          </p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <a
+              href={lineInfo.openExternalUrl || lineInfo.currentUrl}
+              target="_blank"
+              rel="noopener"
+              className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+            >
+              {lineInfo.isIOS ? "用 Safari 開啟" : "用外部瀏覽器開啟"}
+            </a>
+            <button
+              type="button"
+              onClick={handleCopyLink}
+              className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-700"
+            >
+              複製連結
+            </button>
+            {copyStatus ? (
+              <span className="text-[11px] font-semibold text-amber-700">
+                {copyStatus === "copied" ? "已複製" : "複製失敗"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {!GOOGLE_CLIENT_ID ? (
         <p className="mt-3 text-xs text-amber-600">尚未設定 Google Client ID。</p>
@@ -1556,6 +1634,7 @@ function LandingPage() {
     }
     return window.innerWidth < 768;
   });
+  const hasGoogleLogin = Boolean(googleLinkedStudent && googleLinkedStudent.email);
 
   return (
     <div className="min-h-screen">
@@ -1582,7 +1661,7 @@ function LandingPage() {
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
-            {googleLinkedStudent && googleLinkedStudent.email ? (
+            {hasGoogleLogin ? (
               <div>
                 <p className="font-semibold text-slate-900">
                   {displayName ? `${displayName} 已登入` : "已登入"}
@@ -1596,9 +1675,38 @@ function LandingPage() {
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-        <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200/70 bg-slate-50/70 px-5 py-4 text-xs text-slate-600">
+      <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-6 sm:px-12">
+        {!hasGoogleLogin ? (
+          <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
+              <button
+                type="button"
+                onClick={() => setLoginCollapsed((prev) => !prev)}
+                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              >
+                {loginCollapsed ? "展開 ▼" : "收合 ▲"}
+              </button>
+            </div>
+            {!loginCollapsed ? (
+              <>
+                <div className="mt-4">
+                  <GoogleSigninPanel
+                    title="Google 登入"
+                    helperText="請先完成綁定，才能使用活動、訂餐與壘球功能。"
+                    onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                  />
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500">
+                  登入後會儲存在本機，後續進入各系統會自動帶入。
+                </p>
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
+        <section className="entrance entrance-delay-1 mb-5 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-3 shadow-[0_30px_70px_-70px_rgba(15,23,42,0.6)] backdrop-blur sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-[11px] text-slate-600">
             <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white">
                 115B
@@ -1610,7 +1718,7 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 lg:grid-cols-3">
+        <section className="grid gap-4 sm:gap-5 lg:grid-cols-3">
           <a
             href="/events"
             className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg"
@@ -1696,45 +1804,37 @@ function LandingPage() {
           </div>
         </section>
 
-        <section className="entrance entrance-delay-2 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
-            <div className="flex items-center gap-3">
-              {googleLinkedStudent && googleLinkedStudent.email ? (
+        {hasGoogleLogin ? (
+          <section className="entrance entrance-delay-2 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
+              <div className="flex items-center gap-3">
                 <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
                   已登入
                 </span>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => setLoginCollapsed((prev) => !prev)}
-                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-              >
-                {loginCollapsed ? "展開 ▼" : "收合 ▲"}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginCollapsed((prev) => !prev)}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  {loginCollapsed ? "展開 ▼" : "收合 ▲"}
+                </button>
+              </div>
             </div>
-          </div>
-          {!loginCollapsed ? (
-            <>
-              <div className="mt-4">
-                {googleLinkedStudent && googleLinkedStudent.email ? (
+            {!loginCollapsed ? (
+              <>
+                <div className="mt-4">
                   <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-2 text-xs text-emerald-700">
                     已登入 Google：{googleLinkedStudent.email}
                   </div>
-                ) : (
-                  <GoogleSigninPanel
-                    title="Google 登入"
-                    helperText="登入後可直接進入各系統，不需再登入。"
-                    onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
-                  />
-                )}
-              </div>
-              <p className="mt-3 text-[11px] text-slate-500">
-                登入後會儲存在本機，後續進入活動、訂餐與壘球系統會自動帶入。
-              </p>
-            </>
-          ) : null}
-        </section>
+                </div>
+                <p className="mt-3 text-[11px] text-slate-500">
+                  登入後會儲存在本機，後續進入活動、訂餐與壘球系統會自動帶入。
+                </p>
+              </>
+            ) : null}
+          </section>
+        ) : null}
       </main>
     </div>
   );
