@@ -10,6 +10,8 @@ const SHEETS = {
   financeRequests: "FinanceRequests",
   financeActions: "FinanceActions",
   classRoles: "ClassRoles",
+  fundEvents: "FundEvents",
+  fundPayments: "FundPayments",
   softballPlayers: "SoftballPlayers",
   softballPractices: "SoftballPractices",
   softballAttendance: "SoftballAttendance",
@@ -126,6 +128,55 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Role not found" };
     }
     return { ok: true, data: { id: roleId }, error: null };
+  }
+
+  if (payload.action === "listFundEvents") {
+    return { ok: true, data: { events: listFundEvents_() }, error: null };
+  }
+
+  if (payload.action === "listFundPayments") {
+    const eventId = String(payload.eventId || "").trim();
+    return { ok: true, data: { payments: listFundPayments_(eventId) }, error: null };
+  }
+
+  if (payload.action === "upsertFundEvent") {
+    const data = payload.data || {};
+    const updated = upsertFundEvent_(data);
+    return { ok: true, data: { event: updated }, error: null };
+  }
+
+  if (payload.action === "upsertFundPayment") {
+    const data = payload.data || {};
+    const updated = upsertFundPayment_(data);
+    return { ok: true, data: { payment: updated }, error: null };
+  }
+
+  if (payload.action === "deleteFundEvent") {
+    const eventId = String(payload.id || "").trim();
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing event id" };
+    }
+    const removed = deleteFundEvent_(eventId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Event not found" };
+    }
+    return { ok: true, data: { id: eventId }, error: null };
+  }
+
+  if (payload.action === "deleteFundPayment") {
+    const paymentId = String(payload.id || "").trim();
+    if (!paymentId) {
+      return { ok: false, data: null, error: "Missing payment id" };
+    }
+    const removed = deleteFundPayment_(paymentId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Payment not found" };
+    }
+    return { ok: true, data: { id: paymentId }, error: null };
+  }
+
+  if (payload.action === "getFundSummary") {
+    return { ok: true, data: buildFundSummary_(), error: null };
   }
 
   if (payload.action === "verifyGoogle") {
@@ -1359,6 +1410,38 @@ function listClassRoles_() {
     });
 }
 
+function listFundEvents_() {
+  const sheet = getSheet_(SHEETS.fundEvents);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .sort(function (a, b) {
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    });
+}
+
+function listFundPayments_(eventId) {
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const id = String(eventId || "").trim();
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .filter(function (item) {
+      return !id || String(item.eventId || "").trim() === id;
+    })
+    .sort(function (a, b) {
+      return String(b.receivedAt || b.createdAt || "").localeCompare(
+        String(a.receivedAt || a.createdAt || "")
+      );
+    });
+}
+
 function appendEvent_(data) {
   const sheet = getSheet_(SHEETS.events);
   const headers = getHeaders_(sheet);
@@ -1447,6 +1530,48 @@ function appendClassRole_(data) {
   base.createdAt = base.createdAt || nowIso;
   base.updatedAt = nowIso;
   const record = normalizeClassRoleRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFundEvent_(data) {
+  const sheet = getSheet_(SHEETS.fundEvents);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFundEventId_();
+  }
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeFundEventRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFundPayment_(data) {
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFundPaymentId_();
+  }
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeFundPaymentRecord_(base);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -2154,6 +2279,214 @@ function deleteClassRole_(roleId) {
   return false;
 }
 
+function upsertFundEvent_(data) {
+  const eventId = String(data.id || "").trim();
+  if (!eventId) {
+    return appendFundEvent_(data);
+  }
+  const existing = findFundEventById_(eventId);
+  if (!existing) {
+    return appendFundEvent_(data);
+  }
+  return updateFundEvent_(eventId, data);
+}
+
+function updateFundEvent_(eventId, data) {
+  const sheet = getSheet_(SHEETS.fundEvents);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundEvents sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== eventId) {
+      continue;
+    }
+    const record = normalizeFundEventRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, {
+        id: eventId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Fund event not found");
+}
+
+function deleteFundEvent_(eventId) {
+  const sheet = getSheet_(SHEETS.fundEvents);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundEvents sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === eventId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function findFundEventById_(eventId) {
+  if (!eventId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.fundEvents);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundEvents sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === eventId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function upsertFundPayment_(data) {
+  const paymentId = String(data.id || "").trim();
+  if (!paymentId) {
+    return appendFundPayment_(data);
+  }
+  const existing = findFundPaymentById_(paymentId);
+  if (!existing) {
+    return appendFundPayment_(data);
+  }
+  return updateFundPayment_(paymentId, data);
+}
+
+function updateFundPayment_(paymentId, data) {
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundPayments sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== paymentId) {
+      continue;
+    }
+    const record = normalizeFundPaymentRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, {
+        id: paymentId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Fund payment not found");
+}
+
+function deleteFundPayment_(paymentId) {
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundPayments sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === paymentId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function findFundPaymentById_(paymentId) {
+  if (!paymentId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FundPayments sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === paymentId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
+function buildFundSummary_() {
+  const payments = listFundPayments_("");
+  const requests = listFinanceRequests_({});
+  var totalReceived = 0;
+  var totalAccounted = 0;
+  var totalConfirmed = 0;
+  payments.forEach(function (item) {
+    var amount = parseFinanceAmount_(item.amount || 0);
+    if (item.receivedAt || item.createdAt) {
+      totalReceived += amount;
+    }
+    if (item.accountedAt) {
+      totalAccounted += amount;
+    }
+    if (item.confirmedAt) {
+      totalConfirmed += amount;
+    }
+  });
+  var totalExpenses = 0;
+  requests.forEach(function (item) {
+    if (String(item.status || "").trim().toLowerCase() !== "closed") {
+      return;
+    }
+    var type = String(item.type || "").trim().toLowerCase();
+    if (type !== "payment" && type !== "pettycash") {
+      return;
+    }
+    totalExpenses += parseFinanceAmount_(item.amountActual || 0);
+  });
+  return {
+    income: {
+      received: totalReceived,
+      accounted: totalAccounted,
+      confirmed: totalConfirmed,
+    },
+    expense: {
+      total: totalExpenses,
+    },
+    balance: {
+      received: totalReceived - totalExpenses,
+      accounted: totalAccounted - totalExpenses,
+      confirmed: totalConfirmed - totalExpenses,
+    },
+  };
+}
+
 function findClassRoleById_(roleId) {
   if (!roleId) {
     return null;
@@ -2391,6 +2724,42 @@ function normalizeClassRoleRecord_(data) {
   };
 }
 
+function normalizeFundEventRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    title: String(data.title || "").trim(),
+    description: String(data.description || "").trim(),
+    dueDate: String(data.dueDate || "").trim(),
+    amountGeneral: String(data.amountGeneral || "").trim(),
+    amountSponsor: String(data.amountSponsor || "").trim(),
+    expectedGeneralCount: String(data.expectedGeneralCount || "").trim(),
+    expectedSponsorCount: String(data.expectedSponsorCount || "").trim(),
+    status: String(data.status || "collecting").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeFundPaymentRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    eventId: String(data.eventId || "").trim(),
+    payerName: String(data.payerName || "").trim(),
+    payerEmail: normalizeEmail_(data.payerEmail),
+    payerType: String(data.payerType || "").trim(),
+    amount: String(data.amount || "").trim(),
+    method: String(data.method || "").trim(),
+    transferLast5: String(data.transferLast5 || "").trim(),
+    receivedAt: String(data.receivedAt || "").trim(),
+    accountedAt: String(data.accountedAt || "").trim(),
+    confirmedAt: String(data.confirmedAt || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
 function normalizeSoftballPlayerRecord_(data) {
   return {
     id: String(data.id || data.studentId || "").trim(),
@@ -2566,6 +2935,32 @@ function generateFinanceActionId_() {
   var now = new Date();
   return (
     "FIN-ACT-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
+}
+
+function generateFundEventId_() {
+  var now = new Date();
+  return (
+    "FUND-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
+}
+
+function generateFundPaymentId_() {
+  var now = new Date();
+  return (
+    "FUND-PAY-" +
     pad2_(now.getFullYear() % 100) +
     pad2_(now.getMonth() + 1) +
     pad2_(now.getDate()) +
