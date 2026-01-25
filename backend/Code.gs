@@ -2178,7 +2178,6 @@ function normalizeFinanceRequestRecord_(data) {
     title: String(data.title || "").trim(),
     description: String(data.description || "").trim(),
     categoryType: String(data.categoryType || "").trim(),
-    categoryClause: String(data.categoryClause || "").trim(),
     amountEstimated: String(data.amountEstimated || "").trim(),
     amountActual: String(data.amountActual || "").trim(),
     currency: String(data.currency || "TWD").trim(),

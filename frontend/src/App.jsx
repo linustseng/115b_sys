@@ -273,7 +273,6 @@ const buildFinanceDraft_ = () => ({
   title: "",
   description: "",
   categoryType: "general",
-  categoryClause: "",
   amountEstimated: "",
   amountActual: "",
   currency: "TWD",
@@ -2453,7 +2452,6 @@ function FinancePage() {
       title: item.title || "",
       description: item.description || "",
       categoryType: item.categoryType || "general",
-      categoryClause: item.categoryClause || "",
       amountEstimated: item.amountEstimated || "",
       amountActual: item.amountActual || "",
       currency: item.currency || "TWD",
@@ -2728,15 +2726,6 @@ function FinancePage() {
                     </option>
                   ))}
                 </select>
-              </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">條款</label>
-                <input
-                  value={form.categoryClause}
-                  onChange={(event) => handleFormChange("categoryClause", event.target.value)}
-                  placeholder="例如 4-1-1"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                />
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">
@@ -3207,8 +3196,7 @@ function FinanceAdminPage() {
                   <div>
                     班務性質：
                     {FINANCE_CATEGORY_TYPES.find((item) => item.value === selectedRequest.categoryType)
-                      ?.label || "-"}{" "}
-                    {selectedRequest.categoryClause ? `(${selectedRequest.categoryClause})` : ""}
+                      ?.label || "-"}
                   </div>
                 </div>
                 {selectedRequest.attachments ? (
