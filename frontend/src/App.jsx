@@ -3111,6 +3111,12 @@ function FinanceAdminPage() {
   const [fundSummary, setFundSummary] = useState(null);
   const [fundEventForm, setFundEventForm] = useState(buildFundEventDraft_());
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [directoryToken, setDirectoryToken] = useState(
+    () => localStorage.getItem("directoryToken") || ""
+  );
+  const [directory, setDirectory] = useState([]);
+  const [fundPayerQuery, setFundPayerQuery] = useState("");
+  const [fundPayerView, setFundPayerView] = useState("all");
 
   const loadRequests = async () => {
     setLoading(true);
@@ -3125,6 +3131,26 @@ function FinanceAdminPage() {
       setError(err.message || "載入失敗");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDirectory = async () => {
+    const storedToken = localStorage.getItem("directoryToken") || "";
+    if (storedToken && storedToken !== directoryToken) {
+      setDirectoryToken(storedToken);
+    }
+    const activeToken = storedToken || directoryToken;
+    if (!activeToken) {
+      setDirectory([]);
+      return;
+    }
+    try {
+      const { result } = await apiRequest({ action: "listDirectory", authToken: activeToken });
+      if (result.ok) {
+        setDirectory(result.data && result.data.directory ? result.data.directory : []);
+      }
+    } catch (err) {
+      setDirectory([]);
     }
   };
 
@@ -3194,6 +3220,7 @@ function FinanceAdminPage() {
   useEffect(() => {
     loadRequests();
     loadClassRoles();
+    loadDirectory();
     loadFundEvents();
     loadFundSummary();
   }, []);
@@ -3218,6 +3245,7 @@ function FinanceAdminPage() {
     if (adminTab === "funds") {
       loadFundEvents();
       loadFundSummary();
+      loadDirectory();
     }
   }, [adminTab]);
 
@@ -3241,6 +3269,85 @@ function FinanceAdminPage() {
   const adminLeadGroups = adminProfile ? parseCommaList_(adminProfile.leadGroups) : [];
   const adminDeputyGroups = adminProfile ? parseCommaList_(adminProfile.deputyGroups) : [];
   const adminRoles = adminProfile ? parseCommaList_(adminProfile.roles) : [];
+
+  const normalizedDirectory = directory.map((item) => {
+    const name =
+      item.nameZh || item.nameEn || item.preferredName || item.name || item.email || "";
+    return {
+      id: item.id || "",
+      name: name,
+      email: String(item.email || "").trim().toLowerCase(),
+    };
+  });
+
+  const classRoleByEmail = classRoles.reduce((acc, item) => {
+    const email = String(item.email || "").trim().toLowerCase();
+    if (email) {
+      acc[email] = item;
+    }
+    return acc;
+  }, {});
+
+  const getPayerGroupType_ = (payer) => {
+    if (!payer || !payer.email) {
+      return "general";
+    }
+    const match = classRoleByEmail[payer.email];
+    if (!match) {
+      return "general";
+    }
+    const groups = parseCommaList_(match.groups);
+    return groups.includes("J") ? "sponsor" : "general";
+  };
+
+  const normalizePayerKey_ = (value) => String(value || "").trim().toLowerCase();
+
+  const paymentEmailSet = new Set(
+    fundPayments.map((item) => normalizePayerKey_(item.payerEmail)).filter(Boolean)
+  );
+  const paymentNameSet = new Set(
+    fundPayments.map((item) => normalizePayerKey_(item.payerName)).filter(Boolean)
+  );
+
+  const getPayerStatus_ = (payer) => {
+    if (!payer) {
+      return false;
+    }
+    const emailKey = normalizePayerKey_(payer.email);
+    const nameKey = normalizePayerKey_(payer.name);
+    return (emailKey && paymentEmailSet.has(emailKey)) || (nameKey && paymentNameSet.has(nameKey));
+  };
+
+  const payerRows = normalizedDirectory.map((payer) => {
+    const type = getPayerGroupType_(payer);
+    return {
+      ...payer,
+      payerType: type,
+      paid: getPayerStatus_(payer),
+    };
+  });
+
+  const filteredPayers = payerRows.filter((payer) => {
+    if (fundPayerView === "paid" && !payer.paid) {
+      return false;
+    }
+    if (fundPayerView === "unpaid" && payer.paid) {
+      return false;
+    }
+    const needle = normalizePayerKey_(fundPayerQuery);
+    if (!needle) {
+      return true;
+    }
+    return (
+      normalizePayerKey_(payer.name).includes(needle) ||
+      normalizePayerKey_(payer.email).includes(needle)
+    );
+  });
+
+  const generalPayers = filteredPayers.filter((payer) => payer.payerType === "general");
+  const sponsorPayers = filteredPayers.filter((payer) => payer.payerType === "sponsor");
+  const generalPaid = generalPayers.filter((payer) => payer.paid).length;
+  const sponsorPaid = sponsorPayers.filter((payer) => payer.paid).length;
 
   const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
   const hasRepPrivilege = adminRoles.includes("rep");
@@ -3328,6 +3435,20 @@ function FinanceAdminPage() {
 
   const handleFundPaymentChange = (key, value) => {
     setFundPaymentForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const matchDirectoryByName_ = (value) => {
+    const needle = String(value || "").trim().toLowerCase();
+    if (!needle) {
+      return null;
+    }
+    return (
+      directory.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
+      directory.find((item) => String(item.nameZh || "").trim().toLowerCase() === needle) ||
+      directory.find((item) => String(item.nameEn || "").trim().toLowerCase() === needle) ||
+      directory.find((item) => String(item.preferredName || "").trim().toLowerCase() === needle) ||
+      null
+    );
   };
 
   const resetFundEventForm = () => {
@@ -4027,9 +4148,39 @@ function FinanceAdminPage() {
                     <label className="text-sm font-medium text-slate-700">繳費人</label>
                     <input
                       value={fundPaymentForm.payerName}
-                      onChange={(event) => handleFundPaymentChange("payerName", event.target.value)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        handleFundPaymentChange("payerName", value);
+                        const match = matchDirectoryByName_(value);
+                        if (match && match.email) {
+                          handleFundPaymentChange("payerEmail", match.email);
+                        }
+                      }}
+                      list="fund-payer-options"
                       className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                     />
+                    <datalist id="fund-payer-options">
+                      {directory.map((item) => {
+                        const name = item.nameZh || item.nameEn || item.preferredName;
+                        const email = item.email;
+                        const options = [];
+                        if (name) {
+                          options.push(
+                            <option key={`${item.id || email}-name`} value={name}>
+                              {email || ""}
+                            </option>
+                          );
+                        }
+                        if (email) {
+                          options.push(
+                            <option key={`${item.id || email}-email`} value={email}>
+                              {name || ""}
+                            </option>
+                          );
+                        }
+                        return options;
+                      })}
+                    </datalist>
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">Email</label>
@@ -4070,8 +4221,13 @@ function FinanceAdminPage() {
                     <input
                       value={fundPaymentForm.amount}
                       onChange={(event) => handleFundPaymentChange("amount", event.target.value)}
+                      list="fund-amount-options"
                       className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                     />
+                    <datalist id="fund-amount-options">
+                      <option value="50000">50000</option>
+                      <option value="200000">200000</option>
+                    </datalist>
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">付款方式</label>
@@ -4157,6 +4313,108 @@ function FinanceAdminPage() {
                   </button>
                 </div>
               </form>
+            </section>
+
+            <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">收齊狀況</h2>
+                  <p className="text-xs text-slate-500">
+                    已繳 {generalPaid + sponsorPaid} / {generalPayers.length + sponsorPayers.length}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: "all", label: "全部" },
+                    { id: "paid", label: "已繳" },
+                    { id: "unpaid", label: "未繳" },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setFundPayerView(item.id)}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        fundPayerView === item.id
+                          ? "bg-slate-900 text-white"
+                          : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                  <input
+                    value={fundPayerQuery}
+                    onChange={(event) => setFundPayerQuery(event.target.value)}
+                    placeholder="搜尋姓名或 Email"
+                    className="h-9 w-40 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                  />
+                </div>
+              </div>
+
+              {!fundPaymentForm.eventId ? (
+                <p className="mt-4 text-sm text-slate-500">請先選擇班費事件。</p>
+              ) : !directory.length ? (
+                <p className="mt-4 text-sm text-amber-600">
+                  尚未載入 Directory，請先到 /directory 登入以取得名單。
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                      <span>一般同學</span>
+                      <span>
+                        已繳 {generalPaid} / {generalPayers.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {generalPayers.length ? (
+                        generalPayers.map((payer) => (
+                          <span
+                            key={`${payer.email || payer.name}-general`}
+                            title={payer.email || ""}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+                              payer.paid
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                            }`}
+                          >
+                            {payer.name || payer.email || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">沒有符合的名單。</p>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                      <span>班董</span>
+                      <span>
+                        已繳 {sponsorPaid} / {sponsorPayers.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sponsorPayers.length ? (
+                        sponsorPayers.map((payer) => (
+                          <span
+                            key={`${payer.email || payer.name}-sponsor`}
+                            title={payer.email || ""}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+                              payer.paid
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                            }`}
+                          >
+                            {payer.name || payer.email || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">沒有符合的名單。</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </section>
           </section>
         ) : null}
