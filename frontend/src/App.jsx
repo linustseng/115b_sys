@@ -2250,6 +2250,7 @@ function SoftballPage() {
     email: "",
     phone: "",
     jerseyNumber: "",
+    nickname: "",
     positions: "",
     bats: "",
     throws: "",
@@ -2472,6 +2473,7 @@ function SoftballPage() {
       email: "",
       phone: "",
       jerseyNumber: "",
+      nickname: "",
       jerseyChoices: "",
       positions: "",
       bats: "",
@@ -2815,6 +2817,7 @@ function SoftballPage() {
       player.name,
       player.nameEn,
       player.preferredName,
+      player.nickname,
       player.email,
       player.jerseyNumber,
       player.positions,
@@ -3229,7 +3232,7 @@ function SoftballPage() {
               <input
                 value={playerQuery}
                 onChange={(event) => setPlayerQuery(event.target.value)}
-                placeholder="搜尋姓名、學號、背號"
+                placeholder="搜尋姓名、學號、背號、暱稱"
                 className="h-10 w-56 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
               />
             </div>
@@ -3301,6 +3304,7 @@ function SoftballPage() {
                       <div>
                         <p className="font-semibold text-slate-900">
                           {player.preferredName || player.name || player.id}
+                          {player.nickname ? ` · ${player.nickname}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
                         </p>
                         <p className="text-xs text-slate-500">
@@ -3381,21 +3385,29 @@ function SoftballPage() {
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">聯絡電話</label>
-                    <input
-                      value={playerForm.phone}
-                      onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">背號</label>
-                    <input
-                      value={playerForm.jerseyNumber}
-                      onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                </div>
+              <input
+                value={playerForm.phone}
+                onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+              />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">背號</label>
+              <input
+                value={playerForm.jerseyNumber}
+                onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+              />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <label className="text-sm font-medium text-slate-700">球員暱稱</label>
+            <input
+              value={playerForm.nickname}
+              onChange={(event) => handlePlayerFormChange("nickname", event.target.value)}
+              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+            />
+          </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">守備位置</label>
                   <div className="flex flex-wrap gap-2">
@@ -3782,6 +3794,7 @@ function SoftballPlayerPage() {
     preferredName: "",
     email: "",
     phone: "",
+    nickname: "",
     bats: "",
     throws: "",
     positions: "",
@@ -3884,6 +3897,7 @@ function SoftballPlayerPage() {
         preferredName: match.preferredName || googleLinkedStudent.preferredName || "",
         email: match.email || googleLinkedStudent.email || "",
         phone: match.phone || "",
+        nickname: match.nickname || "",
         bats: match.bats || "",
         throws: match.throws || "",
         positions: match.positions || "",
@@ -3899,6 +3913,7 @@ function SoftballPlayerPage() {
         name: googleLinkedStudent.name || "",
         preferredName: googleLinkedStudent.preferredName || "",
         email: googleLinkedStudent.email || "",
+        nickname: "",
       }));
     }
   }, [players, googleLinkedStudent]);
@@ -4115,6 +4130,14 @@ function SoftballPlayerPage() {
                   <p className="text-xs text-slate-400">
                     可選 00-99，截止日為 {softballConfig.jerseyDeadline || "待公告"}
                   </p>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">球員暱稱</label>
+                <input
+                  value={profileForm.nickname}
+                  onChange={(event) => handleProfileChange("nickname", event.target.value)}
+                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
               </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">位置偏好</label>

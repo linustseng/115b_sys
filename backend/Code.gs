@@ -1964,6 +1964,7 @@ function normalizeSoftballPlayerRecord_(data) {
     name: String(data.name || "").trim(),
     nameEn: String(data.nameEn || "").trim(),
     preferredName: String(data.preferredName || "").trim(),
+    nickname: String(data.nickname || "").trim(),
     email: normalizeEmail_(data.email),
     phone: String(data.phone || "").trim(),
     jerseyNumber: String(data.jerseyNumber || "").trim(),
