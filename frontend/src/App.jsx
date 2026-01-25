@@ -607,7 +607,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               rel="noopener"
               className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
             >
-              {lineInfo.isIOS ? "用 Safari 開啟" : "用外部瀏覽器開啟"}
+              {lineInfo.isIOS ? "用 Safari 開啟" : lineInfo.isAndroid ? "用 Chrome 開啟" : "用外部瀏覽器開啟"}
             </a>
             <button
               type="button"
