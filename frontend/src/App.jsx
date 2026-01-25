@@ -704,6 +704,8 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 export default function App() {
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");
+  const isAdminEventsPage = pathname.includes("admin/events");
+  const isAdminOrderingPage = pathname.includes("admin/ordering");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
   const isEventsPage = pathname.includes("events");
@@ -715,8 +717,21 @@ export default function App() {
     return <CheckinPage />;
   }
 
+  if (isAdminEventsPage) {
+    return (
+      <AdminPage
+        initialTab="events"
+        allowedTabs={["events", "registrations", "checkins", "students"]}
+      />
+    );
+  }
+
+  if (isAdminOrderingPage) {
+    return <AdminPage initialTab="ordering" allowedTabs={["ordering"]} />;
+  }
+
   if (isAdminPage) {
-    return <AdminPage />;
+    return <AdminPage initialTab="registrations" allowedTabs={["registrations", "checkins", "students"]} />;
   }
 
   if (pathname.includes("directory")) {
@@ -1712,10 +1727,7 @@ function LandingPage() {
         ) : null}
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-3">
-          <a
-            href="/events"
-            className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg"
-          >
+          <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
@@ -1732,16 +1744,24 @@ function LandingPage() {
                 報名、簽到與活動資訊一站完成。
               </p>
             </div>
-            <span className="mt-6 inline-flex items-center text-sm font-semibold text-slate-700">
-              前往活動
-              <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
-            </span>
-          </a>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/events"
+                className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              <a
+                href="/admin/events"
+                className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-slate-900/30 hover:bg-slate-800"
+              >
+                活動管理
+              </a>
+            </div>
+          </div>
 
-          <a
-            href="/ordering"
-            className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-amber-200/70 bg-amber-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(120,53,15,0.4)] transition hover:-translate-y-1 hover:shadow-lg"
-          >
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-amber-200/70 bg-amber-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(120,53,15,0.4)] transition hover:-translate-y-1 hover:shadow-lg">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600/70">
@@ -1758,11 +1778,22 @@ function LandingPage() {
                 週末與特別課程訂餐，前一日 23:59 截止。
               </p>
             </div>
-            <span className="mt-6 inline-flex items-center text-sm font-semibold text-amber-700">
-              前往訂餐
-              <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
-            </span>
-          </a>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/ordering"
+                className="inline-flex items-center rounded-full border border-amber-300 bg-white px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm hover:border-amber-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              <a
+                href="/admin/ordering"
+                className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+              >
+                訂餐管理
+              </a>
+            </div>
+          </div>
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-emerald-200/70 bg-emerald-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(16,185,129,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
             <div>
@@ -1781,17 +1812,17 @@ function LandingPage() {
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
-                href="/softball"
+                href="/softball/player"
                 className="inline-flex items-center rounded-full border border-emerald-300 bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm hover:border-emerald-400"
               >
-                前往管理
+                球員入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
               <a
-                href="/softball/player"
+                href="/softball"
                 className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-emerald-500/30 hover:bg-emerald-500"
               >
-                球員入口
+                前往管理
               </a>
             </div>
           </div>
@@ -5313,7 +5344,10 @@ function HomePage() {
   );
 }
 
-function AdminPage() {
+function AdminPage({
+  initialTab = "events",
+  allowedTabs = ["events", "ordering", "registrations", "checkins", "students"],
+}) {
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
   const [directory, setDirectory] = useState([]);
@@ -5326,7 +5360,9 @@ function AdminPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState("");
-  const [activeTab, setActiveTab] = useState("events");
+  const [activeTab, setActiveTab] = useState(() =>
+    allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0]
+  );
   const [seedTimestamp, setSeedTimestamp] = useState(Date.now());
   const [form, setForm] = useState({
     id: "",
@@ -5597,9 +5633,22 @@ function AdminPage() {
     }
   };
 
+  const hasEventDataTabs =
+    allowedTabs.includes("events") ||
+    allowedTabs.includes("registrations") ||
+    allowedTabs.includes("checkins");
+
   useEffect(() => {
-    loadEvents();
-  }, []);
+    if (hasEventDataTabs) {
+      loadEvents();
+    }
+  }, [hasEventDataTabs]);
+
+  useEffect(() => {
+    if (!allowedTabs.includes(activeTab)) {
+      setActiveTab(allowedTabs[0] || "events");
+    }
+  }, [activeTab, allowedTabs]);
 
   useEffect(() => {
     if (activeTab === "registrations") {
@@ -6385,9 +6434,17 @@ function AdminPage() {
               後台管理 (MVP)
             </h1>
           </div>
-          <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
-            管理者模式
-          </span>
+          <div className="hidden items-center gap-3 sm:flex">
+            <a
+              href="/"
+              className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm hover:border-slate-300"
+            >
+              回首頁
+            </a>
+            <span className="rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm">
+              管理者模式
+            </span>
+          </div>
         </div>
       </header>
 
@@ -6400,17 +6457,21 @@ function AdminPage() {
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
               { id: "students", label: "同學" },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`rounded-xl px-4 py-2 ${
-                  activeTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
+            ]
+              .filter((item) => allowedTabs.includes(item.id))
+              .map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`rounded-xl px-4 py-2 ${
+                    activeTab === item.id
+                      ? "bg-slate-900 text-white"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
           </div>
         </section>
 
