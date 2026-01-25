@@ -1628,13 +1628,19 @@ function LandingPage() {
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
     (googleLinkedStudent && googleLinkedStudent.name) ||
     "";
+  const hasGoogleLogin = Boolean(googleLinkedStudent && googleLinkedStudent.email);
   const [loginCollapsed, setLoginCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return true;
     }
     return window.innerWidth < 768;
   });
-  const hasGoogleLogin = Boolean(googleLinkedStudent && googleLinkedStudent.email);
+
+  useEffect(() => {
+    if (!hasGoogleLogin) {
+      setLoginCollapsed(false);
+    }
+  }, [hasGoogleLogin]);
 
   return (
     <div className="min-h-screen">
@@ -1657,7 +1663,7 @@ function LandingPage() {
               </div>
             </div>
             <p className="mt-3 text-sm text-slate-500">
-              一次登入，進入活動、訂餐、壘球三個系統。
+              共學 · 共餐 · 共練 · 2026-2028 and forever
             </p>
           </div>
           <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
@@ -1704,19 +1710,6 @@ function LandingPage() {
             ) : null}
           </section>
         ) : null}
-
-        <section className="entrance entrance-delay-1 mb-5 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-3 shadow-[0_30px_70px_-70px_rgba(15,23,42,0.6)] backdrop-blur sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200/70 bg-slate-50/70 px-4 py-3 text-[11px] text-slate-600">
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-slate-900 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-white">
-                115B
-              </span>
-              <span className="font-semibold text-slate-700">共學 · 共餐 · 共練</span>
-              <span className="text-slate-500">2026-2028 and forever</span>
-            </div>
-            <span className="text-slate-500">Class Systems Hub</span>
-          </div>
-        </section>
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-3">
           <a
