@@ -3111,10 +3111,7 @@ function FinanceAdminPage() {
   const [fundSummary, setFundSummary] = useState(null);
   const [fundEventForm, setFundEventForm] = useState(buildFundEventDraft_());
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
-  const [directoryToken, setDirectoryToken] = useState(
-    () => localStorage.getItem("directoryToken") || ""
-  );
-  const [directory, setDirectory] = useState([]);
+  const [students, setStudents] = useState([]);
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
 
@@ -3134,23 +3131,14 @@ function FinanceAdminPage() {
     }
   };
 
-  const loadDirectory = async () => {
-    const storedToken = localStorage.getItem("directoryToken") || "";
-    if (storedToken && storedToken !== directoryToken) {
-      setDirectoryToken(storedToken);
-    }
-    const activeToken = storedToken || directoryToken;
-    if (!activeToken) {
-      setDirectory([]);
-      return;
-    }
+  const loadStudents = async () => {
     try {
-      const { result } = await apiRequest({ action: "listDirectory", authToken: activeToken });
+      const { result } = await apiRequest({ action: "listStudents" });
       if (result.ok) {
-        setDirectory(result.data && result.data.directory ? result.data.directory : []);
+        setStudents(result.data && result.data.students ? result.data.students : []);
       }
     } catch (err) {
-      setDirectory([]);
+      setStudents([]);
     }
   };
 
@@ -3220,7 +3208,7 @@ function FinanceAdminPage() {
   useEffect(() => {
     loadRequests();
     loadClassRoles();
-    loadDirectory();
+    loadStudents();
     loadFundEvents();
     loadFundSummary();
   }, []);
@@ -3245,7 +3233,7 @@ function FinanceAdminPage() {
     if (adminTab === "funds") {
       loadFundEvents();
       loadFundSummary();
-      loadDirectory();
+      loadStudents();
     }
   }, [adminTab]);
 
@@ -3270,9 +3258,8 @@ function FinanceAdminPage() {
   const adminDeputyGroups = adminProfile ? parseCommaList_(adminProfile.deputyGroups) : [];
   const adminRoles = adminProfile ? parseCommaList_(adminProfile.roles) : [];
 
-  const normalizedDirectory = directory.map((item) => {
-    const name =
-      item.nameZh || item.nameEn || item.preferredName || item.name || item.email || "";
+  const normalizedStudents = students.map((item) => {
+    const name = item.name || item.email || "";
     return {
       id: item.id || "",
       name: name,
@@ -3318,7 +3305,7 @@ function FinanceAdminPage() {
     return (emailKey && paymentEmailSet.has(emailKey)) || (nameKey && paymentNameSet.has(nameKey));
   };
 
-  const payerRows = normalizedDirectory.map((payer) => {
+  const payerRows = normalizedStudents.map((payer) => {
     const type = getPayerGroupType_(payer);
     return {
       ...payer,
@@ -3443,10 +3430,8 @@ function FinanceAdminPage() {
       return null;
     }
     return (
-      directory.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
-      directory.find((item) => String(item.nameZh || "").trim().toLowerCase() === needle) ||
-      directory.find((item) => String(item.nameEn || "").trim().toLowerCase() === needle) ||
-      directory.find((item) => String(item.preferredName || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
       null
     );
   };
@@ -4160,8 +4145,8 @@ function FinanceAdminPage() {
                       className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                     />
                     <datalist id="fund-payer-options">
-                      {directory.map((item) => {
-                        const name = item.nameZh || item.nameEn || item.preferredName;
+                      {students.map((item) => {
+                        const name = item.name;
                         const email = item.email;
                         const options = [];
                         if (name) {
@@ -4353,10 +4338,8 @@ function FinanceAdminPage() {
 
               {!fundPaymentForm.eventId ? (
                 <p className="mt-4 text-sm text-slate-500">請先選擇班費事件。</p>
-              ) : !directory.length ? (
-                <p className="mt-4 text-sm text-amber-600">
-                  尚未載入 Directory，請先到 /directory 登入以取得名單。
-                </p>
+              ) : !students.length ? (
+                <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
               ) : (
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                   <div>
@@ -7905,11 +7888,12 @@ function AdminPage({
       loadStudents();
       loadDirectoryAdmin();
     }
-    if (activeTab === "ordering") {
-      loadOrderPlans();
-    }
     if (activeTab === "roles") {
       loadClassRoles();
+      loadStudents();
+    }
+    if (activeTab === "ordering") {
+      loadOrderPlans();
     }
   }, [activeTab]);
 
@@ -8316,6 +8300,27 @@ function AdminPage({
 
   const handleRoleFormChange_ = (key, value) => {
     setRoleForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSelectRoleMember_ = (value) => {
+    const needle = String(value || "").trim().toLowerCase();
+    if (!needle) {
+      return;
+    }
+    const match =
+      students.find((item) => String(item.id || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
+      null;
+    if (!match) {
+      return;
+    }
+    setRoleForm((prev) => ({
+      ...prev,
+      id: match.id || prev.id,
+      name: match.name || prev.name,
+      email: match.email || prev.email,
+    }));
   };
 
   const handleRoleToggle_ = (key, value) => {
@@ -9389,6 +9394,25 @@ function AdminPage({
                 )}
               </div>
               <form onSubmit={handleSaveRole_} className="space-y-4">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">選擇同學</label>
+                  <input
+                    list="class-role-students"
+                    onChange={(event) => handleSelectRoleMember_(event.target.value)}
+                    placeholder="輸入姓名/學號/Email"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <datalist id="class-role-students">
+                    {students.map((item) => (
+                      <option
+                        key={item.id || item.email}
+                        value={item.name || item.id || item.email || ""}
+                      >
+                        {item.id || ""} {item.email || ""}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">學號 / ID</label>
                   <input
