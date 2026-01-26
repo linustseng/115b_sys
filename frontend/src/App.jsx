@@ -259,7 +259,7 @@ const normalizePhoneInputValue_ = (value) => {
   return raw;
 };
 
-const formatEventDateTime_ = (value) => {
+const formatDisplayDate_ = (value, options = {}) => {
   if (!value) {
     return "";
   }
@@ -267,26 +267,8 @@ const formatEventDateTime_ = (value) => {
   if (!raw) {
     return "";
   }
-  const normalized =
-    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
-      ? raw.replace(/\//g, "-").replace(" ", "T")
-      : raw;
-  const parsed = new Date(normalized);
-  if (isNaN(parsed.getTime())) {
+  if (/^\d{2}:\d{2}$/.test(raw)) {
     return raw;
-  }
-  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
-    parsed.getDate()
-  )} ${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
-};
-
-const formatEventDate_ = (value) => {
-  if (!value) {
-    return "";
-  }
-  const raw = String(value || "").trim();
-  if (!raw) {
-    return "";
   }
   const normalized =
     /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
@@ -297,9 +279,25 @@ const formatEventDate_ = (value) => {
     return raw;
   }
   const weekday = ["日", "一", "二", "三", "四", "五", "六"][parsed.getDay()];
-  return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
+  const dateLabel = `${parsed.getFullYear()}/${pad2_(parsed.getMonth() + 1)}/${pad2_(
     parsed.getDate()
-  )} (${weekday})`;
+  )} (週${weekday})`;
+  const hasTime =
+    options.withTime ||
+    /T\d{2}:\d{2}/.test(normalized) ||
+    /\d{2}:\d{2}/.test(raw);
+  if (!hasTime) {
+    return dateLabel;
+  }
+  return `${dateLabel} ${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
+};
+
+const formatEventDateTime_ = (value) => {
+  return formatDisplayDate_(value, { withTime: true });
+};
+
+const formatEventDate_ = (value) => {
+  return formatDisplayDate_(value);
 };
 
 const parseFinanceAmount_ = (value) => {
@@ -2120,12 +2118,7 @@ function OrderingPage() {
   };
 
   const formatOrderDateLabel_ = (value) => {
-    const date = parseOrderDate_(value);
-    if (!date) {
-      return value || "-";
-    }
-    const weekday = ["日", "一", "二", "三", "四", "五", "六"][date.getDay()];
-    return `${date.getFullYear()}/${pad2_(date.getMonth() + 1)}/${pad2_(date.getDate())} (週${weekday})`;
+    return formatDisplayDate_(value) || "-";
   };
 
   const getOrderCutoffAt_ = (plan) => {
@@ -2375,7 +2368,7 @@ function OrderingPage() {
                     {plan.title || "午餐訂購"}
                   </h3>
                   <p className="mt-2 text-xs text-slate-400">
-                    截止時間：{cutoff ? cutoff.toLocaleString() : "前一日 23:59"}
+                    截止時間：{cutoff ? formatDisplayDate_(cutoff, { withTime: true }) : "前一日 23:59"}
                   </p>
                   <div className="mt-4 grid gap-3 sm:grid-cols-3">
                     {[
@@ -2430,7 +2423,9 @@ function OrderingPage() {
                   />
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-slate-400">
-                      {response && response.updatedAt ? `已更新：${response.updatedAt}` : "尚未選擇"}
+                      {response && response.updatedAt
+                        ? `已更新：${formatDisplayDate_(response.updatedAt, { withTime: true })}`
+                        : "尚未選擇"}
                     </span>
                     <button
                       type="button"
@@ -3129,6 +3124,7 @@ function FinanceAdminPage() {
   const [financeRoles, setFinanceRoles] = useState([]);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminProfile, setAdminProfile] = useState(null);
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [adminTab, setAdminTab] = useState("requests");
   const [fundEvents, setFundEvents] = useState([]);
   const [fundPayments, setFundPayments] = useState([]);
@@ -3262,6 +3258,12 @@ function FinanceAdminPage() {
   }, []);
 
   useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.email) {
+      setAdminEmail(String(googleLinkedStudent.email || "").trim().toLowerCase());
+    }
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
     const normalized = String(adminEmail || "").trim().toLowerCase();
     if (!normalized) {
       setAdminProfile(null);
@@ -3385,27 +3387,6 @@ function FinanceAdminPage() {
       }))
     );
 
-  const getPayerGroupType_ = (payer) => {
-    if (!payer || !payer.email) {
-      return "general";
-    }
-    const studentMatch = students.find(
-      (item) => String(item.email || "").trim().toLowerCase() === payer.email
-    );
-    const studentId = studentMatch ? String(studentMatch.id || "").trim() : "";
-    const matches = groupMemberships.filter(
-      (item) =>
-        (studentId && String(item.personId || "").trim() === studentId) ||
-        String(item.personEmail || "").trim().toLowerCase() === payer.email
-    );
-    if (!matches.length) {
-      return "general";
-    }
-    return matches.some((item) => String(item.groupId || "").trim() === "J")
-      ? "sponsor"
-      : "general";
-  };
-
   const normalizePayerKey_ = (value) => String(value || "").trim().toLowerCase();
 
   const paymentEmailSet = new Set(
@@ -3424,16 +3405,52 @@ function FinanceAdminPage() {
     return (emailKey && paymentEmailSet.has(emailKey)) || (nameKey && paymentNameSet.has(nameKey));
   };
 
+  const sponsorMemberships = groupMemberships.filter(
+    (item) => String(item.groupId || "").trim() === "J"
+  );
+  const sponsorIdSet = new Set(
+    sponsorMemberships.map((item) => String(item.personId || "").trim()).filter(Boolean)
+  );
+  const sponsorEmailSet = new Set(
+    sponsorMemberships
+      .map((item) => String(item.personEmail || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   const payerRows = normalizedStudents.map((payer) => {
-    const type = getPayerGroupType_(payer);
+    const isSponsor =
+      sponsorIdSet.has(String(payer.id || "").trim()) ||
+      sponsorEmailSet.has(String(payer.email || "").trim().toLowerCase());
     return {
       ...payer,
-      payerType: type,
+      payerType: isSponsor ? "sponsor" : "general",
       paid: getPayerStatus_(payer),
     };
   });
 
-  const filteredPayers = payerRows.filter((payer) => {
+  const extraSponsorRows = sponsorMemberships
+    .filter((member) => {
+      const id = String(member.personId || "").trim();
+      const email = String(member.personEmail || "").trim().toLowerCase();
+      return (
+        (id && !normalizedStudents.some((payer) => String(payer.id || "").trim() === id)) ||
+        (email && !normalizedStudents.some((payer) => String(payer.email || "").trim() === email))
+      );
+    })
+    .map((member) => ({
+      id: member.personId || "",
+      name: member.personName || member.personEmail || member.personId || "",
+      email: String(member.personEmail || "").trim().toLowerCase(),
+      payerType: "sponsor",
+      paid: getPayerStatus_({
+        email: String(member.personEmail || "").trim().toLowerCase(),
+        name: member.personName || "",
+      }),
+    }));
+
+  const allPayerRows = payerRows.concat(extraSponsorRows);
+
+  const filteredPayers = allPayerRows.filter((payer) => {
     if (fundPayerView === "paid" && !payer.paid) {
       return false;
     }
@@ -3704,9 +3721,10 @@ function FinanceAdminPage() {
     }
     setLoading(true);
     try {
+      const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
       const { result } = await apiRequest({
         action: "upsertFundEvent",
-        data: fundEventForm,
+        data: { ...fundEventForm, actorId },
       });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
@@ -3785,9 +3803,10 @@ function FinanceAdminPage() {
     }
     setLoading(true);
     try {
+      const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
       const { result } = await apiRequest({
         action: "upsertFundPayment",
-        data: fundPaymentForm,
+        data: { ...fundPaymentForm, actorId },
       });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
@@ -3870,12 +3889,6 @@ function FinanceAdminPage() {
         <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
             <div className="flex flex-wrap items-center gap-3">
-              <input
-                value={adminEmail}
-                onChange={(event) => setAdminEmail(event.target.value)}
-                placeholder="管理者 Email"
-                className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700"
-              />
               {availableRoles.length ? (
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map((key) => (
@@ -3890,9 +3903,7 @@ function FinanceAdminPage() {
                     </button>
                   ))}
                 </div>
-              ) : (
-                <span className="text-xs text-slate-400">未匹配到班務角色</span>
-              )}
+              ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {[
@@ -4096,7 +4107,9 @@ function FinanceAdminPage() {
                             {item.action} · {FINANCE_ROLE_LABELS[item.actorRole] || item.actorRole || "-"}{" "}
                             {item.actorName || ""}
                           </span>
-                          <span className="text-slate-400">{item.createdAt}</span>
+                    <span className="text-slate-400">
+                      {formatDisplayDate_(item.createdAt, { withTime: true })}
+                    </span>
                         </div>
                       ))}
                     </div>
@@ -4162,38 +4175,66 @@ function FinanceAdminPage() {
                       const expectedSponsor = parseFinanceAmount_(item.amountSponsor) *
                         parseFinanceAmount_(item.expectedSponsorCount);
                       const expectedTotal = expectedGeneral + expectedSponsor;
+                      const isActive = fundPaymentForm.eventId === item.id;
                       return (
                         <div
                           key={item.id}
-                          className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                          onClick={() => {
+                            handleFundPaymentChange("eventId", item.id);
+                            resetFundPaymentForm(item.id);
+                          }}
+                          className={`cursor-pointer rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                            isActive
+                              ? "border-slate-900 bg-slate-900 text-white"
+                              : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                          }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-slate-900">{item.title}</p>
-                              <p className="text-xs text-slate-500">
-                                {item.dueDate || "-"} ·
+                              <p className={`font-semibold ${isActive ? "text-white" : "text-slate-900"}`}>
+                                {item.title}
+                              </p>
+                              <p className={`text-xs ${isActive ? "text-white/70" : "text-slate-500"}`}>
+                                {formatDisplayDate_(item.dueDate) || "-"} ·
                                 {FUND_EVENT_STATUS.find((status) => status.value === item.status)?.label ||
                                   item.status}
                               </p>
-                              <p className="text-xs text-slate-500">
+                              <p className={`text-xs ${isActive ? "text-white/70" : "text-slate-500"}`}>
                                 目標收款 {formatFinanceAmount_(expectedTotal)}
                               </p>
+                              {item.createdById ? (
+                                <p className={`text-[11px] ${isActive ? "text-white/70" : "text-slate-400"}`}>
+                                  建檔者：{item.createdById}
+                                </p>
+                              ) : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => {
+                                onClick={(event) => {
+                                  event.stopPropagation();
                                   handleEditFundEvent(item);
                                   resetFundPaymentForm(item.id);
                                 }}
-                                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  isActive
+                                    ? "border-white/40 text-white hover:border-white/70"
+                                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                }`}
                               >
                                 編輯
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteFundEvent(item.id)}
-                                className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleDeleteFundEvent(item.id);
+                                }}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  isActive
+                                    ? "border-white/40 text-white hover:border-white/70"
+                                    : "border-rose-200 text-rose-600 hover:border-rose-300"
+                                }`}
                               >
                                 刪除
                               </button>
@@ -4214,21 +4255,22 @@ function FinanceAdminPage() {
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">收款紀錄</h2>
                   <div className="flex flex-wrap items-center gap-2">
-                    <select
-                      value={fundPaymentForm.eventId}
-                      onChange={(event) => {
-                        handleFundPaymentChange("eventId", event.target.value);
-                        resetFundPaymentForm(event.target.value);
+                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                      {fundEvents.find((item) => item.id === fundPaymentForm.eventId)?.title ||
+                        "尚未選擇班費事件"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = document.getElementById("fund-events-anchor");
+                        if (target) {
+                          target.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
                       }}
-                      className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                     >
-                      <option value="">選擇班費事件</option>
-                      {fundEvents.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
+                      變更事件
+                    </button>
                     <button
                       type="button"
                       onClick={startNewFundPayment_}
@@ -4257,8 +4299,14 @@ function FinanceAdminPage() {
                               {item.transferLast5 ? ` · 末五碼 ${item.transferLast5}` : ""}
                             </p>
                             <p className="text-xs text-slate-400">
-                              入帳: {item.accountedAt || "-"} · 收齊: {item.confirmedAt || "-"}
+                              入帳: {formatDisplayDate_(item.accountedAt) || "-"} · 收齊:{" "}
+                              {formatDisplayDate_(item.confirmedAt) || "-"}
                             </p>
+                            {item.createdById || item.updatedById ? (
+                              <p className="text-[11px] text-slate-400">
+                                建檔者：{item.createdById || "-"} · 編輯者：{item.updatedById || "-"}
+                              </p>
+                            ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             <button
@@ -4336,7 +4384,34 @@ function FinanceAdminPage() {
               ) : !students.length ? (
                 <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
               ) : (
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="mt-4 space-y-6">
+                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                      <span>班董</span>
+                      <span>
+                        已繳 {sponsorPaid} / {sponsorPayers.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sponsorPayers.length ? (
+                        sponsorPayers.map((payer) => (
+                          <span
+                            key={`${payer.email || payer.name}-sponsor`}
+                            title={payer.email || ""}
+                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
+                              payer.paid
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-slate-200 bg-slate-50 text-slate-600"
+                            }`}
+                          >
+                            {payer.name || payer.email || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">沒有符合的名單。</p>
+                      )}
+                    </div>
+                  </div>
                   <div>
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
                       <span>一般同學</span>
@@ -4364,33 +4439,6 @@ function FinanceAdminPage() {
                       )}
                     </div>
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                      <span>班董</span>
-                      <span>
-                        已繳 {sponsorPaid} / {sponsorPayers.length}
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {sponsorPayers.length ? (
-                        sponsorPayers.map((payer) => (
-                          <span
-                            key={`${payer.email || payer.name}-sponsor`}
-                            title={payer.email || ""}
-                            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
-                              payer.paid
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-slate-200 bg-slate-50 text-slate-600"
-                            }`}
-                          >
-                            {payer.name || payer.email || "未命名"}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-400">沒有符合的名單。</p>
-                      )}
-                    </div>
-                  </div>
                 </div>
               )}
             </section>
@@ -4400,7 +4448,10 @@ function FinanceAdminPage() {
 
         {adminTab === "roles" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div
+                id="fund-events-anchor"
+                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+              >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">財務角色</h2>
                 <button
@@ -4937,14 +4988,7 @@ function SoftballPage() {
   const normalizeId_ = (value) => String(value || "").trim();
 
   const formatPracticeDate_ = (value) => {
-    const parsed = parseLocalInputDate_(value);
-    if (!parsed) {
-      return value || "-";
-    }
-    const weekday = ["日", "一", "二", "三", "四", "五", "六"][parsed.getDay()];
-    return `${parsed.getFullYear()}-${pad2_(parsed.getMonth() + 1)}-${pad2_(
-      parsed.getDate()
-    )} (${weekday})`;
+    return formatDisplayDate_(value) || "-";
   };
 
   const loadPlayers = async () => {
@@ -6917,7 +6961,8 @@ function SoftballPlayerPage() {
                           {formatEventDate_(practice.date)} · {practice.title || "練習"}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {practice.startAt || "-"} - {practice.endAt || "-"}
+                          {formatDisplayDate_(practice.startAt, { withTime: true }) || "-"} -{" "}
+                          {formatDisplayDate_(practice.endAt, { withTime: true }) || "-"}
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
@@ -7427,22 +7472,19 @@ function HomePage() {
       return "";
     }
     if (value instanceof Date) {
-      return value.toLocaleString();
+      return formatDisplayDate_(value, { withTime: true });
     }
     if (typeof value === "number") {
       const parsedNumber = new Date(value);
-      return isNaN(parsedNumber.getTime()) ? "" : parsedNumber.toLocaleString();
+      return isNaN(parsedNumber.getTime())
+        ? ""
+        : formatDisplayDate_(parsedNumber, { withTime: true });
     }
     const raw = String(value || "").trim();
     if (!raw) {
       return "";
     }
-    const normalized =
-      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
-        ? raw.replace(/\//g, "-").replace(" ", "T")
-        : raw;
-    const parsed = new Date(normalized);
-    return isNaN(parsed.getTime()) ? raw : parsed.toLocaleString();
+    return formatDisplayDate_(raw, { withTime: true });
   };
 
   const getRegistrationStatusInfo_ = (registration, checkinStatus) => {
@@ -9532,7 +9574,8 @@ function AdminPage({
                   <div>
                     <p className="font-semibold text-slate-900">{event.title}</p>
                     <p className="text-xs text-slate-500">
-                      {event.startAt} · {event.location}
+                      {formatDisplayDate_(event.startAt, { withTime: true }) || "-"} ·{" "}
+                      {event.location}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">

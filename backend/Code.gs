@@ -1603,6 +1603,12 @@ function appendFundEvent_(data) {
   if (!base.id) {
     base.id = generateFundEventId_();
   }
+  if (!base.createdById && base.actorId) {
+    base.createdById = base.actorId;
+  }
+  if (!base.updatedById && base.actorId) {
+    base.updatedById = base.actorId;
+  }
   base.createdAt = base.createdAt || nowIso;
   base.updatedAt = nowIso;
   const record = normalizeFundEventRecord_(base);
@@ -1623,6 +1629,12 @@ function appendFundPayment_(data) {
   const base = Object.assign({}, data);
   if (!base.id) {
     base.id = generateFundPaymentId_();
+  }
+  if (!base.createdById && base.actorId) {
+    base.createdById = base.actorId;
+  }
+  if (!base.updatedById && base.actorId) {
+    base.updatedById = base.actorId;
   }
   base.createdAt = base.createdAt || nowIso;
   base.updatedAt = nowIso;
@@ -2426,12 +2438,18 @@ function updateFundEvent_(eventId, data) {
     if (String(row[idIndex]).trim() !== eventId) {
       continue;
     }
-    const record = normalizeFundEventRecord_(
-      Object.assign({}, mapRowToObject_(headerMap, row), data, {
-        id: eventId,
-        updatedAt: new Date().toISOString(),
-      })
-    );
+    const existing = mapRowToObject_(headerMap, row);
+    const merged = Object.assign({}, existing, data, {
+      id: eventId,
+      updatedAt: new Date().toISOString(),
+    });
+    if (!merged.createdById && data.actorId) {
+      merged.createdById = data.actorId;
+    }
+    if (data.actorId) {
+      merged.updatedById = data.actorId;
+    }
+    const record = normalizeFundEventRecord_(merged);
     const headers = getHeaders_(sheet);
     const values = new Array(headers.length).fill("");
     headers.forEach(function (header, index) {
@@ -2507,12 +2525,18 @@ function updateFundPayment_(paymentId, data) {
     if (String(row[idIndex]).trim() !== paymentId) {
       continue;
     }
-    const record = normalizeFundPaymentRecord_(
-      Object.assign({}, mapRowToObject_(headerMap, row), data, {
-        id: paymentId,
-        updatedAt: new Date().toISOString(),
-      })
-    );
+    const existing = mapRowToObject_(headerMap, row);
+    const merged = Object.assign({}, existing, data, {
+      id: paymentId,
+      updatedAt: new Date().toISOString(),
+    });
+    if (!merged.createdById && data.actorId) {
+      merged.createdById = data.actorId;
+    }
+    if (data.actorId) {
+      merged.updatedById = data.actorId;
+    }
+    const record = normalizeFundPaymentRecord_(merged);
     const headers = getHeaders_(sheet);
     const values = new Array(headers.length).fill("");
     headers.forEach(function (header, index) {
@@ -2900,6 +2924,8 @@ function normalizeFundEventRecord_(data) {
     notes: String(data.notes || "").trim(),
     createdAt: String(data.createdAt || "").trim(),
     updatedAt: String(data.updatedAt || "").trim(),
+    createdById: String(data.createdById || "").trim(),
+    updatedById: String(data.updatedById || "").trim(),
   };
 }
 
@@ -2919,6 +2945,8 @@ function normalizeFundPaymentRecord_(data) {
     notes: String(data.notes || "").trim(),
     createdAt: String(data.createdAt || "").trim(),
     updatedAt: String(data.updatedAt || "").trim(),
+    createdById: String(data.createdById || "").trim(),
+    updatedById: String(data.updatedById || "").trim(),
   };
 }
 
