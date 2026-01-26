@@ -190,6 +190,21 @@ const GROUP_ROLE_OPTIONS = [
   { id: "member", label: "成員" },
 ];
 
+const GROUP_ROLE_LABELS = {
+  lead: "組長",
+  deputy: "副組長",
+  member: "成員",
+};
+
+const ROLE_BADGE_STYLES = {
+  rep: "border-amber-200 bg-amber-50 text-amber-700",
+  repDeputy: "border-orange-200 bg-orange-50 text-orange-700",
+  lead: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  deputy: "border-sky-200 bg-sky-50 text-sky-700",
+  member: "border-slate-200 bg-slate-100 text-slate-700",
+  unassigned: "border-rose-200 bg-rose-50 text-rose-600",
+};
+
 const FINANCE_ROLE_OPTIONS = [
   { id: "accounting", label: "會計" },
   { id: "cashier", label: "出納" },
@@ -215,6 +230,11 @@ const FUND_PAYMENT_METHODS = [
 const getCategoryLabel_ = (value) => {
   const match = EVENT_CATEGORIES.find((item) => item.value === value);
   return match ? match.label : "聚餐";
+};
+
+const getGroupLabel_ = (groupId) => {
+  const match = CLASS_GROUPS.find((item) => item.id === groupId);
+  return match ? match.label : groupId || "-";
 };
 
 const buildGoogleMapsUrl_ = (address) => {
@@ -903,8 +923,8 @@ export default function App() {
   if (isAdminPage) {
     return (
       <AdminPage
-        initialTab="registrations"
-        allowedTabs={["registrations", "checkins", "students", "roles"]}
+        initialTab="roles"
+        allowedTabs={["students", "roles"]}
       />
     );
   }
@@ -7910,15 +7930,14 @@ function AdminPage({
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
   const [groupMemberships, setGroupMemberships] = useState([]);
-  const [membershipForm, setMembershipForm] = useState({
-    id: "",
-    personId: "",
-    personName: "",
-    personEmail: "",
-    groupId: "",
-    roleInGroup: "member",
-    notes: "",
-  });
+  const [draftMemberships, setDraftMemberships] = useState([]);
+  const [membershipDirty, setMembershipDirty] = useState(false);
+  const [membershipQuery, setMembershipQuery] = useState("");
+  const [membershipStatus, setMembershipStatus] = useState("");
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [showOnlyUnassigned, setShowOnlyUnassigned] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+  const [pinnedGroupId, setPinnedGroupId] = useState("");
   const [directoryToken, setDirectoryToken] = useState(
     () => localStorage.getItem("directoryToken") || ""
   );
@@ -7936,22 +7955,47 @@ function AdminPage({
 
   const normalizeName_ = (value) => String(value || "").trim();
 
-  const resetMembershipForm_ = () => {
-    setMembershipForm({
-      id: "",
-      personId: "",
-      personName: "",
-      personEmail: "",
-      groupId: "",
-      roleInGroup: "member",
-      notes: "",
-    });
-  };
-
   const getDisplayName_ = (student) =>
     String(
       (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
     ).trim();
+
+  const buildMembershipKey_ = (membership) =>
+    `${String(membership.personId || "").trim()}::${String(membership.groupId || "").trim()}::${String(
+      membership.roleInGroup || ""
+    ).trim()}`;
+
+  const getMembershipRoleLabel_ = (membership) => {
+    if (!membership) {
+      return "";
+    }
+    if (membership.groupId === "A") {
+      if (membership.roleInGroup === "lead") {
+        return "班代";
+      }
+      if (membership.roleInGroup === "deputy") {
+        return "副班代";
+      }
+    }
+    return GROUP_ROLE_LABELS[membership.roleInGroup] || membership.roleInGroup || "-";
+  };
+
+  const getMembershipRoleStyleKey_ = (membership) => {
+    if (!membership) {
+      return "member";
+    }
+    if (membership.groupId === "A") {
+      if (membership.roleInGroup === "lead") {
+        return "rep";
+      }
+      if (membership.roleInGroup === "deputy") {
+        return "repDeputy";
+      }
+    }
+    return membership.roleInGroup || "member";
+  };
+
+  const normalizePersonId_ = (value) => String(value || "").trim();
 
   const parseEventAttachments_ = (value) => {
     if (!value) {
@@ -8198,6 +8242,7 @@ function AdminPage({
     }
   }, [activeTab]);
 
+
   useEffect(() => {
     if (!activeId) {
       setForm(buildDefaultForm(events));
@@ -8372,7 +8417,11 @@ function AdminPage({
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
-      setGroupMemberships(result.data && result.data.memberships ? result.data.memberships : []);
+      const memberships = result.data && result.data.memberships ? result.data.memberships : [];
+      setGroupMemberships(memberships);
+      setDraftMemberships(memberships);
+      setMembershipDirty(false);
+      setMembershipStatus("");
     } catch (err) {
       setError(err.message || "班務分組載入失敗。");
     } finally {
@@ -8592,97 +8641,228 @@ function AdminPage({
     }
   };
 
-  const toggleListValue_ = (list, value) => {
-    if (list.includes(value)) {
-      return list.filter((item) => item !== value);
-    }
-    return list.concat(value);
-  };
-
-  const handleMembershipFormChange_ = (key, value) => {
-    setMembershipForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const handleSelectMember_ = (value) => {
-    const needle = String(value || "").trim().toLowerCase();
-    if (!needle) {
+  const applyMembershipDraft_ = (payload) => {
+    const personId = String(payload.personId || "").trim();
+    const groupId = String(payload.groupId || "").trim();
+    const roleInGroup = String(payload.roleInGroup || "").trim();
+    if (!personId || !groupId || !roleInGroup) {
       return;
     }
-    const match =
-      students.find((item) => String(item.id || "").trim().toLowerCase() === needle) ||
-      students.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
-      students.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
-      null;
-    if (!match) {
-      return;
-    }
-    setMembershipForm((prev) => ({
-      ...prev,
-      personId: match.id || prev.personId,
-      personName: match.name || prev.personName,
-      personEmail: match.email || prev.personEmail,
-    }));
-  };
-
-  const handleEditMembership_ = (item) => {
-    if (!item) {
-      return;
-    }
-    setMembershipForm({
-      id: item.id || "",
-      personId: item.personId || "",
-      personName: item.personName || "",
-      personEmail: item.personEmail || "",
-      groupId: item.groupId || "",
-      roleInGroup: item.roleInGroup || "member",
-      notes: item.notes || "",
-    });
-  };
-
-  const handleSaveMembership_ = async (event) => {
-    event.preventDefault();
-    setError("");
-    setRegistrationStatusMessage("");
-    if (!membershipForm.personId) {
-      setError("請先選擇同學");
-      return;
-    }
-    if (!membershipForm.groupId) {
-      setError("請選擇組別");
-      return;
-    }
-    if (
-      membershipForm.groupId === "A" &&
-      membershipForm.roleInGroup === "lead" &&
-      groupMemberships.some(
+    let blocked = false;
+    setDraftMemberships((prev) => {
+      if (
+        groupId === "A" &&
+        roleInGroup === "lead" &&
+        prev.some(
+          (item) =>
+            String(item.groupId || "").trim() === "A" &&
+            String(item.roleInGroup || "").trim() === "lead" &&
+            String(item.personId || "").trim() !== personId
+        )
+      ) {
+        blocked = true;
+        return prev;
+      }
+      const next = prev.slice();
+      const existingIndex = next.findIndex(
         (item) =>
-          String(item.groupId || "").trim() === "A" &&
-          String(item.roleInGroup || "").trim() === "lead" &&
-          String(item.id || "").trim() !== String(membershipForm.id || "").trim()
-      )
-    ) {
+          String(item.personId || "").trim() === personId &&
+          String(item.groupId || "").trim() === groupId
+      );
+      if (existingIndex >= 0) {
+        if (String(next[existingIndex].roleInGroup || "").trim() === roleInGroup) {
+          return prev;
+        }
+        next.splice(existingIndex, 1);
+      }
+      next.push({
+        id: payload.id || "",
+        personId: personId,
+        personName: payload.personName || "",
+        personEmail: payload.personEmail || "",
+        groupId: groupId,
+        roleInGroup: roleInGroup,
+        notes: payload.notes || "",
+      });
+      return next;
+    });
+    if (blocked) {
       setError("班代組只能有一位班代");
       return;
     }
-    setSaving(true);
+    setMembershipDirty(true);
+    setMembershipStatus("尚未儲存");
+    setError("");
+  };
+
+  const removeMembershipDraft_ = (membership) => {
+    if (!membership) {
+      return;
+    }
+    const targetKey = buildMembershipKey_(membership);
+    setDraftMemberships((prev) =>
+      prev.filter((item) => buildMembershipKey_(item) !== targetKey)
+    );
+    setMembershipDirty(true);
+    setMembershipStatus("尚未儲存");
+  };
+
+  const parseDragPayload_ = (event) => {
     try {
-      const { result } = await apiRequest({
-        action: "upsertGroupMembership",
-        data: {
-          id: membershipForm.id,
-          personId: membershipForm.personId,
-          personName: membershipForm.personName,
-          personEmail: membershipForm.personEmail,
-          groupId: membershipForm.groupId,
-          roleInGroup: membershipForm.roleInGroup,
-          notes: membershipForm.notes,
-        },
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "儲存失敗");
+      const raw = event.dataTransfer.getData("application/json");
+      return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const handleDragStartStudent_ = (student, event) => {
+    if (!student) {
+      return;
+    }
+    const payload = {
+      source: "student",
+      personId: student.id || "",
+      personName: getDisplayName_(student),
+      personEmail: student.googleEmail || student.email || "",
+    };
+    event.dataTransfer.setData("application/json", JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = "copy";
+  };
+
+  const handleDragStartMembership_ = (membership, event) => {
+    if (!membership) {
+      return;
+    }
+    const payload = {
+      source: "membership",
+      personId: membership.personId || "",
+      personName: membership.personName || "",
+      personEmail: membership.personEmail || "",
+      groupId: membership.groupId || "",
+      roleInGroup: membership.roleInGroup || "",
+    };
+    event.dataTransfer.setData("application/json", JSON.stringify(payload));
+    event.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDropToRole_ = (groupId, roleInGroup, event) => {
+    event.preventDefault();
+    const payload = parseDragPayload_(event);
+    if (!payload || !payload.personId) {
+      return;
+    }
+    applyMembershipDraft_({
+      id: "",
+      personId: payload.personId,
+      personName: payload.personName,
+      personEmail: payload.personEmail,
+      groupId,
+      roleInGroup,
+    });
+  };
+
+  const handleSelectMember_ = (student) => {
+    if (!student) {
+      setSelectedMember(null);
+      return;
+    }
+    setSelectedMember({
+      personId: student.id || "",
+      personName: getDisplayName_(student) || "",
+      personEmail: student.googleEmail || student.email || "",
+    });
+  };
+
+  const handleAssignSelectedMember_ = (groupId, roleInGroup) => {
+    if (!selectedMember || !selectedMember.personId) {
+      setError("請先從左側選擇同學");
+      return;
+    }
+    applyMembershipDraft_({
+      id: "",
+      personId: selectedMember.personId,
+      personName: selectedMember.personName,
+      personEmail: selectedMember.personEmail,
+      groupId,
+      roleInGroup,
+    });
+  };
+
+  const toggleExpandedGroup_ = (groupId) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
       }
-      resetMembershipForm_();
+      return next;
+    });
+  };
+
+  const expandAllGroups_ = (groups) => {
+    setExpandedGroups(new Set(groups.map((group) => group.id)));
+  };
+
+  const collapseAllGroups_ = () => {
+    setExpandedGroups(new Set());
+  };
+
+  const handleSaveMembershipDrafts_ = async () => {
+    setSaving(true);
+    setError("");
+    setMembershipStatus("");
+    try {
+      const originKeys = new Map();
+      groupMemberships.forEach((item) => {
+        originKeys.set(buildMembershipKey_(item), item);
+      });
+      const draftKeys = new Map();
+      draftMemberships.forEach((item) => {
+        draftKeys.set(buildMembershipKey_(item), item);
+      });
+
+      const toDelete = groupMemberships.filter(
+        (item) => !draftKeys.has(buildMembershipKey_(item))
+      );
+      const toAdd = draftMemberships.filter(
+        (item) => !originKeys.has(buildMembershipKey_(item))
+      );
+
+      for (const item of toDelete) {
+        if (!item.id) {
+          continue;
+        }
+        const { result } = await apiRequest({
+          action: "deleteGroupMembership",
+          id: item.id,
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "刪除失敗");
+        }
+      }
+
+      for (const item of toAdd) {
+        const { result } = await apiRequest({
+          action: "upsertGroupMembership",
+          data: {
+            personId: item.personId,
+            personName: item.personName,
+            personEmail: item.personEmail,
+            groupId: item.groupId,
+            roleInGroup: item.roleInGroup,
+            notes: item.notes || "",
+          },
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "儲存失敗");
+        }
+      }
+
       await loadGroupMemberships();
+      setMembershipDirty(false);
+      setMembershipStatus("已更新班務分組");
     } catch (err) {
       setError(err.message || "儲存失敗");
     } finally {
@@ -8690,29 +8870,11 @@ function AdminPage({
     }
   };
 
-  const handleDeleteMembership_ = async (membershipId) => {
-    if (!membershipId) {
-      return;
-    }
-    setSaving(true);
+  const handleResetMembershipDrafts_ = () => {
+    setDraftMemberships(groupMemberships);
+    setMembershipDirty(false);
+    setMembershipStatus("");
     setError("");
-    try {
-      const { result } = await apiRequest({
-        action: "deleteGroupMembership",
-        id: membershipId,
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "刪除失敗");
-      }
-      if (membershipForm.id === membershipId) {
-        resetMembershipForm_();
-      }
-      await loadGroupMemberships();
-    } catch (err) {
-      setError(err.message || "刪除失敗");
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleRegistrationDelete = async (id) => {
@@ -9088,6 +9250,66 @@ function AdminPage({
         return registrationId && !checkinRegistrationSet.has(registrationId);
       })
     : [];
+
+  const draftMembershipsByPerson = draftMemberships.reduce((acc, item) => {
+    const personId = String(item.personId || "").trim();
+    if (!personId) {
+      return acc;
+    }
+    if (!acc[personId]) {
+      acc[personId] = [];
+    }
+    acc[personId].push(item);
+    return acc;
+  }, {});
+
+  const rolesQuery = String(membershipQuery || "").trim().toLowerCase();
+  const sortedStudentsForRoles = students
+    .filter((item) => {
+      if (!rolesQuery) {
+        return true;
+      }
+      const haystack = [
+        item.id,
+        item.email,
+        item.googleEmail,
+        item.name,
+        item.nameZh,
+        item.nameEn,
+        item.preferredName,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+      return haystack.includes(rolesQuery);
+    })
+    .slice()
+    .sort((a, b) => {
+      const aId = String(a.id || "").trim();
+      const bId = String(b.id || "").trim();
+      const aAssigned = Boolean(draftMembershipsByPerson[aId]);
+      const bAssigned = Boolean(draftMembershipsByPerson[bId]);
+      if (aAssigned !== bAssigned) {
+        return aAssigned ? 1 : -1;
+      }
+      const aName = normalizeName_(getDisplayName_(a));
+      const bName = normalizeName_(getDisplayName_(b));
+      if (aName !== bName) {
+        return aName.localeCompare(bName, "zh-Hant");
+      }
+      return aId.localeCompare(bId);
+    });
+
+  const groupCards = CLASS_GROUPS.filter((group) => group.id !== "A");
+  const orderedGroupCards = pinnedGroupId
+    ? groupCards
+        .slice()
+        .sort((a, b) => (a.id === pinnedGroupId ? -1 : b.id === pinnedGroupId ? 1 : 0))
+    : groupCards;
+  const visibleStudentsForRoles = showOnlyUnassigned
+    ? sortedStudentsForRoles.filter(
+        (student) => !draftMembershipsByPerson[normalizePersonId_(student.id)]
+      )
+    : sortedStudentsForRoles;
 
   return (
     <div className="min-h-screen">
@@ -9592,11 +9814,6 @@ function AdminPage({
 
           {activeTab === "students" ? (
             <div className="mt-6 space-y-4">
-              {!directory.length ? (
-                <p className="text-xs text-amber-600">
-                  目前顯示 Students 基本資料。若要顯示完整欄位，請先到 /directory 登入。
-                </p>
-              ) : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">共 {filteredStudents.length} 筆</p>
                 <input
@@ -9643,158 +9860,389 @@ function AdminPage({
           ) : null}
 
           {activeTab === "roles" ? (
-            <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-700">
-                    班務分組名單
-                  </p>
-                  <button
-                    type="button"
-                    onClick={resetMembershipForm_}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                  >
-                    新增
-                  </button>
-                </div>
-                {groupMemberships.length ? (
-                  groupMemberships.map((item) => (
-                    <div
-                      key={item.id || `${item.personId}-${item.groupId}-${item.roleInGroup}`}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+            <div className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200/70 bg-white p-4 text-sm text-slate-600">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-700">班務分組名單</p>
+                    <span className="text-xs text-slate-400">拖拉或點選加入右側</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      value={membershipQuery}
+                      onChange={(event) => setMembershipQuery(event.target.value)}
+                      placeholder="搜尋姓名、學號、Email..."
+                      className="h-9 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOnlyUnassigned((prev) => !prev)}
+                      className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                        showOnlyUnassigned
+                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          : "border-slate-200 bg-white text-slate-600"
+                      }`}
                     >
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {item.personName || item.personEmail || item.personId}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {item.personEmail || "-"} · 組別:{" "}
-                          {CLASS_GROUPS.find((group) => group.id === item.groupId)?.label ||
-                            item.groupId ||
-                            "-"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          職務:{" "}
-                          {GROUP_ROLE_OPTIONS.find((role) => role.id === item.roleInGroup)?.label ||
-                            item.roleInGroup ||
-                            "-"}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditMembership_(item)}
-                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                        >
-                          編輯
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMembership_(item.id)}
-                          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
-                        >
-                          刪除
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-500">尚未建立班務角色。</p>
-                )}
+                      {showOnlyUnassigned ? "只看未分派" : "全部名單"}
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.rep}`}
+                    >
+                      班代
+                    </span>
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.repDeputy}`}
+                    >
+                      副班代
+                    </span>
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.lead}`}
+                    >
+                      組長
+                    </span>
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.deputy}`}
+                    >
+                      副組長
+                    </span>
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.member}`}
+                    >
+                      成員
+                    </span>
+                    <span
+                      className={`rounded-full border px-3 py-1 ${ROLE_BADGE_STYLES.unassigned}`}
+                    >
+                      未分派
+                    </span>
+                  </div>
+                  <div className="mt-4 max-h-[520px] space-y-2 overflow-y-auto pr-1">
+                    {visibleStudentsForRoles.length ? (
+                      visibleStudentsForRoles.map((student) => {
+                        const personId = String(student.id || "").trim();
+                        const memberships = draftMembershipsByPerson[personId] || [];
+                        const displayName = getDisplayName_(student) || "未命名";
+                        const isSelected =
+                          selectedMember &&
+                          normalizePersonId_(selectedMember.personId) === normalizePersonId_(student.id);
+                        const badgeItems = memberships.length
+                          ? memberships.map((item) => ({
+                              label: getGroupLabel_(item.groupId),
+                              styleKey: getMembershipRoleStyleKey_(item),
+                              key: buildMembershipKey_(item),
+                            }))
+                          : [
+                              {
+                                label: "未分派",
+                                styleKey: "unassigned",
+                                key: `${personId}-unassigned`,
+                              },
+                            ];
+                        return (
+                          <button
+                            key={student.id || student.googleEmail || student.email || displayName}
+                            type="button"
+                            draggable
+                            onDragStart={(event) => handleDragStartStudent_(student, event)}
+                            onClick={() => handleSelectMember_(student)}
+                            className={`group flex w-full cursor-pointer flex-wrap items-center gap-2 rounded-2xl border px-3 py-2 text-left text-xs font-semibold shadow-sm ${
+                              isSelected
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-slate-50 text-slate-700"
+                            }`}
+                          >
+                            <span
+                              className="whitespace-nowrap"
+                              title={student.id ? `學號 ${student.id}` : ""}
+                            >
+                              {displayName}
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {badgeItems.map((badge) => (
+                                <span
+                                  key={badge.key}
+                                  className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                    isSelected ? "border-white/30 bg-white/10 text-white" : ROLE_BADGE_STYLES[badge.styleKey]
+                                  }`}
+                                >
+                                  {badge.label}
+                                </span>
+                              ))}
+                            </div>
+                          </button>
+                        );
+                      })
+                    ) : (
+                      <p className="text-xs text-slate-400">尚未載入同學名單。</p>
+                    )}
+                  </div>
+                </div>
               </div>
-              <form onSubmit={handleSaveMembership_} className="space-y-4">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">選擇同學</label>
-                  <input
-                    list="class-role-students"
-                    onChange={(event) => handleSelectMember_(event.target.value)}
-                    placeholder="輸入姓名/學號/Email"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  />
-                  <datalist id="class-role-students">
-                    {students.map((item) => (
-                      <option
-                        key={item.id || item.email}
-                        value={item.name || item.id || item.email || ""}
+              <div className="space-y-5">
+                <div className="rounded-2xl border border-slate-200/70 bg-white p-4 text-sm text-slate-600">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-700">班務分組維護</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        點選左側同學後，點右側區塊即可加入；拖拉也可使用。右側名單雙擊可移除，最後按「儲存變更」。
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {selectedMember ? (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                          已選：{selectedMember.personName || selectedMember.personId}
+                        </span>
+                      ) : null}
+                      {selectedMember ? (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectMember_(null)}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          取消選取
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={handleResetMembershipDrafts_}
+                        disabled={!membershipDirty || saving}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {item.id || ""} {item.email || ""}
-                      </option>
-                    ))}
-                  </datalist>
+                        還原
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveMembershipDrafts_}
+                        disabled={!membershipDirty || saving}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {saving ? "儲存中..." : "儲存變更"}
+                      </button>
+                    </div>
+                  </div>
+                  {membershipStatus ? (
+                    <p className="mt-2 text-xs font-semibold text-emerald-600">
+                      {membershipStatus}
+                    </p>
+                  ) : null}
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">學號 / ID</label>
-                  <input
-                    value={membershipForm.personId}
-                    onChange={(event) => handleMembershipFormChange_("personId", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  />
+
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+                  <p className="text-sm font-semibold text-slate-700">班代 / 副班代</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {[
+                      { title: "班代", roleInGroup: "lead", styleKey: "rep" },
+                      { title: "副班代", roleInGroup: "deputy", styleKey: "repDeputy" },
+                    ].map((role) => {
+                      const items = draftMemberships
+                        .filter(
+                          (item) =>
+                            String(item.groupId || "").trim() === "A" &&
+                            String(item.roleInGroup || "").trim() === role.roleInGroup
+                        )
+                        .slice()
+                        .sort((a, b) =>
+                          normalizeName_(a.personName || "").localeCompare(
+                            normalizeName_(b.personName || ""),
+                            "zh-Hant"
+                          )
+                        );
+                      return (
+                        <div
+                          key={role.title}
+                          onClick={() => handleAssignSelectedMember_("A", role.roleInGroup)}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => handleDropToRole_("A", role.roleInGroup, event)}
+                          className="min-h-[88px] cursor-pointer rounded-2xl border border-dashed border-slate-300 bg-white/80 p-3"
+                        >
+                          <p className="text-xs font-semibold text-slate-500">{role.title}</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {items.length ? (
+                              items.map((item) => (
+                                <div
+                                  key={buildMembershipKey_(item)}
+                                  draggable
+                                  onDragStart={(event) => handleDragStartMembership_(item, event)}
+                                  onDoubleClick={() => removeMembershipDraft_(item)}
+                                  className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${ROLE_BADGE_STYLES[role.styleKey]}`}
+                                  title="雙擊移除"
+                                >
+                                  <span title={item.personId ? `學號 ${item.personId}` : ""}>
+                                    {item.personName || item.personId || "未命名"}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <p className="text-xs text-slate-400">拖拉加入</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">姓名</label>
-                  <input
-                    value={membershipForm.personName}
-                    onChange={(event) => handleMembershipFormChange_("personName", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  />
+
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                    <span>組別設定</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => expandAllGroups_(groupCards)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        全部展開
+                      </button>
+                      <button
+                        type="button"
+                        onClick={collapseAllGroups_}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        全部收合
+                      </button>
+                    </div>
+                  </div>
+                  {orderedGroupCards.map((group) => {
+                    const leadItems = draftMemberships.filter(
+                      (item) =>
+                        String(item.groupId || "").trim() === group.id &&
+                        String(item.roleInGroup || "").trim() === "lead"
+                    );
+                    const deputyItems = draftMemberships.filter(
+                      (item) =>
+                        String(item.groupId || "").trim() === group.id &&
+                        String(item.roleInGroup || "").trim() === "deputy"
+                    );
+                    const memberItems = draftMemberships.filter(
+                      (item) =>
+                        String(item.groupId || "").trim() === group.id &&
+                        String(item.roleInGroup || "").trim() === "member"
+                    );
+                    const isExpanded = expandedGroups.has(group.id);
+                    const sortMembers = (items) =>
+                      items
+                        .slice()
+                        .sort((a, b) =>
+                          normalizeName_(a.personName || "").localeCompare(
+                            normalizeName_(b.personName || ""),
+                            "zh-Hant"
+                          )
+                        );
+                    return (
+                      <div
+                        key={group.id}
+                        className="rounded-2xl border border-slate-200/70 bg-white p-4"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleExpandedGroup_(group.id)}
+                            className="flex flex-1 flex-wrap items-center gap-2 text-left"
+                          >
+                            <p className="text-sm font-semibold text-slate-700">
+                              {group.label}
+                            </p>
+                            <span className="text-xs text-slate-400">
+                              組長 {leadItems.length} · 副組長 {deputyItems.length} · 成員{" "}
+                              {memberItems.length} {isExpanded ? "· 收合" : "· 展開"}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPinnedGroupId((prev) => (prev === group.id ? "" : group.id))
+                            }
+                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                              pinnedGroupId === group.id
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-slate-200 bg-white text-slate-600"
+                            }`}
+                          >
+                            {pinnedGroupId === group.id ? "已置頂" : "置頂"}
+                          </button>
+                        </div>
+                        {isExpanded ? (
+                          <div className="mt-3 space-y-3">
+                            <div className="grid gap-3 md:grid-cols-2">
+                              {[
+                                { title: "組長", roleInGroup: "lead", styleKey: "lead", items: leadItems },
+                                {
+                                  title: "副組長",
+                                  roleInGroup: "deputy",
+                                  styleKey: "deputy",
+                                  items: deputyItems,
+                                },
+                              ].map((role) => (
+                                <div
+                                  key={`${group.id}-${role.roleInGroup}`}
+                                  onClick={() => handleAssignSelectedMember_(group.id, role.roleInGroup)}
+                                  onDragOver={(event) => event.preventDefault()}
+                                  onDrop={(event) =>
+                                    handleDropToRole_(group.id, role.roleInGroup, event)
+                                  }
+                                  className="min-h-[96px] cursor-pointer rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-3"
+                                >
+                                  <p className="text-xs font-semibold text-slate-500">{role.title}</p>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    {role.items.length ? (
+                                      sortMembers(role.items).map((item) => (
+                                        <div
+                                          key={buildMembershipKey_(item)}
+                                          draggable
+                                          onDragStart={(event) => handleDragStartMembership_(item, event)}
+                                          onDoubleClick={() => removeMembershipDraft_(item)}
+                                          className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${ROLE_BADGE_STYLES[role.styleKey]}`}
+                                          title="雙擊移除"
+                                        >
+                                          <span title={item.personId ? `學號 ${item.personId}` : ""}>
+                                            {item.personName || item.personId || "未命名"}
+                                          </span>
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <p className="text-xs text-slate-400">拖拉加入</p>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <div
+                              onClick={() => handleAssignSelectedMember_(group.id, "member")}
+                              onDragOver={(event) => event.preventDefault()}
+                              onDrop={(event) => handleDropToRole_(group.id, "member", event)}
+                              className="min-h-[96px] cursor-pointer rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-3"
+                            >
+                              <p className="text-xs font-semibold text-slate-500">成員</p>
+                              <div className="mt-2 columns-2 gap-2 md:columns-4 lg:columns-5">
+                                {memberItems.length ? (
+                                  sortMembers(memberItems).map((item) => (
+                                    <div
+                                      key={buildMembershipKey_(item)}
+                                      draggable
+                                      onDragStart={(event) => handleDragStartMembership_(item, event)}
+                                      onDoubleClick={() => removeMembershipDraft_(item)}
+                                      className={`mb-2 break-inside-avoid cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold shadow-sm ${ROLE_BADGE_STYLES.member}`}
+                                      title="雙擊移除"
+                                    >
+                                      <span title={item.personId ? `學號 ${item.personId}` : ""}>
+                                        {item.personName || item.personId || "未命名"}
+                                      </span>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-xs text-slate-400">拖拉加入</p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">組別</label>
-                  <select
-                    value={membershipForm.groupId}
-                    onChange={(event) => handleMembershipFormChange_("groupId", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  >
-                    <option value="">請選擇</option>
-                    {CLASS_GROUPS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">組內職務</label>
-                  <select
-                    value={membershipForm.roleInGroup}
-                    onChange={(event) =>
-                      handleMembershipFormChange_("roleInGroup", event.target.value)
-                    }
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  >
-                    {GROUP_ROLE_OPTIONS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">備註</label>
-                  <textarea
-                    value={membershipForm.notes}
-                    onChange={(event) => handleMembershipFormChange_("notes", event.target.value)}
-                    rows="3"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {saving ? "儲存中..." : "儲存分組"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetMembershipForm_}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                  >
-                    清空
-                  </button>
-                </div>
-              </form>
+              </div>
             </div>
           ) : null}
 
