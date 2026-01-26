@@ -3135,6 +3135,8 @@ function FinanceAdminPage() {
   const [fundSummary, setFundSummary] = useState(null);
   const [fundEventForm, setFundEventForm] = useState(buildFundEventDraft_());
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [showFundEventModal, setShowFundEventModal] = useState(false);
+  const [showFundPaymentModal, setShowFundPaymentModal] = useState(false);
   const [financeRoleForm, setFinanceRoleForm] = useState({
     id: "",
     personId: "",
@@ -3301,6 +3303,11 @@ function FinanceAdminPage() {
       loadGroupMemberships();
       loadFinanceRoles();
     }
+    if (adminTab === "roles") {
+      loadGroupMemberships();
+      loadFinanceRoles();
+      loadStudents();
+    }
   }, [adminTab]);
 
   useEffect(() => {
@@ -3342,6 +3349,41 @@ function FinanceAdminPage() {
       email: String(item.email || "").trim().toLowerCase(),
     };
   });
+
+  const financeGroupMembers = groupMemberships.filter(
+    (item) => String(item.groupId || "").trim() === "D"
+  );
+  const financeMemberIdSet = new Set(
+    financeGroupMembers.map((item) => String(item.personId || "").trim()).filter(Boolean)
+  );
+  const financeMemberEmailSet = new Set(
+    financeGroupMembers
+      .map((item) => String(item.personEmail || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const financeGroupStudents = students.filter(
+    (item) =>
+      financeMemberIdSet.has(String(item.id || "").trim()) ||
+      financeMemberEmailSet.has(String(item.email || "").trim().toLowerCase())
+  );
+  const financeGroupFallback = financeGroupMembers.filter((member) => {
+    const id = String(member.personId || "").trim();
+    const email = String(member.personEmail || "").trim().toLowerCase();
+    return !financeMemberIdSet.has(id) && !financeMemberEmailSet.has(email);
+  });
+  const financeGroupOptions = financeGroupStudents
+    .map((item) => ({
+      id: item.id || "",
+      name: item.name || "",
+      email: item.email || "",
+    }))
+    .concat(
+      financeGroupFallback.map((item) => ({
+        id: item.personId || "",
+        name: item.personName || "",
+        email: item.personEmail || "",
+      }))
+    );
 
   const getPayerGroupType_ = (payer) => {
     if (!payer || !payer.email) {
@@ -3500,6 +3542,22 @@ function FinanceAdminPage() {
     setFundPaymentForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const openFundEventModal_ = () => {
+    setShowFundEventModal(true);
+  };
+
+  const closeFundEventModal_ = () => {
+    setShowFundEventModal(false);
+  };
+
+  const openFundPaymentModal_ = () => {
+    setShowFundPaymentModal(true);
+  };
+
+  const closeFundPaymentModal_ = () => {
+    setShowFundPaymentModal(false);
+  };
+
   const handleFinanceRoleChange = (key, value) => {
     setFinanceRoleForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -3521,9 +3579,9 @@ function FinanceAdminPage() {
       return;
     }
     const match =
-      students.find((item) => String(item.id || "").trim().toLowerCase() === needle) ||
-      students.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
-      students.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
+      financeGroupOptions.find((item) => String(item.id || "").trim().toLowerCase() === needle) ||
+      financeGroupOptions.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
+      financeGroupOptions.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
       null;
     if (!match) {
       return;
@@ -3626,6 +3684,16 @@ function FinanceAdminPage() {
     setFundPaymentForm(buildFundPaymentDraft_(eventId));
   };
 
+  const startNewFundEvent_ = () => {
+    resetFundEventForm();
+    openFundEventModal_();
+  };
+
+  const startNewFundPayment_ = () => {
+    resetFundPaymentForm(fundPaymentForm.eventId);
+    openFundPaymentModal_();
+  };
+
   const handleSaveFundEvent = async (event) => {
     event.preventDefault();
     setError("");
@@ -3646,6 +3714,7 @@ function FinanceAdminPage() {
       resetFundEventForm();
       await loadFundEvents();
       setStatusMessage("已儲存班費事件");
+      setShowFundEventModal(false);
     } catch (err) {
       setError(err.message || "儲存失敗");
     } finally {
@@ -3669,6 +3738,7 @@ function FinanceAdminPage() {
       status: item.status || "collecting",
       notes: item.notes || "",
     });
+    openFundEventModal_();
   };
 
   const handleDeleteFundEvent = async (eventId) => {
@@ -3726,6 +3796,7 @@ function FinanceAdminPage() {
       await loadFundPayments(fundPaymentForm.eventId);
       await loadFundSummary();
       setStatusMessage("已儲存收款紀錄");
+      setShowFundPaymentModal(false);
     } catch (err) {
       setError(err.message || "儲存失敗");
     } finally {
@@ -3751,6 +3822,7 @@ function FinanceAdminPage() {
       confirmedAt: item.confirmedAt || "",
       notes: item.notes || "",
     });
+    openFundPaymentModal_();
   };
 
   const handleDeleteFundPayment = async (paymentId) => {
@@ -3826,6 +3898,7 @@ function FinanceAdminPage() {
               {[
                 { id: "requests", label: "請款/請購" },
                 { id: "funds", label: "班費管理" },
+                { id: "roles", label: "財務角色" },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -4075,7 +4148,7 @@ function FinanceAdminPage() {
                   <h2 className="text-lg font-semibold text-slate-900">班費事件</h2>
                   <button
                     type="button"
-                    onClick={resetFundEventForm}
+                    onClick={startNewFundEvent_}
                     className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                   >
                     新增
@@ -4134,113 +4207,36 @@ function FinanceAdminPage() {
                   )}
                 </div>
               </div>
-
-              <form
-                onSubmit={handleSaveFundEvent}
-                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
-              >
-                <h3 className="text-lg font-semibold text-slate-900">班費事件設定</h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">事件名稱</label>
-                    <input
-                      value={fundEventForm.title}
-                      onChange={(event) => handleFundEventChange("title", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">截止日期</label>
-                    <input
-                      type="date"
-                      value={fundEventForm.dueDate}
-                      onChange={(event) => handleFundEventChange("dueDate", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">狀態</label>
-                    <select
-                      value={fundEventForm.status}
-                      onChange={(event) => handleFundEventChange("status", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    >
-                      {FUND_EVENT_STATUS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">一般同學金額</label>
-                    <input
-                      value={fundEventForm.amountGeneral}
-                      onChange={(event) => handleFundEventChange("amountGeneral", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">班董金額</label>
-                    <input
-                      value={fundEventForm.amountSponsor}
-                      onChange={(event) => handleFundEventChange("amountSponsor", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">預計一般人數</label>
-                    <input
-                      value={fundEventForm.expectedGeneralCount}
-                      onChange={(event) =>
-                        handleFundEventChange("expectedGeneralCount", event.target.value)
-                      }
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">預計班董人數</label>
-                    <input
-                      value={fundEventForm.expectedSponsorCount}
-                      onChange={(event) =>
-                        handleFundEventChange("expectedSponsorCount", event.target.value)
-                      }
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">說明/備註</label>
-                    <textarea
-                      value={fundEventForm.description}
-                      onChange={(event) => handleFundEventChange("description", event.target.value)}
-                      rows="3"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? "儲存中..." : "儲存事件"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={resetFundEventForm}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                  >
-                    清空
-                  </button>
-                </div>
-              </form>
             </section>
 
             <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">收款紀錄</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      value={fundPaymentForm.eventId}
+                      onChange={(event) => {
+                        handleFundPaymentChange("eventId", event.target.value);
+                        resetFundPaymentForm(event.target.value);
+                      }}
+                      className="h-9 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                    >
+                      <option value="">選擇班費事件</option>
+                      {fundEvents.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.title}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={startNewFundPayment_}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      新增收款
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-4 space-y-3">
                   {fundPayments.length ? (
@@ -4288,200 +4284,6 @@ function FinanceAdminPage() {
                   )}
                 </div>
               </div>
-
-              <form
-                onSubmit={handleSaveFundPayment}
-                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
-              >
-                <h3 className="text-lg font-semibold text-slate-900">新增收款</h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">班費事件</label>
-                    <select
-                      value={fundPaymentForm.eventId}
-                      onChange={(event) => {
-                        handleFundPaymentChange("eventId", event.target.value);
-                        resetFundPaymentForm(event.target.value);
-                      }}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    >
-                      <option value="">請選擇</option>
-                      {fundEvents.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.title}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">繳費人</label>
-                    <input
-                      value={fundPaymentForm.payerName}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        handleFundPaymentChange("payerName", value);
-                        const match = matchDirectoryByName_(value);
-                        if (match && match.email) {
-                          handleFundPaymentChange("payerEmail", match.email);
-                        }
-                      }}
-                      list="fund-payer-options"
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                    <datalist id="fund-payer-options">
-                      {students.map((item) => {
-                        const name = item.name;
-                        const email = item.email;
-                        const options = [];
-                        if (name) {
-                          options.push(
-                            <option key={`${item.id || email}-name`} value={name}>
-                              {email || ""}
-                            </option>
-                          );
-                        }
-                        if (email) {
-                          options.push(
-                            <option key={`${item.id || email}-email`} value={email}>
-                              {name || ""}
-                            </option>
-                          );
-                        }
-                        return options;
-                      })}
-                    </datalist>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">Email</label>
-                    <input
-                      value={fundPaymentForm.payerEmail}
-                      onChange={(event) => handleFundPaymentChange("payerEmail", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">繳費身份</label>
-                    <select
-                      value={fundPaymentForm.payerType}
-                      onChange={(event) => {
-                        handleFundPaymentChange("payerType", event.target.value);
-                        const eventItem = fundEvents.find(
-                          (item) => item.id === fundPaymentForm.eventId
-                        );
-                        if (eventItem) {
-                          const amount =
-                            event.target.value === "sponsor"
-                              ? eventItem.amountSponsor
-                              : eventItem.amountGeneral;
-                          handleFundPaymentChange("amount", amount || "");
-                        }
-                      }}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    >
-                      {FUND_PAYER_TYPES.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">金額</label>
-                    <input
-                      value={fundPaymentForm.amount}
-                      onChange={(event) => handleFundPaymentChange("amount", event.target.value)}
-                      list="fund-amount-options"
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                    <datalist id="fund-amount-options">
-                      <option value="50000">50000</option>
-                      <option value="200000">200000</option>
-                    </datalist>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">付款方式</label>
-                    <select
-                      value={fundPaymentForm.method}
-                      onChange={(event) => handleFundPaymentChange("method", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    >
-                      {FUND_PAYMENT_METHODS.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {fundPaymentForm.method === "transfer" ? (
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼</label>
-                      <input
-                        value={fundPaymentForm.transferLast5}
-                        onChange={(event) =>
-                          handleFundPaymentChange("transferLast5", event.target.value)
-                        }
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                      />
-                    </div>
-                  ) : null}
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">收款日期</label>
-                    <input
-                      type="date"
-                      value={fundPaymentForm.receivedAt}
-                      onChange={(event) => handleFundPaymentChange("receivedAt", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">入帳日期</label>
-                    <input
-                      type="date"
-                      value={fundPaymentForm.accountedAt}
-                      onChange={(event) =>
-                        handleFundPaymentChange("accountedAt", event.target.value)
-                      }
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">收齊日期</label>
-                    <input
-                      type="date"
-                      value={fundPaymentForm.confirmedAt}
-                      onChange={(event) =>
-                        handleFundPaymentChange("confirmedAt", event.target.value)
-                      }
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">備註</label>
-                    <textarea
-                      value={fundPaymentForm.notes}
-                      onChange={(event) => handleFundPaymentChange("notes", event.target.value)}
-                      rows="2"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {loading ? "儲存中..." : "儲存收款"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => resetFundPaymentForm(fundPaymentForm.eventId)}
-                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                  >
-                    清空
-                  </button>
-                </div>
-              </form>
             </section>
 
             <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
@@ -4511,6 +4313,13 @@ function FinanceAdminPage() {
                       {item.label}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setFundPayerView((prev) => (prev === "collapsed" ? "all" : "collapsed"))}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    {fundPayerView === "collapsed" ? "展開" : "收合"}
+                  </button>
                   <input
                     value={fundPayerQuery}
                     onChange={(event) => setFundPayerQuery(event.target.value)}
@@ -4520,7 +4329,9 @@ function FinanceAdminPage() {
                 </div>
               </div>
 
-              {!fundPaymentForm.eventId ? (
+              {fundPayerView === "collapsed" ? (
+                <p className="mt-4 text-sm text-slate-500">已收合，點「展開」查看名單。</p>
+              ) : !fundPaymentForm.eventId ? (
                 <p className="mt-4 text-sm text-slate-500">請先選擇班費事件。</p>
               ) : !students.length ? (
                 <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
@@ -4584,145 +4395,467 @@ function FinanceAdminPage() {
               )}
             </section>
 
-            <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-slate-900">財務角色</h2>
-                  <button
-                    type="button"
-                    onClick={resetFinanceRoleForm}
-                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                  >
-                    新增
-                  </button>
-                </div>
-                <div className="mt-4 space-y-3">
-                  {financeRoles.length ? (
-                    financeRoles.map((item) => (
-                      <div
-                        key={item.id || `${item.personId}-${item.role}`}
-                        className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-slate-900">
-                              {item.personName || item.personEmail || item.personId}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {item.personEmail || "-"} ·{" "}
-                              {FINANCE_ROLE_OPTIONS.find((role) => role.id === item.role)?.label ||
-                                item.role}
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleEditFinanceRole(item)}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                            >
-                              編輯
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFinanceRole(item.id)}
-                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
-                            >
-                              刪除
-                            </button>
-                          </div>
+          </section>
+        ) : null}
+
+        {adminTab === "roles" ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">財務角色</h2>
+                <button
+                  type="button"
+                  onClick={resetFinanceRoleForm}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  新增
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {financeRoles.length ? (
+                  financeRoles.map((item) => (
+                    <div
+                      key={item.id || `${item.personId}-${item.role}`}
+                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">
+                            {item.personName || item.personEmail || item.personId}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {item.personEmail || "-"} ·{" "}
+                            {FINANCE_ROLE_OPTIONS.find((role) => role.id === item.role)?.label ||
+                              item.role}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditFinanceRole(item)}
+                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                          >
+                            編輯
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFinanceRole(item.id)}
+                            className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                          >
+                            刪除
+                          </button>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500">尚未設定財務角色。</p>
-                  )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">尚未設定財務角色。</p>
+                )}
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSaveFinanceRole}
+              className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+            >
+              <h3 className="text-lg font-semibold text-slate-900">設定財務角色</h3>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">選擇同學（財會組）</label>
+                  <input
+                    list="finance-role-students"
+                    onChange={(event) => handleSelectFinanceRoleMember_(event.target.value)}
+                    placeholder="輸入姓名/學號/Email"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <datalist id="finance-role-students">
+                    {financeGroupOptions.map((item) => (
+                      <option
+                        key={item.id || item.email}
+                        value={item.name || item.id || item.email || ""}
+                      >
+                        {item.id || ""} {item.email || ""}
+                      </option>
+                    ))}
+                  </datalist>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">學號 / ID</label>
+                  <input
+                    value={financeRoleForm.personId}
+                    onChange={(event) => handleFinanceRoleChange("personId", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">姓名</label>
+                  <input
+                    value={financeRoleForm.personName}
+                    onChange={(event) => handleFinanceRoleChange("personName", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">角色</label>
+                  <select
+                    value={financeRoleForm.role}
+                    onChange={(event) => handleFinanceRoleChange("role", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FINANCE_ROLE_OPTIONS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={financeRoleForm.notes}
+                    onChange={(event) => handleFinanceRoleChange("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
                 </div>
               </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "儲存中..." : "儲存角色"}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetFinanceRoleForm}
+                  className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  清空
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
 
-              <form
-                onSubmit={handleSaveFinanceRole}
-                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
-              >
-                <h3 className="text-lg font-semibold text-slate-900">設定財務角色</h3>
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">選擇同學</label>
-                    <input
-                      list="finance-role-students"
-                      onChange={(event) => handleSelectFinanceRoleMember_(event.target.value)}
-                      placeholder="輸入姓名/學號/Email"
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                    <datalist id="finance-role-students">
-                      {students.map((item) => (
-                        <option
-                          key={item.id || item.email}
-                          value={item.name || item.id || item.email || ""}
-                        >
-                          {item.id || ""} {item.email || ""}
-                        </option>
-                      ))}
-                    </datalist>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">學號 / ID</label>
-                    <input
-                      value={financeRoleForm.personId}
-                      onChange={(event) => handleFinanceRoleChange("personId", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">姓名</label>
-                    <input
-                      value={financeRoleForm.personName}
-                      onChange={(event) => handleFinanceRoleChange("personName", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">角色</label>
-                    <select
-                      value={financeRoleForm.role}
-                      onChange={(event) => handleFinanceRoleChange("role", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    >
-                      {FINANCE_ROLE_OPTIONS.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">備註</label>
-                    <textarea
-                      value={financeRoleForm.notes}
-                      onChange={(event) => handleFinanceRoleChange("notes", event.target.value)}
-                      rows="3"
-                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
-                    />
-                  </div>
+        {showFundEventModal ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 px-6">
+            <div className="w-full max-w-2xl rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {fundEventForm.id ? "編輯班費事件" : "新增班費事件"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeFundEventModal_}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  關閉
+                </button>
+              </div>
+              <form onSubmit={handleSaveFundEvent} className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">事件名稱</label>
+                  <input
+                    value={fundEventForm.title}
+                    onChange={(event) => handleFundEventChange("title", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
                 </div>
-                <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">截止日期</label>
+                  <input
+                    type="date"
+                    value={fundEventForm.dueDate}
+                    onChange={(event) => handleFundEventChange("dueDate", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">狀態</label>
+                  <select
+                    value={fundEventForm.status}
+                    onChange={(event) => handleFundEventChange("status", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FUND_EVENT_STATUS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">一般同學金額</label>
+                  <input
+                    value={fundEventForm.amountGeneral}
+                    onChange={(event) => handleFundEventChange("amountGeneral", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">班董金額</label>
+                  <input
+                    value={fundEventForm.amountSponsor}
+                    onChange={(event) => handleFundEventChange("amountSponsor", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">預計一般人數</label>
+                  <input
+                    value={fundEventForm.expectedGeneralCount}
+                    onChange={(event) =>
+                      handleFundEventChange("expectedGeneralCount", event.target.value)
+                    }
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">預計班董人數</label>
+                  <input
+                    value={fundEventForm.expectedSponsorCount}
+                    onChange={(event) =>
+                      handleFundEventChange("expectedSponsorCount", event.target.value)
+                    }
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">說明/備註</label>
+                  <textarea
+                    value={fundEventForm.description}
+                    onChange={(event) => handleFundEventChange("description", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
                   <button
                     type="submit"
                     disabled={loading}
                     className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {loading ? "儲存中..." : "儲存角色"}
+                    {loading ? "儲存中..." : "儲存事件"}
                   </button>
                   <button
                     type="button"
-                    onClick={resetFinanceRoleForm}
+                    onClick={resetFundEventForm}
                     className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
                   >
                     清空
                   </button>
                 </div>
               </form>
-            </section>
-          </section>
+            </div>
+          </div>
+        ) : null}
+
+        {showFundPaymentModal ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 px-6">
+            <div className="w-full max-w-2xl rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {fundPaymentForm.id ? "編輯收款" : "新增收款"}
+                </h3>
+                <button
+                  type="button"
+                  onClick={closeFundPaymentModal_}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  關閉
+                </button>
+              </div>
+              <form onSubmit={handleSaveFundPayment} className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">班費事件</label>
+                  <select
+                    value={fundPaymentForm.eventId}
+                    onChange={(event) => {
+                      handleFundPaymentChange("eventId", event.target.value);
+                      resetFundPaymentForm(event.target.value);
+                    }}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    <option value="">請選擇</option>
+                    {fundEvents.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">繳費人</label>
+                  <input
+                    value={fundPaymentForm.payerName}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      handleFundPaymentChange("payerName", value);
+                      const match = matchDirectoryByName_(value);
+                      if (match && match.email) {
+                        handleFundPaymentChange("payerEmail", match.email);
+                      }
+                    }}
+                    list="fund-payer-options"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <datalist id="fund-payer-options">
+                    {students.map((item) => {
+                      const name = item.name;
+                      const email = item.email;
+                      const options = [];
+                      if (name) {
+                        options.push(
+                          <option key={`${item.id || email}-name`} value={name}>
+                            {email || ""}
+                          </option>
+                        );
+                      }
+                      if (email) {
+                        options.push(
+                          <option key={`${item.id || email}-email`} value={email}>
+                            {name || ""}
+                          </option>
+                        );
+                      }
+                      return options;
+                    })}
+                  </datalist>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">Email</label>
+                  <input
+                    value={fundPaymentForm.payerEmail}
+                    onChange={(event) => handleFundPaymentChange("payerEmail", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">繳費身份</label>
+                  <select
+                    value={fundPaymentForm.payerType}
+                    onChange={(event) => {
+                      handleFundPaymentChange("payerType", event.target.value);
+                      const eventItem = fundEvents.find(
+                        (item) => item.id === fundPaymentForm.eventId
+                      );
+                      if (eventItem) {
+                        const amount =
+                          event.target.value === "sponsor"
+                            ? eventItem.amountSponsor
+                            : eventItem.amountGeneral;
+                        handleFundPaymentChange("amount", amount || "");
+                      }
+                    }}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FUND_PAYER_TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">金額</label>
+                  <input
+                    value={fundPaymentForm.amount}
+                    onChange={(event) => handleFundPaymentChange("amount", event.target.value)}
+                    list="fund-amount-options"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <datalist id="fund-amount-options">
+                    <option value="50000">50000</option>
+                    <option value="200000">200000</option>
+                  </datalist>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">付款方式</label>
+                  <select
+                    value={fundPaymentForm.method}
+                    onChange={(event) => handleFundPaymentChange("method", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FUND_PAYMENT_METHODS.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {fundPaymentForm.method === "transfer" ? (
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼</label>
+                    <input
+                      value={fundPaymentForm.transferLast5}
+                      onChange={(event) =>
+                        handleFundPaymentChange("transferLast5", event.target.value)
+                      }
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                ) : null}
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">收款日期</label>
+                  <input
+                    type="date"
+                    value={fundPaymentForm.receivedAt}
+                    onChange={(event) => handleFundPaymentChange("receivedAt", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">入帳日期</label>
+                  <input
+                    type="date"
+                    value={fundPaymentForm.accountedAt}
+                    onChange={(event) =>
+                      handleFundPaymentChange("accountedAt", event.target.value)
+                    }
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">收齊日期</label>
+                  <input
+                    type="date"
+                    value={fundPaymentForm.confirmedAt}
+                    onChange={(event) =>
+                      handleFundPaymentChange("confirmedAt", event.target.value)
+                    }
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={fundPaymentForm.notes}
+                    onChange={(event) => handleFundPaymentChange("notes", event.target.value)}
+                    rows="2"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loading ? "儲存中..." : "儲存收款"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => resetFundPaymentForm(fundPaymentForm.eventId)}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         ) : null}
       </main>
     </div>
