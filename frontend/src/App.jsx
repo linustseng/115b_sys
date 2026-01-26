@@ -184,9 +184,13 @@ const CLASS_GROUPS = [
   { id: "J", label: "班董" },
 ];
 
-const CLASS_ROLE_OPTIONS = [
-  { id: "rep", label: "班代" },
-  { id: "vice_rep", label: "副班代" },
+const GROUP_ROLE_OPTIONS = [
+  { id: "lead", label: "組長" },
+  { id: "deputy", label: "副組長" },
+  { id: "member", label: "成員" },
+];
+
+const FINANCE_ROLE_OPTIONS = [
   { id: "accounting", label: "會計" },
   { id: "cashier", label: "出納" },
   { id: "auditor", label: "監察人" },
@@ -2449,7 +2453,7 @@ function FinancePage() {
   const [form, setForm] = useState(buildFinanceDraft_());
   const [editingId, setEditingId] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
-  const [classRole, setClassRole] = useState(null);
+  const [memberGroups, setMemberGroups] = useState([]);
 
   const applicantName =
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -2476,44 +2480,43 @@ function FinancePage() {
     }
   };
 
-  const loadClassRole = async (email) => {
+  const loadMemberGroups = async (email) => {
     if (!email) {
-      setClassRole(null);
+      setMemberGroups([]);
       return;
     }
     try {
-      const { result } = await apiRequest({ action: "listClassRoles" });
+      const { result } = await apiRequest({ action: "listGroupMemberships" });
       if (!result.ok) {
         return;
       }
-      const roles = result.data && result.data.roles ? result.data.roles : [];
+      const memberships = result.data && result.data.memberships ? result.data.memberships : [];
       const normalized = String(email || "").trim().toLowerCase();
-      const match =
-        roles.find((item) => String(item.email || "").trim().toLowerCase() === normalized) || null;
-      setClassRole(match);
+      const groups = memberships
+        .filter((item) => String(item.personEmail || "").trim().toLowerCase() === normalized)
+        .map((item) => String(item.groupId || "").trim())
+        .filter(Boolean);
+      setMemberGroups(groups);
     } catch (err) {
-      setClassRole(null);
+      setMemberGroups([]);
     }
   };
 
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
       loadRequests(googleLinkedStudent.email);
-      loadClassRole(googleLinkedStudent.email);
+      loadMemberGroups(googleLinkedStudent.email);
     }
   }, [googleLinkedStudent]);
 
   useEffect(() => {
-    if (!classRole) {
+    if (!memberGroups.length) {
       return;
     }
     if (!form.applicantDepartment) {
-      const groups = parseCommaList_(classRole.groups);
-      if (groups.length) {
-        setForm((prev) => ({ ...prev, applicantDepartment: groups[0] }));
-      }
+      setForm((prev) => ({ ...prev, applicantDepartment: memberGroups[0] }));
     }
-  }, [classRole, form.applicantDepartment]);
+  }, [memberGroups, form.applicantDepartment]);
 
   useEffect(() => {
     if (form.type === "pettycash" && form.paymentMethod !== "pettycash") {
@@ -3102,7 +3105,8 @@ function FinanceAdminPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const [classRoles, setClassRoles] = useState([]);
+  const [groupMemberships, setGroupMemberships] = useState([]);
+  const [financeRoles, setFinanceRoles] = useState([]);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminProfile, setAdminProfile] = useState(null);
   const [adminTab, setAdminTab] = useState("requests");
@@ -3111,6 +3115,14 @@ function FinanceAdminPage() {
   const [fundSummary, setFundSummary] = useState(null);
   const [fundEventForm, setFundEventForm] = useState(buildFundEventDraft_());
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [financeRoleForm, setFinanceRoleForm] = useState({
+    id: "",
+    personId: "",
+    personName: "",
+    personEmail: "",
+    role: "accounting",
+    notes: "",
+  });
   const [students, setStudents] = useState([]);
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
@@ -3179,14 +3191,27 @@ function FinanceAdminPage() {
     }
   };
 
-  const loadClassRoles = async () => {
+  const loadGroupMemberships = async () => {
     try {
-      const { result } = await apiRequest({ action: "listClassRoles" });
+      const { result } = await apiRequest({ action: "listGroupMemberships" });
       if (result.ok) {
-        setClassRoles(result.data && result.data.roles ? result.data.roles : []);
+        setGroupMemberships(
+          result.data && result.data.memberships ? result.data.memberships : []
+        );
       }
     } catch (err) {
-      setClassRoles([]);
+      setGroupMemberships([]);
+    }
+  };
+
+  const loadFinanceRoles = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listFinanceRoles" });
+      if (result.ok) {
+        setFinanceRoles(result.data && result.data.roles ? result.data.roles : []);
+      }
+    } catch (err) {
+      setFinanceRoles([]);
     }
   };
 
@@ -3207,7 +3232,8 @@ function FinanceAdminPage() {
 
   useEffect(() => {
     loadRequests();
-    loadClassRoles();
+    loadGroupMemberships();
+    loadFinanceRoles();
     loadStudents();
     loadFundEvents();
     loadFundSummary();
@@ -3219,11 +3245,29 @@ function FinanceAdminPage() {
       setAdminProfile(null);
       return;
     }
-    const match =
-      classRoles.find((item) => String(item.email || "").trim().toLowerCase() === normalized) ||
+    const studentMatch =
+      students.find((item) => String(item.email || "").trim().toLowerCase() === normalized) ||
       null;
-    setAdminProfile(match);
-  }, [adminEmail, classRoles]);
+    const personId = String((studentMatch && studentMatch.id) || "").trim();
+    const memberships = groupMemberships.filter((item) => {
+      if (personId && String(item.personId || "").trim() === personId) {
+        return true;
+      }
+      return String(item.personEmail || "").trim().toLowerCase() === normalized;
+    });
+    const financeRoleItems = financeRoles.filter((item) => {
+      if (personId && String(item.personId || "").trim() === personId) {
+        return true;
+      }
+      return String(item.personEmail || "").trim().toLowerCase() === normalized;
+    });
+    setAdminProfile({
+      personId: personId,
+      email: normalized,
+      memberships: memberships,
+      financeRoles: financeRoleItems,
+    });
+  }, [adminEmail, students, groupMemberships, financeRoles]);
 
   useEffect(() => {
     loadActions(selectedId);
@@ -3234,6 +3278,8 @@ function FinanceAdminPage() {
       loadFundEvents();
       loadFundSummary();
       loadStudents();
+      loadGroupMemberships();
+      loadFinanceRoles();
     }
   }, [adminTab]);
 
@@ -3253,10 +3299,20 @@ function FinanceAdminPage() {
 
   const normalizeEmail = (value) => String(value || "").trim().toLowerCase();
 
-  const adminGroups = adminProfile ? parseCommaList_(adminProfile.groups) : [];
-  const adminLeadGroups = adminProfile ? parseCommaList_(adminProfile.leadGroups) : [];
-  const adminDeputyGroups = adminProfile ? parseCommaList_(adminProfile.deputyGroups) : [];
-  const adminRoles = adminProfile ? parseCommaList_(adminProfile.roles) : [];
+  const memberships = adminProfile ? adminProfile.memberships || [] : [];
+  const financeRoleItems = adminProfile ? adminProfile.financeRoles || [] : [];
+
+  const adminLeadGroups = memberships
+    .filter((item) => String(item.roleInGroup || "").trim() === "lead")
+    .map((item) => String(item.groupId || "").trim())
+    .filter(Boolean);
+  const adminDeputyGroups = memberships
+    .filter((item) => String(item.roleInGroup || "").trim() === "deputy")
+    .map((item) => String(item.groupId || "").trim())
+    .filter(Boolean);
+  const adminRoles = financeRoleItems
+    .map((item) => String(item.role || "").trim())
+    .filter(Boolean);
 
   const normalizedStudents = students.map((item) => {
     const name = item.name || item.email || "";
@@ -3267,24 +3323,25 @@ function FinanceAdminPage() {
     };
   });
 
-  const classRoleByEmail = classRoles.reduce((acc, item) => {
-    const email = String(item.email || "").trim().toLowerCase();
-    if (email) {
-      acc[email] = item;
-    }
-    return acc;
-  }, {});
-
   const getPayerGroupType_ = (payer) => {
     if (!payer || !payer.email) {
       return "general";
     }
-    const match = classRoleByEmail[payer.email];
-    if (!match) {
+    const studentMatch = students.find(
+      (item) => String(item.email || "").trim().toLowerCase() === payer.email
+    );
+    const studentId = studentMatch ? String(studentMatch.id || "").trim() : "";
+    const matches = groupMemberships.filter(
+      (item) =>
+        (studentId && String(item.personId || "").trim() === studentId) ||
+        String(item.personEmail || "").trim().toLowerCase() === payer.email
+    );
+    if (!matches.length) {
       return "general";
     }
-    const groups = parseCommaList_(match.groups);
-    return groups.includes("J") ? "sponsor" : "general";
+    return matches.some((item) => String(item.groupId || "").trim() === "J")
+      ? "sponsor"
+      : "general";
   };
 
   const normalizePayerKey_ = (value) => String(value || "").trim().toLowerCase();
@@ -3337,9 +3394,8 @@ function FinanceAdminPage() {
   const sponsorPaid = sponsorPayers.filter((payer) => payer.paid).length;
 
   const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
-  const hasRepPrivilege = adminRoles.includes("rep");
-  const hasCommitteePrivilege =
-    hasLeadPrivilege || adminRoles.includes("rep") || adminRoles.includes("vice_rep");
+  const hasRepPrivilege = adminLeadGroups.includes("A");
+  const hasCommitteePrivilege = hasLeadPrivilege || hasRepPrivilege || adminDeputyGroups.includes("A");
   const hasAccountingPrivilege = adminRoles.includes("accounting");
   const hasCashierPrivilege = adminRoles.includes("cashier");
   const hasAuditorPrivilege = adminRoles.includes("auditor");
@@ -3422,6 +3478,112 @@ function FinanceAdminPage() {
 
   const handleFundPaymentChange = (key, value) => {
     setFundPaymentForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleFinanceRoleChange = (key, value) => {
+    setFinanceRoleForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFinanceRoleForm = () => {
+    setFinanceRoleForm({
+      id: "",
+      personId: "",
+      personName: "",
+      personEmail: "",
+      role: "accounting",
+      notes: "",
+    });
+  };
+
+  const handleSelectFinanceRoleMember_ = (value) => {
+    const needle = String(value || "").trim().toLowerCase();
+    if (!needle) {
+      return;
+    }
+    const match =
+      students.find((item) => String(item.id || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.email || "").trim().toLowerCase() === needle) ||
+      students.find((item) => String(item.name || "").trim().toLowerCase() === needle) ||
+      null;
+    if (!match) {
+      return;
+    }
+    setFinanceRoleForm((prev) => ({
+      ...prev,
+      personId: match.id || prev.personId,
+      personName: match.name || prev.personName,
+      personEmail: match.email || prev.personEmail,
+    }));
+  };
+
+  const handleSaveFinanceRole = async (event) => {
+    event.preventDefault();
+    setError("");
+    setStatusMessage("");
+    if (!financeRoleForm.personId) {
+      setError("請先選擇同學");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { result } = await apiRequest({
+        action: "upsertFinanceRole",
+        data: {
+          id: financeRoleForm.id,
+          personId: financeRoleForm.personId,
+          personName: financeRoleForm.personName,
+          personEmail: financeRoleForm.personEmail,
+          role: financeRoleForm.role,
+          notes: financeRoleForm.notes,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      resetFinanceRoleForm();
+      await loadFinanceRoles();
+      setStatusMessage("已更新財務角色");
+    } catch (err) {
+      setError(err.message || "儲存失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditFinanceRole = (item) => {
+    if (!item) {
+      return;
+    }
+    setFinanceRoleForm({
+      id: item.id || "",
+      personId: item.personId || "",
+      personName: item.personName || "",
+      personEmail: item.personEmail || "",
+      role: item.role || "accounting",
+      notes: item.notes || "",
+    });
+  };
+
+  const handleDeleteFinanceRole = async (roleId) => {
+    if (!roleId) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "deleteFinanceRole", id: roleId });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      if (financeRoleForm.id === roleId) {
+        resetFinanceRoleForm();
+      }
+      await loadFinanceRoles();
+    } catch (err) {
+      setError(err.message || "刪除失敗");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const matchDirectoryByName_ = (value) => {
@@ -3661,7 +3823,9 @@ function FinanceAdminPage() {
                 type="button"
                 onClick={() => {
                   loadRequests();
-                  loadClassRoles();
+                  loadGroupMemberships();
+                  loadFinanceRoles();
+                  loadStudents();
                   loadFundEvents();
                   loadFundSummary();
                 }}
@@ -4398,6 +4562,145 @@ function FinanceAdminPage() {
                   </div>
                 </div>
               )}
+            </section>
+
+            <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+              <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-slate-900">財務角色</h2>
+                  <button
+                    type="button"
+                    onClick={resetFinanceRoleForm}
+                    className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    新增
+                  </button>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {financeRoles.length ? (
+                    financeRoles.map((item) => (
+                      <div
+                        key={item.id || `${item.personId}-${item.role}`}
+                        className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">
+                              {item.personName || item.personEmail || item.personId}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {item.personEmail || "-"} ·{" "}
+                              {FINANCE_ROLE_OPTIONS.find((role) => role.id === item.role)?.label ||
+                                item.role}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditFinanceRole(item)}
+                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            >
+                              編輯
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFinanceRole(item.id)}
+                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                            >
+                              刪除
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">尚未設定財務角色。</p>
+                  )}
+                </div>
+              </div>
+
+              <form
+                onSubmit={handleSaveFinanceRole}
+                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+              >
+                <h3 className="text-lg font-semibold text-slate-900">設定財務角色</h3>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">選擇同學</label>
+                    <input
+                      list="finance-role-students"
+                      onChange={(event) => handleSelectFinanceRoleMember_(event.target.value)}
+                      placeholder="輸入姓名/學號/Email"
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                    <datalist id="finance-role-students">
+                      {students.map((item) => (
+                        <option
+                          key={item.id || item.email}
+                          value={item.name || item.id || item.email || ""}
+                        >
+                          {item.id || ""} {item.email || ""}
+                        </option>
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">學號 / ID</label>
+                    <input
+                      value={financeRoleForm.personId}
+                      onChange={(event) => handleFinanceRoleChange("personId", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">姓名</label>
+                    <input
+                      value={financeRoleForm.personName}
+                      onChange={(event) => handleFinanceRoleChange("personName", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">角色</label>
+                    <select
+                      value={financeRoleForm.role}
+                      onChange={(event) => handleFinanceRoleChange("role", event.target.value)}
+                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    >
+                      {FINANCE_ROLE_OPTIONS.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <textarea
+                      value={financeRoleForm.notes}
+                      onChange={(event) => handleFinanceRoleChange("notes", event.target.value)}
+                      rows="3"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                    />
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loading ? "儲存中..." : "儲存角色"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={resetFinanceRoleForm}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    清空
+                  </button>
+                </div>
+              </form>
             </section>
           </section>
         ) : null}
@@ -7606,15 +7909,14 @@ function AdminPage({
   const [studentsQuery, setStudentsQuery] = useState("");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
-  const [classRoles, setClassRoles] = useState([]);
-  const [roleForm, setRoleForm] = useState({
+  const [groupMemberships, setGroupMemberships] = useState([]);
+  const [membershipForm, setMembershipForm] = useState({
     id: "",
-    name: "",
-    email: "",
-    groups: [],
-    leadGroups: [],
-    deputyGroups: [],
-    roles: [],
+    personId: "",
+    personName: "",
+    personEmail: "",
+    groupId: "",
+    roleInGroup: "member",
     notes: "",
   });
   const [directoryToken, setDirectoryToken] = useState(
@@ -7634,15 +7936,14 @@ function AdminPage({
 
   const normalizeName_ = (value) => String(value || "").trim();
 
-  const resetRoleForm_ = () => {
-    setRoleForm({
+  const resetMembershipForm_ = () => {
+    setMembershipForm({
       id: "",
-      name: "",
-      email: "",
-      groups: [],
-      leadGroups: [],
-      deputyGroups: [],
-      roles: [],
+      personId: "",
+      personName: "",
+      personEmail: "",
+      groupId: "",
+      roleInGroup: "member",
       notes: "",
     });
   };
@@ -7889,7 +8190,7 @@ function AdminPage({
       loadDirectoryAdmin();
     }
     if (activeTab === "roles") {
-      loadClassRoles();
+      loadGroupMemberships();
       loadStudents();
     }
     if (activeTab === "ordering") {
@@ -8063,17 +8364,17 @@ function AdminPage({
     }
   };
 
-  const loadClassRoles = async () => {
+  const loadGroupMemberships = async () => {
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listClassRoles" });
+      const { result } = await apiRequest({ action: "listGroupMemberships" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
-      setClassRoles(result.data && result.data.roles ? result.data.roles : []);
+      setGroupMemberships(result.data && result.data.memberships ? result.data.memberships : []);
     } catch (err) {
-      setError(err.message || "班務角色載入失敗。");
+      setError(err.message || "班務分組載入失敗。");
     } finally {
       setLoading(false);
     }
@@ -8298,11 +8599,11 @@ function AdminPage({
     return list.concat(value);
   };
 
-  const handleRoleFormChange_ = (key, value) => {
-    setRoleForm((prev) => ({ ...prev, [key]: value }));
+  const handleMembershipFormChange_ = (key, value) => {
+    setMembershipForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSelectRoleMember_ = (value) => {
+  const handleSelectMember_ = (value) => {
     const needle = String(value || "").trim().toLowerCase();
     if (!needle) {
       return;
@@ -8315,73 +8616,73 @@ function AdminPage({
     if (!match) {
       return;
     }
-    setRoleForm((prev) => ({
+    setMembershipForm((prev) => ({
       ...prev,
-      id: match.id || prev.id,
-      name: match.name || prev.name,
-      email: match.email || prev.email,
+      personId: match.id || prev.personId,
+      personName: match.name || prev.personName,
+      personEmail: match.email || prev.personEmail,
     }));
   };
 
-  const handleRoleToggle_ = (key, value) => {
-    setRoleForm((prev) => {
-      const current = prev[key] || [];
-      const isAdding = !current.includes(value);
-      if (key === "groups" && isAdding && current.length >= 3) {
-        setError("最多只能選擇 3 個組別");
-        return prev;
-      }
-      return {
-        ...prev,
-        [key]: toggleListValue_(current, value),
-      };
-    });
-  };
-
-  const handleEditRole_ = (item) => {
+  const handleEditMembership_ = (item) => {
     if (!item) {
       return;
     }
-    setRoleForm({
+    setMembershipForm({
       id: item.id || "",
-      name: item.name || "",
-      email: item.email || "",
-      groups: parseCommaList_(item.groups),
-      leadGroups: parseCommaList_(item.leadGroups),
-      deputyGroups: parseCommaList_(item.deputyGroups),
-      roles: parseCommaList_(item.roles),
+      personId: item.personId || "",
+      personName: item.personName || "",
+      personEmail: item.personEmail || "",
+      groupId: item.groupId || "",
+      roleInGroup: item.roleInGroup || "member",
       notes: item.notes || "",
     });
   };
 
-  const handleSaveRole_ = async (event) => {
+  const handleSaveMembership_ = async (event) => {
     event.preventDefault();
     setError("");
     setRegistrationStatusMessage("");
-    if (!roleForm.id && !roleForm.email) {
-      setError("請填寫學號或 Email");
+    if (!membershipForm.personId) {
+      setError("請先選擇同學");
+      return;
+    }
+    if (!membershipForm.groupId) {
+      setError("請選擇組別");
+      return;
+    }
+    if (
+      membershipForm.groupId === "A" &&
+      membershipForm.roleInGroup === "lead" &&
+      groupMemberships.some(
+        (item) =>
+          String(item.groupId || "").trim() === "A" &&
+          String(item.roleInGroup || "").trim() === "lead" &&
+          String(item.id || "").trim() !== String(membershipForm.id || "").trim()
+      )
+    ) {
+      setError("班代組只能有一位班代");
       return;
     }
     setSaving(true);
     try {
       const { result } = await apiRequest({
-        action: "upsertClassRole",
+        action: "upsertGroupMembership",
         data: {
-          id: roleForm.id,
-          name: roleForm.name,
-          email: roleForm.email,
-          groups: joinCommaList_(roleForm.groups),
-          leadGroups: joinCommaList_(roleForm.leadGroups),
-          deputyGroups: joinCommaList_(roleForm.deputyGroups),
-          roles: joinCommaList_(roleForm.roles),
-          notes: roleForm.notes,
+          id: membershipForm.id,
+          personId: membershipForm.personId,
+          personName: membershipForm.personName,
+          personEmail: membershipForm.personEmail,
+          groupId: membershipForm.groupId,
+          roleInGroup: membershipForm.roleInGroup,
+          notes: membershipForm.notes,
         },
       });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
-      resetRoleForm_();
-      await loadClassRoles();
+      resetMembershipForm_();
+      await loadGroupMemberships();
     } catch (err) {
       setError(err.message || "儲存失敗");
     } finally {
@@ -8389,21 +8690,24 @@ function AdminPage({
     }
   };
 
-  const handleDeleteRole_ = async (roleId) => {
-    if (!roleId) {
+  const handleDeleteMembership_ = async (membershipId) => {
+    if (!membershipId) {
       return;
     }
     setSaving(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "deleteClassRole", id: roleId });
+      const { result } = await apiRequest({
+        action: "deleteGroupMembership",
+        id: membershipId,
+      });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
-      if (roleForm.id === roleId) {
-        resetRoleForm_();
+      if (membershipForm.id === membershipId) {
+        resetMembershipForm_();
       }
-      await loadClassRoles();
+      await loadGroupMemberships();
     } catch (err) {
       setError(err.message || "刪除失敗");
     } finally {
@@ -8820,7 +9124,7 @@ function AdminPage({
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
               { id: "students", label: "同學" },
-              { id: "roles", label: "班務角色" },
+              { id: "roles", label: "班務分組" },
             ]
               .filter((item) => allowedTabs.includes(item.id))
               .map((item) => (
@@ -9343,45 +9647,50 @@ function AdminPage({
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-sm font-semibold text-slate-700">
-                    班務角色與分組 (最多 3 組)
+                    班務分組名單
                   </p>
                   <button
                     type="button"
-                    onClick={resetRoleForm_}
+                    onClick={resetMembershipForm_}
                     className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                   >
                     新增
                   </button>
                 </div>
-                {classRoles.length ? (
-                  classRoles.map((item) => (
+                {groupMemberships.length ? (
+                  groupMemberships.map((item) => (
                     <div
-                      key={item.id || item.email}
+                      key={item.id || `${item.personId}-${item.groupId}-${item.roleInGroup}`}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
                     >
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {item.name || item.email || item.id}
+                          {item.personName || item.personEmail || item.personId}
                         </p>
                         <p className="text-xs text-slate-500">
-                          {item.email || "-"} · 組別: {item.groups || "-"}
+                          {item.personEmail || "-"} · 組別:{" "}
+                          {CLASS_GROUPS.find((group) => group.id === item.groupId)?.label ||
+                            item.groupId ||
+                            "-"}
                         </p>
                         <p className="text-xs text-slate-500">
-                          組長: {item.leadGroups || "-"} · 副組長: {item.deputyGroups || "-"}
+                          職務:{" "}
+                          {GROUP_ROLE_OPTIONS.find((role) => role.id === item.roleInGroup)?.label ||
+                            item.roleInGroup ||
+                            "-"}
                         </p>
-                        <p className="text-xs text-slate-500">角色: {item.roles || "-"}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleEditRole_(item)}
+                          onClick={() => handleEditMembership_(item)}
                           className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                         >
                           編輯
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteRole_(item.id)}
+                          onClick={() => handleDeleteMembership_(item.id)}
                           className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                         >
                           刪除
@@ -9393,12 +9702,12 @@ function AdminPage({
                   <p className="text-sm text-slate-500">尚未建立班務角色。</p>
                 )}
               </div>
-              <form onSubmit={handleSaveRole_} className="space-y-4">
+              <form onSubmit={handleSaveMembership_} className="space-y-4">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">選擇同學</label>
                   <input
                     list="class-role-students"
-                    onChange={(event) => handleSelectRoleMember_(event.target.value)}
+                    onChange={(event) => handleSelectMember_(event.target.value)}
                     placeholder="輸入姓名/學號/Email"
                     className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
@@ -9416,102 +9725,55 @@ function AdminPage({
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">學號 / ID</label>
                   <input
-                    value={roleForm.id}
-                    onChange={(event) => handleRoleFormChange_("id", event.target.value)}
+                    value={membershipForm.personId}
+                    onChange={(event) => handleMembershipFormChange_("personId", event.target.value)}
                     className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">姓名</label>
-                    <input
-                      value={roleForm.name}
-                      onChange={(event) => handleRoleFormChange_("name", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">姓名</label>
+                  <input
+                    value={membershipForm.personName}
+                    onChange={(event) => handleMembershipFormChange_("personName", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">組別</label>
-                  <div className="flex flex-wrap gap-2">
+                  <select
+                    value={membershipForm.groupId}
+                    onChange={(event) => handleMembershipFormChange_("groupId", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    <option value="">請選擇</option>
                     {CLASS_GROUPS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleRoleToggle_("groups", item.id)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                          roleForm.groups.includes(item.id)
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
+                      <option key={item.id} value={item.id}>
                         {item.label}
-                      </button>
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">組長</label>
-                  <div className="flex flex-wrap gap-2">
-                    {CLASS_GROUPS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleRoleToggle_("leadGroups", item.id)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                          roleForm.leadGroups.includes(item.id)
-                            ? "border-emerald-600 bg-emerald-600 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
+                  <label className="text-sm font-medium text-slate-700">組內職務</label>
+                  <select
+                    value={membershipForm.roleInGroup}
+                    onChange={(event) =>
+                      handleMembershipFormChange_("roleInGroup", event.target.value)
+                    }
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {GROUP_ROLE_OPTIONS.map((item) => (
+                      <option key={item.id} value={item.id}>
                         {item.label}
-                      </button>
+                      </option>
                     ))}
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">副組長</label>
-                  <div className="flex flex-wrap gap-2">
-                    {CLASS_GROUPS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleRoleToggle_("deputyGroups", item.id)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                          roleForm.deputyGroups.includes(item.id)
-                            ? "border-amber-500 bg-amber-500 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">班務角色</label>
-                  <div className="flex flex-wrap gap-2">
-                    {CLASS_ROLE_OPTIONS.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => handleRoleToggle_("roles", item.id)}
-                        className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                          roleForm.roles.includes(item.id)
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                  </select>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">備註</label>
                   <textarea
-                    value={roleForm.notes}
-                    onChange={(event) => handleRoleFormChange_("notes", event.target.value)}
+                    value={membershipForm.notes}
+                    onChange={(event) => handleMembershipFormChange_("notes", event.target.value)}
                     rows="3"
                     className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
                   />
@@ -9522,11 +9784,11 @@ function AdminPage({
                     disabled={saving}
                     className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {saving ? "儲存中..." : "儲存角色"}
+                    {saving ? "儲存中..." : "儲存分組"}
                   </button>
                   <button
                     type="button"
-                    onClick={resetRoleForm_}
+                    onClick={resetMembershipForm_}
                     className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
                   >
                     清空

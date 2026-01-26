@@ -9,7 +9,8 @@ const SHEETS = {
   orderResponses: "OrderResponses",
   financeRequests: "FinanceRequests",
   financeActions: "FinanceActions",
-  classRoles: "ClassRoles",
+  groupMemberships: "GroupMemberships",
+  financeRoles: "FinanceRoles",
   fundEvents: "FundEvents",
   fundPayments: "FundPayments",
   softballPlayers: "SoftballPlayers",
@@ -108,22 +109,44 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { actions: listFinanceActions_(requestId) }, error: null };
   }
 
-  if (payload.action === "listClassRoles") {
-    return { ok: true, data: { roles: listClassRoles_() }, error: null };
+  if (payload.action === "listGroupMemberships") {
+    return { ok: true, data: { memberships: listGroupMemberships_() }, error: null };
   }
 
-  if (payload.action === "upsertClassRole") {
+  if (payload.action === "upsertGroupMembership") {
     const data = payload.data || {};
-    const updated = upsertClassRole_(data);
+    const updated = upsertGroupMembership_(data);
+    return { ok: true, data: { membership: updated }, error: null };
+  }
+
+  if (payload.action === "deleteGroupMembership") {
+    const membershipId = String(payload.id || "").trim();
+    if (!membershipId) {
+      return { ok: false, data: null, error: "Missing membership id" };
+    }
+    const removed = deleteGroupMembership_(membershipId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Membership not found" };
+    }
+    return { ok: true, data: { id: membershipId }, error: null };
+  }
+
+  if (payload.action === "listFinanceRoles") {
+    return { ok: true, data: { roles: listFinanceRoles_() }, error: null };
+  }
+
+  if (payload.action === "upsertFinanceRole") {
+    const data = payload.data || {};
+    const updated = upsertFinanceRole_(data);
     return { ok: true, data: { role: updated }, error: null };
   }
 
-  if (payload.action === "deleteClassRole") {
+  if (payload.action === "deleteFinanceRole") {
     const roleId = String(payload.id || "").trim();
     if (!roleId) {
       return { ok: false, data: null, error: "Missing role id" };
     }
-    const removed = deleteClassRole_(roleId);
+    const removed = deleteFinanceRole_(roleId);
     if (!removed) {
       return { ok: false, data: null, error: "Role not found" };
     }
@@ -1397,8 +1420,8 @@ function listFinanceActions_(requestId) {
   });
 }
 
-function listClassRoles_() {
-  const sheet = getSheet_(SHEETS.classRoles);
+function listGroupMemberships_() {
+  const sheet = getSheet_(SHEETS.groupMemberships);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
   return rows
@@ -1406,7 +1429,20 @@ function listClassRoles_() {
       return mapRowToObject_(headerMap, row);
     })
     .sort(function (a, b) {
-      return String(a.name || "").localeCompare(String(b.name || ""));
+      return String(a.personName || "").localeCompare(String(b.personName || ""));
+    });
+}
+
+function listFinanceRoles_() {
+  const sheet = getSheet_(SHEETS.financeRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .sort(function (a, b) {
+      return String(a.personName || "").localeCompare(String(b.personName || ""));
     });
 }
 
@@ -1517,19 +1553,38 @@ function appendFinanceAction_(data) {
   return record;
 }
 
-function appendClassRole_(data) {
-  const sheet = getSheet_(SHEETS.classRoles);
+function appendGroupMembership_(data) {
+  const sheet = getSheet_(SHEETS.groupMemberships);
   const headers = getHeaders_(sheet);
   const nowIso = new Date().toISOString();
   const base = Object.assign({}, data);
-  const roleId = String(base.id || base.email || "").trim();
-  if (!roleId) {
-    throw new Error("Missing role id");
+  if (!base.id) {
+    base.id = generateGroupMembershipId_(base.personId, base.groupId, base.roleInGroup);
   }
-  base.id = roleId;
   base.createdAt = base.createdAt || nowIso;
   base.updatedAt = nowIso;
-  const record = normalizeClassRoleRecord_(base);
+  const record = normalizeGroupMembershipRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFinanceRole_(data) {
+  const sheet = getSheet_(SHEETS.financeRoles);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFinanceRoleId_(base.personId, base.role);
+  }
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeFinanceRoleRecord_(base);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -2218,24 +2273,91 @@ function updateFinanceRequestFlow_(requestId, payload) {
   return updated;
 }
 
-function upsertClassRole_(data) {
-  const roleId = String(data.id || data.email || "").trim();
-  if (!roleId) {
-    throw new Error("Missing role id");
+function upsertGroupMembership_(data) {
+  const membershipId = String(data.id || "").trim();
+  const groupId = String(data.groupId || "").trim();
+  const roleInGroup = String(data.roleInGroup || "").trim();
+  if (groupId === "A" && roleInGroup === "lead") {
+    const existingLead = findGroupLead_("A", membershipId);
+    if (existingLead) {
+      throw new Error("班代組只能有一位班代");
+    }
   }
-  const existing = findClassRoleById_(roleId);
-  if (!existing) {
-    return appendClassRole_(data);
+  if (membershipId) {
+    const existing = findGroupMembershipById_(membershipId);
+    if (existing) {
+      return updateGroupMembership_(membershipId, data);
+    }
   }
-  return updateClassRole_(roleId, data);
+  return appendGroupMembership_(data);
 }
 
-function updateClassRole_(roleId, data) {
-  const sheet = getSheet_(SHEETS.classRoles);
+function updateGroupMembership_(membershipId, data) {
+  const sheet = getSheet_(SHEETS.groupMemberships);
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
-    throw new Error("ClassRoles sheet missing id column");
+    throw new Error("GroupMemberships sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== membershipId) {
+      continue;
+    }
+    const record = normalizeGroupMembershipRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, {
+        id: membershipId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Membership not found");
+}
+
+function deleteGroupMembership_(membershipId) {
+  const sheet = getSheet_(SHEETS.groupMemberships);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("GroupMemberships sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === membershipId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function upsertFinanceRole_(data) {
+  const roleId = String(data.id || "").trim();
+  if (roleId) {
+    const existing = findFinanceRoleById_(roleId);
+    if (existing) {
+      return updateFinanceRole_(roleId, data);
+    }
+  }
+  return appendFinanceRole_(data);
+}
+
+function updateFinanceRole_(roleId, data) {
+  const sheet = getSheet_(SHEETS.financeRoles);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceRoles sheet missing id column");
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
@@ -2243,7 +2365,7 @@ function updateClassRole_(roleId, data) {
     if (String(row[idIndex]).trim() !== roleId) {
       continue;
     }
-    const record = normalizeClassRoleRecord_(
+    const record = normalizeFinanceRoleRecord_(
       Object.assign({}, mapRowToObject_(headerMap, row), data, {
         id: roleId,
         updatedAt: new Date().toISOString(),
@@ -2259,15 +2381,15 @@ function updateClassRole_(roleId, data) {
     sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
     return record;
   }
-  throw new Error("Role not found");
+  throw new Error("Finance role not found");
 }
 
-function deleteClassRole_(roleId) {
-  const sheet = getSheet_(SHEETS.classRoles);
+function deleteFinanceRole_(roleId) {
+  const sheet = getSheet_(SHEETS.financeRoles);
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
-    throw new Error("ClassRoles sheet missing id column");
+    throw new Error("FinanceRoles sheet missing id column");
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
@@ -2487,41 +2609,69 @@ function buildFundSummary_() {
   };
 }
 
-function findClassRoleById_(roleId) {
-  if (!roleId) {
+function findGroupLead_(groupId, excludeId) {
+  const sheet = getSheet_(SHEETS.groupMemberships);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const groupIndex = headerMap.groupId;
+  const roleIndex = headerMap.roleInGroup;
+  const idIndex = headerMap.id;
+  if (groupIndex === undefined || roleIndex === undefined || idIndex === undefined) {
+    throw new Error("GroupMemberships sheet missing columns");
+  }
+  const targetGroup = String(groupId || "").trim();
+  const excluded = String(excludeId || "").trim();
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[groupIndex]).trim() !== targetGroup) {
+      continue;
+    }
+    if (String(row[roleIndex]).trim() !== "lead") {
+      continue;
+    }
+    if (excluded && String(row[idIndex]).trim() === excluded) {
+      continue;
+    }
+    return mapRowToObject_(headerMap, row);
+  }
+  return null;
+}
+
+function findGroupMembershipById_(membershipId) {
+  if (!membershipId) {
     return null;
   }
-  const sheet = getSheet_(SHEETS.classRoles);
+  const sheet = getSheet_(SHEETS.groupMemberships);
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
-    throw new Error("ClassRoles sheet missing id column");
+    throw new Error("GroupMemberships sheet missing id column");
   }
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (String(row[idIndex]).trim() === roleId) {
+    if (String(row[idIndex]).trim() === membershipId) {
       return mapRowToObject_(headerMap, row);
     }
   }
   return null;
 }
 
-function findClassRoleByEmail_(email) {
-  if (!email) {
+function findFinanceRoleById_(roleId) {
+  if (!roleId) {
     return null;
   }
-  const sheet = getSheet_(SHEETS.classRoles);
+  const sheet = getSheet_(SHEETS.financeRoles);
   const headerMap = getHeaderMap_(sheet);
-  const emailIndex = headerMap.email;
-  if (emailIndex === undefined) {
-    throw new Error("ClassRoles sheet missing email column");
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceRoles sheet missing id column");
   }
   const rows = getDataRows_(sheet);
-  const normalized = normalizeEmail_(email);
   for (var i = 0; i < rows.length; i++) {
-    if (normalizeEmail_(rows[i][emailIndex]) === normalized) {
-      return mapRowToObject_(headerMap, rows[i]);
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === roleId) {
+      return mapRowToObject_(headerMap, row);
     }
   }
   return null;
@@ -2709,15 +2859,27 @@ function normalizeFinanceActionRecord_(data) {
   };
 }
 
-function normalizeClassRoleRecord_(data) {
+function normalizeGroupMembershipRecord_(data) {
   return {
-    id: String(data.id || data.email || "").trim(),
-    name: String(data.name || "").trim(),
-    email: normalizeEmail_(data.email),
-    groups: String(data.groups || "").trim(),
-    leadGroups: String(data.leadGroups || "").trim(),
-    deputyGroups: String(data.deputyGroups || "").trim(),
-    roles: String(data.roles || "").trim(),
+    id: String(data.id || "").trim(),
+    personId: String(data.personId || "").trim(),
+    personName: String(data.personName || "").trim(),
+    personEmail: normalizeEmail_(data.personEmail),
+    groupId: String(data.groupId || "").trim(),
+    roleInGroup: String(data.roleInGroup || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeFinanceRoleRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    personId: String(data.personId || "").trim(),
+    personName: String(data.personName || "").trim(),
+    personEmail: normalizeEmail_(data.personEmail),
+    role: String(data.role || "").trim(),
     notes: String(data.notes || "").trim(),
     createdAt: String(data.createdAt || "").trim(),
     updatedAt: String(data.updatedAt || "").trim(),
@@ -2968,6 +3130,19 @@ function generateFundPaymentId_() {
     pad2_(now.getMinutes()) +
     pad2_(now.getSeconds())
   );
+}
+
+function generateGroupMembershipId_(personId, groupId, roleInGroup) {
+  var cleanPerson = String(personId || "").trim();
+  var cleanGroup = String(groupId || "").trim();
+  var cleanRole = String(roleInGroup || "").trim();
+  return cleanPerson + "-" + cleanGroup + "-" + cleanRole;
+}
+
+function generateFinanceRoleId_(personId, role) {
+  var cleanPerson = String(personId || "").trim();
+  var cleanRole = String(role || "").trim();
+  return cleanPerson + "-" + cleanRole;
 }
 
 function generateOrderPlanId_(dateValue, existingPlans) {
