@@ -9430,14 +9430,6 @@ function AdminPage({
                       className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                     />
                   </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">Email</label>
-                    <input
-                      value={roleForm.email}
-                      onChange={(event) => handleRoleFormChange_("email", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">組別</label>
