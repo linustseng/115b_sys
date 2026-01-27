@@ -8412,6 +8412,7 @@ function AdminPage({
   const [membershipDirty, setMembershipDirty] = useState(false);
   const [membershipQuery, setMembershipQuery] = useState("");
   const [membershipStatus, setMembershipStatus] = useState("");
+  const [membershipSaveError, setMembershipSaveError] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [showOnlyUnassigned, setShowOnlyUnassigned] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
@@ -8683,6 +8684,7 @@ function AdminPage({
     allowedTabs.includes("events") ||
     allowedTabs.includes("registrations") ||
     allowedTabs.includes("checkins");
+  const isMembershipSaving = activeTab === "roles" && saving;
 
   useEffect(() => {
     if (hasEventDataTabs) {
@@ -8695,6 +8697,19 @@ function AdminPage({
       setActiveTab(allowedTabs[0] || "events");
     }
   }, [activeTab, allowedTabs]);
+
+  useEffect(() => {
+    if (!isMembershipSaving) {
+      return;
+    }
+    const handleBeforeUnload = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isMembershipSaving]);
 
   useEffect(() => {
     if (activeTab === "registrations") {
@@ -8719,6 +8734,23 @@ function AdminPage({
       loadOrderPlans();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "roles") {
+      setMembershipSaveError("");
+      setMembershipStatus("");
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!membershipStatus) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setMembershipStatus("");
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, [membershipStatus]);
 
 
   useEffect(() => {
@@ -9291,6 +9323,7 @@ function AdminPage({
     setSaving(true);
     setError("");
     setMembershipStatus("");
+    setMembershipSaveError("");
     try {
       const originKeys = new Map();
       groupMemberships.forEach((item) => {
@@ -9308,34 +9341,23 @@ function AdminPage({
         (item) => !originKeys.has(buildMembershipKey_(item))
       );
 
-      for (const item of toDelete) {
-        if (!item.id) {
-          continue;
-        }
-        const { result } = await apiRequest({
-          action: "deleteGroupMembership",
-          id: item.id,
-        });
-        if (!result.ok) {
-          throw new Error(result.error || "刪除失敗");
-        }
-      }
-
-      for (const item of toAdd) {
-        const { result } = await apiRequest({
-          action: "upsertGroupMembership",
-          data: {
+      const { result } = await apiRequest({
+        action: "batchUpdateGroupMemberships",
+        data: {
+          toDeleteIds: toDelete.map((item) => item.id).filter(Boolean),
+          toUpsert: toAdd.map((item) => ({
+            id: item.id,
             personId: item.personId,
             personName: item.personName,
             personEmail: item.personEmail,
             groupId: item.groupId,
             roleInGroup: item.roleInGroup,
             notes: item.notes || "",
-          },
-        });
-        if (!result.ok) {
-          throw new Error(result.error || "儲存失敗");
-        }
+          })),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
       }
 
       await loadGroupMemberships();
@@ -9343,6 +9365,7 @@ function AdminPage({
       setMembershipStatus("已更新班務分組");
     } catch (err) {
       setError(err.message || "儲存失敗");
+      setMembershipSaveError(err.message || "儲存失敗");
     } finally {
       setSaving(false);
     }
@@ -9831,7 +9854,8 @@ function AdminPage({
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`rounded-xl px-4 py-2 ${
+                  disabled={isMembershipSaving}
+                  className={`rounded-xl px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60 ${
                     activeTab === item.id
                       ? "bg-slate-900 text-white"
                       : "bg-slate-100 text-slate-600"
@@ -10505,6 +10529,29 @@ function AdminPage({
                     <p className="mt-2 text-xs font-semibold text-emerald-600">
                       {membershipStatus}
                     </p>
+                  ) : null}
+                  {isMembershipSaving ? (
+                    <div className="mt-2 space-y-2">
+                      <p className="text-xs font-semibold text-slate-600">
+                        正在寫入班務分組，請勿關閉或離開。
+                      </p>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200/80">
+                        <div className="h-full w-2/3 animate-pulse rounded-full bg-slate-900/70" />
+                      </div>
+                    </div>
+                  ) : null}
+                  {membershipSaveError ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-rose-600">
+                      <span>儲存失敗：{membershipSaveError}</span>
+                      <button
+                        type="button"
+                        onClick={handleSaveMembershipDrafts_}
+                        disabled={saving}
+                        className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        重試
+                      </button>
+                    </div>
                   ) : null}
                 </div>
 

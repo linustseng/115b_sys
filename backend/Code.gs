@@ -113,6 +113,12 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { memberships: listGroupMemberships_() }, error: null };
   }
 
+  if (payload.action === "batchUpdateGroupMemberships") {
+    const data = payload.data || {};
+    const updated = batchUpdateGroupMemberships_(data);
+    return { ok: true, data: { memberships: updated }, error: null };
+  }
+
   if (payload.action === "upsertGroupMembership") {
     const data = payload.data || {};
     const updated = upsertGroupMembership_(data);
@@ -2302,6 +2308,111 @@ function upsertGroupMembership_(data) {
     }
   }
   return appendGroupMembership_(data);
+}
+
+function batchUpdateGroupMemberships_(data) {
+  const sheet = getSheet_(SHEETS.groupMemberships);
+  const headers = getHeaders_(sheet);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("GroupMemberships sheet missing id column");
+  }
+
+  const rows = getDataRows_(sheet);
+  const nowIso = new Date().toISOString();
+  const deleteIds = (data && data.toDeleteIds ? data.toDeleteIds : [])
+    .map(function (id) {
+      return String(id || "").trim();
+    })
+    .filter(function (id) {
+      return id;
+    });
+  const deleteSet = {};
+  deleteIds.forEach(function (id) {
+    deleteSet[id] = true;
+  });
+
+  const existingList = rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  const existingById = {};
+  existingList.forEach(function (item) {
+    const id = String(item.id || "").trim();
+    if (id) {
+      existingById[id] = item;
+    }
+  });
+
+  const keepList = existingList.filter(function (item) {
+    const id = String(item.id || "").trim();
+    return !id || !deleteSet[id];
+  });
+
+  const upsertList = Array.isArray(data && data.toUpsert) ? data.toUpsert : [];
+  const upsertById = {};
+  upsertList.forEach(function (item) {
+    const personId = String(item.personId || "").trim();
+    const groupId = String(item.groupId || "").trim();
+    const roleInGroup = String(item.roleInGroup || "").trim();
+    const id =
+      String(item.id || "").trim() || generateGroupMembershipId_(personId, groupId, roleInGroup);
+    const base = Object.assign({}, existingById[id] || {}, item, {
+      id: id,
+      updatedAt: nowIso,
+    });
+    if (!base.createdAt) {
+      base.createdAt = nowIso;
+    }
+    upsertById[id] = normalizeGroupMembershipRecord_(base);
+  });
+
+  const finalList = [];
+  keepList.forEach(function (item) {
+    const id = String(item.id || "").trim();
+    if (id && upsertById[id]) {
+      finalList.push(upsertById[id]);
+      delete upsertById[id];
+      return;
+    }
+    finalList.push(item);
+  });
+  Object.keys(upsertById).forEach(function (id) {
+    finalList.push(upsertById[id]);
+  });
+
+  const groupALeads = finalList.filter(function (item) {
+    return String(item.groupId || "").trim() === "A" && String(item.roleInGroup || "") === "lead";
+  });
+  if (groupALeads.length > 1) {
+    throw new Error("班代組只能有一位班代");
+  }
+
+  if (!finalList.length) {
+    if (rows.length) {
+      sheet.getRange(2, 1, rows.length, headers.length).clearContent();
+    }
+    return [];
+  }
+
+  const values = finalList.map(function (record) {
+    const normalized = normalizeGroupMembershipRecord_(record);
+    const rowValues = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (normalized.hasOwnProperty(header)) {
+        rowValues[index] = normalized[header];
+      }
+    });
+    return rowValues;
+  });
+
+  sheet.getRange(2, 1, finalList.length, headers.length).setValues(values);
+  if (rows.length > finalList.length) {
+    sheet
+      .getRange(2 + finalList.length, 1, rows.length - finalList.length, headers.length)
+      .clearContent();
+  }
+  return finalList;
 }
 
 function updateGroupMembership_(membershipId, data) {
