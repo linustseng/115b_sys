@@ -145,11 +145,6 @@ const FINANCE_PAYMENT_METHODS = [
   { value: "pettycash", label: "零用金" },
 ];
 
-const FINANCE_CATEGORY_TYPES = [
-  { value: "general", label: "一般性班務" },
-  { value: "special", label: "特殊性班務" },
-];
-
 const FINANCE_STATUS_LABELS = {
   draft: "草稿",
   pending_lead: "待組長審核",
@@ -352,7 +347,8 @@ const buildFinanceDraft_ = () => ({
   expectedClearDate: "",
   attachments: [],
   status: "draft",
-  applicantRole: "",
+  applicantId: "",
+  applicantName: "",
   applicantDepartment: "",
 });
 
@@ -2469,6 +2465,8 @@ function FinancePage() {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [financeCategories, setFinanceCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -2507,6 +2505,30 @@ function FinancePage() {
     }
   };
 
+  const loadStudents = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listStudents" });
+      if (!result.ok) {
+        return;
+      }
+      setStudents(result.data && result.data.students ? result.data.students : []);
+    } catch (err) {
+      // Optional list for datalist only.
+    }
+  };
+
+  const loadFinanceCategories = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listFinanceCategoryTypes" });
+      if (!result.ok) {
+        return;
+      }
+      setFinanceCategories(result.data && result.data.categories ? result.data.categories : []);
+    } catch (err) {
+      setFinanceCategories([]);
+    }
+  };
+
   const loadMemberGroups = async (email) => {
     if (!email) {
       setMemberGroups([]);
@@ -2528,6 +2550,25 @@ function FinancePage() {
       setMemberGroups([]);
     }
   };
+
+  useEffect(() => {
+    if (googleLinkedStudent && googleLinkedStudent.email) {
+      loadStudents();
+      loadFinanceCategories();
+    }
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (!form.categoryType && financeCategories.length) {
+      setForm((prev) => ({ ...prev, categoryType: financeCategories[0].id || "" }));
+    }
+  }, [financeCategories, form.categoryType]);
+
+  useEffect(() => {
+    if (!editingId && !form.applicantName && applicantName) {
+      setForm((prev) => ({ ...prev, applicantName: applicantName }));
+    }
+  }, [applicantName, editingId, form.applicantName]);
 
   const loadFundEvents = async () => {
     try {
@@ -2644,6 +2685,44 @@ function FinancePage() {
     }));
   };
 
+  const resolveApplicantFromInput_ = (inputValue) => {
+    const raw = String(inputValue || "").trim();
+    if (!raw || !students.length) {
+      return { id: "", name: "" };
+    }
+    const normalized = raw.toLowerCase();
+    const studentOptions = students.map((student) => {
+      const id = String(student.id || "").trim();
+      const name = String(
+        student.preferredName || student.nameZh || student.nameEn || student.name || ""
+      ).trim();
+      const label = [id, name].filter(Boolean).join(" ").trim();
+      return { id, name, label, normalizedLabel: label.toLowerCase() };
+    });
+    const exact = studentOptions.find((item) => item.normalizedLabel === normalized);
+    if (exact && exact.id) {
+      return { id: exact.id, name: exact.name };
+    }
+    const idMatch = studentOptions.find((item) => item.id && item.id.toLowerCase() === normalized);
+    if (idMatch) {
+      return { id: idMatch.id, name: idMatch.name };
+    }
+    const nameMatches = studentOptions.filter((item) => item.name.toLowerCase() === normalized);
+    if (nameMatches.length === 1) {
+      return { id: nameMatches[0].id, name: nameMatches[0].name };
+    }
+    return { id: "", name: "" };
+  };
+
+  const handleApplicantInputChange = (value) => {
+    const resolved = resolveApplicantFromInput_(value);
+    setForm((prev) => ({
+      ...prev,
+      applicantName: value,
+      applicantId: resolved.id || "",
+    }));
+  };
+
   const handleEditRequest = (item) => {
     if (!item) {
       return;
@@ -2668,7 +2747,8 @@ function FinancePage() {
       expectedClearDate: item.expectedClearDate || "",
       attachments: parseFinanceAttachments_(item.attachments),
       status: item.status || "draft",
-      applicantRole: item.applicantRole || "",
+      applicantId: item.applicantId || "",
+      applicantName: item.applicantName || "",
       applicantDepartment: item.applicantDepartment || "",
     });
     setStatusMessage("");
@@ -2682,12 +2762,16 @@ function FinancePage() {
       setError("請先登入 Google");
       return;
     }
+    const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
+    const draftApplicantId = form.applicantId || resolvedApplicant.id;
     const payload = {
       ...form,
       attachments: JSON.stringify(form.attachments || []),
       status: "draft",
-      applicantId: googleLinkedStudent.id || "",
-      applicantName: applicantName,
+      applicantId: draftApplicantId || "",
+      applicantName: String(
+        resolvedApplicant.name || form.applicantName || applicantName || ""
+      ).trim(),
       applicantEmail: googleLinkedStudent.email || "",
     };
     setLoading(true);
@@ -2723,8 +2807,33 @@ function FinancePage() {
       setError("請先登入 Google");
       return;
     }
+    if (!form.type) {
+      setError("請選擇申請類型");
+      return;
+    }
+    const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
+    const resolvedApplicantId = form.applicantId || resolvedApplicant.id;
+    const resolvedApplicantName = String(
+      resolvedApplicant.name || form.applicantName || applicantName || ""
+    ).trim();
+    if (!resolvedApplicantId) {
+      setError("請選擇請款人學號");
+      return;
+    }
+    if (!resolvedApplicantName) {
+      setError("請填寫請款人");
+      return;
+    }
     if (!form.title) {
       setError("請填寫項目名稱");
+      return;
+    }
+    if (!form.description) {
+      setError("請填寫說明/活動內容");
+      return;
+    }
+    if (!form.categoryType) {
+      setError("請選擇班務性質");
       return;
     }
     if (!form.applicantDepartment) {
@@ -2743,16 +2852,12 @@ function FinancePage() {
       setError("請填寫對應請購或未經請購原因");
       return;
     }
-    if (!form.applicantRole) {
-      setError("請填寫職務");
-      return;
-    }
     const payload = {
       ...form,
       attachments: JSON.stringify(form.attachments || []),
       status: "pending_lead",
-      applicantId: googleLinkedStudent.id || "",
-      applicantName: applicantName,
+      applicantId: resolvedApplicantId,
+      applicantName: resolvedApplicantName,
       applicantEmail: googleLinkedStudent.email || "",
     };
     if (isPettyCash) {
@@ -3108,7 +3213,9 @@ function FinancePage() {
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">申請類型</label>
+                <label className="text-sm font-medium text-slate-700">
+                  申請類型 <span className="text-rose-600">*</span>
+                </label>
                 <select
                   value={form.type}
                   onChange={(event) => handleFormChange("type", event.target.value)}
@@ -3122,16 +3229,34 @@ function FinancePage() {
                 </select>
               </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">職務</label>
+              <label className="text-sm font-medium text-slate-700">
+                請款人 <span className="text-rose-600">*</span>
+              </label>
               <input
-                value={form.applicantRole}
-                onChange={(event) => handleFormChange("applicantRole", event.target.value)}
-                placeholder="職務/部門/姓名"
+                value={form.applicantName}
+                onChange={(event) => handleApplicantInputChange(event.target.value)}
+                list="finance-students"
+                placeholder="請輸入或選擇學號 + 姓名"
                 className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
               />
+              <datalist id="finance-students">
+                {students.map((student) => {
+                  const id = String(student.id || "").trim();
+                  const name = String(
+                    student.preferredName || student.nameZh || student.nameEn || student.name || ""
+                  ).trim();
+                  if (!id && !name) {
+                    return null;
+                  }
+                  const label = [id, name].filter(Boolean).join(" ");
+                  return <option key={`${id}-${name}`} value={label} />;
+                })}
+              </datalist>
             </div>
             <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">申請組別</label>
+              <label className="text-sm font-medium text-slate-700">
+                申請組別 <span className="text-rose-600">*</span>
+              </label>
               <select
                 value={form.applicantDepartment}
                 onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
@@ -3146,39 +3271,51 @@ function FinancePage() {
               </select>
             </div>
               <div className="grid gap-2 sm:col-span-2">
-                <label className="text-sm font-medium text-slate-700">項目名稱</label>
+                <label className="text-sm font-medium text-slate-700">
+                  項目名稱 <span className="text-rose-600">*</span>
+                </label>
                 <input
                   value={form.title}
                   onChange={(event) => handleFormChange("title", event.target.value)}
+                  placeholder="例如壘球比賽"
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
-                <label className="text-sm font-medium text-slate-700">說明/活動內容</label>
+                <label className="text-sm font-medium text-slate-700">
+                  說明/活動內容 <span className="text-rose-600">*</span>
+                </label>
                 <textarea
                   value={form.description}
                   onChange={(event) => handleFormChange("description", event.target.value)}
                   rows="3"
+                  placeholder="例如教練費、場地租金等"
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
                 />
               </div>
               <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">班務性質</label>
+                <label className="text-sm font-medium text-slate-700">
+                  班務性質 <span className="text-rose-600">*</span>
+                </label>
                 <select
                   value={form.categoryType}
                   onChange={(event) => handleFormChange("categoryType", event.target.value)}
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                 >
-                  {FINANCE_CATEGORY_TYPES.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
+                  {!financeCategories.length ? (
+                    <option value="">尚未設定</option>
+                  ) : (
+                    financeCategories.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label || item.id}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">
-                  {isPurchase ? "預估金額" : "實際金額"}
+                  {isPurchase ? "預估金額" : "實際金額"} <span className="text-rose-600">*</span>
                 </label>
                 <input
                   value={isPurchase ? form.amountEstimated : form.amountActual}
@@ -3430,6 +3567,7 @@ function FinanceAdminPage() {
   const [statusMessage, setStatusMessage] = useState("");
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [financeRoles, setFinanceRoles] = useState([]);
+  const [financeCategories, setFinanceCategories] = useState([]);
   const [adminEmail, setAdminEmail] = useState("");
   const [adminProfile, setAdminProfile] = useState(null);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -3447,6 +3585,12 @@ function FinanceAdminPage() {
     personName: "",
     personEmail: "",
     role: "accounting",
+    notes: "",
+  });
+  const [financeCategoryForm, setFinanceCategoryForm] = useState({
+    id: "",
+    label: "",
+    sortOrder: "",
     notes: "",
   });
   const [students, setStudents] = useState([]);
@@ -3557,6 +3701,17 @@ function FinanceAdminPage() {
     }
   };
 
+  const loadFinanceCategories = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listFinanceCategoryTypes" });
+      if (result.ok) {
+        setFinanceCategories(result.data && result.data.categories ? result.data.categories : []);
+      }
+    } catch (err) {
+      setFinanceCategories([]);
+    }
+  };
+
   const loadActions = async (requestId) => {
     if (!requestId) {
       setActions([]);
@@ -3576,6 +3731,7 @@ function FinanceAdminPage() {
     loadRequests();
     loadGroupMemberships();
     loadFinanceRoles();
+    loadFinanceCategories();
     loadStudents();
     loadFundEvents();
     loadFundSummary();
@@ -3633,6 +3789,9 @@ function FinanceAdminPage() {
       loadGroupMemberships();
       loadFinanceRoles();
       loadStudents();
+    }
+    if (adminTab === "categories") {
+      loadFinanceCategories();
     }
   }, [adminTab]);
 
@@ -3914,6 +4073,19 @@ function FinanceAdminPage() {
     });
   };
 
+  const handleFinanceCategoryChange = (key, value) => {
+    setFinanceCategoryForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const resetFinanceCategoryForm = () => {
+    setFinanceCategoryForm({
+      id: "",
+      label: "",
+      sortOrder: "",
+      notes: "",
+    });
+  };
+
   const handleSelectFinanceRoleMember_ = (value) => {
     const needle = String(value || "").trim().toLowerCase();
     if (!needle) {
@@ -3998,6 +4170,72 @@ function FinanceAdminPage() {
         resetFinanceRoleForm();
       }
       await loadFinanceRoles();
+    } catch (err) {
+      setError(err.message || "刪除失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveFinanceCategory = async (event) => {
+    event.preventDefault();
+    setError("");
+    setStatusMessage("");
+    if (!financeCategoryForm.label) {
+      setError("請填寫班務性質名稱");
+      return;
+    }
+    setLoading(true);
+    try {
+      const { result } = await apiRequest({
+        action: "upsertFinanceCategoryType",
+        data: {
+          id: financeCategoryForm.id,
+          label: financeCategoryForm.label,
+          sortOrder: financeCategoryForm.sortOrder,
+          notes: financeCategoryForm.notes,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      resetFinanceCategoryForm();
+      await loadFinanceCategories();
+      setStatusMessage("已更新班務性質");
+    } catch (err) {
+      setError(err.message || "儲存失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditFinanceCategory = (item) => {
+    if (!item) {
+      return;
+    }
+    setFinanceCategoryForm({
+      id: item.id || "",
+      label: item.label || "",
+      sortOrder: item.sortOrder || "",
+      notes: item.notes || "",
+    });
+  };
+
+  const handleDeleteFinanceCategory = async (categoryId) => {
+    if (!categoryId) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "deleteFinanceCategoryType", id: categoryId });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      if (financeCategoryForm.id === categoryId) {
+        resetFinanceCategoryForm();
+      }
+      await loadFinanceCategories();
     } catch (err) {
       setError(err.message || "刪除失敗");
     } finally {
@@ -4234,6 +4472,7 @@ function FinanceAdminPage() {
                 { id: "requests", label: "請款/請購" },
                 { id: "funds", label: "班費管理" },
                 { id: "roles", label: "財務角色" },
+                { id: "categories", label: "班務性質" },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -4253,6 +4492,7 @@ function FinanceAdminPage() {
                   loadRequests();
                   loadGroupMemberships();
                   loadFinanceRoles();
+                  loadFinanceCategories();
                   loadStudents();
                   loadFundEvents();
                   loadFundSummary();
@@ -4334,7 +4574,10 @@ function FinanceAdminPage() {
                 </div>
                   <div className="grid gap-2 text-xs text-slate-500">
                     <div>
-                      申請人：{selectedRequest.applicantName || "-"} · {selectedRequest.applicantRole || "-"}
+                      申請人：{selectedRequest.applicantName || "-"} ·{" "}
+                      {CLASS_GROUPS.find((item) => item.id === selectedRequest.applicantDepartment)?.label ||
+                        selectedRequest.applicantDepartment ||
+                        "-"}
                     </div>
                     <div>
                       組別：
@@ -4356,7 +4599,7 @@ function FinanceAdminPage() {
                   <div>說明：{selectedRequest.description || "-"}</div>
                   <div>
                     班務性質：
-                    {FINANCE_CATEGORY_TYPES.find((item) => item.value === selectedRequest.categoryType)
+                    {financeCategories.find((item) => item.id === selectedRequest.categoryType)
                       ?.label || "-"}
                   </div>
                 </div>
@@ -4895,6 +5138,112 @@ function FinanceAdminPage() {
                 <button
                   type="button"
                   onClick={resetFinanceRoleForm}
+                  className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  清空
+                </button>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {adminTab === "categories" ? (
+          <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">班務性質</h2>
+                <button
+                  type="button"
+                  onClick={resetFinanceCategoryForm}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  新增
+                </button>
+              </div>
+              <div className="mt-4 space-y-3">
+                {financeCategories.length ? (
+                  financeCategories.map((item) => (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-slate-900">{item.label || "未命名"}</p>
+                          <p className="text-xs text-slate-500">
+                            排序 {item.sortOrder || "-"} · {item.id}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditFinanceCategory(item)}
+                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                          >
+                            編輯
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteFinanceCategory(item.id)}
+                            className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                          >
+                            刪除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">尚未設定班務性質。</p>
+                )}
+              </div>
+            </div>
+
+            <form
+              onSubmit={handleSaveFinanceCategory}
+              className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+            >
+              <h3 className="text-lg font-semibold text-slate-900">設定班務性質</h3>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">名稱</label>
+                  <input
+                    value={financeCategoryForm.label}
+                    onChange={(event) => handleFinanceCategoryChange("label", event.target.value)}
+                    placeholder="例如：全班性的聯誼活動"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">排序</label>
+                  <input
+                    value={financeCategoryForm.sortOrder}
+                    onChange={(event) => handleFinanceCategoryChange("sortOrder", event.target.value)}
+                    placeholder="數字越小越前"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <textarea
+                    value={financeCategoryForm.notes}
+                    onChange={(event) => handleFinanceCategoryChange("notes", event.target.value)}
+                    rows="3"
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  />
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading ? "儲存中..." : "儲存性質"}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetFinanceCategoryForm}
                   className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
                 >
                   清空

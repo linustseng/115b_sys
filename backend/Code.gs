@@ -11,6 +11,7 @@ const SHEETS = {
   financeActions: "FinanceActions",
   groupMemberships: "GroupMemberships",
   financeRoles: "FinanceRoles",
+  financeCategoryTypes: "FinanceCategoryTypes",
   fundEvents: "FundEvents",
   fundPayments: "FundPayments",
   softballPlayers: "SoftballPlayers",
@@ -139,6 +140,28 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "listFinanceRoles") {
     return { ok: true, data: { roles: listFinanceRoles_() }, error: null };
+  }
+
+  if (payload.action === "listFinanceCategoryTypes") {
+    return { ok: true, data: { categories: listFinanceCategoryTypes_() }, error: null };
+  }
+
+  if (payload.action === "upsertFinanceCategoryType") {
+    const data = payload.data || {};
+    const updated = upsertFinanceCategoryType_(data);
+    return { ok: true, data: { category: updated }, error: null };
+  }
+
+  if (payload.action === "deleteFinanceCategoryType") {
+    const categoryId = String(payload.id || "").trim();
+    if (!categoryId) {
+      return { ok: false, data: null, error: "Missing category id" };
+    }
+    const removed = deleteFinanceCategoryType_(categoryId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Category not found" };
+    }
+    return { ok: true, data: { id: categoryId }, error: null };
   }
 
   if (payload.action === "upsertFinanceRole") {
@@ -1452,6 +1475,31 @@ function listFinanceRoles_() {
     });
 }
 
+function listFinanceCategoryTypes_() {
+  const sheet = getSheet_(SHEETS.financeCategoryTypes);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const list = rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+  return list.sort(function (a, b) {
+    const orderA = parseInt(a.sortOrder, 10);
+    const orderB = parseInt(b.sortOrder, 10);
+    if (!isNaN(orderA) || !isNaN(orderB)) {
+      if (isNaN(orderA)) {
+        return 1;
+      }
+      if (isNaN(orderB)) {
+        return -1;
+      }
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+    }
+    return String(a.label || "").localeCompare(String(b.label || ""));
+  });
+}
+
 function listFundEvents_() {
   const sheet = getSheet_(SHEETS.fundEvents);
   const headerMap = getHeaderMap_(sheet);
@@ -1591,6 +1639,27 @@ function appendFinanceRole_(data) {
   base.createdAt = base.createdAt || nowIso;
   base.updatedAt = nowIso;
   const record = normalizeFinanceRoleRecord_(base);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function appendFinanceCategoryType_(data) {
+  const sheet = getSheet_(SHEETS.financeCategoryTypes);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const base = Object.assign({}, data);
+  if (!base.id) {
+    base.id = generateFinanceCategoryTypeId_();
+  }
+  base.createdAt = base.createdAt || nowIso;
+  base.updatedAt = nowIso;
+  const record = normalizeFinanceCategoryTypeRecord_(base);
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
     if (record.hasOwnProperty(header)) {
@@ -2475,6 +2544,17 @@ function upsertFinanceRole_(data) {
   return appendFinanceRole_(data);
 }
 
+function upsertFinanceCategoryType_(data) {
+  const categoryId = String(data.id || "").trim();
+  if (categoryId) {
+    const existing = findFinanceCategoryTypeById_(categoryId);
+    if (existing) {
+      return updateFinanceCategoryType_(categoryId, data);
+    }
+  }
+  return appendFinanceCategoryType_(data);
+}
+
 function updateFinanceRole_(roleId, data) {
   const sheet = getSheet_(SHEETS.financeRoles);
   const headerMap = getHeaderMap_(sheet);
@@ -2507,6 +2587,38 @@ function updateFinanceRole_(roleId, data) {
   throw new Error("Finance role not found");
 }
 
+function updateFinanceCategoryType_(categoryId, data) {
+  const sheet = getSheet_(SHEETS.financeCategoryTypes);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceCategoryTypes sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== categoryId) {
+      continue;
+    }
+    const record = normalizeFinanceCategoryTypeRecord_(
+      Object.assign({}, mapRowToObject_(headerMap, row), data, {
+        id: categoryId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Finance category not found");
+}
+
 function deleteFinanceRole_(roleId) {
   const sheet = getSheet_(SHEETS.financeRoles);
   const headerMap = getHeaderMap_(sheet);
@@ -2517,6 +2629,23 @@ function deleteFinanceRole_(roleId) {
   const rows = getDataRows_(sheet);
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i][idIndex]).trim() === roleId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function deleteFinanceCategoryType_(categoryId) {
+  const sheet = getSheet_(SHEETS.financeCategoryTypes);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceCategoryTypes sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex]).trim() === categoryId) {
       sheet.deleteRow(i + 2);
       return true;
     }
@@ -2812,6 +2941,26 @@ function findFinanceRoleById_(roleId) {
   return null;
 }
 
+function findFinanceCategoryTypeById_(categoryId) {
+  if (!categoryId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.financeCategoryTypes);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("FinanceCategoryTypes sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() === categoryId) {
+      return mapRowToObject_(headerMap, row);
+    }
+  }
+  return null;
+}
+
 function upsertOrderResponse_(orderId, data) {
   const sheet = getSheet_(SHEETS.orderResponses);
   const headerMap = getHeaderMap_(sheet);
@@ -3015,6 +3164,17 @@ function normalizeFinanceRoleRecord_(data) {
     personName: String(data.personName || "").trim(),
     personEmail: normalizeEmail_(data.personEmail),
     role: String(data.role || "").trim(),
+    notes: String(data.notes || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeFinanceCategoryTypeRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    label: String(data.label || "").trim(),
+    sortOrder: String(data.sortOrder || "").trim(),
     notes: String(data.notes || "").trim(),
     createdAt: String(data.createdAt || "").trim(),
     updatedAt: String(data.updatedAt || "").trim(),
@@ -3282,6 +3442,19 @@ function generateFinanceRoleId_(personId, role) {
   var cleanPerson = String(personId || "").trim();
   var cleanRole = String(role || "").trim();
   return cleanPerson + "-" + cleanRole;
+}
+
+function generateFinanceCategoryTypeId_() {
+  var now = new Date();
+  return (
+    "FIN-CAT-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
 }
 
 function generateOrderPlanId_(dateValue, existingPlans) {
