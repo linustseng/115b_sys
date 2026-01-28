@@ -3204,6 +3204,7 @@ function normalizeFundPaymentRecord_(data) {
   return {
     id: String(data.id || "").trim(),
     eventId: String(data.eventId || "").trim(),
+    payerId: String(data.payerId || "").trim(),
     payerName: String(data.payerName || "").trim(),
     payerEmail: normalizeEmail_(data.payerEmail),
     payerType: String(data.payerType || "").trim(),

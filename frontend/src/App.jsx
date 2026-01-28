@@ -373,20 +373,21 @@ const buildFundEventDraft_ = () => ({
   notes: "",
 });
 
-  const buildFundPaymentDraft_ = (eventId = "") => ({
-    id: "",
-    eventId: eventId,
-    payerName: "",
-    payerEmail: "",
-    payerType: "general",
-    amount: "",
-    method: "transfer",
-    transferLast5: "",
-    receivedAt: toDateInputValue_(new Date()),
-    accountedAt: "",
-    confirmedAt: "",
-    notes: "",
-  });
+const buildFundPaymentDraft_ = (eventId = "") => ({
+  id: "",
+  eventId: eventId,
+  payerId: "",
+  payerName: "",
+  payerEmail: "",
+  payerType: "general",
+  amount: "",
+  method: "transfer",
+  transferLast5: "",
+  receivedAt: toDateInputValue_(new Date()),
+  accountedAt: "",
+  confirmedAt: "",
+  notes: "",
+});
 
 const formatEventTime_ = (value) => {
   if (!value) {
@@ -2479,6 +2480,12 @@ function FinancePage() {
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState("requests");
+  const fundPaymentErrorActive = financeTab === "fund" && !!error;
+  const fundPaymentErrorFlags = {
+    eventId: fundPaymentErrorActive && error.includes("班費事件"),
+    amount: fundPaymentErrorActive && error.includes("金額"),
+    transferLast5: fundPaymentErrorActive && error.includes("末 5 碼"),
+  };
 
   const applicantName =
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -2603,6 +2610,7 @@ function FinancePage() {
       loadFundEvents();
       setFundPaymentForm((prev) => ({
         ...prev,
+        payerId: String(googleLinkedStudent.id || "").trim(),
         payerName: applicantName,
         payerEmail: googleLinkedStudent.email || "",
       }));
@@ -2938,6 +2946,7 @@ function FinancePage() {
       const actorId = String(googleLinkedStudent.id || "").trim();
       const payload = {
         ...fundPaymentForm,
+        payerId: String(googleLinkedStudent.id || "").trim(),
         payerName: applicantName,
         payerEmail: googleLinkedStudent.email || "",
         actorId: actorId,
@@ -2952,6 +2961,7 @@ function FinancePage() {
       setFundStatusMessage("已送出繳費回報，等待財務確認");
       setFundPaymentForm((prev) => ({
         ...buildFundPaymentDraft_(prev.eventId),
+        payerId: String(googleLinkedStudent.id || "").trim(),
         payerName: applicantName,
         payerEmail: googleLinkedStudent.email || "",
         payerType: prev.payerType,
@@ -2970,14 +2980,9 @@ function FinancePage() {
   const isPettyCash = form.type === "pettycash";
   const myFundPayments = fundPaymentForm.eventId
     ? fundPayments.filter((item) => {
-        const emailMatch =
-          googleLinkedStudent &&
-          String(item.payerEmail || "").trim().toLowerCase() ===
-            String(googleLinkedStudent.email || "").trim().toLowerCase();
-        const nameMatch =
-          applicantName &&
-          String(item.payerName || "").trim() === String(applicantName || "").trim();
-        return emailMatch || nameMatch;
+        const payerId = String(item.payerId || "").trim();
+        const myId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
+        return payerId && myId && payerId === myId;
       })
     : [];
 
@@ -3076,11 +3081,17 @@ function FinancePage() {
                 </div>
                 <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2 sm:col-span-2">
-                    <label className="text-sm font-medium text-slate-700">班費事件</label>
+                    <label className="text-sm font-medium text-slate-700">班費事件 *</label>
                     <select
                       value={fundPaymentForm.eventId}
                       onChange={(event) => handleFundPaymentChange("eventId", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      required
+                      aria-invalid={fundPaymentErrorFlags.eventId ? "true" : "false"}
+                      className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                        fundPaymentErrorFlags.eventId
+                          ? "border-rose-300 bg-rose-50/60"
+                          : "border-slate-200 bg-white"
+                      }`}
                     >
                       <option value="">請選擇</option>
                       {fundEvents.map((item) => (
@@ -3099,11 +3110,17 @@ function FinancePage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">金額</label>
+                    <label className="text-sm font-medium text-slate-700">金額 *</label>
                     <input
                       value={fundPaymentForm.amount}
                       onChange={(event) => handleFundPaymentChange("amount", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      required
+                      aria-invalid={fundPaymentErrorFlags.amount ? "true" : "false"}
+                      className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                        fundPaymentErrorFlags.amount
+                          ? "border-rose-300 bg-rose-50/60"
+                          : "border-slate-200 bg-white"
+                      }`}
                     />
                   </div>
                   <div className="grid gap-2">
@@ -3122,13 +3139,19 @@ function FinancePage() {
                   </div>
                   {fundPaymentForm.method === "transfer" ? (
                     <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼</label>
+                      <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼 *</label>
                       <input
                         value={fundPaymentForm.transferLast5}
                         onChange={(event) =>
                           handleFundPaymentChange("transferLast5", event.target.value)
                         }
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                        required={fundPaymentForm.method === "transfer"}
+                        aria-invalid={fundPaymentErrorFlags.transferLast5 ? "true" : "false"}
+                        className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                          fundPaymentErrorFlags.transferLast5
+                            ? "border-rose-300 bg-rose-50/60"
+                            : "border-slate-200 bg-white"
+                        }`}
                       />
                     </div>
                   ) : null}
@@ -3596,6 +3619,12 @@ function FinanceAdminPage() {
   const [students, setStudents] = useState([]);
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
+  const fundPaymentErrorFlags = {
+    eventId: !!error && error.includes("班費事件"),
+    payerName: !!error && error.includes("繳費人"),
+    amount: !!error && error.includes("金額"),
+    transferLast5: !!error && error.includes("末 5 碼"),
+  };
 
   const loadRequests = async () => {
     setLoading(true);
@@ -3872,20 +3901,16 @@ function FinanceAdminPage() {
 
   const normalizePayerKey_ = (value) => String(value || "").trim().toLowerCase();
 
-  const paymentEmailSet = new Set(
-    fundPayments.map((item) => normalizePayerKey_(item.payerEmail)).filter(Boolean)
-  );
-  const paymentNameSet = new Set(
-    fundPayments.map((item) => normalizePayerKey_(item.payerName)).filter(Boolean)
+  const paymentIdSet = new Set(
+    fundPayments.map((item) => String(item.payerId || "").trim()).filter(Boolean)
   );
 
   const getPayerStatus_ = (payer) => {
     if (!payer) {
       return false;
     }
-    const emailKey = normalizePayerKey_(payer.email);
-    const nameKey = normalizePayerKey_(payer.name);
-    return (emailKey && paymentEmailSet.has(emailKey)) || (nameKey && paymentNameSet.has(nameKey));
+    const idKey = String(payer.id || "").trim();
+    return idKey ? paymentIdSet.has(idKey) : false;
   };
 
   const sponsorMemberships = groupMemberships.filter(
@@ -4366,9 +4391,14 @@ function FinanceAdminPage() {
     setLoading(true);
     try {
       const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
+      const resolvedMatch =
+        fundPaymentForm.payerId
+          ? null
+          : matchDirectoryByName_(fundPaymentForm.payerEmail || fundPaymentForm.payerName);
+      const resolvedPayerId = fundPaymentForm.payerId || (resolvedMatch && resolvedMatch.id) || "";
       const { result } = await apiRequest({
         action: "upsertFundPayment",
-        data: { ...fundPaymentForm, actorId },
+        data: { ...fundPaymentForm, payerId: resolvedPayerId, actorId },
       });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
@@ -4392,6 +4422,7 @@ function FinanceAdminPage() {
     setFundPaymentForm({
       id: item.id || "",
       eventId: item.eventId || "",
+      payerId: item.payerId || "",
       payerName: item.payerName || "",
       payerEmail: item.payerEmail || "",
       payerType: item.payerType || "general",
@@ -5383,14 +5414,20 @@ function FinanceAdminPage() {
               </div>
               <form onSubmit={handleSaveFundPayment} className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2 sm:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">班費事件</label>
+                  <label className="text-sm font-medium text-slate-700">班費事件 *</label>
                   <select
                     value={fundPaymentForm.eventId}
                     onChange={(event) => {
                       handleFundPaymentChange("eventId", event.target.value);
                       resetFundPaymentForm(event.target.value);
                     }}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    required
+                    aria-invalid={fundPaymentErrorFlags.eventId ? "true" : "false"}
+                    className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                      fundPaymentErrorFlags.eventId
+                        ? "border-rose-300 bg-rose-50/60"
+                        : "border-slate-200 bg-white"
+                    }`}
                   >
                     <option value="">請選擇</option>
                     {fundEvents.map((item) => (
@@ -5401,19 +5438,28 @@ function FinanceAdminPage() {
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">繳費人</label>
+                  <label className="text-sm font-medium text-slate-700">繳費人 *</label>
                   <input
                     value={fundPaymentForm.payerName}
                     onChange={(event) => {
                       const value = event.target.value;
                       handleFundPaymentChange("payerName", value);
                       const match = matchDirectoryByName_(value);
-                      if (match && match.email) {
-                        handleFundPaymentChange("payerEmail", match.email);
+                      if (match) {
+                        handleFundPaymentChange("payerId", match.id || "");
+                        if (match.email) {
+                          handleFundPaymentChange("payerEmail", match.email);
+                        }
                       }
                     }}
                     list="fund-payer-options"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    required
+                    aria-invalid={fundPaymentErrorFlags.payerName ? "true" : "false"}
+                    className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                      fundPaymentErrorFlags.payerName
+                        ? "border-rose-300 bg-rose-50/60"
+                        : "border-slate-200 bg-white"
+                    }`}
                   />
                   <datalist id="fund-payer-options">
                     {students.map((item) => {
@@ -5442,7 +5488,17 @@ function FinanceAdminPage() {
                   <label className="text-sm font-medium text-slate-700">Email</label>
                   <input
                     value={fundPaymentForm.payerEmail}
-                    onChange={(event) => handleFundPaymentChange("payerEmail", event.target.value)}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      handleFundPaymentChange("payerEmail", value);
+                      const match = matchDirectoryByName_(value);
+                      if (match) {
+                        handleFundPaymentChange("payerId", match.id || "");
+                        if (match.name) {
+                          handleFundPaymentChange("payerName", match.name);
+                        }
+                      }
+                    }}
                     className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
                 </div>
@@ -5473,12 +5529,18 @@ function FinanceAdminPage() {
                   </select>
                 </div>
                 <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">金額</label>
+                  <label className="text-sm font-medium text-slate-700">金額 *</label>
                   <input
                     value={fundPaymentForm.amount}
                     onChange={(event) => handleFundPaymentChange("amount", event.target.value)}
                     list="fund-amount-options"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    required
+                    aria-invalid={fundPaymentErrorFlags.amount ? "true" : "false"}
+                    className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                      fundPaymentErrorFlags.amount
+                        ? "border-rose-300 bg-rose-50/60"
+                        : "border-slate-200 bg-white"
+                    }`}
                   />
                   <datalist id="fund-amount-options">
                     <option value="50000">50000</option>
@@ -5501,13 +5563,19 @@ function FinanceAdminPage() {
                 </div>
                 {fundPaymentForm.method === "transfer" ? (
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼</label>
+                    <label className="text-sm font-medium text-slate-700">匯款帳號末 5 碼 *</label>
                     <input
                       value={fundPaymentForm.transferLast5}
                       onChange={(event) =>
                         handleFundPaymentChange("transferLast5", event.target.value)
                       }
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      required={fundPaymentForm.method === "transfer"}
+                      aria-invalid={fundPaymentErrorFlags.transferLast5 ? "true" : "false"}
+                      className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
+                        fundPaymentErrorFlags.transferLast5
+                          ? "border-rose-300 bg-rose-50/60"
+                          : "border-slate-200 bg-white"
+                      }`}
                     />
                   </div>
                 ) : null}
