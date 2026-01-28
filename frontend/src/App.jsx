@@ -232,6 +232,13 @@ const getGroupLabel_ = (groupId) => {
   return match ? match.label : groupId || "-";
 };
 
+const normalizeEmailValue_ = (value) => String(value || "").trim().toLowerCase();
+
+const buildAccessLabel_ = (groupIds) => {
+  const labels = groupIds.map((id) => getGroupLabel_(id)).filter(Boolean);
+  return labels.join("、");
+};
+
 const buildGoogleMapsUrl_ = (address) => {
   const normalized = String(address || "").trim();
   if (!normalized) {
@@ -887,6 +894,133 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   );
 }
 
+function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [memberships, setMemberships] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadMemberships = async () => {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listGroupMemberships" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setMemberships(result.data && result.data.memberships ? result.data.memberships : []);
+    } catch (err) {
+      setError(err.message || "權限載入失敗");
+      setMemberships([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadMemberships();
+  }, [googleLinkedStudent]);
+
+  const normalizedEmail = normalizeEmailValue_(googleLinkedStudent && googleLinkedStudent.email);
+  const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+  const userMemberships = memberships.filter((item) => {
+    const memberId = String(item.personId || "").trim();
+    const memberEmail = normalizeEmailValue_(item.personEmail);
+    if (normalizedId && memberId && normalizedId === memberId) {
+      return true;
+    }
+    return normalizedEmail && memberEmail && normalizedEmail === memberEmail;
+  });
+  const hasAccess = userMemberships.some((item) => {
+    const groupId = String(item.groupId || "").trim();
+    const roleInGroup = String(item.roleInGroup || "").trim();
+    if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
+      return true;
+    }
+    return allowedGroupIds.includes(groupId);
+  });
+  const allowedLabel = buildAccessLabel_(allowedGroupIds);
+
+  if (!googleLinkedStudent || !googleLinkedStudent.email) {
+    return (
+      <div className="min-h-screen">
+        <header className="px-6 pt-8 sm:px-12">
+          <div className="mx-auto max-w-6xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              NTU EMBA 115B
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+              {title}
+            </h1>
+            <p className="mt-3 text-sm text-slate-500">{helperText || "請先登入以取得權限。"}</p>
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <GoogleSigninPanel
+              title="Google 登入"
+              helperText="登入後會自動判斷可存取的後台權限。"
+              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+            />
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen">
+        <header className="px-6 pt-8 sm:px-12">
+          <div className="mx-auto max-w-6xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              NTU EMBA 115B
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+              {title}
+            </h1>
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 text-sm text-slate-600 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            權限載入中...
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  if (error || !hasAccess) {
+    return (
+      <div className="min-h-screen">
+        <header className="px-6 pt-8 sm:px-12">
+          <div className="mx-auto max-w-6xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+              NTU EMBA 115B
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+              {title}
+            </h1>
+          </div>
+        </header>
+        <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+          <div className="rounded-3xl border border-rose-200/80 bg-rose-50/80 p-6 text-sm text-rose-700 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            {error || "您目前沒有權限存取此後台。"}
+            <div className="mt-2 text-xs text-rose-600">
+              允許群組：班代、副班代{allowedLabel ? `、${allowedLabel}` : ""}
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return children;
+}
+
 export default function App() {
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");
@@ -907,27 +1041,52 @@ export default function App() {
 
   if (isAdminEventsPage) {
     return (
-      <AdminPage
-        initialTab="events"
-        allowedTabs={["events", "registrations", "checkins", "students"]}
-      />
+      <AdminAccessGuard
+        title="活動管理 · 後台"
+        helperText="僅限班代、副班代、活動組、資管組成員。"
+        allowedGroupIds={["C", "E"]}
+      >
+        <AdminPage
+          initialTab="events"
+          allowedTabs={["events", "registrations", "checkins", "students"]}
+        />
+      </AdminAccessGuard>
     );
   }
 
   if (isAdminOrderingPage) {
-    return <AdminPage initialTab="ordering" allowedTabs={["ordering"]} />;
+    return (
+      <AdminAccessGuard
+        title="訂餐管理 · 後台"
+        helperText="僅限班代、副班代、美食組、資管組成員。"
+        allowedGroupIds={["I", "E"]}
+      >
+        <AdminPage initialTab="ordering" allowedTabs={["ordering"]} />
+      </AdminAccessGuard>
+    );
   }
 
   if (isAdminFinancePage) {
-    return <FinanceAdminPage />;
+    return (
+      <AdminAccessGuard
+        title="財務管理 · 後台"
+        helperText="僅限班代、副班代、財會組、資管組成員。"
+        allowedGroupIds={["D", "E"]}
+      >
+        <FinanceAdminPage />
+      </AdminAccessGuard>
+    );
   }
 
   if (isAdminPage) {
     return (
-      <AdminPage
-        initialTab="roles"
-        allowedTabs={["students", "roles"]}
-      />
+      <AdminAccessGuard
+        title="後台管理 · MVP"
+        helperText="僅限班代、副班代、資管組成員。"
+        allowedGroupIds={["E"]}
+      >
+        <AdminPage initialTab="roles" allowedTabs={["students", "roles"]} />
+      </AdminAccessGuard>
     );
   }
 
@@ -956,7 +1115,15 @@ export default function App() {
   }
 
   if (isSoftballPage) {
-    return <SoftballPage />;
+    return (
+      <AdminAccessGuard
+        title="壘球隊管理 · 後台"
+        helperText="僅限班代、副班代、活動組、資管組、體育主將組成員。"
+        allowedGroupIds={["C", "E", "H"]}
+      >
+        <SoftballPage />
+      </AdminAccessGuard>
+    );
   }
 
   return <LandingPage />;
