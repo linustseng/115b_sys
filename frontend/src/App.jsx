@@ -1118,8 +1118,8 @@ export default function App() {
     return (
       <AdminAccessGuard
         title="壘球隊管理 · 後台"
-        helperText="僅限班代、副班代、活動組、資管組、體育主將組成員。"
-        allowedGroupIds={["C", "E", "H"]}
+        helperText="僅限班代、副班代、資管組、體育主將組成員。"
+        allowedGroupIds={["E", "H"]}
       >
         <SoftballPage />
       </AdminAccessGuard>
