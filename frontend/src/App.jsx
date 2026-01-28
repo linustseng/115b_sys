@@ -291,6 +291,14 @@ const formatDisplayDate_ = (value, options = {}) => {
   if (!hasTime) {
     return dateLabel;
   }
+  if (
+    !options.withTime &&
+    parsed.getHours() === 0 &&
+    parsed.getMinutes() === 0 &&
+    /(T00:00| 00:00|00:00:00)/.test(normalized)
+  ) {
+    return dateLabel;
+  }
   return `${dateLabel} ${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
 };
 
