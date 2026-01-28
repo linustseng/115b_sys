@@ -2711,6 +2711,17 @@ function FinancePage() {
     }
   };
 
+  const resolveMemberGroups_ = (email, memberships) => {
+    if (!email) {
+      return [];
+    }
+    const normalized = normalizeEmailValue_(email);
+    return (memberships || [])
+      .filter((item) => normalizeEmailValue_(item.personEmail) === normalized)
+      .map((item) => String(item.groupId || "").trim())
+      .filter(Boolean);
+  };
+
   const loadMemberGroups = async (email) => {
     if (!email) {
       setMemberGroups([]);
@@ -2733,10 +2744,44 @@ function FinancePage() {
     }
   };
 
+  const loadFinanceBootstrap = async (email) => {
+    if (!email) {
+      return false;
+    }
+    try {
+      const { result } = await apiRequest({ action: "listFinanceBootstrap" });
+      if (!result.ok) {
+        return false;
+      }
+      const data = result.data || {};
+      setStudents(data.students || []);
+      setFinanceCategories(data.categories || []);
+      setFundEvents(data.fundEvents || []);
+      const memberships = data.groupMemberships || [];
+      setMemberGroups(resolveMemberGroups_(email, memberships));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
-      loadStudents();
-      loadFinanceCategories();
+      loadRequests(googleLinkedStudent.email);
+      loadFinanceBootstrap(googleLinkedStudent.email).then((ok) => {
+        if (!ok) {
+          loadStudents();
+          loadFinanceCategories();
+          loadMemberGroups(googleLinkedStudent.email);
+          loadFundEvents();
+        }
+      });
+      setFundPaymentForm((prev) => ({
+        ...prev,
+        payerId: String(googleLinkedStudent.id || "").trim(),
+        payerName: applicantName,
+        payerEmail: googleLinkedStudent.email || "",
+      }));
     }
   }, [googleLinkedStudent]);
 
@@ -2778,19 +2823,7 @@ function FinancePage() {
     }
   };
 
-  useEffect(() => {
-    if (googleLinkedStudent && googleLinkedStudent.email) {
-      loadRequests(googleLinkedStudent.email);
-      loadMemberGroups(googleLinkedStudent.email);
-      loadFundEvents();
-      setFundPaymentForm((prev) => ({
-        ...prev,
-        payerId: String(googleLinkedStudent.id || "").trim(),
-        payerName: applicantName,
-        payerEmail: googleLinkedStudent.email || "",
-      }));
-    }
-  }, [googleLinkedStudent]);
+  // handled in bootstrap useEffect above
 
   useEffect(() => {
     if (fundPaymentForm.eventId) {
@@ -3916,6 +3949,25 @@ function FinanceAdminPage() {
     }
   };
 
+  const loadFinanceAdminBootstrap = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listFinanceAdminBootstrap" });
+      if (!result.ok) {
+        return false;
+      }
+      const data = result.data || {};
+      setStudents(data.students || []);
+      setGroupMemberships(data.groupMemberships || []);
+      setFinanceRoles(data.roles || []);
+      setFinanceCategories(data.categories || []);
+      setFundEvents(data.fundEvents || []);
+      setFundSummary(data.fundSummary || null);
+      return true;
+    } catch (err) {
+      return false;
+    }
+  };
+
   const loadActions = async (requestId) => {
     if (!requestId) {
       setActions([]);
@@ -3933,12 +3985,16 @@ function FinanceAdminPage() {
 
   useEffect(() => {
     loadRequests();
-    loadGroupMemberships();
-    loadFinanceRoles();
-    loadFinanceCategories();
-    loadStudents();
-    loadFundEvents();
-    loadFundSummary();
+    loadFinanceAdminBootstrap().then((ok) => {
+      if (!ok) {
+        loadGroupMemberships();
+        loadFinanceRoles();
+        loadFinanceCategories();
+        loadStudents();
+        loadFundEvents();
+        loadFundSummary();
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -3983,19 +4039,22 @@ function FinanceAdminPage() {
 
   useEffect(() => {
     if (adminTab === "funds") {
-      loadFundEvents();
-      loadFundSummary();
-      loadStudents();
-      loadGroupMemberships();
-      loadFinanceRoles();
+      if (!fundEvents.length || !students.length || !groupMemberships.length || !financeRoles.length) {
+        loadFinanceAdminBootstrap();
+      }
+      if (!fundSummary) {
+        loadFundSummary();
+      }
     }
     if (adminTab === "roles") {
-      loadGroupMemberships();
-      loadFinanceRoles();
-      loadStudents();
+      if (!groupMemberships.length || !financeRoles.length || !students.length) {
+        loadFinanceAdminBootstrap();
+      }
     }
     if (adminTab === "categories") {
-      loadFinanceCategories();
+      if (!financeCategories.length) {
+        loadFinanceAdminBootstrap();
+      }
     }
   }, [adminTab]);
 
@@ -4696,12 +4755,7 @@ function FinanceAdminPage() {
                 type="button"
                 onClick={() => {
                   loadRequests();
-                  loadGroupMemberships();
-                  loadFinanceRoles();
-                  loadFinanceCategories();
-                  loadStudents();
-                  loadFundEvents();
-                  loadFundSummary();
+                  loadFinanceAdminBootstrap();
                 }}
                 className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
               >
@@ -5969,16 +6023,54 @@ function SoftballPage() {
     }
   };
 
+  const loadSoftballBootstrap = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listSoftballBootstrap" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const data = result.data || {};
+      setPlayers(data.players || []);
+      const practiceList = data.practices || [];
+      const sorted = practiceList
+        .slice()
+        .sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+      setPractices(sorted);
+      setFields(data.fields || []);
+      setGear(data.gear || []);
+      const config = data.config || {};
+      setSoftballConfig(config);
+      setJerseyDeadline(config.jerseyDeadline || "");
+      return true;
+    } catch (err) {
+      setError(err.message || "載入失敗");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
-      setLoading(true);
-      setError("");
-      try {
-        await Promise.all([loadPlayers(), loadPractices(), loadFields(), loadGear(), loadSoftballConfig()]);
-      } finally {
-        if (!ignore) {
-          setLoading(false);
+      const ok = await loadSoftballBootstrap();
+      if (!ok) {
+        setLoading(true);
+        setError("");
+        try {
+          await Promise.all([
+            loadPlayers(),
+            loadPractices(),
+            loadFields(),
+            loadGear(),
+            loadSoftballConfig(),
+          ]);
+        } finally {
+          if (!ignore) {
+            setLoading(false);
+          }
         }
       }
     };
@@ -8275,6 +8367,34 @@ function HomePage() {
     return "open";
   };
 
+  const isEventClosed_ = (event) => {
+    if (!event) {
+      return false;
+    }
+    const status = String(event.status || "").trim().toLowerCase();
+    if (status === "closed") {
+      return true;
+    }
+    const endAt = parseEventDateValue_(event.endAt || event.registrationCloseAt);
+    return endAt ? endAt.getTime() < Date.now() : false;
+  };
+
+  const visibleEvents = events
+    .filter((event) => !isEventClosed_(event))
+    .sort((a, b) => {
+      const aOpen = String(a.status || "").trim().toLowerCase() === "open";
+      const bOpen = String(b.status || "").trim().toLowerCase() === "open";
+      if (aOpen !== bOpen) {
+        return aOpen ? -1 : 1;
+      }
+      const aDate = parseEventDateValue_(a.startAt || a.endAt);
+      const bDate = parseEventDateValue_(b.startAt || b.endAt);
+      if (aDate && bDate) {
+        return bDate.getTime() - aDate.getTime();
+      }
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
+
   const handleStartCheckin = (event) => {
     setCheckinError("");
     setCheckinSuccess("");
@@ -8738,7 +8858,7 @@ function HomePage() {
             </div>
           ) : null}
 
-          {!loading && !events.length && !error ? (
+          {!loading && !visibleEvents.length && !error ? (
             <p className="mt-6 text-sm text-slate-500">目前沒有活動，請稍後再查看。</p>
           ) : null}
 
@@ -8762,7 +8882,7 @@ function HomePage() {
                     <div className="mt-6 h-9 rounded-xl bg-slate-100" />
                   </div>
                 ))
-              : events.map((event) => {
+              : visibleEvents.map((event) => {
                   const statusLabel = event.status === "open" ? "報名進行中" : "報名狀態更新";
                   const schedule = formatEventSchedule_(event.startAt, event.endAt);
                   const eventId = normalizeEventId_(event.id);
@@ -9160,6 +9280,55 @@ function AdminPage({
     return normalized;
   };
 
+  const parseEventDateValue_ = (value) => {
+    if (!value) {
+      return null;
+    }
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const normalized =
+      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+        ? raw.replace(/\//g, "-").replace(" ", "T")
+        : raw;
+    const parsed = new Date(normalized);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const isEventClosed_ = (event) => {
+    if (!event) {
+      return false;
+    }
+    const status = String(event.status || "").trim().toLowerCase();
+    if (status === "closed") {
+      return true;
+    }
+    const endAt = parseEventDateValue_(event.endAt || event.registrationCloseAt);
+    return endAt ? endAt.getTime() < Date.now() : false;
+  };
+
+  const sortedEvents = events
+    .slice()
+    .sort((a, b) => {
+      const aClosed = isEventClosed_(a);
+      const bClosed = isEventClosed_(b);
+      if (aClosed !== bClosed) {
+        return aClosed ? 1 : -1;
+      }
+      const aOpen = String(a.status || "").trim().toLowerCase() === "open";
+      const bOpen = String(b.status || "").trim().toLowerCase() === "open";
+      if (aOpen !== bOpen) {
+        return aOpen ? -1 : 1;
+      }
+      const aDate = parseEventDateValue_(a.startAt || a.endAt);
+      const bDate = parseEventDateValue_(b.startAt || b.endAt);
+      if (aDate && bDate) {
+        return bDate.getTime() - aDate.getTime();
+      }
+      return String(b.id || "").localeCompare(String(a.id || ""));
+    });
+
   const formatOrderDateLabel_ = (value) => {
     const parsed = parseLocalInputDate_(value);
     if (!parsed) {
@@ -9280,7 +9449,11 @@ function AdminPage({
 
   useEffect(() => {
     if (hasEventDataTabs) {
-      loadEvents();
+      loadAdminBootstrap().then((ok) => {
+        if (!ok) {
+          loadEvents();
+        }
+      });
     }
   }, [hasEventDataTabs]);
 
@@ -9306,21 +9479,34 @@ function AdminPage({
   useEffect(() => {
     if (activeTab === "registrations") {
       loadRegistrations();
-      loadStudents();
+      if (!students.length || !events.length) {
+        loadAdminBootstrap();
+      }
       loadDirectoryAdmin();
     }
     if (activeTab === "checkins") {
       loadCheckins();
       loadRegistrations();
+      if (!students.length || !events.length) {
+        loadAdminBootstrap();
+      }
       loadDirectoryAdmin();
     }
     if (activeTab === "students") {
-      loadStudents();
+      if (!students.length) {
+        loadAdminBootstrap();
+      } else {
+        loadStudents();
+      }
       loadDirectoryAdmin();
     }
     if (activeTab === "roles") {
-      loadGroupMemberships();
-      loadStudents();
+      if (!groupMemberships.length || !students.length) {
+        loadAdminBootstrap();
+      } else {
+        loadGroupMemberships();
+        loadStudents();
+      }
     }
     if (activeTab === "ordering") {
       loadOrderPlans();
@@ -9526,6 +9712,31 @@ function AdminPage({
       setMembershipStatus("");
     } catch (err) {
       setError(err.message || "班務分組載入失敗。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAdminBootstrap = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listAdminBootstrap" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const data = result.data || {};
+      setEvents(data.events || []);
+      const studentsList = data.students || [];
+      setStudents(studentsList);
+      setGroupMemberships(data.groupMemberships || []);
+      setDraftMemberships(data.groupMemberships || []);
+      setMembershipDirty(false);
+      setMembershipStatus("");
+      return true;
+    } catch (err) {
+      setError(err.message || "後台資料載入失敗。");
+      return false;
     } finally {
       setLoading(false);
     }
@@ -10485,13 +10696,16 @@ function AdminPage({
           ) : null}
           {activeTab === "events" ? (
             <div className="mt-6 space-y-4">
-              {events.map((event) => (
+              {sortedEvents.map((event) => (
                 <div
                   key={event.id}
                   className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
                 >
                   <div>
-                    <p className="font-semibold text-slate-900">{event.title}</p>
+                    <p className="font-semibold text-slate-900">
+                      {event.title}
+                      {isEventClosed_(event) ? " (已結束)" : ""}
+                    </p>
                     <p className="text-xs text-slate-500">
                       {formatDisplayDate_(event.startAt, { withTime: true }) || "-"} ·{" "}
                       {event.location}
@@ -10772,9 +10986,10 @@ function AdminPage({
                     onChange={(event) => setRegistrationEventId(event.target.value)}
                     className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                   >
-                    {events.map((event) => (
+                    {sortedEvents.map((event) => (
                       <option key={event.id} value={event.id}>
-                        {event.title} · {event.id}
+                        {event.title}
+                        {isEventClosed_(event) ? " (已結束)" : ""} · {event.id}
                       </option>
                     ))}
                   </select>
@@ -10851,9 +11066,10 @@ function AdminPage({
                     onChange={(event) => setCheckinEventId(event.target.value)}
                     className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                   >
-                    {events.map((event) => (
+                    {sortedEvents.map((event) => (
                       <option key={event.id} value={event.id}>
-                        {event.title} · {event.id}
+                        {event.title}
+                        {isEventClosed_(event) ? " (已結束)" : ""} · {event.id}
                       </option>
                     ))}
                   </select>
