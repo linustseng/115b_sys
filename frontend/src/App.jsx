@@ -7,7 +7,7 @@ const gatheringFieldConfig = {
   attendance: {
     id: "attendance",
     label: "是否出席",
-    options: ["出席", "不出席", "尚未確定"],
+    options: ["出席", "不克出席", "尚未確定"],
   },
   companions: {
     id: "companions",
@@ -90,7 +90,7 @@ const meetingFields = [
     id: "attendance",
     label: "是否出席",
     type: "select",
-    options: ["出席", "不出席", "尚未確定"],
+    options: ["出席", "不克出席", "尚未確定"],
     control: "buttons",
   },
   {
@@ -2010,7 +2010,7 @@ function RegistrationPage() {
             <ul className="mt-4 space-y-3 text-sm text-slate-600">
               <li>報名截止：2024/10/10 23:00</li>
               {allowCompanions ? <li>攜伴請於備註註明姓名</li> : null}
-              <li>若改為不出席請於截止日前更新</li>
+              <li>若改為不克出席請於截止日前更新</li>
             </ul>
           </div>
         </aside>
@@ -8669,7 +8669,7 @@ function HomePage() {
     }
     if (checkinStatus && checkinStatus.status === "not_attending") {
       return {
-        label: "已報名不出席",
+        label: "已報名不克出席",
         badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
       };
     }
@@ -8696,9 +8696,9 @@ function HomePage() {
         badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
       };
     }
-    if (attendance === "不出席") {
+    if (attendance === "不克出席") {
       return {
-        label: "已報名不出席",
+        label: "已報名不克出席",
         badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
       };
     }
@@ -8956,7 +8956,7 @@ function HomePage() {
                       </div>
                     ) : isNotAttending ? (
                       <span className="text-xs text-rose-500">
-                        已回覆不出席，無法簽到，請洽活動負責人
+                        已回覆不克出席，無法簽到，請洽活動負責人
                       </span>
                     ) : isAttendanceUnknown ? (
                       <span className="text-xs text-rose-500">
@@ -11259,7 +11259,7 @@ function AdminPage({
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-slate-500">
-                    色塊提示報名狀態：綠色＝出席，紅色＝不出席，灰色＝未定，白色＝未報名。
+                    色塊提示報名狀態：綠色＝出席，紅色＝不克出席，灰色＝未定，白色＝未報名。
                   </p>
                   <input
                     value={unregisteredQuery}
@@ -11282,7 +11282,7 @@ function AdminPage({
                         (normalizedName && attendanceByName.get(normalizedName)) ||
                         "";
                       const attendanceStatus =
-                        attendanceValue === "不出席"
+                        attendanceValue === "不克出席"
                           ? "not_attending"
                           : attendanceValue === "尚未確定" ||
                             attendanceValue === "未定" ||
