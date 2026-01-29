@@ -9768,13 +9768,13 @@ function AdminPage({
   }, [activeId, events, seedTimestamp]);
 
   useEffect(() => {
-    if (!registrationEventId && events.length) {
-      setRegistrationEventId(events[0].id || "");
+    if (!registrationEventId && sortedEvents.length) {
+      setRegistrationEventId(sortedEvents[0].id || "");
     }
-    if (!checkinEventId && events.length) {
-      setCheckinEventId(events[0].id || "");
+    if (!checkinEventId && sortedEvents.length) {
+      setCheckinEventId(sortedEvents[0].id || "");
     }
-  }, [events, registrationEventId, checkinEventId]);
+  }, [sortedEvents, registrationEventId, checkinEventId]);
 
   useEffect(() => {
     if (activeTab !== "ordering") {
