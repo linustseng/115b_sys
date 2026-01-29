@@ -2696,10 +2696,16 @@ function FinancePage() {
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [memberGroups, setMemberGroups] = useState([]);
   const [fundEvents, setFundEvents] = useState([]);
+  const [fundEventsLoading, setFundEventsLoading] = useState(false);
+  const [fundEventsError, setFundEventsError] = useState("");
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState("requests");
+  const [requestsLoaded, setRequestsLoaded] = useState(false);
+  const [requestBootstrapLoaded, setRequestBootstrapLoaded] = useState(false);
+  const fundEventsCacheKey = "fund_events_cache_v1";
+  const fundEventsCacheTtlMs = 10 * 60 * 1000;
   const fundPaymentErrorActive = financeTab === "fund" && !!error;
   const fundPaymentErrorFlags = {
     eventId: fundPaymentErrorActive && error.includes("班費事件"),
@@ -2801,7 +2807,17 @@ function FinancePage() {
       const data = result.data || {};
       setStudents(data.students || []);
       setFinanceCategories(data.categories || []);
-      setFundEvents(data.fundEvents || []);
+      if (data.fundEvents) {
+        setFundEvents(data.fundEvents || []);
+        try {
+          localStorage.setItem(
+            fundEventsCacheKey,
+            JSON.stringify({ ts: Date.now(), events: data.fundEvents || [] })
+          );
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      }
       const memberships = data.groupMemberships || [];
       setMemberGroups(resolveMemberGroups_(email, memberships));
       return true;
@@ -2812,23 +2828,46 @@ function FinancePage() {
 
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
-      loadRequests(googleLinkedStudent.email);
-      loadFinanceBootstrap(googleLinkedStudent.email).then((ok) => {
-        if (!ok) {
-          loadStudents();
-          loadFinanceCategories();
-          loadMemberGroups(googleLinkedStudent.email);
-          loadFundEvents();
-        }
-      });
+      setRequestsLoaded(false);
+      setRequestBootstrapLoaded(false);
+      loadMemberGroups(googleLinkedStudent.email);
       setFundPaymentForm((prev) => ({
         ...prev,
         payerId: String(googleLinkedStudent.id || "").trim(),
         payerName: applicantName,
         payerEmail: googleLinkedStudent.email || "",
       }));
+    } else {
+      setRequests([]);
+      setStudents([]);
+      setFinanceCategories([]);
+      setMemberGroups([]);
+      setRequestsLoaded(false);
+      setRequestBootstrapLoaded(false);
     }
   }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      return;
+    }
+    if (financeTab !== "requests") {
+      return;
+    }
+    if (!requestsLoaded) {
+      loadRequests(googleLinkedStudent.email);
+      setRequestsLoaded(true);
+    }
+    if (!requestBootstrapLoaded) {
+      loadFinanceBootstrap(googleLinkedStudent.email).then((ok) => {
+        if (!ok) {
+          loadStudents();
+          loadFinanceCategories();
+        }
+        setRequestBootstrapLoaded(true);
+      });
+    }
+  }, [financeTab, googleLinkedStudent, requestsLoaded, requestBootstrapLoaded]);
 
   useEffect(() => {
     if (!form.categoryType && financeCategories.length) {
@@ -2843,13 +2882,29 @@ function FinancePage() {
   }, [applicantName, editingId, form.applicantName]);
 
   const loadFundEvents = async () => {
+    setFundEventsLoading(true);
+    setFundEventsError("");
     try {
       const { result } = await apiRequest({ action: "listFundEvents" });
       if (result.ok) {
-        setFundEvents(result.data && result.data.events ? result.data.events : []);
+        const events = result.data && result.data.events ? result.data.events : [];
+        setFundEvents(events);
+        try {
+          localStorage.setItem(
+            fundEventsCacheKey,
+            JSON.stringify({ ts: Date.now(), events: events })
+          );
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      } else {
+        setFundEventsError(result.error || "班費事件載入失敗");
       }
     } catch (err) {
-      setFundEvents([]);
+      setFundEventsError("班費事件載入失敗");
+      setFundEvents((prev) => (prev.length ? prev : []));
+    } finally {
+      setFundEventsLoading(false);
     }
   };
 
@@ -2868,7 +2923,20 @@ function FinancePage() {
     }
   };
 
-  // handled in bootstrap useEffect above
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(fundEventsCacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && Array.isArray(parsed.events) && Date.now() - parsed.ts < fundEventsCacheTtlMs) {
+          setFundEvents(parsed.events);
+        }
+      }
+    } catch (error) {
+      // Ignore cache read errors.
+    }
+    loadFundEvents();
+  }, []);
 
   useEffect(() => {
     if (fundPaymentForm.eventId) {
@@ -3340,19 +3408,42 @@ function FinancePage() {
                       onChange={(event) => handleFundPaymentChange("eventId", event.target.value)}
                       required
                       aria-invalid={fundPaymentErrorFlags.eventId ? "true" : "false"}
+                      disabled={fundEventsLoading && !fundEvents.length}
                       className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                         fundPaymentErrorFlags.eventId
                           ? "border-rose-300 bg-rose-50/60"
                           : "border-slate-200 bg-white"
                       }`}
                     >
-                      <option value="">請選擇</option>
+                      <option value="" disabled>
+                        {fundEventsLoading
+                          ? "班費事件載入中..."
+                          : fundEvents.length
+                          ? "請選擇"
+                          : fundEventsError
+                          ? "載入失敗，請重試"
+                          : "目前沒有班費事件"}
+                      </option>
                       {fundEvents.map((item) => (
                         <option key={item.id} value={item.id}>
                           {item.title}
                         </option>
                       ))}
                     </select>
+                    {fundEventsLoading ? (
+                      <p className="text-xs text-slate-400">載入中，約 3-5 秒。</p>
+                    ) : fundEventsError ? (
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-rose-500">
+                        <span>{fundEventsError}</span>
+                        <button
+                          type="button"
+                          onClick={loadFundEvents}
+                          className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-600"
+                        >
+                          重新載入
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">繳費身份</label>
