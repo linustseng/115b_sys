@@ -1790,7 +1790,6 @@ function RegistrationPage() {
                     )}
                   </div>
                   {allowCompanions ? (
-                  {allowCompanions ? (
                     <div className="grid gap-2">
                       <label className="text-sm font-medium text-slate-700" htmlFor="companions">
                         {gatheringFieldConfig.companions.label}
@@ -1809,7 +1808,6 @@ function RegistrationPage() {
                         className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
                       />
                     </div>
-                  ) : null}
                   ) : null}
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
@@ -1848,7 +1846,6 @@ function RegistrationPage() {
                   </div>
                 </div>
 
-                {allowBringDrinks ? (
                 {allowBringDrinks ? (
                   <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-5">
                     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1896,7 +1893,6 @@ function RegistrationPage() {
                       <p className="mt-3 text-xs text-slate-400">目前未攜帶酒水。</p>
                     )}
                   </div>
-                ) : null}
                 ) : null}
               </div>
             )}
@@ -3483,73 +3479,77 @@ function FinancePage() {
               onSubmit={handleSubmit}
               className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
             >
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-900">新建申請</h2>
-              {editingId ? (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-                  編輯中 {editingId}
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">
-                  申請類型 <span className="text-rose-600">*</span>
-                </label>
-                <select
-                  value={form.type}
-                  onChange={(event) => handleFormChange("type", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                >
-                  {FINANCE_TYPES.map((item) => (
-                    <option key={item.value} value={item.value}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">新建申請</h2>
+                {editingId ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                    編輯中 {editingId}
+                  </span>
+                ) : null}
               </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">
-                請款人 <span className="text-rose-600">*</span>
-              </label>
-              <input
-                value={form.applicantName}
-                onChange={(event) => handleApplicantInputChange(event.target.value)}
-                list="finance-students"
-                placeholder="請輸入或選擇學號 + 姓名"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-              />
-              <datalist id="finance-students">
-                {students.map((student) => {
-                  const id = String(student.id || "").trim();
-                  const name = String(
-                    student.preferredName || student.nameZh || student.nameEn || student.name || ""
-                  ).trim();
-                  if (!id && !name) {
-                    return null;
-                  }
-                  const label = [id, name].filter(Boolean).join(" ");
-                  return <option key={`${id}-${name}`} value={label} />;
-                })}
-              </datalist>
-            </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">
-                申請組別 <span className="text-rose-600">*</span>
-              </label>
-              <select
-                value={form.applicantDepartment}
-                onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-              >
-                <option value="">請選擇</option>
-                {CLASS_GROUPS.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    申請類型 <span className="text-rose-600">*</span>
+                  </label>
+                  <select
+                    value={form.type}
+                    onChange={(event) => handleFormChange("type", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    {FINANCE_TYPES.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    請款人 <span className="text-rose-600">*</span>
+                  </label>
+                  <input
+                    value={form.applicantName}
+                    onChange={(event) => handleApplicantInputChange(event.target.value)}
+                    list="finance-students"
+                    placeholder="請輸入或選擇學號 + 姓名"
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <datalist id="finance-students">
+                    {students.map((student) => {
+                      const id = String(student.id || "").trim();
+                      const name = String(
+                        student.preferredName ||
+                          student.nameZh ||
+                          student.nameEn ||
+                          student.name ||
+                          ""
+                      ).trim();
+                      if (!id && !name) {
+                        return null;
+                      }
+                      const label = [id, name].filter(Boolean).join(" ");
+                      return <option key={`${id}-${name}`} value={label} />;
+                    })}
+                  </datalist>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">
+                    申請組別 <span className="text-rose-600">*</span>
+                  </label>
+                  <select
+                    value={form.applicantDepartment}
+                    onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  >
+                    <option value="">請選擇</option>
+                    {CLASS_GROUPS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
                   項目名稱 <span className="text-rose-600">*</span>

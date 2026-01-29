@@ -16,6 +16,8 @@
     "capacity": "number",
     "status": "draft|open|closed",
     "category": "gathering|meeting",
+    "allowCompanions": "yes|no",
+    "allowBringDrinks": "yes|no",
     "formSchema": {
       "fields": "array",
       "presets": "object"

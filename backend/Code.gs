@@ -50,6 +50,69 @@ function doGet(e) {
   }
 }
 
+function getCachedJson_(key, ttlSeconds, loader) {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get(key);
+  if (cached) {
+    try {
+      return JSON.parse(cached);
+    } catch (error) {
+      // fall through and refresh
+    }
+  }
+  const data = loader();
+  cache.put(key, JSON.stringify(data || null), ttlSeconds);
+  return data;
+}
+
+function listStudentsCached_() {
+  return getCachedJson_("students:list:v1", 60, listStudents_);
+}
+
+function listGroupMembershipsCached_() {
+  return getCachedJson_("groupMemberships:list:v1", 60, listGroupMemberships_);
+}
+
+function listFinanceRolesCached_() {
+  return getCachedJson_("financeRoles:list:v1", 60, listFinanceRoles_);
+}
+
+function listFinanceCategoryTypesCached_() {
+  return getCachedJson_("financeCategoryTypes:list:v1", 120, listFinanceCategoryTypes_);
+}
+
+function listFundEventsCached_() {
+  return getCachedJson_("fundEvents:list:v1", 60, listFundEvents_);
+}
+
+function listEventsCached_() {
+  return getCachedJson_("events:list:v1", 60, listEvents_);
+}
+
+function listSoftballPlayersCached_() {
+  return getCachedJson_("softballPlayers:list:v1", 60, listSoftballPlayers_);
+}
+
+function listSoftballPracticesCached_() {
+  return getCachedJson_("softballPractices:list:v1", 60, listSoftballPractices_);
+}
+
+function listSoftballFieldsCached_() {
+  return getCachedJson_("softballFields:list:v1", 60, listSoftballFields_);
+}
+
+function listSoftballGearCached_() {
+  return getCachedJson_("softballGear:list:v1", 60, listSoftballGear_);
+}
+
+function listSoftballConfigCached_() {
+  return getCachedJson_("softballConfig:list:v1", 60, listSoftballConfig_);
+}
+
+function buildFundSummaryCached_() {
+  return getCachedJson_("fundSummary:v1", 60, buildFundSummary_);
+}
+
 function handleAction_(payload) {
   const result = handleActionPayload_(payload);
   return jsonResponse(result.ok ? 200 : 400, result.data, result.error);
@@ -74,6 +137,60 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "listFinanceRequests") {
     return { ok: true, data: { requests: listFinanceRequests_(payload) }, error: null };
+  }
+
+  if (payload.action === "listAdminBootstrap") {
+    return {
+      ok: true,
+      data: {
+        events: listEventsCached_(),
+        students: listStudentsCached_(),
+        groupMemberships: listGroupMembershipsCached_(),
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listFinanceBootstrap") {
+    return {
+      ok: true,
+      data: {
+        students: listStudentsCached_(),
+        groupMemberships: listGroupMembershipsCached_(),
+        categories: listFinanceCategoryTypesCached_(),
+        fundEvents: listFundEventsCached_(),
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listFinanceAdminBootstrap") {
+    return {
+      ok: true,
+      data: {
+        students: listStudentsCached_(),
+        groupMemberships: listGroupMembershipsCached_(),
+        roles: listFinanceRolesCached_(),
+        categories: listFinanceCategoryTypesCached_(),
+        fundEvents: listFundEventsCached_(),
+        fundSummary: buildFundSummaryCached_(),
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listSoftballBootstrap") {
+    return {
+      ok: true,
+      data: {
+        players: listSoftballPlayersCached_(),
+        practices: listSoftballPracticesCached_(),
+        fields: listSoftballFieldsCached_(),
+        gear: listSoftballGearCached_(),
+        config: listSoftballConfigCached_(),
+      },
+      error: null,
+    };
   }
 
   if (payload.action === "createFinanceRequest") {
@@ -3062,6 +3179,8 @@ function normalizeEventRecord_(data) {
     capacity: data.capacity || "",
     status: String(data.status || "draft").trim(),
     category: String(data.category || "gathering").trim(),
+    allowCompanions: String(data.allowCompanions || "").trim(),
+    allowBringDrinks: String(data.allowBringDrinks || "").trim(),
     attachments: data.attachments || "",
     formSchema: data.formSchema || "",
   };
