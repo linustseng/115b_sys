@@ -3445,6 +3445,11 @@ function FinancePage() {
                       </div>
                     ) : null}
                   </div>
+                  {fundPaymentForm.eventId && fundPayments.length ? (
+                    <div className="sm:col-span-2 rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+                      已有 {fundPayments.length} 筆繳交回報紀錄。若是補登或更正可再送出；若非必要可先確認右側紀錄。
+                    </div>
+                  ) : null}
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">繳費身份</label>
                     <input
@@ -10704,6 +10709,20 @@ function AdminPage({
   const registrationList = registrationEventId
     ? registrationsByEvent[normalizeEventId_(registrationEventId)] || []
     : registrations;
+  const attendanceByStudentId = new Map();
+  const attendanceByName = new Map();
+  registrationList.forEach((registration) => {
+    const fields = parseCustomFields_(registration.customFields);
+    const attendanceValue = String(fields.attendance || "").trim();
+    const studentId = String(registration.studentId || "").trim();
+    if (studentId) {
+      attendanceByStudentId.set(studentId, attendanceValue);
+    }
+    const nameKey = normalizeName_(registration.userName);
+    if (nameKey) {
+      attendanceByName.set(nameKey, attendanceValue);
+    }
+  });
   const registeredStudentIdSet = new Set(
     registrationList
       .map((item) => {
@@ -11240,7 +11259,7 @@ function AdminPage({
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-xs text-slate-500">
-                    色塊提示報名狀態：綠色＝已報名，灰色＝未報名。
+                    色塊提示報名狀態：綠色＝出席，紅色＝不出席，灰色＝未定，白色＝未報名。
                   </p>
                   <input
                     value={unregisteredQuery}
@@ -11258,15 +11277,32 @@ function AdminPage({
                       const isRegistered =
                         (studentId && registeredStudentIdSet.has(studentId)) ||
                         (normalizedName && registeredNameSet.has(normalizedName));
+                      const attendanceValue =
+                        (studentId && attendanceByStudentId.get(studentId)) ||
+                        (normalizedName && attendanceByName.get(normalizedName)) ||
+                        "";
+                      const attendanceStatus =
+                        attendanceValue === "不出席"
+                          ? "not_attending"
+                          : attendanceValue === "尚未確定" ||
+                            attendanceValue === "未定" ||
+                            attendanceValue === "未確認"
+                          ? "unknown"
+                          : attendanceValue === "出席"
+                          ? "attending"
+                          : "";
+                      const badgeStyle = isRegistered
+                        ? attendanceStatus === "not_attending"
+                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          : attendanceStatus === "unknown"
+                          ? "border-slate-300 bg-slate-100 text-slate-600"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-400";
                       return (
                         <span
                           key={student.id || student.googleEmail || student.email}
                           title={student.googleEmail || student.email || ""}
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
-                            isRegistered
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-slate-200 bg-slate-50 text-slate-600"
-                          }`}
+                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${badgeStyle}`}
                         >
                           {displayName || "未命名"}
                           {student.id ? `· ${student.id}` : ""}
