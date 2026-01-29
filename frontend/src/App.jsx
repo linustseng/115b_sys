@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
 import emblem115b from "./assets/115b_icon.png";
+import lineLinkGuide from "./assets/line_link.jpg";
 
 const gatheringFieldConfig = {
   attendance: {
@@ -125,6 +126,8 @@ const DEFAULT_EVENT = {
   category: "gathering",
   capacity: 60,
   status: "open",
+  allowCompanions: "yes",
+  allowBringDrinks: "yes",
 };
 
 const EVENT_CATEGORIES = [
@@ -620,6 +623,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [linkLoading, setLinkLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const [showLineGuide, setShowLineGuide] = useState(false);
   const lineInfo = getLineInAppInfo_();
   const isLineInApp = lineInfo.isLineInApp;
 
@@ -822,7 +826,24 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
                 {copyStatus === "copied" ? "已複製" : "複製失敗"}
               </span>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setShowLineGuide((prev) => !prev)}
+              className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-700"
+            >
+              {showLineGuide ? "收合圖示" : "查看圖示"}
+            </button>
           </div>
+          {showLineGuide ? (
+            <div className="mt-3 overflow-hidden rounded-xl border border-amber-200 bg-white">
+              <img
+                src={lineLinkGuide}
+                alt="LINE 內建瀏覽器開啟外部瀏覽器示意"
+                className="h-auto w-full"
+                loading="lazy"
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1165,6 +1186,8 @@ function RegistrationPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
+  const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
 
   useEffect(() => {
     if (!googleLinkedStudent) {
@@ -1190,6 +1213,22 @@ function RegistrationPage() {
     setAutoFilled(hasEmail);
     setLookupStatus(hasEmail ? "found" : "idle");
   }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    setCustomFields((prev) => {
+      const next = { ...prev };
+      if (!allowCompanions) {
+        delete next.companions;
+      }
+      if (!allowBringDrinks) {
+        next.bringDrinks = "不攜帶";
+        DRINK_FIELD_IDS.forEach((id) => {
+          delete next[id];
+        });
+      }
+      return next;
+    });
+  }, [allowCompanions, allowBringDrinks]);
 
   const parseCustomFields_ = (value) => {
     if (!value) {
@@ -1313,6 +1352,8 @@ function RegistrationPage() {
             category: event.category || categoryParam || DEFAULT_EVENT.category,
             capacity: event.capacity || DEFAULT_EVENT.capacity,
             status: event.status || DEFAULT_EVENT.status,
+            allowCompanions: event.allowCompanions || DEFAULT_EVENT.allowCompanions,
+            allowBringDrinks: event.allowBringDrinks || DEFAULT_EVENT.allowBringDrinks,
           });
         }
       } catch (error) {
@@ -1748,24 +1789,28 @@ function RegistrationPage() {
                       (next) => handleCustomFieldChange(gatheringFieldConfig.attendance.id, next)
                     )}
                   </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700" htmlFor="companions">
-                      {gatheringFieldConfig.companions.label}
-                    </label>
-                    <input
-                      id="companions"
-                      type="number"
-                      placeholder={gatheringFieldConfig.companions.placeholder}
-                      value={customFields.companions || ""}
-                      onChange={(event) =>
-                        handleCustomFieldChange(
-                          gatheringFieldConfig.companions.id,
-                          event.target.value
-                        )
-                      }
-                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
-                    />
-                  </div>
+                  {allowCompanions ? (
+                  {allowCompanions ? (
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700" htmlFor="companions">
+                        {gatheringFieldConfig.companions.label}
+                      </label>
+                      <input
+                        id="companions"
+                        type="number"
+                        placeholder={gatheringFieldConfig.companions.placeholder}
+                        value={customFields.companions || ""}
+                        onChange={(event) =>
+                          handleCustomFieldChange(
+                            gatheringFieldConfig.companions.id,
+                            event.target.value
+                          )
+                        }
+                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                      />
+                    </div>
+                  ) : null}
+                  ) : null}
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
                       {gatheringFieldConfig.dietary.label}
@@ -1803,52 +1848,56 @@ function RegistrationPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {gatheringFieldConfig.drinks.toggle.label}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        若會攜帶酒水，請填寫品項與數量。
-                      </p>
+                {allowBringDrinks ? (
+                {allowBringDrinks ? (
+                  <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          {gatheringFieldConfig.drinks.toggle.label}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          若會攜帶酒水，請填寫品項與數量。
+                        </p>
+                      </div>
+                      {renderOptionButtons(
+                        gatheringFieldConfig.drinks.toggle,
+                        bringDrinksValue,
+                        (next) => handleBringDrinksChange(next)
+                      )}
                     </div>
-                    {renderOptionButtons(
-                      gatheringFieldConfig.drinks.toggle,
-                      bringDrinksValue,
-                      (next) => handleBringDrinksChange(next)
+                    {bringDrinksValue === "攜帶" ? (
+                      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                        {gatheringFieldConfig.drinks.items.map((field) => (
+                          <div key={field.id} className="grid gap-2">
+                            <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
+                              {field.label}
+                            </label>
+                            {field.type === "combo" ? (
+                              renderComboField(field, customFields[field.id] || "", (next) =>
+                                handleCustomFieldChange(field.id, next)
+                              )
+                            ) : (
+                              <input
+                                id={field.id}
+                                type={field.type}
+                                placeholder={field.placeholder}
+                                value={customFields[field.id] || ""}
+                                onChange={(event) =>
+                                  handleCustomFieldChange(field.id, event.target.value)
+                                }
+                                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-slate-400">目前未攜帶酒水。</p>
                     )}
                   </div>
-                  {bringDrinksValue === "攜帶" ? (
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      {gatheringFieldConfig.drinks.items.map((field) => (
-                        <div key={field.id} className="grid gap-2">
-                          <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
-                            {field.label}
-                          </label>
-                          {field.type === "combo" ? (
-                            renderComboField(field, customFields[field.id] || "", (next) =>
-                              handleCustomFieldChange(field.id, next)
-                            )
-                          ) : (
-                            <input
-                              id={field.id}
-                              type={field.type}
-                              placeholder={field.placeholder}
-                              value={customFields[field.id] || ""}
-                              onChange={(event) =>
-                                handleCustomFieldChange(field.id, event.target.value)
-                              }
-                              className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-3 text-xs text-slate-400">目前未攜帶酒水。</p>
-                  )}
-                </div>
+                ) : null}
+                ) : null}
               </div>
             )}
           </div>
@@ -1964,7 +2013,7 @@ function RegistrationPage() {
             </p>
             <ul className="mt-4 space-y-3 text-sm text-slate-600">
               <li>報名截止：2024/10/10 23:00</li>
-              <li>攜伴請於備註註明姓名</li>
+              {allowCompanions ? <li>攜伴請於備註註明姓名</li> : null}
               <li>若改為不出席請於截止日前更新</li>
             </ul>
           </div>
@@ -8309,6 +8358,19 @@ function HomePage() {
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState("");
+  const [showCalendarMobile, setShowCalendarMobile] = useState(() => {
+    try {
+      const stored = localStorage.getItem("home_calendar_mobile_open");
+      if (stored === null) {
+        return true;
+      }
+      return stored === "1";
+    } catch (error) {
+      return true;
+    }
+  });
+  const calendarEmbedUrl =
+    "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
   const normalizeEventId_ = (value) => String(value || "").trim();
   const normalizeOrderId_ = (value) => String(value || "").trim();
@@ -8659,6 +8721,14 @@ function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem("home_calendar_mobile_open", showCalendarMobile ? "1" : "0");
+    } catch (error) {
+      // Ignore write errors (private mode, blocked storage, etc.)
+    }
+  }, [showCalendarMobile]);
+
   return (
     <div className="min-h-screen">
       <header className="px-6 pt-8 sm:px-12">
@@ -8839,6 +8909,66 @@ function HomePage() {
               </span>
             </div>
           ) : null}
+        </section>
+
+        <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">班級行李曆</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                共用行李曆同步最新活動安排，手機可收合或新視窗查看。
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCalendarMobile((prev) => !prev)}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 sm:hidden"
+              >
+                {showCalendarMobile ? "收合行李曆" : "展開行李曆"}
+              </button>
+              <a
+                href={calendarEmbedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                在新視窗開啟
+              </a>
+            </div>
+          </div>
+
+          {!showCalendarMobile ? (
+            <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 sm:hidden">
+              為了保持手機順暢，可先收合行李曆。
+            </div>
+          ) : null}
+
+          {showCalendarMobile ? (
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:hidden">
+              <iframe
+                title="班級行李曆（手機）"
+                src={calendarEmbedUrl}
+                className="h-[480px] w-full"
+                style={{ border: 0 }}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                scrolling="no"
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:block">
+            <iframe
+              title="班級行李曆"
+              src={calendarEmbedUrl}
+              className="h-[560px] w-full"
+              style={{ border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              scrolling="no"
+            />
+          </div>
         </section>
 
         <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
@@ -9093,6 +9223,8 @@ function AdminPage({
     capacity: "",
     status: "draft",
     category: "gathering",
+    allowCompanions: "yes",
+    allowBringDrinks: "yes",
     attachments: "[]",
   });
   const [registrationForm, setRegistrationForm] = useState({
@@ -9421,6 +9553,8 @@ function AdminPage({
       capacity: "60",
       status: "draft",
       category: "gathering",
+      allowCompanions: "yes",
+      allowBringDrinks: "yes",
       attachments: "[]",
     };
   };
@@ -9636,6 +9770,8 @@ function AdminPage({
       capacity: event.capacity || "",
       status: event.status || "draft",
       category: event.category || "gathering",
+      allowCompanions: event.allowCompanions || "yes",
+      allowBringDrinks: event.allowBringDrinks || "yes",
       attachments: event.attachments || "[]",
     });
   };
@@ -11758,6 +11894,28 @@ function AdminPage({
                 onChange={(event) => handleChange("capacity", event.target.value)}
                 className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
               />
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">可攜伴</label>
+              <select
+                value={form.allowCompanions}
+                onChange={(event) => handleChange("allowCompanions", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              >
+                <option value="yes">可以</option>
+                <option value="no">不可以</option>
+              </select>
+            </div>
+            <div className="grid gap-2">
+              <label className="text-sm font-medium text-slate-700">可自帶酒水</label>
+              <select
+                value={form.allowBringDrinks}
+                onChange={(event) => handleChange("allowBringDrinks", event.target.value)}
+                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+              >
+                <option value="yes">可以</option>
+                <option value="no">不可以</option>
+              </select>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">報名開始</label>
