@@ -10744,6 +10744,28 @@ function AdminPage({
   const unregisteredCount = totalStudents
     ? Math.max(totalStudents - registeredCount, 0)
     : 0;
+  const attendanceCounts = registrationList.reduce(
+    (acc, registration) => {
+      const fields = parseCustomFields_(registration.customFields);
+      const attendanceValue = String(fields.attendance || "").trim();
+      if (attendanceValue === "出席") {
+        acc.attending += 1;
+      } else if (attendanceValue === "不克出席") {
+        acc.notAttending += 1;
+      } else if (
+        attendanceValue === "尚未確定" ||
+        attendanceValue === "未定" ||
+        attendanceValue === "未確認" ||
+        !attendanceValue
+      ) {
+        acc.unknown += 1;
+      } else {
+        acc.unknown += 1;
+      }
+      return acc;
+    },
+    { attending: 0, notAttending: 0, unknown: 0 }
+  );
 
   const filteredStudents = displayStudents.filter((item) =>
     matchesStudentQuery_(item, studentsQuery)
@@ -11245,6 +11267,15 @@ function AdminPage({
                     </span>
                     <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">
                       未報名 {unregisteredCount}
+                    </span>
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                      出席 {attendanceCounts.attending}
+                    </span>
+                    <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700">
+                      不克出席 {attendanceCounts.notAttending}
+                    </span>
+                    <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-slate-600">
+                      未定 {attendanceCounts.unknown}
                     </span>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
                       總數 {totalStudents}
