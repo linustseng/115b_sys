@@ -123,6 +123,38 @@ const confirmDelete_ = (message) => {
   }
   return window.confirm(message || "確定要刪除嗎？此動作無法復原。");
 };
+const EVENT_CACHE_PREFIX = "event_info_cache_v1_";
+const loadCachedEventInfo_ = (eventId) => {
+  if (!eventId || typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.sessionStorage.getItem(`${EVENT_CACHE_PREFIX}${eventId}`);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) {
+      return null;
+    }
+    return parsed.data;
+  } catch (error) {
+    return null;
+  }
+};
+const saveCachedEventInfo_ = (eventId, data) => {
+  if (!eventId || !data || typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(
+      `${EVENT_CACHE_PREFIX}${eventId}`,
+      JSON.stringify({ savedAt: Date.now(), data: data })
+    );
+  } catch (error) {
+    // Ignore cache write errors (private mode, storage blocked, etc.)
+  }
+};
 const DEFAULT_EVENT = {
   title: "秋季聚餐",
   location: "大直 · 磺溪會館",
@@ -1172,6 +1204,7 @@ function RegistrationPage() {
   const categoryParam = params.get("category");
   const titleParam = params.get("title");
   const locationParam = params.get("location");
+  const cachedEventInfo = loadCachedEventInfo_(eventId);
 
   const [email, setEmail] = useState("");
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -1189,7 +1222,8 @@ function RegistrationPage() {
   const [updateSubmitting, setUpdateSubmitting] = useState(false);
   const [autoFilled, setAutoFilled] = useState(false);
   const [lookupStatus, setLookupStatus] = useState("idle");
-  const [eventInfo, setEventInfo] = useState(DEFAULT_EVENT);
+  const [eventInfo, setEventInfo] = useState(cachedEventInfo || DEFAULT_EVENT);
+  const [eventLoading, setEventLoading] = useState(!cachedEventInfo);
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -1345,6 +1379,25 @@ function RegistrationPage() {
       return;
     }
     let ignore = false;
+    const cached = loadCachedEventInfo_(eventId);
+    if (cached) {
+      setEventInfo({
+        ...DEFAULT_EVENT,
+        ...cached,
+        title: titleParam || cached.title || DEFAULT_EVENT.title,
+        location: locationParam || cached.location || DEFAULT_EVENT.location,
+        category: categoryParam || cached.category || DEFAULT_EVENT.category,
+      });
+      setEventLoading(false);
+    } else {
+      setEventInfo({
+        ...DEFAULT_EVENT,
+        title: titleParam || DEFAULT_EVENT.title,
+        location: locationParam || DEFAULT_EVENT.location,
+        category: categoryParam || DEFAULT_EVENT.category,
+      });
+      setEventLoading(true);
+    }
     const fetchEvent = async () => {
       try {
         const { result } = await apiRequest({ action: "getEvent", eventId: eventId });
@@ -1353,7 +1406,7 @@ function RegistrationPage() {
         }
         if (!ignore && result.data && result.data.event) {
           const event = result.data.event;
-          setEventInfo({
+          const nextEventInfo = {
             title: titleParam || event.title || DEFAULT_EVENT.title,
             location: locationParam || event.location || DEFAULT_EVENT.location,
             address: event.address || DEFAULT_EVENT.address,
@@ -1365,7 +1418,9 @@ function RegistrationPage() {
             status: event.status || DEFAULT_EVENT.status,
             allowCompanions: event.allowCompanions || DEFAULT_EVENT.allowCompanions,
             allowBringDrinks: event.allowBringDrinks || DEFAULT_EVENT.allowBringDrinks,
-          });
+          };
+          setEventInfo(nextEventInfo);
+          saveCachedEventInfo_(eventId, nextEventInfo);
         }
       } catch (error) {
         if (!ignore && (titleParam || locationParam || categoryParam)) {
@@ -1376,6 +1431,10 @@ function RegistrationPage() {
             address: prev.address,
             category: categoryParam || prev.category,
           }));
+        }
+      } finally {
+        if (!ignore) {
+          setEventLoading(false);
         }
       }
     };
@@ -1623,6 +1682,11 @@ function RegistrationPage() {
             >
               返回報名列表
             </a>
+            {eventLoading ? (
+              <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-500 shadow-sm sm:inline-flex">
+                活動資料載入中
+              </span>
+            ) : null}
             <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
               {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
             </span>
