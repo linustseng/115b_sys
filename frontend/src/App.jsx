@@ -129,6 +129,7 @@ const DEFAULT_EVENT = {
   address: "台北市中山區樂群二路199號",
   startAt: "2024/10/18 18:30",
   endAt: "2024/10/18 21:30",
+  registrationCloseAt: "",
   category: "gathering",
   capacity: 60,
   status: "open",
@@ -1358,6 +1359,7 @@ function RegistrationPage() {
             address: event.address || DEFAULT_EVENT.address,
             startAt: event.startAt || DEFAULT_EVENT.startAt,
             endAt: event.endAt || DEFAULT_EVENT.endAt,
+            registrationCloseAt: event.registrationCloseAt || DEFAULT_EVENT.registrationCloseAt,
             category: event.category || categoryParam || DEFAULT_EVENT.category,
             capacity: event.capacity || DEFAULT_EVENT.capacity,
             status: event.status || DEFAULT_EVENT.status,
@@ -9158,6 +9160,18 @@ function HomePage() {
                   const badgeClass = isRegistered
                     ? `${registrationStatus.badgeClass} ring-1 ring-slate-200/70 shadow-sm`
                     : registrationStatus.badgeClass;
+                  const registeredCtaClass =
+                    registrationStatus.statusKey === "attending"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100"
+                      : registrationStatus.statusKey === "not_attending"
+                        ? "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                        : registrationStatus.statusKey === "attendance_unknown"
+                          ? "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+                          : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white";
+                  const ctaLabel = isRegistered ? "查看報名" : "前往報名";
+                  const ctaClass = isRegistered
+                    ? registeredCtaClass
+                    : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white";
                   return (
                     <div
                       key={event.id}
@@ -9200,9 +9214,9 @@ function HomePage() {
                       </div>
                       <a
                         href={`/register?eventId=${event.id}`}
-                        className="mt-5 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                        className={`mt-5 inline-flex items-center justify-center rounded-xl border px-4 py-2 text-sm font-semibold transition ${ctaClass}`}
                       >
-                        前往報名
+                        {ctaLabel}
                       </a>
                     </div>
                   );
