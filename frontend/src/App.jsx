@@ -8719,18 +8719,21 @@ function HomePage() {
       return {
         label: "尚未報名",
         badgeClass: "border-slate-200 bg-slate-50 text-slate-600",
+        statusKey: "not_registered",
       };
     }
     if (checkinStatus && checkinStatus.status === "not_attending") {
       return {
         label: "已報名不克出席",
         badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
+        statusKey: "not_attending",
       };
     }
     if (checkinStatus && checkinStatus.status === "attendance_unknown") {
       return {
         label: "已報名還不確定",
         badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+        statusKey: "attendance_unknown",
       };
     }
     if (
@@ -8740,6 +8743,7 @@ function HomePage() {
       return {
         label: "已報名會出席",
         badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        statusKey: "attending",
       };
     }
     const fields = parseCustomFields_(registration && registration.customFields);
@@ -8748,17 +8752,20 @@ function HomePage() {
       return {
         label: "已報名會出席",
         badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        statusKey: "attending",
       };
     }
     if (attendance === "不克出席") {
       return {
         label: "已報名不克出席",
         badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
+        statusKey: "not_attending",
       };
     }
     return {
       label: "已報名還不確定",
       badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+      statusKey: "attendance_unknown",
     };
   };
 
@@ -8905,8 +8912,8 @@ function HomePage() {
         </a>
       </div>
 
-      <main className="mx-auto max-w-6xl px-6 pb-28 pt-10 sm:px-12">
-        <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+      <main className="mx-auto flex max-w-6xl flex-col px-6 pb-28 pt-10 sm:px-12">
+        <section className="order-2 mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:order-none sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
@@ -8962,6 +8969,12 @@ function HomePage() {
               >
                 {lookupLoading ? "查詢中..." : "查詢我的報名"}
               </button>
+              <a
+                href="#events"
+                className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:-translate-y-0.5 hover:bg-emerald-700"
+              >
+                直接看可報名活動
+              </a>
               {lookupError ? (
                 <p className="text-xs font-semibold text-amber-600">{lookupError}</p>
               ) : null}
@@ -9076,7 +9089,10 @@ function HomePage() {
           ) : null}
         </section>
 
-        <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <div
+          id="events"
+          className="order-1 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:order-none sm:p-10"
+        >
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">近期活動</h2>
             {loading ? (
@@ -9123,16 +9139,29 @@ function HomePage() {
                   const eventId = normalizeEventId_(event.id);
                   const registration = registrationsByEventId[eventId];
                   const checkinStatus = checkinStatuses[eventId] || null;
+                  const isRegistered = Boolean(registration);
                   const registrationStatus = registration
                     ? getRegistrationStatusInfo_(registration, checkinStatus)
                     : {
                         label: "尚未報名",
                         badgeClass: "border-slate-200 bg-slate-50 text-slate-600",
+                        statusKey: "not_registered",
                       };
+                  const accentClass =
+                    registrationStatus.statusKey === "attending"
+                      ? "border-l-emerald-400"
+                      : registrationStatus.statusKey === "not_attending"
+                        ? "border-l-rose-400"
+                        : registrationStatus.statusKey === "attendance_unknown"
+                          ? "border-l-amber-400"
+                          : "border-l-transparent";
+                  const badgeClass = isRegistered
+                    ? `${registrationStatus.badgeClass} ring-1 ring-slate-200/70 shadow-sm`
+                    : registrationStatus.badgeClass;
                   return (
                     <div
                       key={event.id}
-                      className="flex flex-col justify-between rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                      className={`flex flex-col justify-between rounded-2xl border border-l-4 border-slate-200/70 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${accentClass}`}
                     >
                       <div>
                         <div className="flex items-center justify-between text-xs text-slate-500">
@@ -9142,7 +9171,7 @@ function HomePage() {
                         <h3 className="mt-3 text-lg font-semibold text-slate-900">{event.title}</h3>
                         {shouldShowRegistrationBadge ? (
                           <span
-                            className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${registrationStatus.badgeClass}`}
+                            className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${badgeClass}`}
                           >
                             {registrationStatus.label}
                           </span>
@@ -9181,7 +9210,7 @@ function HomePage() {
           </div>
         </div>
 
-        <section className="mt-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="order-3 mt-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:order-none sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">班級行李曆</h2>
