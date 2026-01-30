@@ -117,6 +117,12 @@ const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macro
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
 const EVENT_ID = "24101801";
+const confirmDelete_ = (message) => {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  return window.confirm(message || "確定要刪除嗎？此動作無法復原。");
+};
 const DEFAULT_EVENT = {
   title: "秋季聚餐",
   location: "大直 · 磺溪會館",
@@ -1188,6 +1194,9 @@ function RegistrationPage() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
+  const registrationDeadlineLabel = eventInfo.registrationCloseAt
+    ? formatDisplayDate_(eventInfo.registrationCloseAt, { withTime: true })
+    : "-";
 
   useEffect(() => {
     if (!googleLinkedStudent) {
@@ -2008,7 +2017,7 @@ function RegistrationPage() {
               報名提醒
             </p>
             <ul className="mt-4 space-y-3 text-sm text-slate-600">
-              <li>報名截止：2024/10/10 23:00</li>
+              <li>報名截止：{registrationDeadlineLabel}</li>
               {allowCompanions ? <li>攜伴請於備註註明姓名</li> : null}
               <li>若改為不克出席請於截止日前更新</li>
             </ul>
@@ -4563,6 +4572,12 @@ function FinanceAdminPage() {
     if (!roleId) {
       return;
     }
+    const roleLabel =
+      financeRoles.find((item) => String(item.id || "").trim() === String(roleId).trim())?.personName ||
+      roleId;
+    if (!confirmDelete_(`確定要刪除財務角色「${roleLabel}」嗎？此動作無法復原。`)) {
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -4627,6 +4642,12 @@ function FinanceAdminPage() {
 
   const handleDeleteFinanceCategory = async (categoryId) => {
     if (!categoryId) {
+      return;
+    }
+    const categoryLabel =
+      financeCategories.find((item) => String(item.id || "").trim() === String(categoryId).trim())
+        ?.label || categoryId;
+    if (!confirmDelete_(`確定要刪除班務性質「${categoryLabel}」嗎？此動作無法復原。`)) {
       return;
     }
     setLoading(true);
@@ -4729,6 +4750,12 @@ function FinanceAdminPage() {
     if (!eventId) {
       return;
     }
+    const eventLabel =
+      fundEvents.find((item) => String(item.id || "").trim() === String(eventId).trim())?.title ||
+      eventId;
+    if (!confirmDelete_(`確定要刪除班費事件「${eventLabel}」嗎？此動作無法復原。`)) {
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -4818,6 +4845,13 @@ function FinanceAdminPage() {
 
   const handleDeleteFundPayment = async (paymentId) => {
     if (!paymentId) {
+      return;
+    }
+    const payment = fundPayments.find((item) => String(item.id || "").trim() === String(paymentId).trim());
+    const paymentLabel = payment
+      ? `${payment.payerName || "未命名"} ${formatFinanceAmount_(payment.amount)}`
+      : paymentId;
+    if (!confirmDelete_(`確定要刪除收款紀錄「${paymentLabel}」嗎？此動作無法復原。`)) {
       return;
     }
     setLoading(true);
@@ -6509,6 +6543,11 @@ function SoftballPage() {
     if (!id) {
       return;
     }
+    const playerLabel =
+      players.find((item) => normalizeId_(item.id) === normalizeId_(id))?.name || id;
+    if (!confirmDelete_(`確定要刪除球員「${playerLabel}」嗎？此動作無法復原。`)) {
+      return;
+    }
     setSaving(true);
     setStatusMessage("");
     try {
@@ -6527,6 +6566,11 @@ function SoftballPage() {
 
   const handleDeletePractice = async (id) => {
     if (!id) {
+      return;
+    }
+    const practiceLabel =
+      practices.find((item) => normalizeId_(item.id) === normalizeId_(id))?.title || id;
+    if (!confirmDelete_(`確定要刪除練習「${practiceLabel}」嗎？此動作無法復原。`)) {
       return;
     }
     setSaving(true);
@@ -6552,6 +6596,11 @@ function SoftballPage() {
     if (!id) {
       return;
     }
+    const fieldLabel =
+      fields.find((item) => normalizeId_(item.id) === normalizeId_(id))?.name || id;
+    if (!confirmDelete_(`確定要刪除場地「${fieldLabel}」嗎？此動作無法復原。`)) {
+      return;
+    }
     setSaving(true);
     setStatusMessage("");
     try {
@@ -6570,6 +6619,11 @@ function SoftballPage() {
 
   const handleDeleteGear = async (id) => {
     if (!id) {
+      return;
+    }
+    const gearLabel =
+      gear.find((item) => normalizeId_(item.id) === normalizeId_(id))?.name || id;
+    if (!confirmDelete_(`確定要刪除器材「${gearLabel}」嗎？此動作無法復原。`)) {
       return;
     }
     setSaving(true);
@@ -10417,6 +10471,9 @@ function AdminPage({
     if (!id) {
       return;
     }
+    if (!confirmDelete_("確定要刪除此筆報名資料嗎？此動作無法復原。")) {
+      return;
+    }
     setSaving(true);
     try {
       const { result } = await apiRequest({ action: "deleteRegistration", id: id });
@@ -10435,6 +10492,9 @@ function AdminPage({
     if (!id) {
       return;
     }
+    if (!confirmDelete_("確定要刪除此筆簽到資料嗎？此動作無法復原。")) {
+      return;
+    }
     setSaving(true);
     try {
       const { result } = await apiRequest({ action: "deleteCheckin", id: id });
@@ -10451,6 +10511,12 @@ function AdminPage({
 
   const handleDelete = async (eventId) => {
     if (!eventId) {
+      return;
+    }
+    const eventLabel =
+      events.find((item) => String(item.id || "").trim() === String(eventId).trim())?.title ||
+      eventId;
+    if (!confirmDelete_(`確定要刪除活動「${eventLabel}」嗎？此動作無法復原。`)) {
       return;
     }
     setSaving(true);
@@ -11209,8 +11275,11 @@ function AdminPage({
                             key={item.id}
                             className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
                           >
-                            <span className="font-semibold text-slate-800">
-                              {item.studentName || item.studentId}
+                            <span
+                              className="font-semibold text-slate-800"
+                              title={item.studentId ? `學號 ${item.studentId}` : ""}
+                            >
+                              {item.studentName || "未命名"}
                             </span>
                             <span className="text-xs text-slate-500">{item.choice}</span>
                           </div>
@@ -11312,6 +11381,12 @@ function AdminPage({
                         (studentId && attendanceByStudentId.get(studentId)) ||
                         (normalizedName && attendanceByName.get(normalizedName)) ||
                         "";
+                      const hoverTitle = [
+                        studentId ? `學號 ${studentId}` : "",
+                        student.googleEmail || student.email || "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
                       const attendanceStatus =
                         attendanceValue === "不克出席"
                           ? "not_attending"
@@ -11332,11 +11407,10 @@ function AdminPage({
                       return (
                         <span
                           key={student.id || student.googleEmail || student.email}
-                          title={student.googleEmail || student.email || ""}
+                          title={hoverTitle}
                           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${badgeStyle}`}
                         >
                           {displayName || "未命名"}
-                          {student.id ? `· ${student.id}` : ""}
                         </span>
                       );
                     })}
@@ -11394,10 +11468,16 @@ function AdminPage({
                       const registrationId = String(registration.id || "").trim();
                       const checkin = checkinStatusByRegistrationId[registrationId] || null;
                       const studentId = registration.studentId;
+                      const hoverTitle = [
+                        studentId ? `學號 ${studentId}` : "",
+                        checkin && checkin.checkinAt ? checkin.checkinAt : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ");
                       return (
                         <span
                           key={registrationId || registration.userEmail}
-                          title={checkin && checkin.checkinAt ? checkin.checkinAt : ""}
+                          title={hoverTitle}
                           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
                             checkin
                               ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -11405,7 +11485,6 @@ function AdminPage({
                           }`}
                         >
                           {registration.userName || "未命名"}
-                          {studentId ? `· ${studentId}` : ""}
                         </span>
                       );
                     })}
