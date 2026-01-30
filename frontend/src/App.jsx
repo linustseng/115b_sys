@@ -8907,8 +8907,21 @@ function HomePage() {
 
       <main className="mx-auto max-w-6xl px-6 pb-28 pt-10 sm:px-12">
         <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                用 Email 查詢報名紀錄，也可以直接從下方活動卡片報名。
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                已報名 {myRegistrations.length}
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
+                可報名活動 {visibleEvents.length}
+              </span>
+            </div>
             {lookupLoading ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                 查詢中
@@ -8954,10 +8967,12 @@ function HomePage() {
               ) : null}
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">簽到提醒</p>
-              <p className="mt-2 text-xs text-slate-500">
-                若活動開放簽到，系統會顯示對應的簽到連結。
-              </p>
+              <p className="font-semibold text-slate-900">報名小提醒</p>
+              <ul className="mt-3 space-y-2 text-xs text-slate-500">
+                <li>若已報名，活動卡片會顯示你的報名狀態。</li>
+                <li>開放簽到時，系統會顯示簽到按鈕。</li>
+                <li>有問題可聯絡活動負責人或班務窗口。</li>
+              </ul>
             </div>
           </div>
 
@@ -9061,66 +9076,6 @@ function HomePage() {
           ) : null}
         </section>
 
-        <section className="mb-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">班級行李曆</h2>
-              <p className="mt-2 text-sm text-slate-500">
-                共用行李曆同步最新活動安排，手機可收合或新視窗查看。
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowCalendarMobile((prev) => !prev)}
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 sm:hidden"
-              >
-                {showCalendarMobile ? "收合行李曆" : "展開行李曆"}
-              </button>
-              <a
-                href={calendarEmbedUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-              >
-                在新視窗開啟
-              </a>
-            </div>
-          </div>
-
-          {!showCalendarMobile ? (
-            <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 sm:hidden">
-              為了保持手機順暢，可先收合行李曆。
-            </div>
-          ) : null}
-
-          {showCalendarMobile ? (
-            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:hidden">
-              <iframe
-                title="班級行李曆（手機）"
-                src={calendarEmbedUrl}
-                className="h-[480px] w-full"
-                style={{ border: 0 }}
-                loading="lazy"
-                referrerPolicy="no-referrer"
-                scrolling="no"
-              />
-            </div>
-          ) : null}
-
-          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:block">
-            <iframe
-              title="班級行李曆"
-              src={calendarEmbedUrl}
-              className="h-[560px] w-full"
-              style={{ border: 0 }}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              scrolling="no"
-            />
-          </div>
-        </section>
-
         <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">近期活動</h2>
@@ -9206,6 +9161,12 @@ function HomePage() {
                         <div className="mt-2 space-y-1 text-xs text-slate-400">
                           <p>{schedule.dateLabel || "-"}</p>
                           {schedule.timeLabel ? <p>{schedule.timeLabel}</p> : null}
+                          {event.registrationCloseAt ? (
+                            <p>
+                              報名截止：
+                              {formatDisplayDate_(event.registrationCloseAt, { withTime: true })}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                       <a
@@ -9219,6 +9180,66 @@ function HomePage() {
                 })}
           </div>
         </div>
+
+        <section className="mt-8 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">班級行李曆</h2>
+              <p className="mt-2 text-sm text-slate-500">
+                共用行李曆同步最新活動安排，手機可收合或新視窗查看。
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowCalendarMobile((prev) => !prev)}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300 sm:hidden"
+              >
+                {showCalendarMobile ? "收合行李曆" : "展開行李曆"}
+              </button>
+              <a
+                href={calendarEmbedUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                在新視窗開啟
+              </a>
+            </div>
+          </div>
+
+          {!showCalendarMobile ? (
+            <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 sm:hidden">
+              為了保持手機順暢，可先收合行李曆。
+            </div>
+          ) : null}
+
+          {showCalendarMobile ? (
+            <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:hidden">
+              <iframe
+                title="班級行李曆（手機）"
+                src={calendarEmbedUrl}
+                className="h-[480px] w-full"
+                style={{ border: 0 }}
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                scrolling="no"
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-6 hidden overflow-hidden rounded-2xl border border-slate-200/70 bg-white sm:block">
+            <iframe
+              title="班級行李曆"
+              src={calendarEmbedUrl}
+              className="h-[560px] w-full"
+              style={{ border: 0 }}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              scrolling="no"
+            />
+          </div>
+        </section>
       </main>
 
       {checkinTarget ? (
