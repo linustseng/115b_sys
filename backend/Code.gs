@@ -206,6 +206,7 @@ function handleActionPayload_(payload) {
         fromStatus: "",
         toStatus: created.status,
       });
+      sendFinanceApprovalEmail_(created);
     }
     return { ok: true, data: { request: created }, error: null };
   }
@@ -225,6 +226,18 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing request id" };
     }
     return { ok: true, data: { actions: listFinanceActions_(requestId) }, error: null };
+  }
+
+  if (payload.action === "listFinanceActionsByActor") {
+    const actorNames = Array.isArray(payload.actorNames)
+      ? payload.actorNames
+      : String(payload.actorName || "").trim()
+      ? [String(payload.actorName || "").trim()]
+      : [];
+    if (!actorNames.length) {
+      return { ok: false, data: null, error: "Missing actor names" };
+    }
+    return { ok: true, data: { actions: listFinanceActionsByActor_(actorNames) }, error: null };
   }
 
   if (payload.action === "listGroupMemberships") {
@@ -1566,6 +1579,41 @@ function listFinanceActions_(requestId) {
   });
 }
 
+function listFinanceActionsByActor_(actorNames) {
+  const sheet = getSheet_(SHEETS.financeActions);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const nameIndex = headerMap.actorName;
+  if (nameIndex === undefined) {
+    throw new Error("FinanceActions sheet missing actorName column");
+  }
+  const normalized = (actorNames || [])
+    .map(function (name) {
+      return String(name || "").trim();
+    })
+    .filter(function (name) {
+      return name;
+    });
+  if (!normalized.length) {
+    return [];
+  }
+  const list = [];
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const actorName = String(row[nameIndex] || "").trim();
+    if (!actorName) {
+      continue;
+    }
+    if (normalized.indexOf(actorName) === -1) {
+      continue;
+    }
+    list.push(mapRowToObject_(headerMap, row));
+  }
+  return list.sort(function (a, b) {
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
 function listGroupMemberships_() {
   const sheet = getSheet_(SHEETS.groupMemberships);
   const headerMap = getHeaderMap_(sheet);
@@ -2473,6 +2521,9 @@ function updateFinanceRequestFlow_(requestId, payload) {
       fromStatus: existing.status || "",
       toStatus: updated.status || "",
     });
+  }
+  if (action === "submit" || action === "approve") {
+    sendFinanceApprovalEmail_(updated);
   }
   return updated;
 }
@@ -3497,6 +3548,151 @@ function resolveFinanceNextStatus_(record, actorRole) {
   }
 
   return record.status || "";
+}
+
+function getAppBaseUrl_() {
+  var base = String(getScriptProperty_("APP_BASE_URL") || "").trim();
+  if (!base) {
+    return "";
+  }
+  return base.replace(/\/+$/, "");
+}
+
+function buildFinanceApprovalLink_(requestId) {
+  var base = getAppBaseUrl_();
+  if (!base) {
+    return "";
+  }
+  return base + "/approvals/" + encodeURIComponent(String(requestId || "").trim());
+}
+
+function collectMembershipEmails_(memberships, groupIdList, roleList) {
+  var groupSet = (groupIdList || []).reduce(function (acc, item) {
+    acc[String(item || "").trim()] = true;
+    return acc;
+  }, {});
+  var roleSet = (roleList || []).reduce(function (acc, item) {
+    acc[String(item || "").trim()] = true;
+    return acc;
+  }, {});
+  return (memberships || [])
+    .filter(function (item) {
+      var groupId = String(item.groupId || "").trim();
+      var roleInGroup = String(item.roleInGroup || "").trim();
+      if (groupSet[groupId] !== true) {
+        return false;
+      }
+      if (roleSet[roleInGroup] !== true) {
+        return false;
+      }
+      return true;
+    })
+    .map(function (item) {
+      return normalizeEmail_(item.personEmail || "");
+    })
+    .filter(function (email) {
+      return email;
+    });
+}
+
+function collectFinanceRoleEmails_(roles, targetRole) {
+  var target = String(targetRole || "").trim().toLowerCase();
+  return (roles || [])
+    .filter(function (item) {
+      return String(item.role || "").trim().toLowerCase() === target;
+    })
+    .map(function (item) {
+      return normalizeEmail_(item.personEmail || "");
+    })
+    .filter(function (email) {
+      return email;
+    });
+}
+
+function resolveFinanceApprovalRecipients_(request, status) {
+  var targetStatus = String(status || request.status || "").trim().toLowerCase();
+  if (!targetStatus) {
+    return [];
+  }
+  var memberships = listGroupMemberships_();
+  var financeRoles = listFinanceRoles_();
+  if (targetStatus === "pending_lead") {
+    var groupId = String(request.applicantDepartment || "").trim();
+    if (!groupId) {
+      return [];
+    }
+    return collectMembershipEmails_(memberships, [groupId], ["lead", "deputy"]);
+  }
+  if (targetStatus === "pending_rep") {
+    return collectMembershipEmails_(memberships, ["A"], ["lead", "deputy"]);
+  }
+  if (targetStatus === "pending_committee") {
+    var leadGroups = memberships
+      .filter(function (item) {
+        var roleInGroup = String(item.roleInGroup || "").trim();
+        return roleInGroup === "lead" || roleInGroup === "deputy";
+      })
+      .map(function (item) {
+        return String(item.groupId || "").trim();
+      })
+      .filter(function (value) {
+        return value;
+      });
+    return collectMembershipEmails_(memberships, leadGroups, ["lead", "deputy"]);
+  }
+  if (targetStatus === "pending_accounting") {
+    return collectFinanceRoleEmails_(financeRoles, "accounting");
+  }
+  if (targetStatus === "pending_cashier") {
+    return collectFinanceRoleEmails_(financeRoles, "cashier");
+  }
+  return [];
+}
+
+function sendFinanceApprovalEmail_(request) {
+  if (!request) {
+    return;
+  }
+  var status = String(request.status || "").trim().toLowerCase();
+  if (!status || status.indexOf("pending_") !== 0) {
+    return;
+  }
+  var recipients = resolveFinanceApprovalRecipients_(request, status);
+  if (!recipients.length) {
+    return;
+  }
+  var link = buildFinanceApprovalLink_(request.id || "");
+  var amount = parseFinanceAmount_(request.amountActual || request.amountEstimated || 0);
+  var title = String(request.title || "請款/請購");
+  var applicant = String(request.applicantName || "");
+  var subject =
+    "【簽核通知】" +
+    title +
+    " · " +
+    (amount ? "NT$ " + amount.toLocaleString("en-US") : "金額待補");
+  var lines = [];
+  lines.push("有新的簽核待處理：");
+  lines.push("申請人：" + (applicant || "未填"));
+  lines.push("項目：" + title);
+  lines.push("金額：" + (amount ? "NT$ " + amount.toLocaleString("en-US") : "待補"));
+  lines.push("狀態：" + status);
+  if (link) {
+    lines.push("");
+    lines.push("請點此進入簽核頁：");
+    lines.push(link);
+  } else {
+    lines.push("");
+    lines.push("請登入系統後到「簽核中心」查看。");
+  }
+  try {
+    MailApp.sendEmail({
+      to: recipients.join(","),
+      subject: subject,
+      body: lines.join("\n"),
+    });
+  } catch (error) {
+    Logger.log("sendFinanceApprovalEmail failed: " + error);
+  }
 }
 
 function generateFinanceId_() {

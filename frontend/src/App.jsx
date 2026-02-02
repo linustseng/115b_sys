@@ -1169,6 +1169,7 @@ function AppShell() {
   const isFinancePage = pathname.includes("finance");
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
+  const isApprovalsPage = pathname.startsWith("/approvals");
 
   if (isCheckinPage) {
     return <CheckinPage />;
@@ -1243,6 +1244,10 @@ function AppShell() {
 
   if (isFinancePage) {
     return <FinancePage />;
+  }
+
+  if (isApprovalsPage) {
+    return <ApprovalsPage />;
   }
 
   if (isSoftballPlayerPage) {
@@ -2452,6 +2457,10 @@ function LandingPage() {
               </a>
             </div>
           </div>
+        </section>
+
+        <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
+          <ApprovalsCenter embedded requestId="" />
         </section>
 
         {hasGoogleLogin ? (
@@ -4159,6 +4168,517 @@ function FinancePage() {
           </section>
         ) : null}
 
+        <a
+          href="/"
+          className="mt-8 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+        >
+          回首頁
+        </a>
+      </main>
+    </div>
+  );
+}
+
+function ApprovalsCenter({ embedded = false, requestId = "" }) {
+  const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [requests, setRequests] = useState([]);
+  const [actions, setActions] = useState([]);
+  const [actionsByActor, setActionsByActor] = useState([]);
+  const [groupMemberships, setGroupMemberships] = useState([]);
+  const [financeRoles, setFinanceRoles] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState("pending");
+  const [actorName, setActorName] = useState("");
+  const [actorNote, setActorNote] = useState("");
+  const [acting, setActing] = useState(false);
+  const displayName =
+    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    (googleLinkedStudent && googleLinkedStudent.email) ||
+    "";
+
+  useEffect(() => {
+    if (displayName && !actorName) {
+      setActorName(displayName);
+    }
+  }, [displayName, actorName]);
+
+  const loadBootstrap = async () => {
+    const { result } = await apiRequest({ action: "listFinanceAdminBootstrap" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    const data = result.data || {};
+    setStudents(data.students || []);
+    setGroupMemberships(data.groupMemberships || []);
+    setFinanceRoles(data.roles || []);
+  };
+
+  const loadRequests = async () => {
+    const { result } = await apiRequest({ action: "listFinanceRequests" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    setRequests(result.data && result.data.requests ? result.data.requests : []);
+  };
+
+  const loadActionsByActor = async () => {
+    if (!displayName) {
+      setActionsByActor([]);
+      return;
+    }
+    const { result } = await apiRequest({
+      action: "listFinanceActionsByActor",
+      actorNames: [displayName],
+    });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    setActionsByActor(result.data && result.data.actions ? result.data.actions : []);
+  };
+
+  const loadActions = async (targetId) => {
+    if (!targetId) {
+      setActions([]);
+      return;
+    }
+    const { result } = await apiRequest({ action: "listFinanceActions", requestId: targetId });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    setActions(result.data && result.data.actions ? result.data.actions : []);
+  };
+
+  useEffect(() => {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      return;
+    }
+    let ignore = false;
+    setLoading(true);
+    setError("");
+    Promise.all([loadBootstrap(), loadRequests(), loadActionsByActor()])
+      .catch((err) => {
+        if (!ignore) {
+          setError(err.message || "載入失敗");
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    if (!requestId) {
+      setActions([]);
+      return;
+    }
+    loadActions(requestId).catch(() => {});
+  }, [requestId]);
+
+  const normalizedEmail = String((googleLinkedStudent && googleLinkedStudent.email) || "")
+    .trim()
+    .toLowerCase();
+  const studentMatch =
+    students.find((item) => String(item.email || "").trim().toLowerCase() === normalizedEmail) ||
+    null;
+  const personId = String((studentMatch && studentMatch.id) || "").trim();
+  const memberships = groupMemberships.filter((item) => {
+    if (personId && String(item.personId || "").trim() === personId) {
+      return true;
+    }
+    return String(item.personEmail || "").trim().toLowerCase() === normalizedEmail;
+  });
+  const financeRoleItems = financeRoles.filter((item) => {
+    if (personId && String(item.personId || "").trim() === personId) {
+      return true;
+    }
+    return String(item.personEmail || "").trim().toLowerCase() === normalizedEmail;
+  });
+
+  const adminLeadGroups = memberships
+    .filter((item) => String(item.roleInGroup || "").trim() === "lead")
+    .map((item) => String(item.groupId || "").trim())
+    .filter(Boolean);
+  const adminDeputyGroups = memberships
+    .filter((item) => String(item.roleInGroup || "").trim() === "deputy")
+    .map((item) => String(item.groupId || "").trim())
+    .filter(Boolean);
+  const adminRoles = financeRoleItems
+    .map((item) => String(item.role || "").trim())
+    .filter(Boolean);
+
+  const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
+  const hasRepPrivilege = adminLeadGroups.includes("A");
+  const hasCommitteePrivilege = hasLeadPrivilege || hasRepPrivilege || adminDeputyGroups.includes("A");
+  const hasAccountingPrivilege = adminRoles.includes("accounting");
+  const hasCashierPrivilege = adminRoles.includes("cashier");
+  const hasAuditorPrivilege = adminRoles.includes("auditor");
+
+  const roleStatusMap = {
+    lead: "pending_lead",
+    rep: "pending_rep",
+    committee: "pending_committee",
+    accounting: "pending_accounting",
+    cashier: "pending_cashier",
+    auditor: "auditor",
+  };
+
+  const availableRoles = [
+    hasLeadPrivilege ? "lead" : null,
+    hasRepPrivilege ? "rep" : null,
+    hasCommitteePrivilege ? "committee" : null,
+    hasAccountingPrivilege ? "accounting" : null,
+    hasCashierPrivilege ? "cashier" : null,
+    hasAuditorPrivilege ? "auditor" : null,
+  ].filter((value) => value);
+
+  const resolveRequestRole_ = (item) => {
+    if (!item) {
+      return "";
+    }
+    for (let i = 0; i < availableRoles.length; i += 1) {
+      const role = availableRoles[i];
+      if (role === "auditor") {
+        continue;
+      }
+      const targetStatus = roleStatusMap[role];
+      if (String(item.status || "").trim() !== targetStatus) {
+        continue;
+      }
+      if (role === "lead") {
+        const group = String(item.applicantDepartment || "").trim();
+        if (
+          !adminLeadGroups.includes(group) &&
+          !adminDeputyGroups.includes(group)
+        ) {
+          continue;
+        }
+      }
+      return role;
+    }
+    return "";
+  };
+
+  const pendingItems = requests
+    .map((item) => ({ request: item, role: resolveRequestRole_(item) }))
+    .filter((item) => item.role)
+    .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
+
+  const actionByRequestId = actionsByActor.reduce((acc, item) => {
+    const id = String(item.requestId || "").trim();
+    if (!id) {
+      return acc;
+    }
+    if (!acc[id]) {
+      acc[id] = item;
+    }
+    return acc;
+  }, {});
+
+  const signedItems = requests
+    .map((item) => ({
+      request: item,
+      action: actionByRequestId[String(item.id || "").trim()] || null,
+    }))
+    .filter((item) => item.action)
+    .sort((a, b) =>
+      String(b.action && b.action.createdAt || "").localeCompare(
+        String(a.action && a.action.createdAt || "")
+      )
+    );
+
+  const selectedRequest = requestId
+    ? requests.find((item) => String(item.id || "").trim() === String(requestId || "").trim())
+    : null;
+  const selectedRole = selectedRequest ? resolveRequestRole_(selectedRequest) : "";
+  const canAct = Boolean(selectedRequest && selectedRole);
+
+  const handleAction = async (actionType) => {
+    if (!selectedRequest || !selectedRequest.id || !selectedRole) {
+      return;
+    }
+    setActing(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({
+        action: "updateFinanceRequest",
+        id: selectedRequest.id,
+        requestAction: actionType,
+        actorRole: selectedRole,
+        actorName: actorName,
+        actorNote: actorNote,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      setActorNote("");
+      await loadRequests();
+      await loadActions(selectedRequest.id);
+      await loadActionsByActor();
+    } catch (err) {
+      setError(err.message || "更新失敗");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const renderRequestRow = (item, extra) => {
+    const request = item.request || item;
+    const amount = request.type === "purchase" ? request.amountEstimated : request.amountActual;
+    return (
+      <div
+        key={request.id}
+        className="rounded-2xl border border-slate-200/70 bg-white p-4 text-sm text-slate-600"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="font-semibold text-slate-900">{request.title || "未命名"}</p>
+            <p className="text-xs text-slate-500">
+              {FINANCE_TYPES.find((type) => type.value === request.type)?.label || "申請"} ·{" "}
+              {formatFinanceAmount_(amount)} ·{" "}
+              {FINANCE_STATUS_LABELS[request.status] || request.status || "-"}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <span>{formatDisplayDate_(request.createdAt, { withTime: true })}</span>
+            {extra ? extra : null}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = `/approvals/${request.id}`;
+            }}
+            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+          >
+            檢視
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  if (!googleLinkedStudent || !googleLinkedStudent.email) {
+    return (
+      <div className={embedded ? "" : "mt-6"}>
+        <GoogleSigninPanel
+          title="Google 登入"
+          helperText="登入後即可查看待簽與已簽清單。"
+          onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className={embedded ? "" : "mt-6"}>
+      <div className={embedded ? "" : "rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">簽核中心</h2>
+            <p className="mt-1 text-xs text-slate-500">待簽與已簽清單。</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+            {[
+              { id: "pending", label: `待簽 ${pendingItems.length}` },
+              { id: "signed", label: `已簽 ${signedItems.length}` },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setTab(item.id)}
+                className={`rounded-full px-4 py-1.5 ${
+                  tab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {loading ? (
+          <p className="mt-4 text-xs text-slate-400">載入中...</p>
+        ) : null}
+        {error ? (
+          <div className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+            {error}
+          </div>
+        ) : null}
+
+        {tab === "pending" ? (
+          <div className="mt-4 space-y-3">
+            {pendingItems.length ? (
+              pendingItems.map((item) => renderRequestRow(item))
+            ) : (
+              <p className="text-sm text-slate-500">目前沒有待簽案件。</p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {signedItems.length ? (
+              signedItems.map((item) =>
+                renderRequestRow(item, (
+                  <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500">
+                    {item.action.action || "已簽"}
+                  </span>
+                ))
+              )
+            ) : (
+              <p className="text-sm text-slate-500">尚未有簽核紀錄。</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {requestId ? (
+        <section className="mt-6 rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          {selectedRequest ? (
+            <div className="space-y-4 text-sm text-slate-600">
+              <div>
+                <p className="text-lg font-semibold text-slate-900">
+                  {selectedRequest.title || "未命名"}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {selectedRequest.id} ·{" "}
+                  {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
+                </p>
+              </div>
+              <div className="grid gap-2 text-xs text-slate-500">
+                <div>
+                  申請人：{selectedRequest.applicantName || "-"} ·{" "}
+                  {CLASS_GROUPS.find((item) => item.id === selectedRequest.applicantDepartment)?.label ||
+                    selectedRequest.applicantDepartment ||
+                    "-"}
+                </div>
+                <div>
+                  類型：
+                  {FINANCE_TYPES.find((type) => type.value === selectedRequest.type)?.label || "-"}
+                </div>
+                <div>
+                  金額：
+                  {formatFinanceAmount_(
+                    selectedRequest.type === "purchase"
+                      ? selectedRequest.amountEstimated
+                      : selectedRequest.amountActual
+                  )}
+                </div>
+                <div>說明：{selectedRequest.description || "-"}</div>
+              </div>
+              {selectedRequest.attachments ? (
+                <div>
+                  <p className="text-xs font-semibold text-slate-600">附件</p>
+                  <div className="mt-2 space-y-2">
+                    {parseFinanceAttachments_(selectedRequest.attachments).map((item, index) => (
+                      <a
+                        key={`${item.url}-${index}`}
+                        href={item.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:border-slate-300"
+                      >
+                        {item.name || item.url}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="grid gap-2">
+                <label className="text-xs font-semibold text-slate-600">審核人</label>
+                <input
+                  value={actorName}
+                  onChange={(event) => setActorName(event.target.value)}
+                  placeholder="姓名"
+                  className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-xs text-slate-700"
+                />
+              </div>
+              <div className="grid gap-2">
+                <label className="text-xs font-semibold text-slate-600">備註</label>
+                <textarea
+                  value={actorNote}
+                  onChange={(event) => setActorNote(event.target.value)}
+                  rows="2"
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700"
+                />
+              </div>
+
+              {canAct ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={acting}
+                    onClick={() => handleAction("approve")}
+                    className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    核准
+                  </button>
+                  <button
+                    type="button"
+                    disabled={acting}
+                    onClick={() => handleAction("return")}
+                    className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    退回
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">目前無可簽核權限或案件已處理。</p>
+              )}
+
+              {actions.length ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-900">流程紀錄</p>
+                  <div className="mt-2 space-y-2">
+                    {actions.map((item) => (
+                      <div key={item.id} className="flex flex-wrap items-center justify-between gap-2">
+                        <span>
+                          {item.action} · {FINANCE_ROLE_LABELS[item.actorRole] || item.actorRole || "-"}{" "}
+                          {item.actorName || ""}
+                        </span>
+                        <span className="text-slate-400">
+                          {formatDisplayDate_(item.createdAt, { withTime: true })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">找不到這筆簽核案件。</p>
+          )}
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function ApprovalsPage() {
+  const parts = window.location.pathname.split("/").filter(Boolean);
+  const requestId = parts.length >= 2 ? parts[1] : "";
+  return (
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12">
+        <div className="mx-auto max-w-6xl">
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+            NTU EMBA 115B
+          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+            簽核中心
+          </h1>
+          <p className="mt-3 text-sm text-slate-500">待簽與已簽清單。</p>
+        </div>
+      </header>
+      <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
+        <ApprovalsCenter embedded={false} requestId={requestId} />
         <a
           href="/"
           className="mt-8 inline-flex items-center rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"

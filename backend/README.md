@@ -43,6 +43,7 @@ Deploy as Web App and copy the URL into `frontend/.env` as `VITE_API_URL`.
 ## Google OAuth
 Set Script Properties:
 - `GOOGLE_CLIENT_ID`: Google OAuth Client ID (comma-separated if multiple).
+- `APP_BASE_URL`: Frontend base URL used to build approval links in email notifications (e.g. https://your-domain.com).
 
 `searchStudents`, `verifyGoogle`, `linkGoogleStudent` require Google ID token (`idToken`) from the frontend.
 
