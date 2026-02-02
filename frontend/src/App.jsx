@@ -3121,6 +3121,18 @@ function FinancePage() {
     }
   }, [applicantName, editingId, form.applicantName]);
 
+  useEffect(() => {
+    if (editingId) {
+      return;
+    }
+    if (googleLinkedStudent && googleLinkedStudent.id) {
+      setForm((prev) => ({
+        ...prev,
+        applicantId: prev.applicantId || String(googleLinkedStudent.id || "").trim(),
+      }));
+    }
+  }, [editingId, googleLinkedStudent]);
+
   const loadFundEvents = async () => {
     setFundEventsLoading(true);
     setFundEventsError("");
@@ -3332,7 +3344,10 @@ function FinancePage() {
       return;
     }
     const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
-    const draftApplicantId = form.applicantId || resolvedApplicant.id;
+    const draftApplicantId =
+      form.applicantId ||
+      resolvedApplicant.id ||
+      String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
     const payload = {
       ...form,
       attachments: JSON.stringify(form.attachments || []),
@@ -3381,7 +3396,10 @@ function FinancePage() {
       return;
     }
     const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
-    const resolvedApplicantId = form.applicantId || resolvedApplicant.id;
+    const resolvedApplicantId =
+      form.applicantId ||
+      resolvedApplicant.id ||
+      String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
     const resolvedApplicantName = String(
       resolvedApplicant.name || form.applicantName || applicantName || ""
     ).trim();
