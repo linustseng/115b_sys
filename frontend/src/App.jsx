@@ -8001,7 +8001,8 @@ function SoftballPage() {
                     >
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {player.preferredName || player.name || player.id}
+                          {player.name || player.id || "-"}
+                          {player.nickname ? ` · ${player.nickname}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
                         </p>
                         <p className="text-xs text-slate-500">
@@ -8069,7 +8070,9 @@ function SoftballPage() {
                           className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white px-3 py-2"
                         >
                           <span className="font-semibold text-slate-800">
-                            {player.preferredName || player.name || player.id}
+                            {player.name || player.id || "-"}
+                            {player.nickname ? ` · ${player.nickname}` : ""}
+                            {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
                           </span>
                           <span className="text-amber-700">
                             背號：{player.jerseyRequest || "-"} · 位置：
