@@ -4223,6 +4223,35 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     }
   }, [displayName, actorName]);
 
+  useEffect(() => {
+    if (!googleLinkedStudent || !googleLinkedStudent.email || googleLinkedStudent.id) {
+      return;
+    }
+    let ignore = false;
+    const enrichStudent = async () => {
+      try {
+        const { result } = await apiRequest({
+          action: "lookupStudent",
+          email: String(googleLinkedStudent.email || "").trim().toLowerCase(),
+        });
+        if (!result.ok || !result.data || !result.data.student) {
+          return;
+        }
+        if (!ignore) {
+          const enriched = result.data.student;
+          setGoogleLinkedStudent(enriched);
+          storeGoogleStudent_(enriched);
+        }
+      } catch (error) {
+        // Ignore lookup failures; fall back to email matching.
+      }
+    };
+    enrichStudent();
+    return () => {
+      ignore = true;
+    };
+  }, [googleLinkedStudent]);
+
   const loadBootstrap = async () => {
     const { result } = await apiRequest({ action: "listFinanceAdminBootstrap" });
     if (!result.ok) {
