@@ -6965,6 +6965,13 @@ function SoftballPage() {
         : { hour: parsed.getHours(), minute: parsed.getMinutes() };
     }
     const raw = String(value).trim();
+    if (isSentinelDate_(raw)) {
+      const timeMatch = raw.match(/(\d{1,2}):(\d{2})/);
+      if (!timeMatch) {
+        return null;
+      }
+      return { hour: Number(timeMatch[1]), minute: Number(timeMatch[2]) };
+    }
     const match = raw.match(/(\d{1,2}):(\d{2})/);
     if (!match) {
       return null;
@@ -8912,6 +8919,13 @@ function SoftballPlayerPage() {
         : { hour: parsed.getHours(), minute: parsed.getMinutes() };
     }
     const raw = String(value).trim();
+    if (isSentinelDate_(raw)) {
+      const timeMatch = raw.match(/(\d{1,2}):(\d{2})/);
+      if (!timeMatch) {
+        return null;
+      }
+      return { hour: Number(timeMatch[1]), minute: Number(timeMatch[2]) };
+    }
     const match = raw.match(/(\d{1,2}):(\d{2})/);
     if (!match) {
       return null;
