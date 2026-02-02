@@ -8441,7 +8441,22 @@ function SoftballPlayerPage() {
               </div>
             </div>
 
-            {nextPractice ? (
+            {loading ? (
+              <div className="mt-6 space-y-3">
+                <div className="rounded-3xl border border-slate-200/70 bg-slate-50/70 p-5">
+                  <div className="h-3 w-24 rounded-full bg-slate-200/80" />
+                  <div className="mt-4 h-5 w-48 rounded-full bg-slate-200/80" />
+                  <div className="mt-2 h-4 w-32 rounded-full bg-slate-100" />
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {[0, 1, 2, 3].map((item) => (
+                      <div key={`practice-skeleton-${item}`} className="h-8 w-16 rounded-full bg-slate-100" />
+                    ))}
+                    <div className="h-8 w-32 rounded-full bg-slate-100" />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400">載入練習中…</p>
+              </div>
+            ) : nextPractice ? (
               <div className="mt-6 rounded-3xl border border-emerald-200/80 bg-emerald-50/70 p-5 text-sm text-emerald-900">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700/70">
                   下一場練習
@@ -8600,7 +8615,7 @@ function SoftballPlayerPage() {
                   })}
                 </div>
               </div>
-            ) : !nextPractice ? (
+            ) : !nextPractice && !loading ? (
               <p className="mt-4 text-sm text-slate-500">目前沒有練習。</p>
             ) : null}
 
