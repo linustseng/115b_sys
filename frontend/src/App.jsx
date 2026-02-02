@@ -6618,6 +6618,9 @@ function SoftballPage() {
     todayStart.getFullYear() * 10000 + (todayStart.getMonth() + 1) * 100 + todayStart.getDate();
   const nextPractice =
     practices.find((practice) => getPracticeDayKey_(practice) >= todayKey) || practices[0] || null;
+  const selectedPractice =
+    practices.find((practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)) ||
+    null;
 
   useEffect(() => {
     if (!activePracticeId && practices.length) {
@@ -7369,11 +7372,27 @@ function SoftballPage() {
                 <option value="">選擇練習</option>
                 {practices.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {formatPracticeDate_(item.date)} {item.title || "練習"}
+                    {formatPracticeDate_(toDateInputValueFromValue_(item.date || item.startAt))}
+                    {getPracticeListTimeLabel_(item) ? ` ${getPracticeListTimeLabel_(item)}` : ""}
+                    {` · ${item.title || "練習"}`}
                   </option>
                 ))}
               </select>
             </div>
+
+            {selectedPractice ? (
+              <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-600">
+                <span className="font-semibold text-slate-800">
+                  {formatPracticeDate_(toDateInputValueFromValue_(selectedPractice.date || selectedPractice.startAt))}
+                </span>
+                {getPracticeListTimeLabel_(selectedPractice)
+                  ? ` · ${getPracticeListTimeLabel_(selectedPractice)}`
+                  : ""}
+                {selectedPractice.fieldId
+                  ? ` · ${fields.find((field) => normalizeId_(field.id) === normalizeId_(selectedPractice.fieldId))?.name || "未命名球場"}`
+                  : ""}
+              </div>
+            ) : null}
 
             <div className="mt-6 grid gap-4 sm:grid-cols-4">
               {[
