@@ -6898,13 +6898,21 @@ function SoftballPage() {
       return null;
     }
     if (value instanceof Date) {
-      return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+      return {
+        year: value.getUTCFullYear(),
+        month: value.getUTCMonth() + 1,
+        day: value.getUTCDate(),
+      };
     }
     if (typeof value === "number") {
       const parsed = new Date(value);
       return isNaN(parsed.getTime())
         ? null
-        : { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate() };
+        : {
+            year: parsed.getUTCFullYear(),
+            month: parsed.getUTCMonth() + 1,
+            day: parsed.getUTCDate(),
+          };
     }
     const raw = String(value).trim();
     const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
@@ -8836,13 +8844,21 @@ function SoftballPlayerPage() {
       return null;
     }
     if (value instanceof Date) {
-      return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+      return {
+        year: value.getUTCFullYear(),
+        month: value.getUTCMonth() + 1,
+        day: value.getUTCDate(),
+      };
     }
     if (typeof value === "number") {
       const parsed = new Date(value);
       return isNaN(parsed.getTime())
         ? null
-        : { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate() };
+        : {
+            year: parsed.getUTCFullYear(),
+            month: parsed.getUTCMonth() + 1,
+            day: parsed.getUTCDate(),
+          };
     }
     const raw = String(value).trim();
     const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
