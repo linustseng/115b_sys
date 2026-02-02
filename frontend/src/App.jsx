@@ -4573,18 +4573,40 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
 
         <div className="mt-4 grid gap-3 sm:grid-cols-4">
           {[
-            { id: "pending", label: "待簽核", count: pendingItems.length },
-            { id: "inprogress", label: "簽核中", count: signedInProgressItems.length },
-            { id: "completed", label: "已結案", count: signedCompletedItems.length },
-            { id: "returned", label: "已退回", count: signedReturnedItems.length },
+            {
+              id: "pending",
+              label: "待簽核",
+              count: pendingItems.length,
+              theme: "border-amber-200 bg-amber-50 text-amber-700",
+              active: "border-amber-500 bg-amber-500 text-white",
+            },
+            {
+              id: "inprogress",
+              label: "簽核中",
+              count: signedInProgressItems.length,
+              theme: "border-sky-200 bg-sky-50 text-sky-700",
+              active: "border-sky-500 bg-sky-500 text-white",
+            },
+            {
+              id: "completed",
+              label: "已結案",
+              count: signedCompletedItems.length,
+              theme: "border-emerald-200 bg-emerald-50 text-emerald-700",
+              active: "border-emerald-500 bg-emerald-500 text-white",
+            },
+            {
+              id: "returned",
+              label: "已退回",
+              count: signedReturnedItems.length,
+              theme: "border-rose-200 bg-rose-50 text-rose-700",
+              active: "border-rose-500 bg-rose-500 text-white",
+            },
           ].map((item) => (
             <button
               key={item.id}
               onClick={() => setTab(item.id)}
               className={`rounded-2xl border px-4 py-3 text-left ${
-                tab === item.id
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-200 bg-white text-slate-700"
+                tab === item.id ? item.active : item.theme
               }`}
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
@@ -4594,25 +4616,6 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
             </button>
           ))}
         </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-          {[
-              { id: "pending", label: "待簽核" },
-              { id: "inprogress", label: "簽核中" },
-              { id: "completed", label: "已結案" },
-              { id: "returned", label: "已退回" },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setTab(item.id)}
-                className={`rounded-full px-4 py-1.5 ${
-                  tab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
 
         {loading ? (
           <p className="mt-4 text-xs text-slate-400">載入中...</p>
