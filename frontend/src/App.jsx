@@ -4460,8 +4460,21 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     .filter((item) => item.role)
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
+  const signedByMeIdSet = new Set(
+    actionsByActor.map((item) => String(item.requestId || "").trim()).filter(Boolean)
+  );
   const inProgressItems = requests
     .filter((item) => isPendingStatus(item.status))
+    .filter((item) => {
+      const requestId = String(item.id || "").trim();
+      const applicantId = String(item.applicantId || "").trim();
+      const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
+      const isMine =
+        (personId && applicantId && applicantId === personId) ||
+        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail);
+      const signedByMe = requestId && signedByMeIdSet.has(requestId);
+      return isMine || signedByMe;
+    })
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
