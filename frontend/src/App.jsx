@@ -9089,6 +9089,16 @@ function SoftballPlayerPage() {
   const nextPractice = upcomingPractices.length ? upcomingPractices[0] : null;
   const remainingUpcomingPractices = upcomingPractices.length > 1 ? upcomingPractices.slice(1) : [];
 
+  const normalizeCsvValue_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    if (Array.isArray(value)) {
+      return value.join(",");
+    }
+    return String(value);
+  };
+
   const jerseyTakenSet = new Set(
     players.map((player) => formatJerseyLabel_(String(player.jerseyNumber || ""))).filter(Boolean)
   );
@@ -9100,9 +9110,10 @@ function SoftballPlayerPage() {
   );
   const myReserved =
     profileForm.jerseyRequest && formatJerseyLabel_(profileForm.jerseyRequest);
-  const jerseyChoices = profileForm.jerseyChoices
-    ? profileForm.jerseyChoices.split(",").map((value) => formatJerseyLabel_(value.trim())).filter(Boolean)
-    : [];
+  const jerseyChoices = normalizeCsvValue_(profileForm.jerseyChoices)
+    .split(",")
+    .map((value) => formatJerseyLabel_(value.trim()))
+    .filter(Boolean);
 
   return (
     <div className="min-h-screen">
