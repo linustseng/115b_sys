@@ -4311,8 +4311,9 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const studentMatch =
     students.find((item) => String(item.email || "").trim().toLowerCase() === normalizedEmail) ||
     null;
-  const personId = String((studentMatch && studentMatch.id) || "").trim();
-  const normalizedName = String(displayName || "").trim().toLowerCase();
+  const personId = String(
+    ((googleLinkedStudent && googleLinkedStudent.id) || (studentMatch && studentMatch.id) || "")
+  ).trim();
   const memberships = groupMemberships.filter((item) => {
     if (personId && String(item.personId || "").trim() === personId) {
       return true;
@@ -4320,10 +4321,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     if (String(item.personEmail || "").trim().toLowerCase() === normalizedEmail) {
       return true;
     }
-    return (
-      normalizedName &&
-      String(item.personName || "").trim().toLowerCase() === normalizedName
-    );
+    return false;
   });
   const financeRoleItems = financeRoles.filter((item) => {
     if (personId && String(item.personId || "").trim() === personId) {
