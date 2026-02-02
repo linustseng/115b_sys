@@ -4463,8 +4463,10 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const signedByMeIdSet = new Set(
     actionsByActor.map((item) => String(item.requestId || "").trim()).filter(Boolean)
   );
+  const pendingIdSet = new Set(pendingItems.map((item) => String(item.request.id || "").trim()));
   const inProgressItems = requests
     .filter((item) => isPendingStatus(item.status))
+    .filter((item) => !pendingIdSet.has(String(item.id || "").trim()))
     .filter((item) => {
       const requestId = String(item.id || "").trim();
       const applicantId = String(item.applicantId || "").trim();
