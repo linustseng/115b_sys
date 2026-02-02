@@ -6965,6 +6965,18 @@ function SoftballPage() {
         : { hour: parsed.getHours(), minute: parsed.getMinutes() };
     }
     const raw = String(value).trim();
+    const ampmMatch = raw.match(/(上午|下午)\s*(\d{1,2}):(\d{2})(?::\d{2})?/);
+    if (ampmMatch) {
+      let hour = Number(ampmMatch[2]);
+      const minute = Number(ampmMatch[3]);
+      if (ampmMatch[1] === "下午" && hour < 12) {
+        hour += 12;
+      }
+      if (ampmMatch[1] === "上午" && hour === 12) {
+        hour = 0;
+      }
+      return { hour, minute };
+    }
     if (isSentinelDate_(raw)) {
       const timeMatch = raw.match(/(\d{1,2}):(\d{2})/);
       if (!timeMatch) {
@@ -8922,6 +8934,18 @@ function SoftballPlayerPage() {
         : { hour: parsed.getHours(), minute: parsed.getMinutes() };
     }
     const raw = String(value).trim();
+    const ampmMatch = raw.match(/(上午|下午)\s*(\d{1,2}):(\d{2})(?::\d{2})?/);
+    if (ampmMatch) {
+      let hour = Number(ampmMatch[2]);
+      const minute = Number(ampmMatch[3]);
+      if (ampmMatch[1] === "下午" && hour < 12) {
+        hour += 12;
+      }
+      if (ampmMatch[1] === "上午" && hour === 12) {
+        hour = 0;
+      }
+      return { hour, minute };
+    }
     if (isSentinelDate_(raw)) {
       const timeMatch = raw.match(/(\d{1,2}):(\d{2})/);
       if (!timeMatch) {
