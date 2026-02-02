@@ -4466,6 +4466,8 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const selectedRole = selectedRequest ? resolveRequestRole_(selectedRequest) : "";
   const canAct = Boolean(selectedRequest && selectedRole);
 
+  const resolvedActorName = displayName || actorName || "";
+
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id || !selectedRole) {
       return;
@@ -4478,7 +4480,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
         id: selectedRequest.id,
         requestAction: actionType,
         actorRole: selectedRole,
-        actorName: actorName,
+        actorName: resolvedActorName,
         actorNote: actorNote,
       });
       if (!result.ok) {
@@ -4659,12 +4661,9 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
 
               <div className="grid gap-2">
                 <label className="text-xs font-semibold text-slate-600">審核人</label>
-                <input
-                  value={actorName}
-                  onChange={(event) => setActorName(event.target.value)}
-                  placeholder="姓名"
-                  className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-xs text-slate-700"
-                />
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700">
+                  {resolvedActorName || "—"}
+                </div>
               </div>
               <div className="grid gap-2">
                 <label className="text-xs font-semibold text-slate-600">備註</label>
@@ -4797,12 +4796,24 @@ function FinanceAdminPage() {
   const [students, setStudents] = useState([]);
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
+  const adminDisplayName =
+    (googleLinkedStudent &&
+      (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
+    (googleLinkedStudent && googleLinkedStudent.name) ||
+    (googleLinkedStudent && googleLinkedStudent.email) ||
+    "";
   const fundPaymentErrorFlags = {
     eventId: !!error && error.includes("班費事件"),
     payerName: !!error && error.includes("繳費人"),
     amount: !!error && error.includes("金額"),
     transferLast5: !!error && error.includes("末 5 碼"),
   };
+
+  useEffect(() => {
+    if (adminDisplayName && !actorName) {
+      setActorName(adminDisplayName);
+    }
+  }, [adminDisplayName, actorName]);
 
   const loadRequests = async () => {
     setLoading(true);
@@ -5233,6 +5244,8 @@ function FinanceAdminPage() {
       adminLeadGroups.includes(String(selectedRequest.applicantDepartment || "").trim()) ||
       adminDeputyGroups.includes(String(selectedRequest.applicantDepartment || "").trim()));
 
+  const resolvedActorName = adminDisplayName || actorName || "";
+
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id) {
       return;
@@ -5246,7 +5259,7 @@ function FinanceAdminPage() {
         id: selectedRequest.id,
         requestAction: actionType,
         actorRole: role,
-        actorName: actorName,
+        actorName: resolvedActorName,
         actorNote: actorNote,
       });
       if (!result.ok) {
@@ -5879,12 +5892,9 @@ function FinanceAdminPage() {
 
                 <div className="grid gap-2">
                   <label className="text-xs font-semibold text-slate-600">審核人</label>
-                  <input
-                    value={actorName}
-                    onChange={(event) => setActorName(event.target.value)}
-                    placeholder="姓名"
-                    className="h-10 rounded-2xl border border-slate-200 bg-white px-4 text-xs text-slate-700"
-                  />
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700">
+                    {resolvedActorName || "—"}
+                  </div>
                 </div>
                 <div className="grid gap-2">
                   <label className="text-xs font-semibold text-slate-600">備註</label>
