@@ -4073,7 +4073,17 @@ function FinancePage() {
             </div>
 
             <div className="mt-6 space-y-3">
-              <label className="text-sm font-medium text-slate-700">附件</label>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="text-sm font-medium text-slate-700">附件</label>
+                <a
+                  href="https://drive.google.com/drive/my-drive"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  上傳到 Google Drive
+                </a>
+              </div>
               <div className="flex flex-wrap gap-3">
                 <input
                   value={attachmentUrl}
@@ -4089,6 +4099,9 @@ function FinancePage() {
                   加入
                 </button>
               </div>
+              <p className="text-xs text-slate-400">
+                建議上傳到雲端硬碟後分享連結（任何知道連結的人可檢視），再貼回此處。
+              </p>
               {form.attachments && form.attachments.length ? (
                 <div className="space-y-2">
                   {form.attachments.map((item, index) => (
