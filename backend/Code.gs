@@ -2524,6 +2524,8 @@ function updateFinanceRequestFlow_(requestId, payload) {
   }
   if (action === "submit" || action === "approve") {
     sendFinanceApprovalEmail_(updated);
+  } else if (action === "return") {
+    sendFinanceReturnEmail_(updated, actorName, actorNote);
   }
   return updated;
 }
@@ -3692,6 +3694,57 @@ function sendFinanceApprovalEmail_(request) {
     });
   } catch (error) {
     Logger.log("sendFinanceApprovalEmail failed: " + error);
+  }
+}
+
+function buildFinanceApplicantLink_() {
+  var base = getAppBaseUrl_();
+  if (!base) {
+    return "";
+  }
+  return base + "/finance";
+}
+
+function sendFinanceReturnEmail_(request, actorName, actorNote) {
+  if (!request) {
+    return;
+  }
+  var recipient = normalizeEmail_(request.applicantEmail || "");
+  if (!recipient) {
+    return;
+  }
+  var link = buildFinanceApplicantLink_();
+  var amount = parseFinanceAmount_(request.amountActual || request.amountEstimated || 0);
+  var title = String(request.title || "請款/請購");
+  var applicant = String(request.applicantName || "");
+  var reviewer = String(actorName || "");
+  var subject =
+    "【退回通知】" +
+    title +
+    " · " +
+    (amount ? "NT$ " + amount.toLocaleString("en-US") : "金額待補");
+  var lines = [];
+  lines.push("你的請款/請購已被退回，請補充資料後重新提交。");
+  lines.push("申請人：" + (applicant || "未填"));
+  lines.push("項目：" + title);
+  lines.push("金額：" + (amount ? "NT$ " + amount.toLocaleString("en-US") : "待補"));
+  lines.push("退回人：" + (reviewer || "未填"));
+  if (actorNote) {
+    lines.push("退回原因：" + actorNote);
+  }
+  if (link) {
+    lines.push("");
+    lines.push("請到系統查看並修正：");
+    lines.push(link);
+  }
+  try {
+    MailApp.sendEmail({
+      to: recipient,
+      subject: subject,
+      body: lines.join("\n"),
+    });
+  } catch (error) {
+    Logger.log("sendFinanceReturnEmail failed: " + error);
   }
 }
 

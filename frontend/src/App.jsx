@@ -4466,6 +4466,18 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const selectedRole = selectedRequest ? resolveRequestRole_(selectedRequest) : "";
   const canAct = Boolean(selectedRequest && selectedRole);
 
+  const isPendingStatus = (status) => String(status || "").trim().startsWith("pending_");
+  const signedInProgressItems = signedItems.filter((item) =>
+    isPendingStatus(item.request && item.request.status)
+  );
+  const signedCompletedItems = signedItems.filter(
+    (item) => String(item.request && item.request.status || "").trim() === "closed"
+  );
+  const signedReturnedItems = signedItems.filter(
+    (item) => String(item.request && item.request.status || "").trim() === "returned"
+  );
+  const statusLabel = (status) => FINANCE_STATUS_LABELS[status] || status || "-";
+
   const resolvedActorName = displayName || actorName || "";
 
   const handleAction = async (actionType) => {
@@ -4519,6 +4531,9 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
             {extra ? extra : null}
           </div>
         </div>
+        <div className="mt-2 text-xs text-slate-500">
+          目前：{statusLabel(String(request.status || "").trim())}
+        </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -4552,12 +4567,40 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">簽核中心</h2>
-            <p className="mt-1 text-xs text-slate-500">待簽與已簽清單。</p>
+            <p className="mt-1 text-xs text-slate-500">待簽核、簽核中與結案清單。</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
-            {[
-              { id: "pending", label: `待簽 ${pendingItems.length}` },
-              { id: "signed", label: `已簽 ${signedItems.length}` },
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-4">
+          {[
+            { id: "pending", label: "待簽核", count: pendingItems.length },
+            { id: "inprogress", label: "簽核中", count: signedInProgressItems.length },
+            { id: "completed", label: "已結案", count: signedCompletedItems.length },
+            { id: "returned", label: "已退回", count: signedReturnedItems.length },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setTab(item.id)}
+              className={`rounded-2xl border px-4 py-3 text-left ${
+                tab === item.id
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              <div className="text-[11px] font-semibold uppercase tracking-[0.2em] opacity-70">
+                {item.label}
+              </div>
+              <div className="mt-2 text-2xl font-semibold tabular-nums">{item.count}</div>
+            </button>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+          {[
+              { id: "pending", label: "待簽核" },
+              { id: "inprogress", label: "簽核中" },
+              { id: "completed", label: "已結案" },
+              { id: "returned", label: "已退回" },
             ].map((item) => (
               <button
                 key={item.id}
@@ -4570,7 +4613,6 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
               </button>
             ))}
           </div>
-        </div>
 
         {loading ? (
           <p className="mt-4 text-xs text-slate-400">載入中...</p>
@@ -4589,18 +4631,40 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
               <p className="text-sm text-slate-500">目前沒有待簽案件。</p>
             )}
           </div>
-        ) : (
+        ) : tab === "inprogress" ? (
           <div className="mt-4 space-y-3">
-            {signedItems.length ? (
-              signedItems.map((item) =>
+            {signedInProgressItems.length ? (
+              signedInProgressItems.map((item) => renderRequestRow(item))
+            ) : (
+              <p className="text-sm text-slate-500">目前沒有簽核中的案件。</p>
+            )}
+          </div>
+        ) : tab === "completed" ? (
+          <div className="mt-4 space-y-3">
+            {signedCompletedItems.length ? (
+              signedCompletedItems.map((item) =>
                 renderRequestRow(item, (
-                  <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500">
-                    {item.action.action || "已簽"}
+                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-600">
+                    已結案
                   </span>
                 ))
               )
             ) : (
-              <p className="text-sm text-slate-500">尚未有簽核紀錄。</p>
+              <p className="text-sm text-slate-500">尚未有已結案的案件。</p>
+            )}
+          </div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {signedReturnedItems.length ? (
+              signedReturnedItems.map((item) =>
+                renderRequestRow(item, (
+                  <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-600">
+                    已退回
+                  </span>
+                ))
+              )
+            ) : (
+              <p className="text-sm text-slate-500">尚未有退回的案件。</p>
             )}
           </div>
         )}
