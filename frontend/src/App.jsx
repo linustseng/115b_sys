@@ -6260,6 +6260,8 @@ function SoftballPage() {
   });
   const [playerQuery, setPlayerQuery] = useState("");
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+  const [practicesUpdatedAt, setPracticesUpdatedAt] = useState(null);
+  const [practiceRefreshing, setPracticeRefreshing] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -7853,6 +7855,7 @@ function SoftballPlayerPage() {
     const list = result.data && result.data.practices ? result.data.practices : [];
     const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
     setPractices(sorted);
+    setPracticesUpdatedAt(new Date());
   };
 
   const loadFields = async () => {
@@ -7910,6 +7913,24 @@ function SoftballPlayerPage() {
       loadAttendance(googleLinkedStudent.id);
     }
   }, [googleLinkedStudent]);
+
+  const handleRefreshPractices = async () => {
+    if (practiceRefreshing) {
+      return;
+    }
+    setPracticeRefreshing(true);
+    try {
+      await Promise.all([
+        loadPractices(),
+        loadFields(),
+        googleLinkedStudent && googleLinkedStudent.id
+          ? loadAttendance(googleLinkedStudent.id)
+          : Promise.resolve(),
+      ]);
+    } finally {
+      setPracticeRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (!googleLinkedStudent || !googleLinkedStudent.id) {
@@ -8438,6 +8459,19 @@ function SoftballPlayerPage() {
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">練習出席回覆</h3>
                 <p className="mt-1 text-xs text-slate-500">回覆會自動儲存。</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] text-slate-400">
+                  最後更新：{practicesUpdatedAt ? formatDisplayDate_(practicesUpdatedAt, { withTime: true }) : "-"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleRefreshPractices}
+                  disabled={practiceRefreshing}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                >
+                  {practiceRefreshing ? "更新中..." : "重新整理"}
+                </button>
               </div>
             </div>
 
