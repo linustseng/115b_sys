@@ -8124,6 +8124,7 @@ function SoftballPage() {
                             requestStatus: player.requestStatus || "",
                             jerseyRequest: player.jerseyRequest || "",
                             positionRequest: player.positionRequest || "",
+                            phone: normalizePhoneInputValue_(player.phone),
                           })
                         }
                         className="flex-1 text-left"
