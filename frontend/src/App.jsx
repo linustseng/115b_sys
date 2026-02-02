@@ -6440,6 +6440,28 @@ function SoftballPage() {
     return dateParts.year * 10000 + dateParts.month * 100 + dateParts.day;
   };
 
+  const toDateInputValueFromValue_ = (value) => {
+    const parts = getDatePartsFromValue_(value);
+    return parts ? formatDateParts_(parts) : "";
+  };
+
+  const toTimeInputValueFromValue_ = (value) => {
+    const parts = getTimePartsFromValue_(value);
+    if (!parts) {
+      return "";
+    }
+    return `${pad2_(parts.hour)}:${pad2_(parts.minute)}`;
+  };
+
+  const getPracticeListTimeLabel_ = (practice) => {
+    const start = toTimeInputValueFromValue_(practice.startAt);
+    const end = toTimeInputValueFromValue_(practice.endAt);
+    if (!start && !end) {
+      return "";
+    }
+    return `${start || "-"} - ${end || "-"}`;
+  };
+
   const formatPracticeDate_ = (value) => {
     return formatDisplayDate_(value) || "-";
   };
@@ -6608,9 +6630,9 @@ function SoftballPage() {
     if (selected) {
       setPracticeForm({
         id: selected.id || "",
-        date: selected.date || "",
-        startAt: selected.startAt || "",
-        endAt: selected.endAt || "",
+        date: toDateInputValueFromValue_(selected.date || selected.startAt),
+        startAt: toTimeInputValueFromValue_(selected.startAt),
+        endAt: toTimeInputValueFromValue_(selected.endAt),
         fieldId: selected.fieldId || "",
         title: selected.title || "",
         focus: selected.focus || "",
@@ -7190,8 +7212,13 @@ function SoftballPage() {
                         }`}
                       >
                         <div>
-                          <p className="font-semibold">{formatPracticeDate_(item.date)}</p>
-                          <p className="text-xs opacity-70">{item.title || "練習"} · {item.status || "scheduled"}</p>
+                          <p className="font-semibold">
+                            {formatPracticeDate_(toDateInputValueFromValue_(item.date || item.startAt))}
+                          </p>
+                          <p className="text-xs opacity-70">
+                            {item.title || "練習"} · {item.status || "scheduled"}
+                            {getPracticeListTimeLabel_(item) ? ` · ${getPracticeListTimeLabel_(item)}` : ""}
+                          </p>
                         </div>
                         <span className="text-xs opacity-70">{item.id}</span>
                       </button>
