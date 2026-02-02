@@ -4312,11 +4312,18 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     students.find((item) => String(item.email || "").trim().toLowerCase() === normalizedEmail) ||
     null;
   const personId = String((studentMatch && studentMatch.id) || "").trim();
+  const normalizedName = String(displayName || "").trim().toLowerCase();
   const memberships = groupMemberships.filter((item) => {
     if (personId && String(item.personId || "").trim() === personId) {
       return true;
     }
-    return String(item.personEmail || "").trim().toLowerCase() === normalizedEmail;
+    if (String(item.personEmail || "").trim().toLowerCase() === normalizedEmail) {
+      return true;
+    }
+    return (
+      normalizedName &&
+      String(item.personName || "").trim().toLowerCase() === normalizedName
+    );
   });
   const financeRoleItems = financeRoles.filter((item) => {
     if (personId && String(item.personId || "").trim() === personId) {
