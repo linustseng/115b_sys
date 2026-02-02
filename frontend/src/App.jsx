@@ -2978,6 +2978,15 @@ function FinancePage() {
     }
   };
 
+  const purchaseOptions = requests
+    .filter((item) => String(item.type || "").trim().toLowerCase() === "purchase")
+    .map((item) => ({
+      id: String(item.id || "").trim(),
+      title: String(item.title || "").trim(),
+      status: String(item.status || "").trim(),
+    }))
+    .filter((item) => item.id);
+
   const loadStudents = async () => {
     try {
       const { result } = await apiRequest({ action: "listStudents" });
@@ -4001,9 +4010,21 @@ function FinancePage() {
                   <input
                     value={form.relatedPurchaseId}
                     onChange={(event) => handleFormChange("relatedPurchaseId", event.target.value)}
+                    list="purchase-options"
                     placeholder="請購單號 (可選)"
                     className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
+                  <datalist id="purchase-options">
+                    {purchaseOptions.map((item) => (
+                      <option
+                        key={item.id}
+                        value={item.id}
+                        label={`${item.id} · ${item.title || "未命名"}${
+                          item.status ? ` · ${FINANCE_STATUS_LABELS[item.status] || item.status}` : ""
+                        }`}
+                      />
+                    ))}
+                  </datalist>
                 </div>
               ) : null}
               {isPayment ? (
