@@ -8052,7 +8052,7 @@ function SoftballPlayerPage() {
       return false;
     }
     const raw = String(value).trim();
-    return /^\d{2}:\d{2}$/.test(raw) || /^\d{2}:\d{2}:\d{2}$/.test(raw);
+    return /^\d{1,2}:\d{2}$/.test(raw) || /^\d{1,2}:\d{2}:\d{2}$/.test(raw);
   };
 
   const isSentinelDate_ = (value) => {
@@ -8060,7 +8060,7 @@ function SoftballPlayerPage() {
       return false;
     }
     const raw = String(value).trim();
-    const match = raw.match(/^(\d{4})[-/]\d{2}[-/]\d{2}/);
+    const match = raw.match(/(\d{4})[-/]\d{1,2}[-/]\d{1,2}/);
     if (!match) {
       return false;
     }
@@ -8068,19 +8068,62 @@ function SoftballPlayerPage() {
     return year > 0 && year <= 1900;
   };
 
-  const extractDatePart_ = (value) => {
+  const getDatePartsFromValue_ = (value) => {
     if (!value) {
-      return "";
+      return null;
+    }
+    if (value instanceof Date) {
+      return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+    }
+    if (typeof value === "number") {
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime())
+        ? null
+        : { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate() };
     }
     const raw = String(value).trim();
-    const match = raw.match(/^(\d{4}[-/]\d{2}[-/]\d{2})/);
+    const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (!match) {
+      return null;
+    }
+    if (isSentinelDate_(match[0])) {
+      return null;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!year || !month || !day) {
+      return null;
+    }
+    return { year, month, day };
+  };
+
+  const formatDateParts_ = (parts) => {
+    if (!parts) {
       return "";
     }
-    if (isSentinelDate_(match[1])) {
-      return "";
+    return `${parts.year}-${pad2_(parts.month)}-${pad2_(parts.day)}`;
+  };
+
+  const getTimePartsFromValue_ = (value) => {
+    if (!value) {
+      return null;
     }
-    return match[1].replace(/\//g, "-");
+    if (value instanceof Date) {
+      return { hour: value.getHours(), minute: value.getMinutes() };
+    }
+    if (typeof value === "number") {
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime())
+        ? null
+        : { hour: parsed.getHours(), minute: parsed.getMinutes() };
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/(\d{1,2}):(\d{2})/);
+    if (!match) {
+      return null;
+    }
+    return { hour: Number(match[1]), minute: Number(match[2]) };
   };
 
   const parsePracticeDate_ = (value) => {
@@ -8107,33 +8150,47 @@ function SoftballPlayerPage() {
   };
 
   const buildPracticeDateTime_ = (practice) => {
-    const baseDate = extractDatePart_(practice.date);
-    const startAtRaw = String(practice.startAt || "").trim();
-    const startTime = isTimeOnly_(startAtRaw)
-      ? startAtRaw.slice(0, 5)
-      : isSentinelDate_(startAtRaw)
-        ? startAtRaw.split(" ").pop().slice(0, 5)
-        : "";
-    if (baseDate) {
-      return parsePracticeDate_(startTime ? `${baseDate} ${startTime}` : baseDate);
+    const baseParts = getDatePartsFromValue_(practice.date);
+    const timeParts = getTimePartsFromValue_(practice.startAt);
+    if (baseParts) {
+      const baseDate = formatDateParts_(baseParts);
+      if (timeParts && Number.isFinite(timeParts.hour) && Number.isFinite(timeParts.minute)) {
+        return parsePracticeDate_(
+          `${baseDate} ${pad2_(timeParts.hour)}:${pad2_(timeParts.minute)}`
+        );
+      }
+      return parsePracticeDate_(baseDate);
     }
-    const fallbackDate = extractDatePart_(practice.startAt);
-    if (fallbackDate) {
-      const timePart = startTime;
-      return parsePracticeDate_(timePart ? `${fallbackDate} ${timePart}` : fallbackDate);
+    const fallbackParts = getDatePartsFromValue_(practice.startAt);
+    if (fallbackParts) {
+      const fallbackDate = formatDateParts_(fallbackParts);
+      if (timeParts && Number.isFinite(timeParts.hour) && Number.isFinite(timeParts.minute)) {
+        return parsePracticeDate_(
+          `${fallbackDate} ${pad2_(timeParts.hour)}:${pad2_(timeParts.minute)}`
+        );
+      }
+      return parsePracticeDate_(fallbackDate);
     }
     return parsePracticeDate_(practice.date) || parsePracticeDate_(practice.startAt);
   };
 
   const getPracticeSortKey_ = (practice) => {
-    const parsed = buildPracticeDateTime_(practice);
-    return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY;
+    const dateParts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (!dateParts) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const timeParts = getTimePartsFromValue_(practice.startAt) || { hour: 0, minute: 0 };
+    const dateKey = dateParts.year * 10000 + dateParts.month * 100 + dateParts.day;
+    const timeKey = pad2_(timeParts.hour) === "00" && pad2_(timeParts.minute) === "00"
+      ? 0
+      : timeParts.hour * 100 + timeParts.minute;
+    return dateKey * 10000 + timeKey;
   };
 
   const getPracticeDateLabel_ = (practice) => {
-    const datePart = extractDatePart_(practice.date) || extractDatePart_(practice.startAt);
-    if (datePart) {
-      return formatEventDate_(datePart);
+    const parts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (parts) {
+      return formatEventDate_(formatDateParts_(parts));
     }
     return formatEventDate_(practice.date || practice.startAt);
   };
@@ -8144,34 +8201,42 @@ function SoftballPlayerPage() {
     }
     const raw = String(value).trim();
     if (isTimeOnly_(raw)) {
-      const clean = raw.slice(0, 5);
+      const parts = getTimePartsFromValue_(raw);
+      if (!parts) {
+        return "";
+      }
+      const clean = `${pad2_(parts.hour)}:${pad2_(parts.minute)}`;
       return clean === "00:00" ? "" : clean;
     }
-    const parsed = parsePracticeDate_(value);
-    if (!parsed) {
+    const parts = getTimePartsFromValue_(value);
+    if (!parts) {
       return "";
     }
-    const hours = pad2_(parsed.getHours());
-    const minutes = pad2_(parsed.getMinutes());
+    const hours = pad2_(parts.hour);
+    const minutes = pad2_(parts.minute);
     return hours === "00" && minutes === "00" ? "" : `${hours}:${minutes}`;
   };
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  const todayKey =
+    todayStart.getFullYear() * 10000 + (todayStart.getMonth() + 1) * 100 + todayStart.getDate();
   const sortedPractices = practices.slice().sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
   const upcomingPractices = sortedPractices.filter((practice) => {
-    const parsed = buildPracticeDateTime_(practice) || parsePracticeDate_(practice.date);
-    if (!parsed) {
+    const parts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (!parts) {
       return true;
     }
-    return parsed >= todayStart;
+    const key = parts.year * 10000 + parts.month * 100 + parts.day;
+    return key >= todayKey;
   });
   const historyPractices = sortedPractices.filter((practice) => {
-    const parsed = buildPracticeDateTime_(practice) || parsePracticeDate_(practice.date);
-    if (!parsed) {
+    const parts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (!parts) {
       return false;
     }
-    return parsed < todayStart;
+    const key = parts.year * 10000 + parts.month * 100 + parts.day;
+    return key < todayKey;
   });
   const nextPractice = upcomingPractices.length ? upcomingPractices[0] : null;
   const remainingUpcomingPractices = upcomingPractices.length > 1 ? upcomingPractices.slice(1) : [];
