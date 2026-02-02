@@ -3489,7 +3489,7 @@ function FinancePage() {
       setError("請填寫金額");
       return;
     }
-    if (fundPaymentForm.method === "transfer" && !fundPaymentForm.transferLast5) {
+    if (fundPaymentForm.method === "transfer" && !String(fundPaymentForm.transferLast5 || "").trim()) {
       setError("請填寫匯款帳號末 5 碼");
       return;
     }
@@ -3733,6 +3733,9 @@ function FinancePage() {
                             : "border-slate-200 bg-white"
                         }`}
                       />
+                      {fundPaymentErrorFlags.transferLast5 ? (
+                        <p className="text-xs text-rose-500">請填寫匯款帳號末 5 碼。</p>
+                      ) : null}
                     </div>
                   ) : null}
                   <div className="grid gap-2">
@@ -3754,6 +3757,11 @@ function FinancePage() {
                     />
                   </div>
                 </div>
+                {error ? (
+                  <div className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+                    {error}
+                  </div>
+                ) : null}
                 <div className="mt-6 flex flex-wrap items-center gap-3">
                   <button
                     type="submit"
