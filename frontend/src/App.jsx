@@ -7806,6 +7806,7 @@ function SoftballPlayerPage() {
   const [saving, setSaving] = useState(false);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [profileForm, setProfileForm] = useState({
     id: "",
     name: "",
@@ -8025,6 +8026,23 @@ function SoftballPlayerPage() {
     return acc;
   }, {});
 
+  const isTimeOnly_ = (value) => {
+    if (!value) {
+      return false;
+    }
+    const raw = String(value).trim();
+    return /^\d{2}:\d{2}$/.test(raw) || /^\d{2}:\d{2}:\d{2}$/.test(raw);
+  };
+
+  const extractDatePart_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/^(\d{4}[-/]\d{2}[-/]\d{2})/);
+    return match ? match[1].replace(/\//g, "-") : "";
+  };
+
   const parsePracticeDate_ = (value) => {
     if (!value) {
       return null;
@@ -8036,6 +8054,9 @@ function SoftballPlayerPage() {
     if (!raw) {
       return null;
     }
+    if (isTimeOnly_(raw)) {
+      return null;
+    }
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
       const parts = raw.split("-").map((part) => Number(part));
       const parsed = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -8045,28 +8066,67 @@ function SoftballPlayerPage() {
     return isNaN(parsed.getTime()) ? null : parsed;
   };
 
+  const buildPracticeDateTime_ = (practice) => {
+    const datePart = extractDatePart_(practice.startAt) || extractDatePart_(practice.date);
+    if (datePart) {
+      const timePart = isTimeOnly_(practice.startAt)
+        ? String(practice.startAt).trim().slice(0, 5)
+        : "";
+      return parsePracticeDate_(timePart ? `${datePart} ${timePart}` : datePart);
+    }
+    return parsePracticeDate_(practice.startAt) || parsePracticeDate_(practice.date);
+  };
+
   const getPracticeSortKey_ = (practice) => {
-    const parsed = parsePracticeDate_(practice.startAt) || parsePracticeDate_(practice.date);
+    const parsed = buildPracticeDateTime_(practice);
     return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY;
+  };
+
+  const getPracticeDateLabel_ = (practice) => {
+    const datePart = extractDatePart_(practice.date) || extractDatePart_(practice.startAt);
+    if (datePart) {
+      return formatEventDate_(datePart);
+    }
+    return formatEventDate_(practice.date || practice.startAt);
+  };
+
+  const getPracticeTimeLabel_ = (value) => {
+    if (!value) {
+      return "";
+    }
+    const raw = String(value).trim();
+    if (isTimeOnly_(raw)) {
+      const clean = raw.slice(0, 5);
+      return clean === "00:00" ? "" : clean;
+    }
+    const parsed = parsePracticeDate_(value);
+    if (!parsed) {
+      return "";
+    }
+    const hours = pad2_(parsed.getHours());
+    const minutes = pad2_(parsed.getMinutes());
+    return hours === "00" && minutes === "00" ? "" : `${hours}:${minutes}`;
   };
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const sortedPractices = practices.slice().sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
   const upcomingPractices = sortedPractices.filter((practice) => {
-    const parsed = parsePracticeDate_(practice.startAt) || parsePracticeDate_(practice.date);
+    const parsed = buildPracticeDateTime_(practice) || parsePracticeDate_(practice.date);
     if (!parsed) {
       return true;
     }
     return parsed >= todayStart;
   });
   const historyPractices = sortedPractices.filter((practice) => {
-    const parsed = parsePracticeDate_(practice.startAt) || parsePracticeDate_(practice.date);
+    const parsed = buildPracticeDateTime_(practice) || parsePracticeDate_(practice.date);
     if (!parsed) {
       return false;
     }
     return parsed < todayStart;
   });
+  const nextPractice = upcomingPractices.length ? upcomingPractices[0] : null;
+  const remainingUpcomingPractices = upcomingPractices.length > 1 ? upcomingPractices.slice(1) : [];
 
   const jerseyTakenSet = new Set(
     players.map((player) => formatJerseyLabel_(String(player.jerseyNumber || ""))).filter(Boolean)
@@ -8347,89 +8407,98 @@ function SoftballPlayerPage() {
 
         {activeTab === "attendance" ? (
           <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
-            <h3 className="text-lg font-semibold text-slate-900">練習出席回覆</h3>
-            {upcomingPractices.length ? (
-              <div className="mt-6 space-y-3">
-                {upcomingPractices.map((practice) => {
-                  const record = attendanceByPractice[normalizeId_(practice.id)] || {};
-                  const currentStatus = String(record.status || "unknown").toLowerCase();
-                  return (
-                    <div
-                      key={practice.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                    >
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {formatEventDate_(practice.date)} · {practice.title || "練習"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {formatDisplayDate_(practice.startAt, { withTime: true }) || "-"} -{" "}
-                          {formatDisplayDate_(practice.endAt, { withTime: true }) || "-"}
-                        </p>
-                        {practice.fieldId && fieldById[normalizeId_(practice.fieldId)] ? (
-                          <p className="mt-1 text-xs text-slate-500">
-                            場地：{fieldById[normalizeId_(practice.fieldId)].name || "未命名"}
-                            {fieldById[normalizeId_(practice.fieldId)].mapUrl ||
-                            fieldById[normalizeId_(practice.fieldId)].address ? (
-                              <>
-                                {" · "}
-                                <a
-                                  href={
-                                    fieldById[normalizeId_(practice.fieldId)].mapUrl ||
-                                    buildGoogleMapsUrl_(fieldById[normalizeId_(practice.fieldId)].address)
-                                  }
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="font-semibold text-slate-600 hover:text-slate-800"
-                                >
-                                  地圖
-                                </a>
-                              </>
-                            ) : null}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {[
-                          { value: "attend", label: "出席" },
-                          { value: "late", label: "遲到" },
-                          { value: "absent", label: "缺席" },
-                          { value: "unknown", label: "未定" },
-                        ].map((item) => (
-                          <button
-                            key={`${practice.id}-${item.value}`}
-                            onClick={() => handleAttendanceStatus(practice.id, item.value)}
-                            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                              currentStatus === item.value
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                            }`}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
-                        <input
-                          value={attendanceNoteMap[practice.id] || record.note || ""}
-                          onChange={(event) =>
-                            setAttendanceNoteMap((prev) => ({ ...prev, [practice.id]: event.target.value }))
-                          }
-                          placeholder="備註"
-                          className="h-8 w-36 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">練習出席回覆</h3>
+                <p className="mt-1 text-xs text-slate-500">回覆會自動儲存。</p>
               </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-500">目前沒有練習。</p>
-            )}
+            </div>
 
-            {historyPractices.length ? (
-              <div className="mt-8">
-                <h4 className="text-sm font-semibold text-slate-900">歷史練球</h4>
+            {nextPractice ? (
+              <div className="mt-6 rounded-3xl border border-emerald-200/80 bg-emerald-50/70 p-5 text-sm text-emerald-900">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700/70">
+                  下一場練習
+                </p>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-lg font-semibold text-emerald-900">
+                      {getPracticeDateLabel_(nextPractice)} · {nextPractice.title || "練習"}
+                    </p>
+                    {getPracticeTimeLabel_(nextPractice.startAt) ||
+                    getPracticeTimeLabel_(nextPractice.endAt) ? (
+                      <p className="mt-1 text-sm text-emerald-800/80">
+                        {getPracticeTimeLabel_(nextPractice.startAt) || "-"} -{" "}
+                        {getPracticeTimeLabel_(nextPractice.endAt) || "-"}
+                      </p>
+                    ) : null}
+                    {nextPractice.fieldId && fieldById[normalizeId_(nextPractice.fieldId)] ? (
+                      <p className="mt-2 text-sm text-emerald-800/80">
+                        場地：{fieldById[normalizeId_(nextPractice.fieldId)].name || "未命名"}
+                        {fieldById[normalizeId_(nextPractice.fieldId)].mapUrl ||
+                        fieldById[normalizeId_(nextPractice.fieldId)].address ? (
+                          <>
+                            {" · "}
+                            <a
+                              href={
+                                fieldById[normalizeId_(nextPractice.fieldId)].mapUrl ||
+                                buildGoogleMapsUrl_(fieldById[normalizeId_(nextPractice.fieldId)].address)
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-semibold text-emerald-900 hover:text-emerald-700"
+                            >
+                              地圖
+                            </a>
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { value: "attend", label: "出席" },
+                      { value: "late", label: "遲到" },
+                      { value: "absent", label: "缺席" },
+                      { value: "unknown", label: "未定" },
+                    ].map((item) => {
+                      const record = attendanceByPractice[normalizeId_(nextPractice.id)] || {};
+                      const currentStatus = String(record.status || "unknown").toLowerCase();
+                      return (
+                        <button
+                          key={`${nextPractice.id}-${item.value}`}
+                          onClick={() => handleAttendanceStatus(nextPractice.id, item.value)}
+                          className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                            currentStatus === item.value
+                              ? "border-emerald-900 bg-emerald-900 text-white"
+                              : "border-emerald-200 bg-white text-emerald-800 hover:border-emerald-300"
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                    <input
+                      value={
+                        attendanceNoteMap[nextPractice.id] ||
+                        (attendanceByPractice[normalizeId_(nextPractice.id)] || {}).note ||
+                        ""
+                      }
+                      onChange={(event) =>
+                        setAttendanceNoteMap((prev) => ({ ...prev, [nextPractice.id]: event.target.value }))
+                      }
+                      placeholder="備註"
+                      className="h-9 w-40 rounded-full border border-emerald-200 bg-white px-3 text-xs text-emerald-900"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {remainingUpcomingPractices.length ? (
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold text-slate-900">接下來的練習</h4>
                 <div className="mt-4 space-y-3">
-                  {historyPractices.map((practice) => {
+                  {remainingUpcomingPractices.map((practice) => {
                     const record = attendanceByPractice[normalizeId_(practice.id)] || {};
                     const currentStatus = String(record.status || "unknown").toLowerCase();
                     return (
@@ -8439,12 +8508,15 @@ function SoftballPlayerPage() {
                       >
                         <div>
                           <p className="font-semibold text-slate-900">
-                            {formatEventDate_(practice.date)} · {practice.title || "練習"}
+                            {getPracticeDateLabel_(practice)} · {practice.title || "練習"}
                           </p>
-                          <p className="text-xs text-slate-500">
-                            {formatDisplayDate_(practice.startAt, { withTime: true }) || "-"} -{" "}
-                            {formatDisplayDate_(practice.endAt, { withTime: true }) || "-"}
-                          </p>
+                          {getPracticeTimeLabel_(practice.startAt) ||
+                          getPracticeTimeLabel_(practice.endAt) ? (
+                            <p className="text-xs text-slate-500">
+                              {getPracticeTimeLabel_(practice.startAt) || "-"} -{" "}
+                              {getPracticeTimeLabel_(practice.endAt) || "-"}
+                            </p>
+                          ) : null}
                           {practice.fieldId && fieldById[normalizeId_(practice.fieldId)] ? (
                             <p className="mt-1 text-xs text-slate-500">
                               場地：{fieldById[normalizeId_(practice.fieldId)].name || "未命名"}
@@ -8490,10 +8562,7 @@ function SoftballPlayerPage() {
                           <input
                             value={attendanceNoteMap[practice.id] || record.note || ""}
                             onChange={(event) =>
-                              setAttendanceNoteMap((prev) => ({
-                                ...prev,
-                                [practice.id]: event.target.value,
-                              }))
+                              setAttendanceNoteMap((prev) => ({ ...prev, [practice.id]: event.target.value }))
                             }
                             placeholder="備註"
                             className="h-8 w-36 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-700"
@@ -8503,6 +8572,107 @@ function SoftballPlayerPage() {
                     );
                   })}
                 </div>
+              </div>
+            ) : !nextPractice ? (
+              <p className="mt-4 text-sm text-slate-500">目前沒有練習。</p>
+            ) : null}
+
+            {historyPractices.length ? (
+              <div className="mt-8">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-semibold text-slate-900">歷史練球</h4>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryExpanded((prev) => !prev)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    {historyExpanded ? "收合" : "展開"}
+                  </button>
+                </div>
+                {historyExpanded ? (
+                  <div className="mt-4 space-y-3">
+                    {historyPractices.map((practice) => {
+                      const record = attendanceByPractice[normalizeId_(practice.id)] || {};
+                      const currentStatus = String(record.status || "unknown").toLowerCase();
+                      return (
+                        <div
+                          key={practice.id}
+                          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-500"
+                        >
+                          <div>
+                            <p className="font-semibold text-slate-700">
+                              {getPracticeDateLabel_(practice)} · {practice.title || "練習"}
+                            </p>
+                            {getPracticeTimeLabel_(practice.startAt) ||
+                            getPracticeTimeLabel_(practice.endAt) ? (
+                              <p className="text-xs text-slate-400">
+                                {getPracticeTimeLabel_(practice.startAt) || "-"} -{" "}
+                                {getPracticeTimeLabel_(practice.endAt) || "-"}
+                              </p>
+                            ) : null}
+                            {practice.fieldId && fieldById[normalizeId_(practice.fieldId)] ? (
+                              <p className="mt-1 text-xs text-slate-400">
+                                場地：{fieldById[normalizeId_(practice.fieldId)].name || "未命名"}
+                                {fieldById[normalizeId_(practice.fieldId)].mapUrl ||
+                                fieldById[normalizeId_(practice.fieldId)].address ? (
+                                  <>
+                                    {" · "}
+                                    <a
+                                      href={
+                                        fieldById[normalizeId_(practice.fieldId)].mapUrl ||
+                                        buildGoogleMapsUrl_(fieldById[normalizeId_(practice.fieldId)].address)
+                                      }
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-semibold text-slate-500 hover:text-slate-700"
+                                    >
+                                      地圖
+                                    </a>
+                                  </>
+                                ) : null}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 opacity-80">
+                            {[
+                              { value: "attend", label: "出席" },
+                              { value: "late", label: "遲到" },
+                              { value: "absent", label: "缺席" },
+                              { value: "unknown", label: "未定" },
+                            ].map((item) => (
+                              <button
+                                key={`${practice.id}-${item.value}`}
+                                onClick={() => handleAttendanceStatus(practice.id, item.value)}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  currentStatus === item.value
+                                    ? "border-slate-700 bg-slate-700 text-white"
+                                    : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                            <input
+                              value={attendanceNoteMap[practice.id] || record.note || ""}
+                              onChange={(event) =>
+                                setAttendanceNoteMap((prev) => ({
+                                  ...prev,
+                                  [practice.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="備註"
+                              className="h-8 w-36 rounded-full border border-slate-200 bg-white px-3 text-xs text-slate-600"
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-400">
+                    已收合 {historyPractices.length} 場歷史練球。
+                  </p>
+                )}
               </div>
             ) : null}
           </section>
