@@ -8034,13 +8034,32 @@ function SoftballPlayerPage() {
     return /^\d{2}:\d{2}$/.test(raw) || /^\d{2}:\d{2}:\d{2}$/.test(raw);
   };
 
+  const isSentinelDate_ = (value) => {
+    if (!value) {
+      return false;
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/^(\d{4})[-/]\d{2}[-/]\d{2}/);
+    if (!match) {
+      return false;
+    }
+    const year = Number(match[1]);
+    return year > 0 && year <= 1900;
+  };
+
   const extractDatePart_ = (value) => {
     if (!value) {
       return "";
     }
     const raw = String(value).trim();
     const match = raw.match(/^(\d{4}[-/]\d{2}[-/]\d{2})/);
-    return match ? match[1].replace(/\//g, "-") : "";
+    if (!match) {
+      return "";
+    }
+    if (isSentinelDate_(match[1])) {
+      return "";
+    }
+    return match[1].replace(/\//g, "-");
   };
 
   const parsePracticeDate_ = (value) => {
@@ -8067,14 +8086,22 @@ function SoftballPlayerPage() {
   };
 
   const buildPracticeDateTime_ = (practice) => {
-    const datePart = extractDatePart_(practice.startAt) || extractDatePart_(practice.date);
-    if (datePart) {
-      const timePart = isTimeOnly_(practice.startAt)
-        ? String(practice.startAt).trim().slice(0, 5)
+    const baseDate = extractDatePart_(practice.date);
+    const startAtRaw = String(practice.startAt || "").trim();
+    const startTime = isTimeOnly_(startAtRaw)
+      ? startAtRaw.slice(0, 5)
+      : isSentinelDate_(startAtRaw)
+        ? startAtRaw.split(" ").pop().slice(0, 5)
         : "";
-      return parsePracticeDate_(timePart ? `${datePart} ${timePart}` : datePart);
+    if (baseDate) {
+      return parsePracticeDate_(startTime ? `${baseDate} ${startTime}` : baseDate);
     }
-    return parsePracticeDate_(practice.startAt) || parsePracticeDate_(practice.date);
+    const fallbackDate = extractDatePart_(practice.startAt);
+    if (fallbackDate) {
+      const timePart = startTime;
+      return parsePracticeDate_(timePart ? `${fallbackDate} ${timePart}` : fallbackDate);
+    }
+    return parsePracticeDate_(practice.date) || parsePracticeDate_(practice.startAt);
   };
 
   const getPracticeSortKey_ = (practice) => {
