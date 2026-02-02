@@ -7815,6 +7815,9 @@ function SoftballPage() {
                             {item.title || "練習"} · {item.status || "scheduled"}
                             {getPracticeListTimeLabel_(item) ? ` · ${getPracticeListTimeLabel_(item)}` : ""}
                           </p>
+                          <p className="mt-1 text-[11px] text-amber-600/80">
+                            Debug: startAt={String(item.startAt || "-")} · endAt={String(item.endAt || "-")}
+                          </p>
                         </div>
                         <span className="text-xs opacity-70">{item.id}</span>
                       </button>
