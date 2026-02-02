@@ -24,6 +24,19 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 
 活動簽到需要在 Events 設定 `checkinUrl`，未設定會回傳 `Check-in link not configured`。
 
+## Group Codes
+- A: 班代組
+- B: 公關組
+- C: 活動組
+- D: 財會組
+- E: 資訊組
+- F: 學藝組
+- G: 醫療組
+- H: 體育主將組
+- I: 美食組
+- J: 班董
+- K: 壘球隊
+
 ## Apps Script
 Deploy as Web App and copy the URL into `frontend/.env` as `VITE_API_URL`.
 

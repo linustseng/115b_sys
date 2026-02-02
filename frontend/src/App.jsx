@@ -219,6 +219,7 @@ const CLASS_GROUPS = [
   { id: "H", label: "體育主將組" },
   { id: "I", label: "美食組" },
   { id: "J", label: "班董" },
+  { id: "K", label: "壘球隊" },
 ];
 
 const GROUP_ROLE_OPTIONS = [
