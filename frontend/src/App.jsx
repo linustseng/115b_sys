@@ -4202,6 +4202,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const [requests, setRequests] = useState([]);
   const [actions, setActions] = useState([]);
   const [actionsByActor, setActionsByActor] = useState([]);
+  const [actionsSummary, setActionsSummary] = useState({});
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [financeRoles, setFinanceRoles] = useState([]);
   const [students, setStudents] = useState([]);
@@ -4288,6 +4289,26 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     } catch (err) {
       // Backward-compatible: backend not deployed yet.
       setActionsByActor([]);
+    }
+  };
+
+  const loadActionsSummary = async (requestIds) => {
+    const ids = (requestIds || []).map((id) => String(id || "").trim()).filter(Boolean);
+    if (!ids.length) {
+      setActionsSummary({});
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "listFinanceActionsSummary",
+        requestIds: ids,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setActionsSummary(result.data && result.data.summary ? result.data.summary : {});
+    } catch (err) {
+      setActionsSummary({});
     }
   };
 
@@ -4432,10 +4453,32 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     return "";
   };
 
+  const isPendingStatus = (status) => String(status || "").trim().startsWith("pending_");
+
   const pendingItems = requests
     .map((item) => ({ request: item, role: resolveRequestRole_(item) }))
     .filter((item) => item.role)
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
+
+  const inProgressItems = requests
+    .filter((item) => isPendingStatus(item.status))
+    .map((item) => ({ request: item }))
+    .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
+
+  const completedItems = requests
+    .filter((item) => String(item.status || "").trim() === "closed")
+    .map((item) => ({ request: item }))
+    .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
+
+  const returnedItems = requests
+    .filter((item) => String(item.status || "").trim() === "returned")
+    .map((item) => ({ request: item }))
+    .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
+
+  useEffect(() => {
+    const ids = inProgressItems.map((item) => item.request.id);
+    loadActionsSummary(ids).catch(() => {});
+  }, [requests, googleLinkedStudent]);
 
   const actionByRequestId = actionsByActor.reduce((acc, item) => {
     const id = String(item.requestId || "").trim();
@@ -4448,34 +4491,12 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     return acc;
   }, {});
 
-  const signedItems = requests
-    .map((item) => ({
-      request: item,
-      action: actionByRequestId[String(item.id || "").trim()] || null,
-    }))
-    .filter((item) => item.action)
-    .sort((a, b) =>
-      String(b.action && b.action.createdAt || "").localeCompare(
-        String(a.action && a.action.createdAt || "")
-      )
-    );
-
   const selectedRequest = requestId
     ? requests.find((item) => String(item.id || "").trim() === String(requestId || "").trim())
     : null;
   const selectedRole = selectedRequest ? resolveRequestRole_(selectedRequest) : "";
   const canAct = Boolean(selectedRequest && selectedRole);
 
-  const isPendingStatus = (status) => String(status || "").trim().startsWith("pending_");
-  const signedInProgressItems = signedItems.filter((item) =>
-    isPendingStatus(item.request && item.request.status)
-  );
-  const signedCompletedItems = signedItems.filter(
-    (item) => String(item.request && item.request.status || "").trim() === "closed"
-  );
-  const signedReturnedItems = signedItems.filter(
-    (item) => String(item.request && item.request.status || "").trim() === "returned"
-  );
   const statusLabel = (status) => FINANCE_STATUS_LABELS[status] || status || "-";
 
   const resolvedActorName = displayName || actorName || "";
@@ -4583,21 +4604,21 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
             {
               id: "inprogress",
               label: "簽核中",
-              count: signedInProgressItems.length,
+              count: inProgressItems.length,
               theme: "border-sky-200 bg-sky-50 text-sky-700",
               active: "border-sky-500 bg-sky-500 text-white",
             },
             {
               id: "completed",
               label: "已結案",
-              count: signedCompletedItems.length,
+              count: completedItems.length,
               theme: "border-emerald-200 bg-emerald-50 text-emerald-700",
               active: "border-emerald-500 bg-emerald-500 text-white",
             },
             {
               id: "returned",
               label: "已退回",
-              count: signedReturnedItems.length,
+              count: returnedItems.length,
               theme: "border-rose-200 bg-rose-50 text-rose-700",
               active: "border-rose-500 bg-rose-500 text-white",
             },
@@ -4636,16 +4657,23 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
           </div>
         ) : tab === "inprogress" ? (
           <div className="mt-4 space-y-3">
-            {signedInProgressItems.length ? (
-              signedInProgressItems.map((item) => renderRequestRow(item))
+            {inProgressItems.length ? (
+              inProgressItems.map((item) => {
+                const action = actionsSummary[String(item.request.id || "").trim()] || null;
+                return renderRequestRow(item, action ? (
+                  <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-600">
+                    已簽：{action.actorName || "-"}
+                  </span>
+                ) : null);
+              })
             ) : (
               <p className="text-sm text-slate-500">目前沒有簽核中的案件。</p>
             )}
           </div>
         ) : tab === "completed" ? (
           <div className="mt-4 space-y-3">
-            {signedCompletedItems.length ? (
-              signedCompletedItems.map((item) =>
+            {completedItems.length ? (
+              completedItems.map((item) =>
                 renderRequestRow(item, (
                   <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-600">
                     已結案
@@ -4658,8 +4686,8 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
           </div>
         ) : (
           <div className="mt-4 space-y-3">
-            {signedReturnedItems.length ? (
-              signedReturnedItems.map((item) =>
+            {returnedItems.length ? (
+              returnedItems.map((item) =>
                 renderRequestRow(item, (
                   <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-600">
                     已退回
@@ -8876,7 +8904,7 @@ function SoftballPlayerPage() {
         name: match.name || googleLinkedStudent.name || "",
         preferredName: match.preferredName || googleLinkedStudent.preferredName || "",
         email: match.email || googleLinkedStudent.email || "",
-        phone: match.phone || "",
+        phone: normalizePhoneInputValue_(match.phone),
         nickname: match.nickname || "",
         bats: match.bats || "",
         throws: match.throws || "",
@@ -8893,6 +8921,7 @@ function SoftballPlayerPage() {
         name: googleLinkedStudent.name || "",
         preferredName: googleLinkedStudent.preferredName || "",
         email: googleLinkedStudent.email || "",
+        phone: normalizePhoneInputValue_(googleLinkedStudent.phone),
         nickname: "",
       }));
     }
@@ -8918,6 +8947,7 @@ function SoftballPlayerPage() {
       const payload = {
         ...profileForm,
         id: googleLinkedStudent.id,
+        phone: normalizePhoneInputValue_(profileForm.phone),
         jerseyChoices: profileForm.jerseyChoices,
         requestStatus: profileForm.jerseyRequest || profileForm.positionRequest ? "pending" : "",
       };
@@ -9364,6 +9394,9 @@ function SoftballPlayerPage() {
                 <input
                   value={profileForm.phone}
                   onChange={(event) => handleProfileChange("phone", event.target.value)}
+                  type="text"
+                  inputMode="tel"
+                  autoComplete="tel"
                   className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                 />
               </div>

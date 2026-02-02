@@ -240,6 +240,18 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { actions: listFinanceActionsByActor_(actorNames) }, error: null };
   }
 
+  if (payload.action === "listFinanceActionsSummary") {
+    const requestIds = Array.isArray(payload.requestIds) ? payload.requestIds : [];
+    if (!requestIds.length) {
+      return { ok: false, data: null, error: "Missing request ids" };
+    }
+    return {
+      ok: true,
+      data: { summary: listFinanceActionsSummary_(requestIds) },
+      error: null,
+    };
+  }
+
   if (payload.action === "listGroupMemberships") {
     return { ok: true, data: { memberships: listGroupMemberships_() }, error: null };
   }
@@ -1612,6 +1624,43 @@ function listFinanceActionsByActor_(actorNames) {
   return list.sort(function (a, b) {
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
+}
+
+function listFinanceActionsSummary_(requestIds) {
+  const sheet = getSheet_(SHEETS.financeActions);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  const idIndex = headerMap.requestId;
+  if (idIndex === undefined) {
+    throw new Error("FinanceActions sheet missing requestId column");
+  }
+  const idSet = (requestIds || []).reduce(function (acc, id) {
+    const key = String(id || "").trim();
+    if (key) {
+      acc[key] = true;
+    }
+    return acc;
+  }, {});
+  const latestById = {};
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const requestId = String(row[idIndex] || "").trim();
+    if (!requestId || !idSet[requestId]) {
+      continue;
+    }
+    const item = mapRowToObject_(headerMap, row);
+    const current = latestById[requestId];
+    if (!current) {
+      latestById[requestId] = item;
+      continue;
+    }
+    const currentCreated = String(current.createdAt || "");
+    const nextCreated = String(item.createdAt || "");
+    if (nextCreated.localeCompare(currentCreated) > 0) {
+      latestById[requestId] = item;
+    }
+  }
+  return latestById;
 }
 
 function listGroupMemberships_() {
