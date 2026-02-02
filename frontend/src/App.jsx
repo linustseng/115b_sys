@@ -8117,7 +8117,7 @@ function SoftballPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {player.preferredName || player.name || player.id}
+                          {player.name || player.id || "-"}
                           {player.nickname ? ` · ${player.nickname}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
                         </p>
@@ -8162,7 +8162,7 @@ function SoftballPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">姓名</label>
+                    <label className="text-sm font-medium text-slate-700">中文姓名</label>
                     <input
                       value={playerForm.name}
                       onChange={(event) => handlePlayerFormChange("name", event.target.value)}
@@ -8170,28 +8170,10 @@ function SoftballPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">英文名</label>
+                    <label className="text-sm font-medium text-slate-700">球員暱稱</label>
                     <input
-                      value={playerForm.nameEn}
-                      onChange={(event) => handlePlayerFormChange("nameEn", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">稱呼</label>
-                    <input
-                      value={playerForm.preferredName}
-                      onChange={(event) => handlePlayerFormChange("preferredName", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">Email</label>
-                    <input
-                      value={playerForm.email}
-                      onChange={(event) => handlePlayerFormChange("email", event.target.value)}
+                      value={playerForm.nickname}
+                      onChange={(event) => handlePlayerFormChange("nickname", event.target.value)}
                       className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                     />
                   </div>
@@ -8213,14 +8195,6 @@ function SoftballPage() {
                 className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
               />
             </div>
-          </div>
-          <div className="grid gap-2">
-            <label className="text-sm font-medium text-slate-700">球員暱稱</label>
-            <input
-              value={playerForm.nickname}
-              onChange={(event) => handlePlayerFormChange("nickname", event.target.value)}
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-            />
           </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">守備位置</label>
