@@ -3,6 +3,65 @@ import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappi
 import emblem115b from "./assets/115b_icon.png";
 import lineLinkGuide from "./assets/line_link.jpg";
 
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    console.error("[AppErrorBoundary]", error, info);
+    try {
+      window.localStorage.setItem(
+        "app_last_error",
+        JSON.stringify({
+          message: error && error.message ? error.message : "Unknown error",
+          stack: error && error.stack ? error.stack : "",
+          info: info && info.componentStack ? info.componentStack : "",
+          at: Date.now(),
+        })
+      );
+    } catch (err) {
+      // Ignore storage failures
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-slate-50">
+          <main className="mx-auto max-w-3xl px-6 py-16">
+            <div className="rounded-3xl border border-rose-200/80 bg-white p-8 text-sm text-rose-700 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.5)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-400">
+                Something went wrong
+              </p>
+              <h1 className="mt-3 text-2xl font-semibold text-rose-800">系統發生錯誤</h1>
+              <p className="mt-2 text-sm text-rose-600">
+                請重新整理頁面。若持續發生，請把以下錯誤訊息回報給管理員。
+              </p>
+              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                {this.state.error.message || "Unknown error"}
+              </div>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="mt-5 rounded-full bg-rose-600 px-4 py-2 text-xs font-semibold text-white shadow-sm shadow-rose-500/30 hover:bg-rose-500"
+              >
+                重新整理
+              </button>
+            </div>
+          </main>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const gatheringFieldConfig = {
   attendance: {
     id: "attendance",
@@ -1097,7 +1156,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   return children;
 }
 
-export default function App() {
+function AppShell() {
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");
   const isAdminEventsPage = pathname.includes("admin/events");
@@ -1203,6 +1262,14 @@ export default function App() {
   }
 
   return <LandingPage />;
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppShell />
+    </ErrorBoundary>
+  );
 }
 
 function RegistrationPage() {
@@ -6272,6 +6339,107 @@ function SoftballPage() {
 
   const normalizeId_ = (value) => String(value || "").trim();
 
+  const isTimeOnly_ = (value) => {
+    if (!value) {
+      return false;
+    }
+    const raw = String(value).trim();
+    return /^\d{1,2}:\d{2}$/.test(raw) || /^\d{1,2}:\d{2}:\d{2}$/.test(raw);
+  };
+
+  const isSentinelDate_ = (value) => {
+    if (!value) {
+      return false;
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/(\d{4})[-/]\d{1,2}[-/]\d{1,2}/);
+    if (!match) {
+      return false;
+    }
+    const year = Number(match[1]);
+    return year > 0 && year <= 1900;
+  };
+
+  const getDatePartsFromValue_ = (value) => {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return { year: value.getFullYear(), month: value.getMonth() + 1, day: value.getDate() };
+    }
+    if (typeof value === "number") {
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime())
+        ? null
+        : { year: parsed.getFullYear(), month: parsed.getMonth() + 1, day: parsed.getDate() };
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (!match) {
+      return null;
+    }
+    if (isSentinelDate_(match[0])) {
+      return null;
+    }
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!year || !month || !day) {
+      return null;
+    }
+    return { year, month, day };
+  };
+
+  const getTimePartsFromValue_ = (value) => {
+    if (!value) {
+      return null;
+    }
+    if (value instanceof Date) {
+      return { hour: value.getHours(), minute: value.getMinutes() };
+    }
+    if (typeof value === "number") {
+      const parsed = new Date(value);
+      return isNaN(parsed.getTime())
+        ? null
+        : { hour: parsed.getHours(), minute: parsed.getMinutes() };
+    }
+    const raw = String(value).trim();
+    const match = raw.match(/(\d{1,2}):(\d{2})/);
+    if (!match) {
+      return null;
+    }
+    return { hour: Number(match[1]), minute: Number(match[2]) };
+  };
+
+  const formatDateParts_ = (parts) => {
+    if (!parts) {
+      return "";
+    }
+    return `${parts.year}-${pad2_(parts.month)}-${pad2_(parts.day)}`;
+  };
+
+  const getPracticeSortKey_ = (practice) => {
+    const dateParts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (!dateParts) {
+      return Number.POSITIVE_INFINITY;
+    }
+    const timeParts = getTimePartsFromValue_(practice.startAt) || { hour: 0, minute: 0 };
+    const dateKey = dateParts.year * 10000 + dateParts.month * 100 + dateParts.day;
+    const timeKey =
+      pad2_(timeParts.hour) === "00" && pad2_(timeParts.minute) === "00"
+        ? 0
+        : timeParts.hour * 100 + timeParts.minute;
+    return dateKey * 10000 + timeKey;
+  };
+
+  const getPracticeDayKey_ = (practice) => {
+    const dateParts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
+    if (!dateParts) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return dateParts.year * 10000 + dateParts.month * 100 + dateParts.day;
+  };
+
   const formatPracticeDate_ = (value) => {
     return formatDisplayDate_(value) || "-";
   };
@@ -6295,7 +6463,7 @@ function SoftballPage() {
         throw new Error(result.error || "載入失敗");
       }
       const list = result.data && result.data.practices ? result.data.practices : [];
-      const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+      const sorted = list.slice().sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
       setPractices(sorted);
     } catch (err) {
       setError("練習資料載入失敗。");
@@ -6372,7 +6540,7 @@ function SoftballPage() {
       const practiceList = data.practices || [];
       const sorted = practiceList
         .slice()
-        .sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+        .sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
       setPractices(sorted);
       setFields(data.fields || []);
       setGear(data.gear || []);
@@ -6422,11 +6590,18 @@ function SoftballPage() {
     }
   }, [activePracticeId]);
 
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayKey =
+    todayStart.getFullYear() * 10000 + (todayStart.getMonth() + 1) * 100 + todayStart.getDate();
+  const nextPractice =
+    practices.find((practice) => getPracticeDayKey_(practice) >= todayKey) || practices[0] || null;
+
   useEffect(() => {
     if (!activePracticeId && practices.length) {
-      setActivePracticeId(normalizeId_(practices[0].id));
+      setActivePracticeId(normalizeId_(nextPractice ? nextPractice.id : practices[0].id));
     }
-  }, [activePracticeId, practices]);
+  }, [activePracticeId, nextPractice, practices]);
 
   useEffect(() => {
     const selected = practices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId));
@@ -6971,9 +7146,9 @@ function SoftballPage() {
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-600">
                 <p className="font-semibold text-slate-900">下一次練習</p>
-                {practices.length ? (
+                {nextPractice ? (
                   <p className="mt-3">
-                    {formatPracticeDate_(practices[0].date)} · {practices[0].title || "練習"}
+                    {formatPracticeDate_(nextPractice.date)} · {nextPractice.title || "練習"}
                   </p>
                 ) : (
                   <p className="mt-3 text-xs text-slate-400">尚未安排練習。</p>
