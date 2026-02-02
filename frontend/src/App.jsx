@@ -6899,9 +6899,9 @@ function SoftballPage() {
     }
     if (value instanceof Date) {
       return {
-        year: value.getUTCFullYear(),
-        month: value.getUTCMonth() + 1,
-        day: value.getUTCDate(),
+        year: value.getFullYear(),
+        month: value.getMonth() + 1,
+        day: value.getDate(),
       };
     }
     if (typeof value === "number") {
@@ -6909,12 +6909,32 @@ function SoftballPage() {
       return isNaN(parsed.getTime())
         ? null
         : {
-            year: parsed.getUTCFullYear(),
-            month: parsed.getUTCMonth() + 1,
-            day: parsed.getUTCDate(),
+            year: parsed.getFullYear(),
+            month: parsed.getMonth() + 1,
+            day: parsed.getDate(),
           };
     }
     const raw = String(value).trim();
+    const dateOnlyMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]);
+      const day = Number(dateOnlyMatch[3]);
+      return year && month && day ? { year, month, day } : null;
+    }
+    if (isSentinelDate_(raw)) {
+      return null;
+    }
+    if (/T/.test(raw) && (raw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(raw))) {
+      const parsed = new Date(raw);
+      return isNaN(parsed.getTime())
+        ? null
+        : {
+            year: parsed.getFullYear(),
+            month: parsed.getMonth() + 1,
+            day: parsed.getDate(),
+          };
+    }
     const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (!match) {
       return null;
@@ -7003,10 +7023,19 @@ function SoftballPage() {
     return `${start || "-"} - ${end || "-"}`;
   };
 
+  const formatDatePartsWithWeekday_ = (parts) => {
+    if (!parts) {
+      return "-";
+    }
+    const dateLocal = new Date(parts.year, parts.month - 1, parts.day);
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][dateLocal.getDay()];
+    return `${parts.year}/${pad2_(parts.month)}/${pad2_(parts.day)} (週${weekday})`;
+  };
+
   const formatPracticeDate_ = (value) => {
     const parts = getDatePartsFromValue_(value);
     if (parts) {
-      return formatEventDate_(formatDateParts_(parts));
+      return formatDatePartsWithWeekday_(parts);
     }
     return formatDisplayDate_(value) || "-";
   };
@@ -8845,9 +8874,9 @@ function SoftballPlayerPage() {
     }
     if (value instanceof Date) {
       return {
-        year: value.getUTCFullYear(),
-        month: value.getUTCMonth() + 1,
-        day: value.getUTCDate(),
+        year: value.getFullYear(),
+        month: value.getMonth() + 1,
+        day: value.getDate(),
       };
     }
     if (typeof value === "number") {
@@ -8855,12 +8884,32 @@ function SoftballPlayerPage() {
       return isNaN(parsed.getTime())
         ? null
         : {
-            year: parsed.getUTCFullYear(),
-            month: parsed.getUTCMonth() + 1,
-            day: parsed.getUTCDate(),
+            year: parsed.getFullYear(),
+            month: parsed.getMonth() + 1,
+            day: parsed.getDate(),
           };
     }
     const raw = String(value).trim();
+    const dateOnlyMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (dateOnlyMatch) {
+      const year = Number(dateOnlyMatch[1]);
+      const month = Number(dateOnlyMatch[2]);
+      const day = Number(dateOnlyMatch[3]);
+      return year && month && day ? { year, month, day } : null;
+    }
+    if (isSentinelDate_(raw)) {
+      return null;
+    }
+    if (/T/.test(raw) && (raw.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(raw))) {
+      const parsed = new Date(raw);
+      return isNaN(parsed.getTime())
+        ? null
+        : {
+            year: parsed.getFullYear(),
+            month: parsed.getMonth() + 1,
+            day: parsed.getDate(),
+          };
+    }
     const match = raw.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (!match) {
       return null;
@@ -8969,7 +9018,9 @@ function SoftballPlayerPage() {
   const getPracticeDateLabel_ = (practice) => {
     const parts = getDatePartsFromValue_(practice.date) || getDatePartsFromValue_(practice.startAt);
     if (parts) {
-      return formatEventDate_(formatDateParts_(parts));
+      const dateLocal = new Date(parts.year, parts.month - 1, parts.day);
+      const weekday = ["日", "一", "二", "三", "四", "五", "六"][dateLocal.getDay()];
+      return `${parts.year}/${pad2_(parts.month)}/${pad2_(parts.day)} (週${weekday})`;
     }
     return formatEventDate_(practice.date || practice.startAt);
   };
