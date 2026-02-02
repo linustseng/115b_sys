@@ -8115,7 +8115,19 @@ function SoftballPage() {
                     className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPlayerForm({
+                            ...player,
+                            jerseyChoices: player.jerseyChoices || "",
+                            requestStatus: player.requestStatus || "",
+                            jerseyRequest: player.jerseyRequest || "",
+                            positionRequest: player.positionRequest || "",
+                          })
+                        }
+                        className="flex-1 text-left"
+                      >
                         <p className="font-semibold text-slate-900">
                           {player.name || player.id || "-"}
                           {player.nickname ? ` · ${player.nickname}` : ""}
@@ -8124,22 +8136,8 @@ function SoftballPage() {
                         <p className="text-xs text-slate-500">
                           {player.positions || "-"} · {player.role || "球員"}
                         </p>
-                      </div>
+                      </button>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() =>
-                            setPlayerForm({
-                              ...player,
-                              jerseyChoices: player.jerseyChoices || "",
-                              requestStatus: player.requestStatus || "",
-                              jerseyRequest: player.jerseyRequest || "",
-                              positionRequest: player.positionRequest || "",
-                            })
-                          }
-                          className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                        >
-                          編輯
-                        </button>
                         <button
                           onClick={() => handleDeletePlayer(player.id)}
                           className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
@@ -8152,14 +8150,6 @@ function SoftballPage() {
                 ))}
               </div>
               <form onSubmit={handleSavePlayer} className="space-y-4">
-                <div className="grid gap-2">
-                  <label className="text-sm font-medium text-slate-700">學號 / ID</label>
-                  <input
-                    value={playerForm.id}
-                    onChange={(event) => handlePlayerFormChange("id", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                  />
-                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">中文姓名</label>
