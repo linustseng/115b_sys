@@ -6334,7 +6334,7 @@ function SoftballPage() {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
 
-  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊"];
+  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
   const ROLE_OPTIONS = ["隊長", "副隊長", "器材", "出勤", "後勤", "教練"];
 
   const normalizeId_ = (value) => String(value || "").trim();
@@ -8049,7 +8049,7 @@ function SoftballPlayerPage() {
   });
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
 
-  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊"];
+  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
 
   const normalizeId_ = (value) => String(value || "").trim();
 
