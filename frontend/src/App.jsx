@@ -4485,6 +4485,14 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
 
   const returnedItems = requests
     .filter((item) => String(item.status || "").trim() === "returned")
+    .filter((item) => {
+      const applicantId = String(item.applicantId || "").trim();
+      const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
+      return (
+        (personId && applicantId && applicantId === personId) ||
+        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail)
+      );
+    })
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
