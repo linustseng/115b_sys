@@ -7809,6 +7809,8 @@ function SoftballPlayerPage() {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [practicesUpdatedAt, setPracticesUpdatedAt] = useState(null);
+  const [practiceRefreshing, setPracticeRefreshing] = useState(false);
   const [profileForm, setProfileForm] = useState({
     id: "",
     name: "",
