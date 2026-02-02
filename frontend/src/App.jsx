@@ -4330,13 +4330,22 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     return String(item.personEmail || "").trim().toLowerCase() === normalizedEmail;
   });
 
+  const normalizeGroupId_ = (value) => {
+    const raw = String(value || "").trim().toUpperCase();
+    if (!raw) {
+      return "";
+    }
+    const match = raw.match(/[A-Z0-9]+/);
+    return match ? match[0] : raw;
+  };
+
   const adminLeadGroups = memberships
     .filter((item) => String(item.roleInGroup || "").trim() === "lead")
-    .map((item) => String(item.groupId || "").trim())
+    .map((item) => normalizeGroupId_(item.groupId))
     .filter(Boolean);
   const adminDeputyGroups = memberships
     .filter((item) => String(item.roleInGroup || "").trim() === "deputy")
-    .map((item) => String(item.groupId || "").trim())
+    .map((item) => normalizeGroupId_(item.groupId))
     .filter(Boolean);
   const adminRoles = financeRoleItems
     .map((item) => String(item.role || "").trim())
@@ -4381,7 +4390,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
         continue;
       }
       if (role === "lead") {
-        const group = String(item.applicantDepartment || "").trim();
+        const group = normalizeGroupId_(item.applicantDepartment);
         if (
           !adminLeadGroups.includes(group) &&
           !adminDeputyGroups.includes(group)
