@@ -4229,14 +4229,19 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
       setActionsByActor([]);
       return;
     }
-    const { result } = await apiRequest({
-      action: "listFinanceActionsByActor",
-      actorNames: [displayName],
-    });
-    if (!result.ok) {
-      throw new Error(result.error || "載入失敗");
+    try {
+      const { result } = await apiRequest({
+        action: "listFinanceActionsByActor",
+        actorNames: [displayName],
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setActionsByActor(result.data && result.data.actions ? result.data.actions : []);
+    } catch (err) {
+      // Backward-compatible: backend not deployed yet.
+      setActionsByActor([]);
     }
-    setActionsByActor(result.data && result.data.actions ? result.data.actions : []);
   };
 
   const loadActions = async (targetId) => {
@@ -6991,6 +6996,10 @@ function SoftballPage() {
   };
 
   const formatPracticeDate_ = (value) => {
+    const parts = getDatePartsFromValue_(value);
+    if (parts) {
+      return formatEventDate_(formatDateParts_(parts));
+    }
     return formatDisplayDate_(value) || "-";
   };
 
