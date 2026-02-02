@@ -8163,6 +8163,9 @@ function SoftballPlayerPage() {
       (item) => normalizeId_(item.id) === normalizeId_(googleLinkedStudent.id)
     );
     if (match) {
+      const normalizedJersey = match.jerseyNumber
+        ? formatJerseyLabel_(String(match.jerseyNumber))
+        : "";
       setProfileForm({
         id: match.id || googleLinkedStudent.id,
         name: match.name || googleLinkedStudent.name || "",
@@ -8174,8 +8177,8 @@ function SoftballPlayerPage() {
         throws: match.throws || "",
         positions: match.positions || "",
         jerseyChoices: match.jerseyChoices || "",
-        jerseyRequest: match.jerseyRequest || "",
-        positionRequest: match.positionRequest || "",
+        jerseyRequest: match.jerseyRequest || normalizedJersey || "",
+        positionRequest: match.positionRequest || match.positions || "",
         notes: match.notes || "",
       });
     } else {
