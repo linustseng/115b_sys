@@ -7401,11 +7401,14 @@ function SoftballPage() {
     try {
       const { result } = await apiRequest({ action: "listSoftballFields" });
       if (!result.ok) {
-        throw new Error(result.error || "載入失敗");
+        setError(`球場資料載入失敗：${result.error || "載入失敗"}`);
+        setFields([]);
+        return;
       }
       setFields(result.data && result.data.fields ? result.data.fields : []);
     } catch (err) {
-      setError("球場資料載入失敗。");
+      setError(`球場資料載入失敗：${err.message || "載入失敗"}`);
+      setFields([]);
     }
   };
 
@@ -7432,11 +7435,14 @@ function SoftballPage() {
         practiceId: practiceId,
       });
       if (!result.ok) {
-        throw new Error(result.error || "載入失敗");
+        setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
+        setAttendance([]);
+        return;
       }
       setAttendance(result.data && result.data.attendance ? result.data.attendance : []);
     } catch (err) {
-      setError("出席資料載入失敗。");
+      setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
+      setAttendance([]);
     }
   };
 
@@ -8286,62 +8292,6 @@ function SoftballPage() {
                 </div>
               </form>
             </div>
-            <div className="mt-8 rounded-2xl border border-slate-200/70 bg-white p-5 text-sm text-slate-600">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-base font-semibold text-slate-900">登錄狀況</h4>
-                  <p className="mt-1 text-xs text-slate-500">
-                    已登錄 {registeredStudents.length} / {students.length}
-                  </p>
-                </div>
-              </div>
-              {!students.length ? (
-                <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
-              ) : (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4">
-                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
-                      <span>已登錄</span>
-                      <span>{registeredStudents.length} 人</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {registeredStudents.length ? (
-                        registeredStudents.map((student) => (
-                          <span
-                            key={student.id || student.email}
-                            className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
-                          >
-                            {getStudentDisplayName_(student) || student.id || "未命名"}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-xs text-emerald-700">尚無已登錄名單。</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
-                    <div className="flex items-center justify-between text-xs font-semibold text-amber-700">
-                      <span>未登錄</span>
-                      <span>{unregisteredStudents.length} 人</span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {unregisteredStudents.length ? (
-                        unregisteredStudents.map((student) => (
-                          <span
-                            key={student.id || student.email}
-                            className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700"
-                          >
-                            {getStudentDisplayName_(student) || student.id || "未命名"}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-xs text-amber-700">全部同學已登錄。</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </section>
         ) : null}
 
@@ -8531,7 +8481,11 @@ function SoftballPage() {
                 {filteredPlayers.map((player) => (
                   <div
                     key={player.id}
-                    className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                    className={`rounded-2xl border p-4 text-sm ${
+                      normalizeId_(playerForm.id) === normalizeId_(player.id)
+                        ? "border-slate-900 bg-white text-slate-700"
+                        : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                    }`}
                   >
                     <div className="flex items-center justify-between gap-3">
                       <button
@@ -8719,6 +8673,62 @@ function SoftballPage() {
                   </button>
                 </div>
               </form>
+            </div>
+            <div className="mt-8 rounded-2xl border border-slate-200/70 bg-white p-5 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-semibold text-slate-900">登錄狀況</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    已登錄 {registeredStudents.length} / {students.length}
+                  </p>
+                </div>
+              </div>
+              {!students.length ? (
+                <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
+              ) : (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
+                      <span>已登錄</span>
+                      <span>{registeredStudents.length} 人</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {registeredStudents.length ? (
+                        registeredStudents.map((student) => (
+                          <span
+                            key={student.id || student.email}
+                            className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
+                          >
+                            {getStudentDisplayName_(student) || student.id || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-emerald-700">尚無已登錄名單。</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-amber-700">
+                      <span>未登錄</span>
+                      <span>{unregisteredStudents.length} 人</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {unregisteredStudents.length ? (
+                        unregisteredStudents.map((student) => (
+                          <span
+                            key={student.id || student.email}
+                            className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700"
+                          >
+                            {getStudentDisplayName_(student) || student.id || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-amber-700">全部同學已登錄。</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         ) : null}
@@ -9052,12 +9062,19 @@ function SoftballPlayerPage() {
       setAttendance([]);
       return;
     }
-    const { result } = await apiRequest({ action: "listSoftballAttendance" });
-    if (!result.ok) {
-      throw new Error(result.error || "載入失敗");
+    try {
+      const { result } = await apiRequest({ action: "listSoftballAttendance" });
+      if (!result.ok) {
+        setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
+        setAttendance([]);
+        return;
+      }
+      const list = result.data && result.data.attendance ? result.data.attendance : [];
+      setAttendance(list.filter((item) => normalizeId_(item.studentId) === normalizeId_(studentId)));
+    } catch (err) {
+      setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
+      setAttendance([]);
     }
-    const list = result.data && result.data.attendance ? result.data.attendance : [];
-    setAttendance(list.filter((item) => normalizeId_(item.studentId) === normalizeId_(studentId)));
   };
 
   useEffect(() => {
