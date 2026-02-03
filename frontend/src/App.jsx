@@ -5303,6 +5303,16 @@ function FinanceAdminPage() {
       email: String(item.email || "").trim().toLowerCase(),
     };
   });
+  const studentNameById = normalizedStudents.reduce((acc, item) => {
+    if (item.id && !acc[item.id]) {
+      acc[item.id] = item.name;
+    }
+    return acc;
+  }, {});
+  const resolveStudentNameById_ = (personId) => {
+    const key = String(personId || "").trim();
+    return key ? studentNameById[key] || "" : "";
+  };
 
   const financeGroupMembers = groupMemberships.filter(
     (item) => String(item.groupId || "").trim() === "D"
@@ -6319,7 +6329,8 @@ function FinanceAdminPage() {
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="font-semibold text-slate-900">
-                              {item.payerName} · {formatFinanceAmount_(item.amount)}
+                              {resolveStudentNameById_(item.payerId) || item.payerName} ·{" "}
+                              {formatFinanceAmount_(item.amount)}
                             </p>
                             <p className="text-xs text-slate-500">
                               {FUND_PAYER_TYPES.find((type) => type.value === item.payerType)?.label ||

@@ -1727,7 +1727,7 @@ function listFundEvents_() {
       return mapRowToObject_(headerMap, row);
     })
     .sort(function (a, b) {
-      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+      return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
     });
 }
 
