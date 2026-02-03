@@ -7105,6 +7105,7 @@ function SoftballPage() {
   const [fields, setFields] = useState([]);
   const [gear, setGear] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [students, setStudents] = useState([]);
   const [softballConfig, setSoftballConfig] = useState({});
   const [jerseyDeadline, setJerseyDeadline] = useState("");
   const [activePracticeId, setActivePracticeId] = useState("");
@@ -7171,6 +7172,11 @@ function SoftballPage() {
   const ROLE_OPTIONS = ["隊長", "副隊長", "器材", "出勤", "後勤", "教練"];
 
   const normalizeId_ = (value) => String(value || "").trim();
+
+  const getStudentDisplayName_ = (student) =>
+    String(
+      (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
+    ).trim();
 
   const isTimeOnly_ = (value) => {
     if (!value) {
@@ -7477,6 +7483,17 @@ function SoftballPage() {
     }
   };
 
+  const loadStudents = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listStudents" });
+      if (result.ok) {
+        setStudents(result.data && result.data.students ? result.data.students : []);
+      }
+    } catch (err) {
+      setStudents([]);
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
@@ -7491,12 +7508,15 @@ function SoftballPage() {
             loadFields(),
             loadGear(),
             loadSoftballConfig(),
+            loadStudents(),
           ]);
         } finally {
           if (!ignore) {
             setLoading(false);
           }
         }
+      } else {
+        await loadStudents();
       }
     };
     loadAll();
@@ -7945,6 +7965,21 @@ function SoftballPage() {
     return haystack.includes(needle);
   });
 
+  const registeredIdSet = new Set(
+    players.map((player) => normalizeId_(player.id)).filter((id) => id)
+  );
+  const sortedStudents = students
+    .slice()
+    .sort((a, b) =>
+      getStudentDisplayName_(a).localeCompare(getStudentDisplayName_(b))
+    );
+  const registeredStudents = sortedStudents.filter((student) =>
+    registeredIdSet.has(normalizeId_(student.id))
+  );
+  const unregisteredStudents = sortedStudents.filter(
+    (student) => !registeredIdSet.has(normalizeId_(student.id))
+  );
+
   const pendingRequests = players.filter(
     (player) => String(player.requestStatus || "").toLowerCase() === "pending"
   );
@@ -8250,6 +8285,62 @@ function SoftballPage() {
                   ) : null}
                 </div>
               </form>
+            </div>
+            <div className="mt-8 rounded-2xl border border-slate-200/70 bg-white p-5 text-sm text-slate-600">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-semibold text-slate-900">登錄狀況</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    已登錄 {registeredStudents.length} / {students.length}
+                  </p>
+                </div>
+              </div>
+              {!students.length ? (
+                <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
+              ) : (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
+                      <span>已登錄</span>
+                      <span>{registeredStudents.length} 人</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {registeredStudents.length ? (
+                        registeredStudents.map((student) => (
+                          <span
+                            key={student.id || student.email}
+                            className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
+                          >
+                            {getStudentDisplayName_(student) || student.id || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-emerald-700">尚無已登錄名單。</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
+                    <div className="flex items-center justify-between text-xs font-semibold text-amber-700">
+                      <span>未登錄</span>
+                      <span>{unregisteredStudents.length} 人</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {unregisteredStudents.length ? (
+                        unregisteredStudents.map((student) => (
+                          <span
+                            key={student.id || student.email}
+                            className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700"
+                          >
+                            {getStudentDisplayName_(student) || student.id || "未命名"}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-xs text-amber-700">全部同學已登錄。</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </section>
         ) : null}
