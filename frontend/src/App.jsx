@@ -430,6 +430,14 @@ const formatEventDate_ = (value) => {
   return formatDisplayDate_(value);
 };
 
+const formatDisplayDateNoMidnight_ = (value) => {
+  const withTime = formatDisplayDate_(value, { withTime: true });
+  if (!withTime) {
+    return "";
+  }
+  return withTime.endsWith(" 00:00") ? formatDisplayDate_(value) : withTime;
+};
+
 const toDateInputValue_ = (date) => {
   if (!date) {
     return "";
@@ -3897,9 +3905,18 @@ function FinancePage() {
                               ?.label || item.method}
                           </p>
                           <p className="text-xs text-slate-500">
-                            匯款: {formatDisplayDate_(item.receivedAt) || "-"} · 入帳:{" "}
-                            {formatDisplayDate_(item.accountedAt) || "-"}
+                            匯款: {formatDisplayDateNoMidnight_(item.receivedAt) || "-"} · 入帳:{" "}
+                            {formatDisplayDateNoMidnight_(item.accountedAt) || "-"}
                           </p>
+                          <span
+                            className={`mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                              item.accountedAt
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                : "border-amber-200 bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {item.accountedAt ? "已入帳" : "待入帳"}
+                          </span>
                         </div>
                       ))
                     ) : (
@@ -5279,7 +5296,7 @@ function FinanceAdminPage() {
     .filter(Boolean);
 
   const normalizedStudents = students.map((item) => {
-    const name = item.name || item.email || "";
+    const name = item.preferredName || item.nameZh || item.name || item.email || "";
     return {
       id: item.id || "",
       name: name,
@@ -6313,9 +6330,18 @@ function FinanceAdminPage() {
                               {item.transferLast5 ? ` · 末五碼 ${item.transferLast5}` : ""}
                             </p>
                             <p className="text-xs text-slate-400">
-                              匯款: {formatDisplayDate_(item.receivedAt) || "-"} · 入帳:{" "}
-                              {formatDisplayDate_(item.accountedAt) || "-"}
+                              匯款: {formatDisplayDateNoMidnight_(item.receivedAt) || "-"} · 入帳:{" "}
+                              {formatDisplayDateNoMidnight_(item.accountedAt) || "-"}
                             </p>
+                            <span
+                              className={`mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                                item.accountedAt
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                              }`}
+                            >
+                              {item.accountedAt ? "已入帳" : "待入帳"}
+                            </span>
                             {item.createdById || item.updatedById ? (
                               <p className="text-[11px] text-slate-400">
                                 建檔者：{item.createdById || "-"} · 編輯者：{item.updatedById || "-"}

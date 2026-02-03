@@ -1744,9 +1744,7 @@ function listFundPayments_(eventId) {
       return !id || String(item.eventId || "").trim() === id;
     })
     .sort(function (a, b) {
-      return String(b.receivedAt || b.createdAt || "").localeCompare(
-        String(a.receivedAt || a.createdAt || "")
-      );
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
     });
 }
 
