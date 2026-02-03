@@ -1222,6 +1222,7 @@ function AppShell() {
           apiRequest={apiRequest}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
+          getGroupLabel_={getGroupLabel_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -1244,6 +1245,7 @@ function AppShell() {
           apiRequest={apiRequest}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
+          getGroupLabel_={getGroupLabel_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -1278,6 +1280,7 @@ function AppShell() {
           apiRequest={apiRequest}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
+          getGroupLabel_={getGroupLabel_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}

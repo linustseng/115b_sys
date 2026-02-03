@@ -13,6 +13,7 @@ export default function AdminPage({
   apiRequest,
   buildGoogleMapsUrl_,
   formatDisplayDate_,
+  getGroupLabel_,
   PUBLIC_SITE_URL,
   GROUP_ROLE_LABELS,
   ROLE_BADGE_STYLES,
