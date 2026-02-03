@@ -15,6 +15,7 @@ export default function AdminPage({
   formatDisplayDate_,
   PUBLIC_SITE_URL,
   GROUP_ROLE_LABELS,
+  ROLE_BADGE_STYLES,
   CLASS_GROUPS,
   initialTab = "events",
   allowedTabs = ["events", "ordering", "registrations", "checkins", "students"],

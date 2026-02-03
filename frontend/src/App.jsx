@@ -1224,6 +1224,7 @@ function AppShell() {
           formatDisplayDate_={formatDisplayDate_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
+          ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
           initialTab="events"
           allowedTabs={["events", "registrations", "checkins", "students"]}
@@ -1245,6 +1246,7 @@ function AppShell() {
           formatDisplayDate_={formatDisplayDate_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
+          ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
           initialTab="ordering"
           allowedTabs={["ordering"]}
@@ -1278,6 +1280,7 @@ function AppShell() {
           formatDisplayDate_={formatDisplayDate_}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
+          ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
           initialTab="roles"
           allowedTabs={["students", "roles"]}
