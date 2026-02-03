@@ -4262,10 +4262,22 @@ function FinancePage() {
                     item.type === "purchase" ? item.amountEstimated : item.amountActual;
                   const canEdit = item.status === "draft" || item.status === "returned";
                   const canWithdraw = String(item.status || "").startsWith("pending");
+                  const isEditing = editingId && editingId === item.id;
                   return (
                     <div
                       key={item.id}
-                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                      onClick={() => {
+                        if (canEdit) {
+                          handleEditRequest(item);
+                        }
+                      }}
+                      className={`rounded-2xl border p-4 text-sm transition ${
+                        canEdit ? "cursor-pointer hover:border-slate-300" : ""
+                      } ${
+                        isEditing
+                          ? "border-slate-900 bg-white text-slate-700"
+                          : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                      }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
@@ -4276,19 +4288,13 @@ function FinancePage() {
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {canEdit ? (
-                            <button
-                              type="button"
-                              onClick={() => handleEditRequest(item)}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                            >
-                              編輯
-                            </button>
-                          ) : null}
                           {canWithdraw ? (
                             <button
                               type="button"
-                              onClick={() => handleWithdraw(item)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleWithdraw(item);
+                              }}
                               className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                             >
                               撤回
@@ -6226,11 +6232,13 @@ function FinanceAdminPage() {
                       const expectedSponsor = parseFinanceAmount_(item.amountSponsor) *
                         parseFinanceAmount_(item.expectedSponsorCount);
                       const expectedTotal = expectedGeneral + expectedSponsor;
-                      const isActive = fundPaymentForm.eventId === item.id;
+                      const isActive =
+                        fundPaymentForm.eventId === item.id || fundEventForm.id === item.id;
                       return (
                         <div
                           key={item.id}
                           onClick={() => {
+                            handleEditFundEvent(item);
                             handleFundPaymentChange("eventId", item.id);
                             resetFundPaymentForm(item.id);
                           }}
@@ -6260,21 +6268,6 @@ function FinanceAdminPage() {
                               ) : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleEditFundEvent(item);
-                                  resetFundPaymentForm(item.id);
-                                }}
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                                  isActive
-                                    ? "border-white/40 text-white hover:border-white/70"
-                                    : "border-slate-200 text-slate-600 hover:border-slate-300"
-                                }`}
-                              >
-                                編輯
-                              </button>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -6321,11 +6314,18 @@ function FinanceAdminPage() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {fundPayments.length ? (
-                    fundPayments.map((item) => (
-                      <div
-                        key={item.id}
-                        className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                      >
+                    fundPayments.map((item) => {
+                      const isActive = fundPaymentForm.id === item.id;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => handleEditFundPayment(item)}
+                          className={`rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                            isActive
+                              ? "border-slate-900 bg-white text-slate-700"
+                              : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                          } cursor-pointer`}
+                        >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="font-semibold text-slate-900">
@@ -6362,22 +6362,19 @@ function FinanceAdminPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => handleEditFundPayment(item)}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                            >
-                              編輯
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFundPayment(item.id)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteFundPayment(item.id);
+                              }}
                               className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                             >
                               刪除
                             </button>
                           </div>
                         </div>
-                      </div>
-                    ))
+                        </div>
+                      );
+                    })
                   ) : (
                     <p className="text-sm text-slate-500">尚未建立收款紀錄。</p>
                   )}
@@ -6515,11 +6512,21 @@ function FinanceAdminPage() {
               </div>
               <div className="mt-4 space-y-3">
                 {financeRoles.length ? (
-                  financeRoles.map((item) => (
-                    <div
-                      key={item.id || `${item.personId}-${item.role}`}
-                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                    >
+                  financeRoles.map((item) => {
+                    const isActive = financeRoleForm.id
+                      ? financeRoleForm.id === item.id
+                      : normalizeId_(financeRoleForm.personId) === normalizeId_(item.personId) &&
+                        financeRoleForm.role === item.role;
+                    return (
+                      <div
+                        key={item.id || `${item.personId}-${item.role}`}
+                        onClick={() => handleEditFinanceRole(item)}
+                        className={`rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                          isActive
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                        } cursor-pointer`}
+                      >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">
@@ -6534,22 +6541,19 @@ function FinanceAdminPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleEditFinanceRole(item)}
-                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                          >
-                            編輯
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFinanceRole(item.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteFinanceRole(item.id);
+                            }}
                             className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                           >
                             刪除
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-slate-500">尚未設定財務角色。</p>
                 )}
@@ -6656,11 +6660,18 @@ function FinanceAdminPage() {
               </div>
               <div className="mt-4 space-y-3">
                 {financeCategories.length ? (
-                  financeCategories.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                    >
+                  financeCategories.map((item) => {
+                    const isActive = financeCategoryForm.id === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => handleEditFinanceCategory(item)}
+                        className={`rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                          isActive
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                        } cursor-pointer`}
+                      >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">{item.label || "未命名"}</p>
@@ -6671,22 +6682,19 @@ function FinanceAdminPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleEditFinanceCategory(item)}
-                            className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                          >
-                            編輯
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteFinanceCategory(item.id)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleDeleteFinanceCategory(item.id);
+                            }}
                             className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                           >
                             刪除
                           </button>
                         </div>
                       </div>
-                    </div>
-                  ))
+                      </div>
+                    );
+                  })
                 ) : (
                   <p className="text-sm text-slate-500">尚未設定班務性質。</p>
                 )}
@@ -8737,31 +8745,36 @@ function SoftballPage() {
           <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
             <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
-                {fields.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                  >
+                {fields.map((item) => {
+                  const isActive = fieldForm.id === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setFieldForm({ ...item })}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                        isActive
+                          ? "border-slate-900 bg-white text-slate-700"
+                          : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                      } cursor-pointer`}
+                    >
                     <div>
                       <p className="font-semibold text-slate-900">{item.name}</p>
                       <p className="text-xs text-slate-500">{item.address || "-"}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setFieldForm({ ...item })}
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                      >
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => handleDeleteField(item.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteField(item.id);
+                        }}
                         className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                       >
                         刪除
                       </button>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
               <form onSubmit={handleSaveField} className="space-y-4">
                 <div className="grid gap-2">
@@ -8840,11 +8853,18 @@ function SoftballPage() {
           <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
             <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
-                {gear.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                  >
+                {gear.map((item) => {
+                  const isActive = gearForm.id === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => setGearForm({ ...item })}
+                      className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4 text-sm text-slate-600 transition ${
+                        isActive
+                          ? "border-slate-900 bg-white text-slate-700"
+                          : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
+                      } cursor-pointer`}
+                    >
                     <div>
                       <p className="font-semibold text-slate-900">{item.name}</p>
                       <p className="text-xs text-slate-500">
@@ -8853,20 +8873,18 @@ function SoftballPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setGearForm({ ...item })}
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                      >
-                        編輯
-                      </button>
-                      <button
-                        onClick={() => handleDeleteGear(item.id)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteGear(item.id);
+                        }}
                         className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                       >
                         刪除
                       </button>
                     </div>
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
               <form onSubmit={handleSaveGear} className="space-y-4">
                 <div className="grid gap-2">
