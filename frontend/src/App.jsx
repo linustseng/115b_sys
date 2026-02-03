@@ -1220,9 +1220,11 @@ function AppShell() {
       >
         <AdminPage
           apiRequest={apiRequest}
+          API_URL={API_URL}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
+          EVENT_CATEGORIES={EVENT_CATEGORIES}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -1243,9 +1245,11 @@ function AppShell() {
       >
         <AdminPage
           apiRequest={apiRequest}
+          API_URL={API_URL}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
+          EVENT_CATEGORIES={EVENT_CATEGORIES}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -1278,9 +1282,11 @@ function AppShell() {
       >
         <AdminPage
           apiRequest={apiRequest}
+          API_URL={API_URL}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
+          EVENT_CATEGORIES={EVENT_CATEGORIES}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -5352,16 +5358,9 @@ function FinanceAdminPage() {
   const sponsorIdSet = new Set(
     sponsorMemberships.map((item) => String(item.personId || "").trim()).filter(Boolean)
   );
-  const sponsorEmailSet = new Set(
-    sponsorMemberships
-      .map((item) => String(item.personEmail || "").trim().toLowerCase())
-      .filter(Boolean)
-  );
 
   const payerRows = normalizedStudents.map((payer) => {
-    const isSponsor =
-      sponsorIdSet.has(String(payer.id || "").trim()) ||
-      sponsorEmailSet.has(String(payer.email || "").trim().toLowerCase());
+    const isSponsor = sponsorIdSet.has(String(payer.id || "").trim());
     return {
       ...payer,
       payerType: isSponsor ? "sponsor" : "general",
@@ -5372,19 +5371,17 @@ function FinanceAdminPage() {
   const extraSponsorRows = sponsorMemberships
     .filter((member) => {
       const id = String(member.personId || "").trim();
-      const email = String(member.personEmail || "").trim().toLowerCase();
       return (
-        (id && !normalizedStudents.some((payer) => String(payer.id || "").trim() === id)) ||
-        (email && !normalizedStudents.some((payer) => String(payer.email || "").trim() === email))
+        (id && !normalizedStudents.some((payer) => String(payer.id || "").trim() === id))
       );
     })
     .map((member) => ({
       id: member.personId || "",
       name: member.personName || member.personEmail || member.personId || "",
-      email: String(member.personEmail || "").trim().toLowerCase(),
+      email: "",
       payerType: "sponsor",
       paid: getPayerStatus_({
-        email: String(member.personEmail || "").trim().toLowerCase(),
+        email: "",
         name: member.personName || "",
       }),
     }));
