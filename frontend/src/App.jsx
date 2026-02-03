@@ -6232,13 +6232,11 @@ function FinanceAdminPage() {
                       const expectedSponsor = parseFinanceAmount_(item.amountSponsor) *
                         parseFinanceAmount_(item.expectedSponsorCount);
                       const expectedTotal = expectedGeneral + expectedSponsor;
-                      const isActive =
-                        fundPaymentForm.eventId === item.id || fundEventForm.id === item.id;
+                      const isActive = fundPaymentForm.eventId === item.id;
                       return (
                         <div
                           key={item.id}
                           onClick={() => {
-                            handleEditFundEvent(item);
                             handleFundPaymentChange("eventId", item.id);
                             resetFundPaymentForm(item.id);
                           }}
@@ -6268,6 +6266,21 @@ function FinanceAdminPage() {
                               ) : null}
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  handleEditFundEvent(item);
+                                  resetFundPaymentForm(item.id);
+                                }}
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                  isActive
+                                    ? "border-white/40 text-white hover:border-white/70"
+                                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                                }`}
+                              >
+                                編輯
+                              </button>
                               <button
                                 type="button"
                                 onClick={(event) => {
@@ -6314,18 +6327,11 @@ function FinanceAdminPage() {
                 </div>
                 <div className="mt-4 space-y-3">
                   {fundPayments.length ? (
-                    fundPayments.map((item) => {
-                      const isActive = fundPaymentForm.id === item.id;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => handleEditFundPayment(item)}
-                          className={`rounded-2xl border p-4 text-sm text-slate-600 transition ${
-                            isActive
-                              ? "border-slate-900 bg-white text-slate-700"
-                              : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
-                          } cursor-pointer`}
-                        >
+                    fundPayments.map((item) => (
+                      <div
+                        key={item.id}
+                        className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+                      >
                         <div className="flex flex-wrap items-center justify-between gap-3">
                           <div>
                             <p className="font-semibold text-slate-900">
@@ -6362,19 +6368,22 @@ function FinanceAdminPage() {
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleDeleteFundPayment(item.id);
-                              }}
+                              onClick={() => handleEditFundPayment(item)}
+                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            >
+                              編輯
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFundPayment(item.id)}
                               className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                             >
                               刪除
                             </button>
                           </div>
                         </div>
-                        </div>
-                      );
-                    })
+                      </div>
+                    ))
                   ) : (
                     <p className="text-sm text-slate-500">尚未建立收款紀錄。</p>
                   )}
