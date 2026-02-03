@@ -11,12 +11,14 @@ import {
 
 export default function AdminPage({
   apiRequest,
+  API_URL,
   buildGoogleMapsUrl_,
   formatDisplayDate_,
   getGroupLabel_,
   PUBLIC_SITE_URL,
   GROUP_ROLE_LABELS,
   ROLE_BADGE_STYLES,
+  EVENT_CATEGORIES,
   CLASS_GROUPS,
   initialTab = "events",
   allowedTabs = ["events", "ordering", "registrations", "checkins", "students"],
@@ -959,7 +961,6 @@ export default function AdminPage({
         id: payload.id || "",
         personId: personId,
         personName: payload.personName || "",
-        personEmail: payload.personEmail || "",
         groupId: groupId,
         roleInGroup: roleInGroup,
         notes: payload.notes || "",
@@ -1004,7 +1005,6 @@ export default function AdminPage({
       source: "student",
       personId: student.id || "",
       personName: getDisplayName_(student),
-      personEmail: student.googleEmail || student.email || "",
     };
     event.dataTransfer.setData("application/json", JSON.stringify(payload));
     event.dataTransfer.effectAllowed = "copy";
@@ -1018,7 +1018,6 @@ export default function AdminPage({
       source: "membership",
       personId: membership.personId || "",
       personName: membership.personName || "",
-      personEmail: membership.personEmail || "",
       groupId: membership.groupId || "",
       roleInGroup: membership.roleInGroup || "",
     };
@@ -1036,7 +1035,6 @@ export default function AdminPage({
       id: "",
       personId: payload.personId,
       personName: payload.personName,
-      personEmail: payload.personEmail,
       groupId,
       roleInGroup,
     });
@@ -1050,7 +1048,6 @@ export default function AdminPage({
     setSelectedMember({
       personId: student.id || "",
       personName: getDisplayName_(student) || "",
-      personEmail: student.googleEmail || student.email || "",
     });
   };
 
@@ -1063,7 +1060,6 @@ export default function AdminPage({
       id: "",
       personId: selectedMember.personId,
       personName: selectedMember.personName,
-      personEmail: selectedMember.personEmail,
       groupId,
       roleInGroup,
     });
@@ -1119,7 +1115,6 @@ export default function AdminPage({
             id: item.id,
             personId: item.personId,
             personName: item.personName,
-            personEmail: item.personEmail,
             groupId: item.groupId,
             roleInGroup: item.roleInGroup,
             notes: item.notes || "",

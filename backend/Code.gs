@@ -1669,7 +1669,11 @@ function listGroupMemberships_() {
   const rows = getDataRows_(sheet);
   return rows
     .map(function (row) {
-      return mapRowToObject_(headerMap, row);
+      var item = mapRowToObject_(headerMap, row);
+      if (item && Object.prototype.hasOwnProperty.call(item, "personEmail")) {
+        delete item.personEmail;
+      }
+      return item;
     })
     .sort(function (a, b) {
       return String(a.personName || "").localeCompare(String(b.personName || ""));
@@ -3369,7 +3373,6 @@ function normalizeGroupMembershipRecord_(data) {
     id: String(data.id || "").trim(),
     personId: String(data.personId || "").trim(),
     personName: String(data.personName || "").trim(),
-    personEmail: normalizeEmail_(data.personEmail),
     groupId: String(data.groupId || "").trim(),
     roleInGroup: String(data.roleInGroup || "").trim(),
     notes: String(data.notes || "").trim(),
@@ -3617,6 +3620,15 @@ function buildFinanceApprovalLink_(requestId) {
   return base + "/approvals/" + encodeURIComponent(String(requestId || "").trim());
 }
 
+function resolveDirectoryEmailByPersonId_(personId) {
+  var id = String(personId || "").trim();
+  if (!id) {
+    return "";
+  }
+  var directory = findDirectoryById_(id);
+  return normalizeEmail_((directory && directory.email) || "");
+}
+
 function collectMembershipEmails_(memberships, groupIdList, roleList) {
   var groupSet = (groupIdList || []).reduce(function (acc, item) {
     acc[String(item || "").trim()] = true;
@@ -3639,7 +3651,7 @@ function collectMembershipEmails_(memberships, groupIdList, roleList) {
       return true;
     })
     .map(function (item) {
-      return normalizeEmail_(item.personEmail || "");
+      return resolveDirectoryEmailByPersonId_(item.personId);
     })
     .filter(function (email) {
       return email;

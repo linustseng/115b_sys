@@ -1095,15 +1095,13 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     loadMemberships();
   }, [googleLinkedStudent]);
 
-  const normalizedEmail = normalizeEmailValue_(googleLinkedStudent && googleLinkedStudent.email);
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
   const userMemberships = memberships.filter((item) => {
     const memberId = String(item.personId || "").trim();
-    const memberEmail = normalizeEmailValue_(item.personEmail);
     if (normalizedId && memberId && normalizedId === memberId) {
       return true;
     }
-    return normalizedEmail && memberEmail && normalizedEmail === memberEmail;
+    return false;
   });
   const hasAccess = userMemberships.some((item) => {
     const groupId = String(item.groupId || "").trim();
@@ -3083,19 +3081,19 @@ function FinancePage() {
     }
   };
 
-  const resolveMemberGroups_ = (email, memberships) => {
-    if (!email) {
+  const resolveMemberGroups_ = (personId, memberships) => {
+    if (!personId) {
       return [];
     }
-    const normalized = normalizeEmailValue_(email);
+    const normalized = String(personId || "").trim();
     return (memberships || [])
-      .filter((item) => normalizeEmailValue_(item.personEmail) === normalized)
+      .filter((item) => String(item.personId || "").trim() === normalized)
       .map((item) => String(item.groupId || "").trim())
       .filter(Boolean);
   };
 
-  const loadMemberGroups = async (email) => {
-    if (!email) {
+  const loadMemberGroups = async (personId) => {
+    if (!personId) {
       setMemberGroups([]);
       return;
     }
@@ -3105,9 +3103,9 @@ function FinancePage() {
         return;
       }
       const memberships = result.data && result.data.memberships ? result.data.memberships : [];
-      const normalized = String(email || "").trim().toLowerCase();
+      const normalized = String(personId || "").trim();
       const groups = memberships
-        .filter((item) => String(item.personEmail || "").trim().toLowerCase() === normalized)
+        .filter((item) => String(item.personId || "").trim() === normalized)
         .map((item) => String(item.groupId || "").trim())
         .filter(Boolean);
       setMemberGroups(groups);
@@ -3140,7 +3138,7 @@ function FinancePage() {
         }
       }
       const memberships = data.groupMemberships || [];
-      setMemberGroups(resolveMemberGroups_(email, memberships));
+      setMemberGroups(resolveMemberGroups_(googleLinkedStudent && googleLinkedStudent.id, memberships));
       return true;
     } catch (err) {
       return false;
@@ -3151,7 +3149,7 @@ function FinancePage() {
     if (googleLinkedStudent && googleLinkedStudent.email) {
       setRequestsLoaded(false);
       setRequestBootstrapLoaded(false);
-      loadMemberGroups(googleLinkedStudent.email);
+      loadMemberGroups(googleLinkedStudent.id);
       setFundPaymentForm((prev) => ({
         ...prev,
         payerId: String(googleLinkedStudent.id || "").trim(),
@@ -4474,9 +4472,6 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     if (personId && String(item.personId || "").trim() === personId) {
       return true;
     }
-    if (String(item.personEmail || "").trim().toLowerCase() === normalizedEmail) {
-      return true;
-    }
     return false;
   });
   const financeRoleItems = financeRoles.filter((item) => {
@@ -4992,7 +4987,6 @@ function FinanceAdminPage() {
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [financeRoles, setFinanceRoles] = useState([]);
   const [financeCategories, setFinanceCategories] = useState([]);
-  const [adminEmail, setAdminEmail] = useState("");
   const [adminProfile, setAdminProfile] = useState(null);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [adminTab, setAdminTab] = useState("requests");
@@ -5203,40 +5197,30 @@ function FinanceAdminPage() {
   }, []);
 
   useEffect(() => {
-    if (googleLinkedStudent && googleLinkedStudent.email) {
-      setAdminEmail(String(googleLinkedStudent.email || "").trim().toLowerCase());
-    }
-  }, [googleLinkedStudent]);
-
-  useEffect(() => {
-    const normalized = String(adminEmail || "").trim().toLowerCase();
-    if (!normalized) {
+    const personId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    if (!personId) {
       setAdminProfile(null);
       return;
     }
-    const studentMatch =
-      students.find((item) => String(item.email || "").trim().toLowerCase() === normalized) ||
-      null;
-    const personId = String((studentMatch && studentMatch.id) || "").trim();
     const memberships = groupMemberships.filter((item) => {
       if (personId && String(item.personId || "").trim() === personId) {
         return true;
       }
-      return String(item.personEmail || "").trim().toLowerCase() === normalized;
+      return false;
     });
     const financeRoleItems = financeRoles.filter((item) => {
       if (personId && String(item.personId || "").trim() === personId) {
         return true;
       }
-      return String(item.personEmail || "").trim().toLowerCase() === normalized;
+      return false;
     });
     setAdminProfile({
       personId: personId,
-      email: normalized,
+      email: "",
       memberships: memberships,
       financeRoles: financeRoleItems,
     });
-  }, [adminEmail, students, groupMemberships, financeRoles]);
+  }, [googleLinkedStudent, groupMemberships, financeRoles]);
 
   useEffect(() => {
     loadActions(selectedId);
@@ -5309,20 +5293,13 @@ function FinanceAdminPage() {
   const financeMemberIdSet = new Set(
     financeGroupMembers.map((item) => String(item.personId || "").trim()).filter(Boolean)
   );
-  const financeMemberEmailSet = new Set(
-    financeGroupMembers
-      .map((item) => String(item.personEmail || "").trim().toLowerCase())
-      .filter(Boolean)
-  );
   const financeGroupStudents = students.filter(
     (item) =>
-      financeMemberIdSet.has(String(item.id || "").trim()) ||
-      financeMemberEmailSet.has(String(item.email || "").trim().toLowerCase())
+      financeMemberIdSet.has(String(item.id || "").trim())
   );
   const financeGroupFallback = financeGroupMembers.filter((member) => {
     const id = String(member.personId || "").trim();
-    const email = String(member.personEmail || "").trim().toLowerCase();
-    return !financeMemberIdSet.has(id) && !financeMemberEmailSet.has(email);
+    return !financeMemberIdSet.has(id);
   });
   const financeGroupOptions = financeGroupStudents
     .map((item) => ({
@@ -5334,7 +5311,7 @@ function FinanceAdminPage() {
       financeGroupFallback.map((item) => ({
         id: item.personId || "",
         name: item.personName || "",
-        email: item.personEmail || "",
+        email: "",
       }))
     );
 
@@ -5377,7 +5354,7 @@ function FinanceAdminPage() {
     })
     .map((member) => ({
       id: member.personId || "",
-      name: member.personName || member.personEmail || member.personId || "",
+      name: member.personName || member.personId || "",
       email: "",
       payerType: "sponsor",
       paid: getPayerStatus_({

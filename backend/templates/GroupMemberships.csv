@@ -1,1 +1,1 @@
-id,personId,personName,personEmail,groupId,roleInGroup,notes,createdAt,updatedAt
+id,personId,personName,groupId,roleInGroup,notes,createdAt,updatedAt
