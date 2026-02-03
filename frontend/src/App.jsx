@@ -6031,8 +6031,8 @@ function FinanceAdminPage() {
                       onClick={() => setSelectedId(item.id)}
                       className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
                         selectedId === item.id
-                          ? "border-slate-900 bg-slate-900 text-white"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                          ? "border-slate-900 bg-white text-slate-700"
+                          : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -6242,25 +6242,25 @@ function FinanceAdminPage() {
                           }}
                           className={`cursor-pointer rounded-2xl border p-4 text-sm text-slate-600 transition ${
                             isActive
-                              ? "border-slate-900 bg-slate-900 text-white"
+                              ? "border-slate-900 bg-white text-slate-700"
                               : "border-slate-200/70 bg-slate-50/60 hover:border-slate-300"
                           }`}
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className={`font-semibold ${isActive ? "text-white" : "text-slate-900"}`}>
+                              <p className="font-semibold text-slate-900">
                                 {item.title}
                               </p>
-                              <p className={`text-xs ${isActive ? "text-white/70" : "text-slate-500"}`}>
+                              <p className="text-xs text-slate-500">
                                 {formatDisplayDate_(item.dueDate) || "-"} ·
                                 {FUND_EVENT_STATUS.find((status) => status.value === item.status)?.label ||
                                   item.status}
                               </p>
-                              <p className={`text-xs ${isActive ? "text-white/70" : "text-slate-500"}`}>
+                              <p className="text-xs text-slate-500">
                                 目標收款 {formatFinanceAmount_(expectedTotal)}
                               </p>
                               {item.createdById ? (
-                                <p className={`text-[11px] ${isActive ? "text-white/70" : "text-slate-400"}`}>
+                                <p className="text-[11px] text-slate-400">
                                   建檔者：{item.createdById}
                                 </p>
                               ) : null}
@@ -6273,11 +6273,7 @@ function FinanceAdminPage() {
                                   handleEditFundEvent(item);
                                   resetFundPaymentForm(item.id);
                                 }}
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                                  isActive
-                                    ? "border-white/40 text-white hover:border-white/70"
-                                    : "border-slate-200 text-slate-600 hover:border-slate-300"
-                                }`}
+                                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                               >
                                 編輯
                               </button>
@@ -6287,11 +6283,7 @@ function FinanceAdminPage() {
                                   event.stopPropagation();
                                   handleDeleteFundEvent(item.id);
                                 }}
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                                  isActive
-                                    ? "border-white/40 text-white hover:border-white/70"
-                                    : "border-rose-200 text-rose-600 hover:border-rose-300"
-                                }`}
+                                className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
                               >
                                 刪除
                               </button>
@@ -8167,8 +8159,8 @@ function SoftballPage() {
                         onClick={() => setActivePracticeId(normalizeId_(item.id))}
                         className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
                           normalizeId_(activePracticeId) === normalizeId_(item.id)
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
                         }`}
                       >
                         <div>
