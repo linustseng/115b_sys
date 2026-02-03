@@ -273,3 +273,12 @@ export default function DirectoryPage({ apiRequest }) {
                   <div>緊急聯絡人: {item.emergencyContact || "-"}</div>
                   <div>緊急聯絡人電話: {item.emergencyPhone || "-"}</div>
                   <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
