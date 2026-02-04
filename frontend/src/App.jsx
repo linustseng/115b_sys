@@ -3068,7 +3068,6 @@ function FinancePage() {
   const [fundEventsLoading, setFundEventsLoading] = useState(false);
   const [fundEventsError, setFundEventsError] = useState("");
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
-  const [completedView, setCompletedView] = useState("relevant");
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState("requests");
@@ -5097,6 +5096,7 @@ function FinanceAdminPage() {
   const [fundSummary, setFundSummary] = useState(null);
   const [fundEventForm, setFundEventForm] = useState(buildFundEventDraft_());
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [completedView, setCompletedView] = useState("relevant");
   const [showFundEventModal, setShowFundEventModal] = useState(false);
   const [showFundPaymentModal, setShowFundPaymentModal] = useState(false);
   const [financeRoleForm, setFinanceRoleForm] = useState({
