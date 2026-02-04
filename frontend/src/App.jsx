@@ -456,6 +456,57 @@ const formatFinanceAmount_ = (value) => {
   return amount ? `NT$ ${amount.toLocaleString("en-US")}` : "NT$ 0";
 };
 
+const normalizeGroupId_ = (value) => {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return "";
+  }
+  const match = raw.match(/[A-Z0-9]+/);
+  return match ? match[0] : raw;
+};
+
+const isPettyCashFinanceRequest_ = (record) => {
+  const type = String(record.type || "").trim().toLowerCase();
+  const method = String(record.paymentMethod || "").trim().toLowerCase();
+  return type === "pettycash" || method === "pettycash";
+};
+
+const isPurchaseFinanceRequest_ = (record) =>
+  String(record.type || "").trim().toLowerCase() === "purchase";
+
+const requiresRepresentative_ = (record) =>
+  parseFinanceAmount_(record.amountActual || record.amountEstimated) > 50000;
+
+const requiresCommittee_ = (record) => {
+  const amount = parseFinanceAmount_(record.amountActual || record.amountEstimated);
+  const categoryType = String(record.categoryType || "").trim().toLowerCase();
+  return amount >= 200000 || categoryType === "special";
+};
+
+const isFinanceRequestRelevantToRole_ = (record, role, context = {}) => {
+  if (!record || !role) {
+    return false;
+  }
+  const { adminLeadGroups = [], adminDeputyGroups = [] } = context;
+  if (role === "auditor") {
+    return true;
+  }
+  if (role === "lead") {
+    const group = normalizeGroupId_(record.applicantDepartment);
+    return adminLeadGroups.includes(group) || adminDeputyGroups.includes(group);
+  }
+  if (role === "rep") {
+    return requiresRepresentative_(record) || requiresCommittee_(record);
+  }
+  if (role === "committee") {
+    return requiresCommittee_(record);
+  }
+  if (role === "accounting" || role === "cashier") {
+    return !isPurchaseFinanceRequest_(record);
+  }
+  return false;
+};
+
 const parseFinanceAttachments_ = (value) => {
   if (!value) {
     return [];
@@ -3017,6 +3068,7 @@ function FinancePage() {
   const [fundEventsLoading, setFundEventsLoading] = useState(false);
   const [fundEventsError, setFundEventsError] = useState("");
   const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [completedView, setCompletedView] = useState("relevant");
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState("requests");
@@ -4336,6 +4388,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("pending");
+  const [completedView, setCompletedView] = useState("relevant");
   const [actorName, setActorName] = useState("");
   const [actorNote, setActorNote] = useState("");
   const [acting, setActing] = useState(false);
@@ -4504,15 +4557,6 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     return String(item.personEmail || "").trim().toLowerCase() === normalizedEmail;
   });
 
-  const normalizeGroupId_ = (value) => {
-    const raw = String(value || "").trim().toUpperCase();
-    if (!raw) {
-      return "";
-    }
-    const match = raw.match(/[A-Z0-9]+/);
-    return match ? match[0] : raw;
-  };
-
   const adminLeadGroups = memberships
     .filter((item) => String(item.roleInGroup || "").trim() === "lead")
     .map((item) => normalizeGroupId_(item.groupId))
@@ -4604,8 +4648,16 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
-  const completedItems = requests
-    .filter((item) => String(item.status || "").trim() === "closed")
+  const showAllCompleted = completedView === "all";
+  const completedRequests = requests.filter(
+    (item) => String(item.status || "").trim() === "closed"
+  );
+  const relevantCompletedRequests = completedRequests.filter((item) =>
+    availableRoles.some((role) =>
+      isFinanceRequestRelevantToRole_(item, role, { adminLeadGroups, adminDeputyGroups })
+    )
+  );
+  const completedItems = (showAllCompleted ? completedRequests : relevantCompletedRequests)
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
@@ -4819,6 +4871,33 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
           </div>
         ) : tab === "completed" ? (
           <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-slate-500">顯示範圍</p>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCompletedView("relevant")}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                    completedView === "relevant"
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  與我相關
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompletedView("all")}
+                  className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                    completedView === "all"
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white text-slate-600"
+                  }`}
+                >
+                  全部
+                </button>
+              </div>
+            </div>
             {completedItems.length ? (
               completedItems.map((item) =>
                 renderRequestRow(item, (
@@ -5460,6 +5539,32 @@ function FinanceAdminPage() {
     return true;
   });
 
+  const isPendingStatus = (status) => String(status || "").trim().startsWith("pending_");
+  const pendingRequests = requests.filter((item) => isPendingStatus(item.status));
+  const actionableIdSet = new Set(filteredRequests.map((item) => String(item.id || "").trim()));
+  const relevantPendingRequests = pendingRequests.filter((item) =>
+    availableRoles.some((availableRole) =>
+      isFinanceRequestRelevantToRole_(item, availableRole, { adminLeadGroups, adminDeputyGroups })
+    )
+  );
+  const inProgressItems = relevantPendingRequests
+    .filter((item) => !actionableIdSet.has(String(item.id || "").trim()))
+    .slice()
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
+  const showAllCompleted = completedView === "all";
+  const completedRequests = requests.filter(
+    (item) => String(item.status || "").trim() === "closed"
+  );
+  const relevantCompletedRequests = completedRequests.filter((item) =>
+    availableRoles.some((availableRole) =>
+      isFinanceRequestRelevantToRole_(item, availableRole, { adminLeadGroups, adminDeputyGroups })
+    )
+  );
+  const completedItems = (showAllCompleted ? completedRequests : relevantCompletedRequests)
+    .slice()
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+
   const selectedRequest = requests.find((item) => item.id === selectedId) || null;
   const canAct =
     selectedRequest &&
@@ -6011,46 +6116,150 @@ function FinanceAdminPage() {
 
         {adminTab === "requests" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
-              {loading ? (
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                  載入中
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-4 space-y-3">
-              {filteredRequests.length ? (
-                filteredRequests.map((item) => {
-                  const amount =
-                    item.type === "purchase" ? item.amountEstimated : item.amountActual;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setSelectedId(item.id)}
-                      className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                        selectedId === item.id
-                          ? "border-slate-900 bg-white text-slate-700"
-                          : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{item.title || "未命名"}</p>
-                          <p className="text-xs opacity-70">
-                            {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
-                            {formatFinanceAmount_(amount)}
-                          </p>
+          <div className="space-y-4">
+            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
+                {loading ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
+                    載入中
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-4 space-y-3">
+                {filteredRequests.length ? (
+                  filteredRequests.map((item) => {
+                    const amount =
+                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedId(item.id)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          selectedId === item.id
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">{item.title || "未命名"}</p>
+                            <p className="text-xs opacity-70">
+                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
+                              {formatFinanceAmount_(amount)}
+                            </p>
+                          </div>
+                          <span className="text-xs opacity-70">{item.id}</span>
                         </div>
-                        <span className="text-xs opacity-70">{item.id}</span>
-                      </div>
-                    </button>
-                  );
-                })
-              ) : (
-                <p className="text-sm text-slate-500">目前沒有待處理案件。</p>
-              )}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-500">目前沒有待處理案件。</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-900">簽核中案件</h2>
+                <span className="text-xs text-slate-400">非目前角色待處理</span>
+              </div>
+              <div className="mt-4 space-y-3">
+                {inProgressItems.length ? (
+                  inProgressItems.map((item) => {
+                    const amount =
+                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedId(item.id)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          selectedId === item.id
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">{item.title || "未命名"}</p>
+                            <p className="text-xs opacity-70">
+                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
+                              {formatFinanceAmount_(amount)} ·{" "}
+                              {FINANCE_STATUS_LABELS[item.status] || item.status}
+                            </p>
+                          </div>
+                          <span className="text-xs opacity-70">{item.id}</span>
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-500">目前沒有簽核中的案件。</p>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">已結案</h2>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCompletedView("relevant")}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                      completedView === "relevant"
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600"
+                    }`}
+                  >
+                    與我相關
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCompletedView("all")}
+                    className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                      completedView === "all"
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600"
+                    }`}
+                  >
+                    全部
+                  </button>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {completedItems.length ? (
+                  completedItems.map((item) => {
+                    const amount =
+                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setSelectedId(item.id)}
+                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                          selectedId === item.id
+                            ? "border-slate-900 bg-white text-slate-700"
+                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">{item.title || "未命名"}</p>
+                            <p className="text-xs opacity-70">
+                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
+                              {formatFinanceAmount_(amount)}
+                            </p>
+                          </div>
+                          <span className="text-xs opacity-70">{item.id}</span>
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <p className="text-sm text-slate-500">尚未有已結案的案件。</p>
+                )}
+              </div>
             </div>
           </div>
 

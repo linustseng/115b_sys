@@ -65,6 +65,24 @@ function getCachedJson_(key, ttlSeconds, loader) {
   return data;
 }
 
+function invalidateCacheKeys_(keys) {
+  const list = Array.isArray(keys) ? keys : [keys];
+  const sanitized = list
+    .map(function (key) {
+      return String(key || "").trim();
+    })
+    .filter(function (key) {
+      return key;
+    });
+  if (!sanitized.length) {
+    return;
+  }
+  const cache = CacheService.getScriptCache();
+  sanitized.forEach(function (key) {
+    cache.remove(key);
+  });
+}
+
 function listStudentsCached_() {
   return getCachedJson_("students:list:v1", 60, listStudents_);
 }
@@ -2594,10 +2612,14 @@ function upsertGroupMembership_(data) {
   if (membershipId) {
     const existing = findGroupMembershipById_(membershipId);
     if (existing) {
-      return updateGroupMembership_(membershipId, data);
+      const updated = updateGroupMembership_(membershipId, data);
+      invalidateCacheKeys_(["groupMemberships:list:v1"]);
+      return updated;
     }
   }
-  return appendGroupMembership_(data);
+  const created = appendGroupMembership_(data);
+  invalidateCacheKeys_(["groupMemberships:list:v1"]);
+  return created;
 }
 
 function batchUpdateGroupMemberships_(data) {
@@ -2702,6 +2724,7 @@ function batchUpdateGroupMemberships_(data) {
       .getRange(2 + finalList.length, 1, rows.length - finalList.length, headers.length)
       .clearContent();
   }
+  invalidateCacheKeys_(["groupMemberships:list:v1"]);
   return finalList;
 }
 
@@ -2748,6 +2771,7 @@ function deleteGroupMembership_(membershipId) {
   for (var i = 0; i < rows.length; i++) {
     if (String(rows[i][idIndex]).trim() === membershipId) {
       sheet.deleteRow(i + 2);
+      invalidateCacheKeys_(["groupMemberships:list:v1"]);
       return true;
     }
   }
