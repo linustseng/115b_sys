@@ -126,25 +126,41 @@ function SoftballPlayerPage({ shared }) {
   };
 
   const loadBootstrap = async (studentId) => {
-    const { result } = await apiRequest({
-      action: "listSoftballPlayerBootstrap",
-      studentId: studentId,
-    });
-    if (!result.ok) {
-      throw new Error(result.error || "載入失敗");
+    try {
+      const { result } = await apiRequest({
+        action: "listSoftballPlayerBootstrap",
+        studentId: studentId,
+      });
+      if (result && result.ok) {
+        const data = result.data || {};
+        setPlayers(data.players || []);
+        const list = data.practices || [];
+        const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+        setPractices(sorted);
+        setPracticesUpdatedAt(new Date());
+        setFields(data.fields || []);
+        setSoftballConfig(data.config || {});
+        if (Array.isArray(data.attendance)) {
+          setAttendance(data.attendance);
+          setAttendanceLoaded(true);
+        }
+        return;
+      }
+    } catch (error) {
+      // Fall back to legacy endpoints below.
     }
-    const data = result.data || {};
-    setPlayers(data.players || []);
-    const list = data.practices || [];
-    const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
-    setPractices(sorted);
-    setPracticesUpdatedAt(new Date());
-    setFields(data.fields || []);
-    setSoftballConfig(data.config || {});
-    if (Array.isArray(data.attendance)) {
-      setAttendance(data.attendance);
-      setAttendanceLoaded(true);
-    }
+
+    await Promise.all([
+      loadPlayers(),
+      loadPractices(),
+      loadFields(),
+      apiRequest({ action: "listSoftballConfig" }).then(({ result }) => {
+        if (result && result.ok) {
+          setSoftballConfig(result.data && result.data.config ? result.data.config : {});
+        }
+      }),
+      studentId ? loadAttendance(studentId) : Promise.resolve(),
+    ]);
   };
 
   const loadAttendance = async (studentId) => {
