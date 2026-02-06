@@ -117,19 +117,43 @@ function RegistrationPage({ shared }) {
     const normalized = String(emailValue || "").trim().toLowerCase();
     if (!normalized || !eventId) {
       setExistingRegistration(null);
-      return false;
+      return "none";
     }
     try {
       const { result } = await apiRequest({
-        action: "getRegistrationByEmail",
+        action: "getRegistrationBootstrap",
         eventId: eventId,
         email: normalized,
       });
-      if (!result.ok || !result.data || !result.data.registration) {
+      if (!result.ok || !result.data) {
         setExistingRegistration(null);
-        return false;
+        return "none";
       }
-      const registration = result.data.registration;
+      const { registration, student: matchedStudent } = result.data || {};
+      if (matchedStudent) {
+        setStudent({
+          name: matchedStudent.name || "",
+          company: matchedStudent.company || "",
+          title: matchedStudent.title || "",
+          phone: normalizePhoneInputValue_(matchedStudent.phone),
+          dietaryPreference: matchedStudent.dietaryPreference || "",
+        });
+        setCustomFields((prev) =>
+          prev.dietary && prev.studentId
+            ? prev
+            : {
+                ...prev,
+                dietary: matchedStudent.dietaryPreference || prev.dietary || "無禁忌",
+                studentId: matchedStudent.id || prev.studentId || "",
+              }
+        );
+        setAutoFilled(true);
+        setLookupStatus("found");
+      }
+      if (!registration) {
+        setExistingRegistration(null);
+        return matchedStudent ? "student" : "none";
+      }
       const storedFields = parseCustomFields_(registration.customFields);
       const notesValue = storedFields.notes || "";
       const { notes: _notes, ...restFields } = storedFields;
@@ -144,10 +168,10 @@ function RegistrationPage({ shared }) {
         name: registration.userName || prev.name,
         phone: normalizePhoneInputValue_(registration.userPhone || prev.phone),
       }));
-      return true;
+      return "registration";
     } catch (error) {
       setExistingRegistration(null);
-      return false;
+      return "none";
     }
   };
 
@@ -226,11 +250,11 @@ function RegistrationPage({ shared }) {
     }
     const fetchEvent = async () => {
       try {
-        const { result } = await apiRequest({ action: "getEvent", eventId: eventId });
-        if (!result.ok) {
+        const { result } = await apiRequest({ action: "getRegistrationBootstrap", eventId: eventId });
+        if (!result.ok || !result.data || !result.data.event) {
           throw new Error(result.error || "Event not found");
         }
-        if (!ignore && result.data && result.data.event) {
+        if (!ignore) {
           const event = result.data.event;
           const nextEventInfo = {
             title: titleParam || event.title || DEFAULT_EVENT.title,
@@ -277,52 +301,21 @@ function RegistrationPage({ shared }) {
     let ignore = false;
     const normalized = String(email || "").trim().toLowerCase();
     setLookupStatus("loading");
-    let hasRegistration = false;
-    const warmRegistration = async () => {
-      hasRegistration = await loadExistingRegistration(normalized);
-    };
-    warmRegistration();
-
     const timer = setTimeout(async () => {
-      try {
-        const { result } = await apiRequest({
-          action: "lookupStudent",
-          email: normalized,
-        });
-        if (!result.ok) {
-          throw new Error(result.error || "Student not found");
-        }
-        if (!ignore && result.data && result.data.student) {
-          const match = result.data.student;
-          setStudent({
-            name: match.name || "",
-            company: match.company || "",
-            title: match.title || "",
-            phone: normalizePhoneInputValue_(match.phone),
-            dietaryPreference: match.dietaryPreference || "",
-          });
-          setCustomFields((prev) =>
-            prev.dietary && prev.studentId
-              ? prev
-              : {
-                  ...prev,
-                  dietary: match.dietaryPreference || prev.dietary || "無禁忌",
-                  studentId: match.id || prev.studentId || "",
-                }
-          );
-          setAutoFilled(true);
-          setLookupStatus("found");
-        }
-      } catch (error) {
-        if (!ignore) {
-          setAutoFilled(false);
-          setLookupStatus("notfound");
-          if (!hasRegistration) {
-            setStudent({ name: "", company: "", title: "", phone: "", dietaryPreference: "" });
-          }
-        }
+      const status = await loadExistingRegistration(normalized);
+      if (ignore) {
+        return;
       }
-    }, autoFilled ? 0 : 500);
+      if (status === "none") {
+        setAutoFilled(false);
+        setLookupStatus("notfound");
+        setStudent({ name: "", company: "", title: "", phone: "", dietaryPreference: "" });
+      } else if (status === "student") {
+        setLookupStatus("found");
+      } else if (status === "registration") {
+        setLookupStatus("found");
+      }
+    }, autoFilled ? 0 : 400);
 
     return () => {
       ignore = true;

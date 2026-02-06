@@ -182,6 +182,22 @@ function handleActionPayload_(payload) {
     };
   }
 
+  if (payload.action === "listFinanceApplicantBootstrap") {
+    const applicantEmail = normalizeEmail_(payload.applicantEmail || payload.email);
+    const requests = applicantEmail ? listFinanceRequests_({ applicantEmail: applicantEmail }) : [];
+    return {
+      ok: true,
+      data: {
+        requests: requests,
+        students: listStudentsCached_(),
+        groupMemberships: listGroupMembershipsCached_(),
+        categories: listFinanceCategoryTypesCached_(),
+        fundEvents: listFundEventsCached_(),
+      },
+      error: null,
+    };
+  }
+
   if (payload.action === "listFinanceAdminBootstrap") {
     return {
       ok: true,
@@ -206,6 +222,21 @@ function handleActionPayload_(payload) {
         fields: listSoftballFieldsCached_(),
         gear: listSoftballGearCached_(),
         config: listSoftballConfigCached_(),
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listSoftballPlayerBootstrap") {
+    const studentId = String(payload.studentId || "").trim();
+    return {
+      ok: true,
+      data: {
+        players: listSoftballPlayersCached_(),
+        practices: listSoftballPracticesCached_(),
+        fields: listSoftballFieldsCached_(),
+        config: listSoftballConfigCached_(),
+        attendance: listSoftballAttendance_("", studentId),
       },
       error: null,
     };
@@ -477,8 +508,37 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { event: event }, error: null };
   }
 
+  if (payload.action === "getRegistrationBootstrap") {
+    const eventId = String(payload.eventId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing eventId" };
+    }
+    const event = findEventById_(eventId);
+    if (!event) {
+      return { ok: false, data: null, error: "Event not found" };
+    }
+    var registration = null;
+    if (email) {
+      registration = findRegistrationByEmail_(eventId, email);
+    }
+    var studentProfile = null;
+    if (email) {
+      const directory = findDirectoryByEmail_(email);
+      const student = directory && directory.id ? findStudentById_(directory.id) : null;
+      if (student && directory) {
+        studentProfile = buildStudentProfile_(student, directory, email);
+      }
+    }
+    return {
+      ok: true,
+      data: { event: event, registration: registration, student: studentProfile },
+      error: null,
+    };
+  }
+
   if (payload.action === "listEvents") {
-    const events = listEvents_();
+    const events = listEventsCached_();
     return { ok: true, data: { events: events }, error: null };
   }
 

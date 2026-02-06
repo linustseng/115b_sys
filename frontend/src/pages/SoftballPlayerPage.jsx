@@ -56,6 +56,7 @@ function SoftballPlayerPage({ shared }) {
   const [players, setPlayers] = useState([]);
   const [practices, setPractices] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [attendanceLoaded, setAttendanceLoaded] = useState(false);
   const [fields, setFields] = useState([]);
   const [softballConfig, setSoftballConfig] = useState({});
   const [loading, setLoading] = useState(true);
@@ -124,9 +125,32 @@ function SoftballPlayerPage({ shared }) {
     setFields(result.data && result.data.fields ? result.data.fields : []);
   };
 
+  const loadBootstrap = async (studentId) => {
+    const { result } = await apiRequest({
+      action: "listSoftballPlayerBootstrap",
+      studentId: studentId,
+    });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    const data = result.data || {};
+    setPlayers(data.players || []);
+    const list = data.practices || [];
+    const sorted = list.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
+    setPractices(sorted);
+    setPracticesUpdatedAt(new Date());
+    setFields(data.fields || []);
+    setSoftballConfig(data.config || {});
+    if (Array.isArray(data.attendance)) {
+      setAttendance(data.attendance);
+      setAttendanceLoaded(true);
+    }
+  };
+
   const loadAttendance = async (studentId) => {
     if (!studentId) {
       setAttendance([]);
+      setAttendanceLoaded(true);
       return;
     }
     try {
@@ -137,13 +161,16 @@ function SoftballPlayerPage({ shared }) {
       if (!result.ok) {
         setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
         setAttendance([]);
+        setAttendanceLoaded(true);
         return;
       }
       const list = result.data && result.data.attendance ? result.data.attendance : [];
       setAttendance(list);
+      setAttendanceLoaded(true);
     } catch (err) {
       setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
       setAttendance([]);
+      setAttendanceLoaded(true);
     }
   };
 
@@ -153,15 +180,7 @@ function SoftballPlayerPage({ shared }) {
       setLoading(true);
       setError("");
       try {
-        const [{ result: configResult }] = await Promise.all([
-          apiRequest({ action: "listSoftballConfig" }),
-          loadPlayers(),
-          loadPractices(),
-          loadFields(),
-        ]);
-        if (configResult && configResult.ok) {
-          setSoftballConfig(configResult.data && configResult.data.config ? configResult.data.config : {});
-        }
+        await loadBootstrap(googleLinkedStudent && googleLinkedStudent.id);
       } catch (err) {
         if (!ignore) {
           setError("壘球資料載入失敗。");
@@ -180,9 +199,15 @@ function SoftballPlayerPage({ shared }) {
 
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.id) {
-      loadAttendance(googleLinkedStudent.id);
+      if (!attendanceLoaded) {
+        loadAttendance(googleLinkedStudent.id);
+      }
     }
-  }, [googleLinkedStudent]);
+  }, [googleLinkedStudent, attendanceLoaded]);
+
+  useEffect(() => {
+    setAttendanceLoaded(false);
+  }, [googleLinkedStudent && googleLinkedStudent.id]);
 
   const handleRefreshPractices = async () => {
     if (practiceRefreshing) {

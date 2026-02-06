@@ -205,11 +205,50 @@ function FinancePage({ shared }) {
     }
   };
 
+  const loadApplicantBootstrap = async (email) => {
+    if (!email) {
+      return false;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({
+        action: "listFinanceApplicantBootstrap",
+        applicantEmail: email,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const data = result.data || {};
+      setRequests(data.requests || []);
+      setStudents(data.students || []);
+      setFinanceCategories(data.categories || []);
+      if (data.fundEvents) {
+        setFundEvents(data.fundEvents || []);
+        try {
+          localStorage.setItem(
+            fundEventsCacheKey,
+            JSON.stringify({ ts: Date.now(), events: data.fundEvents || [] })
+          );
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      }
+      const memberships = data.groupMemberships || [];
+      setMemberGroups(resolveMemberGroups_(googleLinkedStudent && googleLinkedStudent.id, memberships));
+      return true;
+    } catch (err) {
+      setError(err.message || "載入失敗");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
       setRequestsLoaded(false);
       setRequestBootstrapLoaded(false);
-      loadMemberGroups(googleLinkedStudent.id);
       setFundPaymentForm((prev) => ({
         ...prev,
         payerId: String(googleLinkedStudent.id || "").trim(),
@@ -234,15 +273,17 @@ function FinancePage({ shared }) {
       return;
     }
     if (!requestsLoaded) {
-      loadRequests(googleLinkedStudent.email);
-      setRequestsLoaded(true);
-    }
-    if (!requestBootstrapLoaded) {
-      loadFinanceBootstrap(googleLinkedStudent.email).then((ok) => {
+      loadApplicantBootstrap(googleLinkedStudent.email).then((ok) => {
         if (!ok) {
-          loadStudents();
-          loadFinanceCategories();
+          loadRequests(googleLinkedStudent.email);
+          loadFinanceBootstrap(googleLinkedStudent.email).then((bootstrapOk) => {
+            if (!bootstrapOk) {
+              loadStudents();
+              loadFinanceCategories();
+            }
+          });
         }
+        setRequestsLoaded(true);
         setRequestBootstrapLoaded(true);
       });
     }
