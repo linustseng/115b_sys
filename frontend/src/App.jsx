@@ -1295,6 +1295,16 @@ function AppShell() {
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
   const isApprovalsPage = pathname.startsWith("/approvals");
+  const lineInfo = getLineInAppInfo_();
+  const [hideLineBanner, setHideLineBanner] = useState(() => {
+    try {
+      return window.sessionStorage.getItem("hide_line_banner") === "1";
+    } catch (error) {
+      return false;
+    }
+  });
+  const [copyStatus, setCopyStatus] = useState("");
+  const showLineBanner = lineInfo.isLineInApp && !hideLineBanner;
   const shared = {
     apiRequest,
     API_URL,
@@ -1355,12 +1365,78 @@ function AppShell() {
     normalizeId_,
   };
 
-  if (isCheckinPage) {
-    return <CheckinPage shared={shared} />;
-  }
+  const handleCopyLink = async () => {
+    if (!lineInfo.currentUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(lineInfo.currentUrl);
+      setCopyStatus("copied");
+    } catch (copyError) {
+      setCopyStatus("failed");
+    } finally {
+      window.setTimeout(() => setCopyStatus(""), 2000);
+    }
+  };
 
-  if (isAdminEventsPage) {
-    return (
+  const handleHideBanner = () => {
+    setHideLineBanner(true);
+    try {
+      window.sessionStorage.setItem("hide_line_banner", "1");
+    } catch (error) {
+      // Ignore storage errors.
+    }
+  };
+
+  const lineBanner = showLineBanner ? (
+    <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
+        <div className="flex-1">
+          <p className="font-semibold">LINE 內建瀏覽器無法啟動 PWA</p>
+          <p className="mt-1 text-amber-800">
+            請點右上角「…」改用 {lineInfo.isIOS ? "Safari" : lineInfo.isAndroid ? "Chrome" : "外部瀏覽器"} 開啟，
+            再加入主畫面。
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={lineInfo.openExternalUrl || lineInfo.currentUrl}
+            target="_blank"
+            rel="noopener"
+            className="rounded-full bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+          >
+            {lineInfo.isIOS ? "用 Safari 開啟" : lineInfo.isAndroid ? "用 Chrome 開啟" : "用外部瀏覽器開啟"}
+          </a>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-700"
+          >
+            複製連結
+          </button>
+          {copyStatus ? (
+            <span className="text-[11px] font-semibold text-amber-700">
+              {copyStatus === "copied" ? "已複製" : "複製失敗"}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleHideBanner}
+            className="rounded-full border border-amber-300 bg-white px-3 py-1 text-[11px] font-semibold text-amber-700"
+          >
+            隱藏
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  let content = null;
+
+  if (isCheckinPage) {
+    content = <CheckinPage shared={shared} />;
+  } else if (isAdminEventsPage) {
+    content = (
       <AdminAccessGuard
         title="活動管理 · 後台"
         helperText="僅限班代、副班代、活動組、資管組成員。"
@@ -1382,10 +1458,8 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
-  }
-
-  if (isAdminOrderingPage) {
-    return (
+  } else if (isAdminOrderingPage) {
+    content = (
       <AdminAccessGuard
         title="訂餐管理 · 後台"
         helperText="僅限班代、副班代、美食組、資管組成員。"
@@ -1407,10 +1481,8 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
-  }
-
-  if (isAdminFinancePage) {
-    return (
+  } else if (isAdminFinancePage) {
+    content = (
       <AdminAccessGuard
         title="財務管理 · 後台"
         helperText="僅限班代、副班代、財會組、資管組成員。"
@@ -1419,10 +1491,8 @@ function AppShell() {
         <FinanceAdminPage shared={shared} />
       </AdminAccessGuard>
     );
-  }
-
-  if (isAdminPage) {
-    return (
+  } else if (isAdminPage) {
+    content = (
       <AdminAccessGuard
         title="後台管理 · MVP"
         helperText="僅限班代、副班代、資管組成員。"
@@ -1444,18 +1514,12 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
-  }
-
-  if (pathname.includes("directory")) {
-    return <DirectoryPage apiRequest={apiRequest} />;
-  }
-
-  if (isRegisterPage) {
-    return <RegistrationPage shared={shared} />;
-  }
-
-  if (isEventsPage) {
-    return (
+  } else if (pathname.includes("directory")) {
+    content = <DirectoryPage apiRequest={apiRequest} />;
+  } else if (isRegisterPage) {
+    content = <RegistrationPage shared={shared} />;
+  } else if (isEventsPage) {
+    content = (
       <HomePage
         apiRequest={apiRequest}
         buildGoogleMapsUrl_={buildGoogleMapsUrl_}
@@ -1466,26 +1530,16 @@ function AppShell() {
         GoogleSigninPanel={GoogleSigninPanel}
       />
     );
-  }
-
-  if (isOrderingPage) {
-    return <OrderingPage shared={shared} />;
-  }
-
-  if (isFinancePage) {
-    return <FinancePage shared={shared} />;
-  }
-
-  if (isApprovalsPage) {
-    return <ApprovalsPage shared={shared} />;
-  }
-
-  if (isSoftballPlayerPage) {
-    return <SoftballPlayerPage shared={shared} />;
-  }
-
-  if (isSoftballPage) {
-    return (
+  } else if (isOrderingPage) {
+    content = <OrderingPage shared={shared} />;
+  } else if (isFinancePage) {
+    content = <FinancePage shared={shared} />;
+  } else if (isApprovalsPage) {
+    content = <ApprovalsPage shared={shared} />;
+  } else if (isSoftballPlayerPage) {
+    content = <SoftballPlayerPage shared={shared} />;
+  } else if (isSoftballPage) {
+    content = (
       <AdminAccessGuard
         title="壘球隊管理 · 後台"
         helperText="僅限班代、副班代、資管組、體育主將組成員。"
@@ -1494,14 +1548,21 @@ function AppShell() {
         <SoftballPage shared={shared} />
       </AdminAccessGuard>
     );
+  } else {
+    content = (
+      <LandingPage
+        shared={shared}
+        GoogleSigninPanel={GoogleSigninPanel}
+        loadStoredGoogleStudent_={loadStoredGoogleStudent_}
+      />
+    );
   }
 
   return (
-    <LandingPage
-      shared={shared}
-      GoogleSigninPanel={GoogleSigninPanel}
-      loadStoredGoogleStudent_={loadStoredGoogleStudent_}
-    />
+    <>
+      {lineBanner}
+      {content}
+    </>
   );
 }
 
