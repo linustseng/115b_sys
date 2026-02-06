@@ -3836,13 +3836,14 @@ function FinancePage() {
                 onSubmit={handleFundPaymentSubmit}
                 className="card p-6 sm:p-8"
               >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-slate-900">班費繳交回報</h2>
-                  <span className="badge">
-                    {memberGroups.includes("J") ? "班董" : "一般同學"}
-                  </span>
-                </div>
-                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-slate-900">班費繳交回報</h2>
+                <span className="badge">
+                  {memberGroups.includes("J") ? "班董" : "一般同學"}
+                </span>
+              </div>
+              <p className="mt-2 required-note">* 為必填欄位</p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2 sm:col-span-2">
                     <label className="text-sm font-medium text-slate-700">班費事件 *</label>
                     <select
@@ -3853,7 +3854,7 @@ function FinancePage() {
                       disabled={fundEventsLoading && !fundEvents.length}
                       className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                         fundPaymentErrorFlags.eventId
-                          ? "border-rose-300 bg-rose-50/60"
+                          ? "input-error"
                           : "border-slate-200 bg-white"
                       }`}
                     >
@@ -3875,7 +3876,7 @@ function FinancePage() {
                     {fundEventsLoading ? (
                       <p className="text-xs text-slate-400">載入中，約 3-5 秒。</p>
                     ) : fundEventsError ? (
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-rose-500">
+                      <div className="flex flex-wrap items-center gap-3 help-error">
                         <span>{fundEventsError}</span>
                         <button
                           type="button"
@@ -3909,7 +3910,7 @@ function FinancePage() {
                       aria-invalid={fundPaymentErrorFlags.amount ? "true" : "false"}
                       className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                         fundPaymentErrorFlags.amount
-                          ? "border-rose-300 bg-rose-50/60"
+                          ? "input-error"
                           : "border-slate-200 bg-white"
                       }`}
                     />
@@ -3940,12 +3941,12 @@ function FinancePage() {
                         aria-invalid={fundPaymentErrorFlags.transferLast5 ? "true" : "false"}
                         className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                           fundPaymentErrorFlags.transferLast5
-                            ? "border-rose-300 bg-rose-50/60"
+                            ? "input-error"
                             : "border-slate-200 bg-white"
                         }`}
                       />
                       {fundPaymentErrorFlags.transferLast5 ? (
-                        <p className="text-xs text-rose-500">請填寫匯款帳號末 5 碼。</p>
+                        <p className="help-error">請填寫匯款帳號末 5 碼。</p>
                       ) : null}
                     </div>
                   ) : null}
@@ -4042,10 +4043,11 @@ function FinancePage() {
                   </span>
                 ) : null}
               </div>
+              <p className="mt-2 required-note">* 為必填欄位</p>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">
-                    申請類型 <span className="text-rose-600">*</span>
+                    申請類型 <span className="required-mark">*</span>
                   </label>
                   <select
                     value={form.type}
@@ -4061,7 +4063,7 @@ function FinancePage() {
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">
-                    請款人 <span className="text-rose-600">*</span>
+                    請款人 <span className="required-mark">*</span>
                   </label>
                   <input
                     value={form.applicantName}
@@ -4090,7 +4092,7 @@ function FinancePage() {
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">
-                    申請組別 <span className="text-rose-600">*</span>
+                    申請組別 <span className="required-mark">*</span>
                   </label>
                   <select
                     value={form.applicantDepartment}
@@ -4107,7 +4109,7 @@ function FinancePage() {
                 </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
-                  項目名稱 <span className="text-rose-600">*</span>
+                  項目名稱 <span className="required-mark">*</span>
                 </label>
                 <input
                   value={form.title}
@@ -4118,19 +4120,19 @@ function FinancePage() {
               </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
-                  說明/活動內容 <span className="text-rose-600">*</span>
+                  說明/活動內容 <span className="required-mark">*</span>
                 </label>
                 <textarea
                   value={form.description}
                   onChange={(event) => handleFormChange("description", event.target.value)}
                   rows="3"
                   placeholder="例如教練費、場地租金等"
-                  className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                  className="input-base"
                 />
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">
-                  班務性質 <span className="text-rose-600">*</span>
+                  班務性質 <span className="required-mark">*</span>
                 </label>
                 <select
                   value={form.categoryType}
@@ -4150,7 +4152,7 @@ function FinancePage() {
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">
-                  {isPurchase ? "預估金額" : "實際金額"} <span className="text-rose-600">*</span>
+                  {isPurchase ? "預估金額" : "實際金額"} <span className="required-mark">*</span>
                 </label>
                 <input
                   value={isPurchase ? form.amountEstimated : form.amountActual}
@@ -4304,7 +4306,7 @@ function FinancePage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveAttachment(index)}
-                        className="text-xs font-semibold text-rose-600"
+                        className="help-error-strong"
                       >
                         移除
                       </button>
@@ -7160,7 +7162,7 @@ function FinanceAdminPage() {
                     aria-invalid={fundPaymentErrorFlags.eventId ? "true" : "false"}
                     className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                       fundPaymentErrorFlags.eventId
-                        ? "border-rose-300 bg-rose-50/60"
+                        ? "input-error"
                         : "border-slate-200 bg-white"
                     }`}
                   >
@@ -7192,7 +7194,7 @@ function FinanceAdminPage() {
                     aria-invalid={fundPaymentErrorFlags.payerName ? "true" : "false"}
                     className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                       fundPaymentErrorFlags.payerName
-                        ? "border-rose-300 bg-rose-50/60"
+                        ? "input-error"
                         : "border-slate-200 bg-white"
                     }`}
                   />
@@ -7278,7 +7280,7 @@ function FinanceAdminPage() {
                     aria-invalid={fundPaymentErrorFlags.amount ? "true" : "false"}
                     className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                       fundPaymentErrorFlags.amount
-                        ? "border-rose-300 bg-rose-50/60"
+                        ? "input-error"
                         : "border-slate-200 bg-white"
                     }`}
                   />
@@ -7313,7 +7315,7 @@ function FinanceAdminPage() {
                       aria-invalid={fundPaymentErrorFlags.transferLast5 ? "true" : "false"}
                       className={`h-11 rounded-2xl border px-4 text-sm text-slate-900 ${
                         fundPaymentErrorFlags.transferLast5
-                          ? "border-rose-300 bg-rose-50/60"
+                          ? "input-error"
                           : "border-slate-200 bg-white"
                       }`}
                     />
@@ -10617,7 +10619,7 @@ function CheckinPage() {
           {checkinStatus === "not_attending" ||
           checkinStatus === "attendance_unknown" ||
           checkinStatus === "not_registered" ? (
-            <p className="mt-2 text-xs font-semibold text-rose-600">
+            <p className="mt-2 help-error-strong">
               無法簽到，請洽活動負責人。
             </p>
           ) : null}
@@ -10657,7 +10659,7 @@ function CheckinPage() {
                 <p className="font-semibold">{errorDisplay.title}</p>
                 <p className="mt-1 text-rose-600">{errorDisplay.message}</p>
                 {errorDisplay.action ? (
-                  <p className="mt-2 text-xs text-rose-500">{errorDisplay.action}</p>
+                  <p className="mt-2 help-error">{errorDisplay.action}</p>
                 ) : null}
               </div>
             ) : null}
@@ -11243,11 +11245,11 @@ function HomePage() {
                         </button>
                       </div>
                     ) : isNotAttending ? (
-                      <span className="text-xs text-rose-500">
+                      <span className="help-error">
                         已回覆不克出席，無法簽到，請洽活動負責人
                       </span>
                     ) : isAttendanceUnknown ? (
-                      <span className="text-xs text-rose-500">
+                      <span className="help-error">
                         未確認出席，無法簽到，請洽活動負責人
                       </span>
                     ) : checkinUrl && checkinState === "open" ? (
@@ -11442,7 +11444,7 @@ function HomePage() {
             ) : null}
             <p className="mt-4 text-sm text-slate-500">確定要完成簽到嗎？</p>
             {checkinError ? (
-              <p className="mt-3 text-xs font-semibold text-rose-600">{checkinError}</p>
+              <p className="mt-3 help-error-strong">{checkinError}</p>
             ) : null}
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <button
@@ -11480,7 +11482,7 @@ function HomePage() {
             ) : null}
             <p className="mt-4 text-sm text-slate-500">確定要取消簽到嗎？</p>
             {cancelError ? (
-              <p className="mt-3 text-xs font-semibold text-rose-600">{cancelError}</p>
+              <p className="mt-3 help-error-strong">{cancelError}</p>
             ) : null}
             <div className="mt-6 flex flex-wrap justify-center gap-3">
               <button

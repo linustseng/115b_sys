@@ -2409,7 +2409,7 @@ export default function AdminPage({
                     </div>
                   ) : null}
                   {membershipSaveError ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-semibold text-rose-600">
+                    <div className="mt-2 flex flex-wrap items-center gap-2 help-error-strong">
                       <span>儲存失敗：{membershipSaveError}</span>
                       <button
                         type="button"
@@ -2733,7 +2733,7 @@ export default function AdminPage({
                   上傳檔案
                 </label>
                 {uploading ? <span className="text-xs text-slate-500">上傳中...</span> : null}
-                {uploadError ? <span className="text-xs text-rose-600">{uploadError}</span> : null}
+                {uploadError ? <span className="help-error">{uploadError}</span> : null}
               </div>
               {attachments.length ? (
                 <div className="space-y-2">
@@ -2753,7 +2753,7 @@ export default function AdminPage({
                       <button
                         type="button"
                         onClick={() => handleRemoveAttachment(index)}
-                        className="text-xs font-semibold text-rose-600"
+                        className="help-error-strong"
                       >
                         移除
                       </button>
