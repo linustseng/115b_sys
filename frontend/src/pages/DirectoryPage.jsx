@@ -136,7 +136,7 @@ export default function DirectoryPage({ apiRequest }) {
           </div>
         </header>
         <main className="mx-auto max-w-4xl px-6 pb-28 pt-10 sm:px-12">
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <h2 className="text-lg font-semibold text-slate-900">管理者登入</h2>
             <form onSubmit={handleLogin} className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2 sm:col-span-2">
@@ -144,7 +144,12 @@ export default function DirectoryPage({ apiRequest }) {
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
@@ -153,11 +158,12 @@ export default function DirectoryPage({ apiRequest }) {
                   type="password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  autoComplete="current-password"
+                  className="input-sm"
                 />
               </div>
               {loginError ? (
-                <div className="sm:col-span-2 rounded-2xl border border-rose-200/70 bg-rose-50/70 px-4 py-3 text-sm text-rose-700">
+                <div className="sm:col-span-2 alert alert-error">
                   {loginError}
                 </div>
               ) : null}
@@ -192,7 +198,7 @@ export default function DirectoryPage({ apiRequest }) {
               setAuth("");
               localStorage.removeItem("directoryToken");
             }}
-            className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex"
+            className="inline-flex rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-[11px] font-medium text-slate-500 shadow-sm sm:px-4 sm:py-2 sm:text-xs"
           >
             登出
           </button>
@@ -200,7 +206,7 @@ export default function DirectoryPage({ apiRequest }) {
       </header>
 
       <main className="mx-auto max-w-5xl px-6 pb-28 pt-10 sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="card p-7 sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">匯入同學資料</h2>
             {loading ? (
@@ -216,11 +222,12 @@ export default function DirectoryPage({ apiRequest }) {
             value={importText}
             onChange={(event) => setImportText(event.target.value)}
             rows="8"
+            spellCheck="false"
             className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
             placeholder="貼上 CSV 或 Excel 複製的表格內容 (含標題列)"
           />
           {importResult ? (
-            <div className="mt-4 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+            <div className="mt-4 alert alert-success">
               {importResult}
             </div>
           ) : null}
@@ -233,7 +240,7 @@ export default function DirectoryPage({ apiRequest }) {
           </button>
         </section>
 
-        <section className="mt-6 rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="mt-6 card p-7 sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">同學列表</h2>
             <span className="text-xs text-slate-400">共 {filteredDirectory.length} 筆</span>
@@ -243,6 +250,8 @@ export default function DirectoryPage({ apiRequest }) {
               value={directoryQuery}
               onChange={(event) => setDirectoryQuery(event.target.value)}
               placeholder="搜尋姓名、Email、公司、分組..."
+              type="search"
+              inputMode="search"
               className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
             />
           </div>

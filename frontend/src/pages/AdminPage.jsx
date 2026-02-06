@@ -1649,10 +1649,21 @@ export default function AdminPage({
             </span>
           </div>
         </div>
+        <div className="mx-auto mt-4 flex max-w-5xl flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 sm:hidden">
+          <a
+            href="/"
+            className="btn-chip px-3 py-1.5"
+          >
+            回首頁
+          </a>
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
+            管理者模式
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto grid max-w-5xl gap-6 px-6 pb-28 pt-10 sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+        <section className="card p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
               { id: "events", label: "活動" },
@@ -1680,7 +1691,7 @@ export default function AdminPage({
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="card p-7 sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">
               {activeTab === "events"
@@ -1700,7 +1711,7 @@ export default function AdminPage({
             ) : null}
           </div>
           {error ? (
-            <div className="mt-4 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            <div className="mt-4 alert alert-warning">
               {error}
             </div>
           ) : null}
@@ -1731,7 +1742,7 @@ export default function AdminPage({
                     <button
                       onClick={() => handleDelete(event.id)}
                       disabled={saving}
-                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="badge-error hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       刪除
                     </button>
@@ -1788,7 +1799,7 @@ export default function AdminPage({
                       type="date"
                       value={orderForm.date}
                       onChange={(event) => handleOrderDateChange(event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -1796,7 +1807,7 @@ export default function AdminPage({
                     <input
                       value={orderForm.title}
                       onChange={(event) => handleOrderFormChange("title", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -1805,7 +1816,7 @@ export default function AdminPage({
                       <input
                         value={orderForm.optionA}
                         onChange={(event) => handleOrderFormChange("optionA", event.target.value)}
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -1813,7 +1824,7 @@ export default function AdminPage({
                       <input
                         value={orderForm.optionB}
                         onChange={(event) => handleOrderFormChange("optionB", event.target.value)}
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       />
                     </div>
                   </div>
@@ -1830,7 +1841,7 @@ export default function AdminPage({
                           handleOrderFormChange("optionAImage", event.target.value)
                         }
                         placeholder="貼上圖片網址或拖曳圖片"
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       />
                       <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
                       {orderForm.optionAImage ? (
@@ -1854,7 +1865,7 @@ export default function AdminPage({
                           handleOrderFormChange("optionBImage", event.target.value)
                         }
                         placeholder="貼上圖片網址或拖曳圖片"
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       />
                       <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
                       {orderForm.optionBImage ? (
@@ -1874,7 +1885,7 @@ export default function AdminPage({
                         type="datetime-local"
                         value={orderForm.cutoffAt}
                         onChange={(event) => handleOrderFormChange("cutoffAt", event.target.value)}
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       />
                     </div>
                     <div className="grid gap-2">
@@ -1882,7 +1893,7 @@ export default function AdminPage({
                       <select
                         value={orderForm.status}
                         onChange={(event) => handleOrderFormChange("status", event.target.value)}
-                        className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                        className="input-sm"
                       >
                         <option value="open">開放</option>
                         <option value="closed">關閉</option>
@@ -1902,7 +1913,7 @@ export default function AdminPage({
                     <button
                       type="submit"
                       disabled={saving}
-                      className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="btn-primary"
                     >
                       {saving ? "儲存中..." : orderForm.id ? "更新訂餐" : "新增訂餐"}
                     </button>
@@ -1915,7 +1926,7 @@ export default function AdminPage({
                 </form>
               </div>
 
-              <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+              <div className="card-muted p-5 text-sm text-slate-600">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="font-semibold text-slate-900">訂餐統計</p>
                   <span className="text-xs text-slate-400">
@@ -2007,16 +2018,16 @@ export default function AdminPage({
                     ))}
                   </select>
                   <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                    <span className="badge-success">
                       已報名 {registeredCount}
                     </span>
-                    <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">
+                    <span className="btn-chip">
                       未報名 {unregisteredCount}
                     </span>
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                    <span className="badge-success">
                       出席 {attendanceCounts.attending}
                     </span>
-                    <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700">
+                    <span className="badge-error">
                       不克出席 {attendanceCounts.notAttending}
                     </span>
                     <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-slate-600">
@@ -2075,16 +2086,16 @@ export default function AdminPage({
                           : "";
                       const badgeStyle = isRegistered
                         ? attendanceStatus === "not_attending"
-                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          ? "badge-error"
                           : attendanceStatus === "unknown"
                           ? "border-slate-300 bg-slate-100 text-slate-600"
-                          : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "badge-success"
                         : "border-slate-200 bg-white text-slate-400";
                       return (
                         <span
                           key={student.id || student.googleEmail || student.email}
                           title={hoverTitle}
-                          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${badgeStyle}`}
+                          className={`inline-flex items-center gap-2 tabular-nums ${badgeStyle}`}
                         >
                           {displayName || "未命名"}
                         </span>
@@ -2118,10 +2129,10 @@ export default function AdminPage({
                     ))}
                   </select>
                   <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-700">
+                    <span className="badge-success">
                       已簽到 {checkinList.length}
                     </span>
-                    <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700">
+                    <span className="badge-warning">
                       未簽到 {pendingCheckins.length}
                     </span>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
@@ -2156,8 +2167,8 @@ export default function AdminPage({
                           title={hoverTitle}
                           className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
                             checkin
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                              : "border-amber-200 bg-amber-50 text-amber-800"
+                              ? "badge-success"
+                              : "badge-warning"
                           }`}
                         >
                           {registration.userName || "未命名"}
@@ -2239,7 +2250,7 @@ export default function AdminPage({
                       onClick={() => setShowOnlyUnassigned((prev) => !prev)}
                       className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                         showOnlyUnassigned
-                          ? "border-rose-200 bg-rose-50 text-rose-700"
+                          ? "badge-error"
                           : "border-slate-200 bg-white text-slate-600"
                       }`}
                     >
@@ -2351,7 +2362,7 @@ export default function AdminPage({
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {selectedMember ? (
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                        <span className="badge">
                           已選：{selectedMember.personName || selectedMember.personId}
                         </span>
                       ) : null}
@@ -2359,7 +2370,7 @@ export default function AdminPage({
                         <button
                           type="button"
                           onClick={() => handleSelectMember_(null)}
-                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                          className="btn-chip"
                         >
                           取消選取
                         </button>
@@ -2368,7 +2379,7 @@ export default function AdminPage({
                         type="button"
                         onClick={handleResetMembershipDrafts_}
                         disabled={!membershipDirty || saving}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="btn-chip disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         還原
                       </button>
@@ -2404,7 +2415,7 @@ export default function AdminPage({
                         type="button"
                         onClick={handleSaveMembershipDrafts_}
                         disabled={saving}
-                        className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[11px] font-semibold text-rose-600 hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="badge-error text-[11px] font-semibold hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         重試
                       </button>
@@ -2474,14 +2485,14 @@ export default function AdminPage({
                       <button
                         type="button"
                         onClick={() => expandAllGroups_(groupCards)}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        className="btn-chip"
                       >
                         全部展開
                       </button>
                       <button
                         type="button"
                         onClick={collapseAllGroups_}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        className="btn-chip"
                       >
                         全部收合
                       </button>
@@ -2539,7 +2550,7 @@ export default function AdminPage({
                             }
                             className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                               pinnedGroupId === group.id
-                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                ? "badge-warning"
                                 : "border-slate-200 bg-white text-slate-600"
                             }`}
                           >
@@ -2632,7 +2643,7 @@ export default function AdminPage({
         </section>
 
         {activeTab === "events" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <h2 className="text-lg font-semibold text-slate-900">
               {activeId ? "編輯活動" : "新增活動"}
             </h2>
@@ -2659,7 +2670,7 @@ export default function AdminPage({
               <select
                 value={form.category}
                 onChange={(event) => handleCategoryChange(event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               >
                 {EVENT_CATEGORIES.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -2684,7 +2695,7 @@ export default function AdminPage({
               <input
                 value={form.title}
                 onChange={(event) => handleChange("title", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">
@@ -2761,7 +2772,7 @@ export default function AdminPage({
                 value={form.startAt}
                 onChange={(event) => handleStartAtChange(event.target.value)}
                 placeholder="2024-10-18 18:30"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2771,7 +2782,7 @@ export default function AdminPage({
                 value={form.endAt}
                 onChange={(event) => handleChange("endAt", event.target.value)}
                 placeholder="2024-10-18 21:30"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2779,7 +2790,7 @@ export default function AdminPage({
               <input
                 value={form.location}
                 onChange={(event) => handleChange("location", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2787,7 +2798,7 @@ export default function AdminPage({
               <input
                 value={form.address}
                 onChange={(event) => handleChange("address", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
               {form.address ? (
                 <a
@@ -2805,7 +2816,7 @@ export default function AdminPage({
               <input
                 value={form.capacity}
                 onChange={(event) => handleChange("capacity", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2813,7 +2824,7 @@ export default function AdminPage({
               <select
                 value={form.allowCompanions}
                 onChange={(event) => handleChange("allowCompanions", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               >
                 <option value="yes">可以</option>
                 <option value="no">不可以</option>
@@ -2824,7 +2835,7 @@ export default function AdminPage({
               <select
                 value={form.allowBringDrinks}
                 onChange={(event) => handleChange("allowBringDrinks", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               >
                 <option value="yes">可以</option>
                 <option value="no">不可以</option>
@@ -2837,7 +2848,7 @@ export default function AdminPage({
                 value={form.registrationOpenAt}
                 onChange={(event) => handleRegistrationOpenChange(event.target.value)}
                 placeholder="2024-09-20 09:00"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2847,7 +2858,7 @@ export default function AdminPage({
                 value={form.registrationCloseAt}
                 onChange={(event) => handleChange("registrationCloseAt", event.target.value)}
                 placeholder="2024-10-10 23:00"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2857,7 +2868,7 @@ export default function AdminPage({
                 value={form.checkinOpenAt}
                 onChange={(event) => handleChange("checkinOpenAt", event.target.value)}
                 placeholder="2024-10-18 18:00"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -2867,7 +2878,7 @@ export default function AdminPage({
                 value={form.checkinCloseAt}
                 onChange={(event) => handleChange("checkinCloseAt", event.target.value)}
                 placeholder="2024-10-18 20:30"
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">
@@ -2876,7 +2887,7 @@ export default function AdminPage({
                   value={form.registerUrl}
                   onChange={(event) => handleChange("registerUrl", event.target.value)}
                   placeholder="https://your-domain/register?eventId=24011801"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  className="input-sm"
                 />
               <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
                 <button
@@ -2887,7 +2898,7 @@ export default function AdminPage({
                       `${window.location.origin}/register?eventId=${encodeURIComponent(form.id || "")}`
                     )
                   }
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  className="btn-chip"
                 >
                   使用目前網域產生
                 </button>
@@ -2902,7 +2913,7 @@ export default function AdminPage({
                         )}`
                       )
                     }
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                    className="btn-chip"
                   >
                     使用正式網域產生
                   </button>
@@ -2910,7 +2921,7 @@ export default function AdminPage({
                 <button
                   type="button"
                   onClick={handleCopyRegisterUrl}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  className="btn-chip"
                 >
                   複製報名連結
                 </button>
@@ -2956,7 +2967,7 @@ export default function AdminPage({
                   value={form.checkinUrl}
                   onChange={(event) => handleChange("checkinUrl", event.target.value)}
                   placeholder="https://your-domain/checkin?eventId=24011801"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  className="input-sm"
                 />
               <div className="flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
                 <button
@@ -2967,7 +2978,7 @@ export default function AdminPage({
                       `${window.location.origin}/checkin?eventId=${encodeURIComponent(form.id || "")}`
                     )
                   }
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  className="btn-chip"
                 >
                   使用目前網域產生
                 </button>
@@ -2982,7 +2993,7 @@ export default function AdminPage({
                         )}`
                       )
                     }
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                    className="btn-chip"
                   >
                     使用正式網域產生
                   </button>
@@ -2990,7 +3001,7 @@ export default function AdminPage({
                 <button
                   type="button"
                   onClick={handleCopyCheckinUrl}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600 hover:border-slate-300"
+                  className="btn-chip"
                 >
                   複製簽到連結
                 </button>
@@ -3033,7 +3044,7 @@ export default function AdminPage({
               <select
                 value={form.status}
                 onChange={(event) => handleChange("status", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               >
                 <option value="draft">草稿</option>
                 <option value="open">開放報名</option>
@@ -3075,7 +3086,7 @@ export default function AdminPage({
         ) : null}
 
         {activeTab === "students" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <h2 className="text-lg font-semibold text-slate-900">同學列表</h2>
             <p className="mt-2 text-sm text-slate-500">
               此處顯示 Students 名單，提供未報名統計與快速查詢。
@@ -3084,7 +3095,7 @@ export default function AdminPage({
         ) : null}
 
         {activeTab === "registrations" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <h2 className="text-lg font-semibold text-slate-900">更新報名狀態</h2>
             <form onSubmit={handleRegistrationSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="grid gap-2">
@@ -3093,7 +3104,7 @@ export default function AdminPage({
                   value={registrationForm.id}
                   onChange={(event) => setRegistrationForm((prev) => ({ ...prev, id: event.target.value }))}
                   placeholder="輸入報名 ID / 學號 (P...) / 姓名"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2">
@@ -3101,7 +3112,7 @@ export default function AdminPage({
                 <select
                   value={registrationForm.status}
                   onChange={(event) => setRegistrationForm((prev) => ({ ...prev, status: event.target.value }))}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                  className="input-sm"
                 >
                   <option value="registered">已報名</option>
                   <option value="cancelled">已取消</option>

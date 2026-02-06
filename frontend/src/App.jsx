@@ -46,7 +46,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div className="min-h-screen bg-slate-50">
           <main className="mx-auto max-w-3xl px-6 py-16">
-            <div className="rounded-3xl border border-rose-200/80 bg-white p-8 text-sm text-rose-700 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.5)]">
+            <div className="card p-8 text-sm text-rose-700 border border-rose-200/80">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-400">
                 Something went wrong
               </p>
@@ -54,7 +54,7 @@ class ErrorBoundary extends React.Component {
               <p className="mt-2 text-sm text-rose-600">
                 請重新整理頁面。若持續發生，請把以下錯誤訊息回報給管理員。
               </p>
-              <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+              <div className="mt-4 alert alert-error text-xs">
                 {this.state.error.message || "Unknown error"}
               </div>
               <button
@@ -305,12 +305,12 @@ const GROUP_ROLE_LABELS = {
 };
 
 const ROLE_BADGE_STYLES = {
-  rep: "border-amber-200 bg-amber-50 text-amber-700",
+  rep: "badge-warning",
   repDeputy: "border-orange-200 bg-orange-50 text-orange-700",
-  lead: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  lead: "badge-success",
   deputy: "border-sky-200 bg-sky-50 text-sky-700",
   member: "border-slate-200 bg-slate-100 text-slate-700",
-  unassigned: "border-rose-200 bg-rose-50 text-rose-600",
+  unassigned: "badge-error",
 };
 
 const FINANCE_ROLE_OPTIONS = [
@@ -979,7 +979,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       </div>
 
       {isLineInApp ? (
-        <div className="mt-4 rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+        <div className="mt-4 alert alert-warning text-xs">
           <p className="font-semibold">LINE 內建瀏覽器無法完成 Google 登入</p>
           <p className="mt-1">
             {lineInfo.isIOS
@@ -1033,7 +1033,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       ) : null}
 
       {status === "linked" && linkedStudent ? (
-        <div className="mt-4 rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+        <div className="mt-4 alert alert-success">
           已綁定：{linkedStudent.name || "同學"} · {linkedStudent.email}
         </div>
       ) : null}
@@ -1051,7 +1051,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
                 setStatus("needs-link");
               }
             }}
-            className="mt-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+            className="mt-2 btn-chip"
           >
             開始綁定
           </button>
@@ -1060,7 +1060,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
       {status === "needs-link" && profile ? (
         <div className="mt-4 space-y-3">
-          <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+          <div className="alert alert-warning text-xs">
             <p className="font-semibold">尚未綁定同學資料</p>
             <p className="mt-1">請搜尋並點選你的資料進行綁定。</p>
           </div>
@@ -1093,7 +1093,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="輸入姓名 / Email"
-              className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+              className="input-sm shadow-sm outline-none transition focus:border-slate-400"
             />
             {searchLoading ? <p className="text-xs text-slate-400">搜尋中...</p> : null}
           </div>
@@ -1187,7 +1187,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          <section className="card p-6 sm:p-8">
             <GoogleSigninPanel
               title="Google 登入"
               helperText="登入後會自動判斷可存取的後台權限。"
@@ -1235,7 +1235,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-          <div className="rounded-3xl border border-rose-200/80 bg-rose-50/80 p-6 text-sm text-rose-700 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          <div className="card p-6 sm:p-8 text-sm text-rose-700 border border-rose-200/80 bg-rose-50/80">
             {error || "您目前沒有權限存取此後台。"}
             <div className="mt-2 text-xs text-rose-600">
               允許群組：班代、副班代{allowedLabel ? `、${allowedLabel}` : ""}
@@ -1836,8 +1836,9 @@ function RegistrationPage() {
           <button
             key={option}
             type="button"
+            aria-pressed={isActive}
             onClick={() => onChange(option)}
-            className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+            className={`min-h-[40px] rounded-full border px-4 py-2 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300/70 focus-visible:ring-offset-2 ${
               isActive
                 ? "border-slate-900 bg-slate-900 text-white shadow-sm"
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
@@ -1858,8 +1859,10 @@ function RegistrationPage() {
         list={`${field.id}-options`}
         placeholder={field.placeholder || "數量"}
         value={value}
+        inputMode="numeric"
+        autoComplete="off"
         onChange={(event) => onChange(event.target.value)}
-        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+        className="input-base"
       />
       <datalist id={`${field.id}-options`}>
         {field.options.map((option) => (
@@ -1887,7 +1890,7 @@ function RegistrationPage() {
           <div className="flex items-center gap-3">
             <a
               href="/"
-              className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white sm:inline-flex"
+              className="hidden btn-ghost sm:inline-flex"
             >
               返回報名列表
             </a>
@@ -1896,15 +1899,31 @@ function RegistrationPage() {
                 活動資料載入中
               </span>
             ) : null}
-            <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
+            <span className="hidden badge-muted sm:inline-flex">
               {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
             </span>
           </div>
         </div>
+        <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 sm:hidden">
+          <a
+            href="/"
+            className="btn-chip px-3 py-1.5"
+          >
+            返回報名列表
+          </a>
+          {eventLoading ? (
+            <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
+              活動資料載入中
+            </span>
+          ) : null}
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
+            {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto grid max-w-6xl gap-8 px-6 pb-28 pt-10 sm:grid-cols-[1.1fr_0.9fr] sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="card p-7 sm:p-10">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">報名資料</h2>
             {autoFilled ? (
@@ -1932,7 +1951,7 @@ function RegistrationPage() {
 
           <div className="mt-6 grid gap-6">
             {googleLinkedStudent && googleLinkedStudent.email ? (
-              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+              <div className="alert alert-success">
                 已登入 Google：{googleLinkedStudent.email}
               </div>
             ) : (
@@ -1952,8 +1971,12 @@ function RegistrationPage() {
                 value={email}
                 onChange={(event) => handleEmailChange(event.target.value)}
                 placeholder="you@emba115b.tw"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
                 disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
-                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                className="input-base"
               />
               <p className="text-xs text-slate-500">
                 {googleLinkedStudent && googleLinkedStudent.email
@@ -1978,9 +2001,10 @@ function RegistrationPage() {
                   type="text"
                   value={student.name}
                   placeholder="王小明"
+                  autoComplete="name"
                   onChange={(event) => setStudent({ ...student, name: event.target.value })}
                   disabled={Boolean(student.name)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                  className="input-base"
                 />
               </div>
               <div className="grid gap-2">
@@ -1989,11 +2013,13 @@ function RegistrationPage() {
                 </label>
                 <input
                   id="phone"
-                  type="text"
+                  type="tel"
                   value={student.phone}
                   placeholder="手機或其他聯絡方式"
+                  inputMode="tel"
+                  autoComplete="tel"
                   onChange={(event) => setStudent({ ...student, phone: event.target.value })}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                  className="input-base"
                 />
               </div>
             </div>
@@ -2029,7 +2055,7 @@ function RegistrationPage() {
                           id={field.id}
                           value={value}
                           onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
-                          className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                          className="input-base"
                         >
                           <option value="" disabled>
                             請選擇
@@ -2048,14 +2074,15 @@ function RegistrationPage() {
                       <label className="text-sm font-medium text-slate-700" htmlFor={field.id}>
                         {field.label}
                       </label>
-                      <input
-                        id={field.id}
-                        type={field.type}
-                        placeholder={field.placeholder}
-                        value={value}
-                        onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
-                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
-                      />
+                        <input
+                          id={field.id}
+                          type={field.type}
+                          placeholder={field.placeholder}
+                          value={value}
+                          autoComplete="off"
+                          onChange={(event) => handleCustomFieldChange(field.id, event.target.value)}
+                          className="input-base"
+                        />
                     </div>
                   );
                 })}
@@ -2083,13 +2110,15 @@ function RegistrationPage() {
                         type="number"
                         placeholder={gatheringFieldConfig.companions.placeholder}
                         value={customFields.companions || ""}
+                        inputMode="numeric"
+                        min="0"
                         onChange={(event) =>
                           handleCustomFieldChange(
                             gatheringFieldConfig.companions.id,
                             event.target.value
                           )
                         }
-                        className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                        className="input-base"
                       />
                     </div>
                   ) : null}
@@ -2106,7 +2135,7 @@ function RegistrationPage() {
                           event.target.value
                         )
                       }
-                      className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                      className="input-base"
                     >
                       <option value="" disabled>
                         請選擇
@@ -2164,10 +2193,11 @@ function RegistrationPage() {
                                 type={field.type}
                                 placeholder={field.placeholder}
                                 value={customFields[field.id] || ""}
+                                autoComplete="off"
                                 onChange={(event) =>
                                   handleCustomFieldChange(field.id, event.target.value)
                                 }
-                                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+                                className="input-base"
                               />
                             )}
                           </div>
@@ -2192,12 +2222,12 @@ function RegistrationPage() {
               placeholder="有任何特殊需求請在此填寫"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400"
+              className="mt-2 w-full input-base"
             />
           </div>
 
           {submitError ? (
-            <div className="mt-8 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            <div className="mt-8 alert alert-warning">
               <p className="font-semibold">報名未完成</p>
               <p className="mt-1 text-amber-600">{submitError}</p>
               <p className="mt-2 text-xs text-amber-500">若持續無法送出，請聯繫班級承辦。</p>
@@ -2205,7 +2235,7 @@ function RegistrationPage() {
           ) : null}
 
           {submitSuccess ? (
-            <div className="mt-8 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+            <div className="mt-8 alert alert-success">
               <p className="font-semibold">報名成功</p>
               <p className="mt-1 text-emerald-600">已完成報名，期待與你相見。</p>
             </div>
@@ -2214,14 +2244,14 @@ function RegistrationPage() {
           <button
             onClick={handleRegister}
             disabled={submitLoading}
-            className="mt-10 hidden w-full items-center justify-center gap-2 rounded-2xl bg-[#1e293b] px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
+            className="mt-10 hidden w-full items-center justify-center gap-2 btn-primary sm:inline-flex"
           >
             {submitLoading ? "送出中..." : "送出報名"}
           </button>
         </section>
 
         <aside className="space-y-6">
-          <div className="rounded-3xl border border-slate-200/80 bg-white/80 p-6 shadow-[0_25px_70px_-60px_rgba(15,23,42,0.7)]">
+          <div className="card-soft p-6">
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">
               活動資訊
             </p>
@@ -2300,11 +2330,11 @@ function RegistrationPage() {
         </aside>
       </main>
 
-      <div className="fixed bottom-5 left-4 right-4 z-20 sm:hidden">
+      <div className="fixed fixed-bottom-cta left-4 right-4 z-20 sm:hidden">
         <button
           onClick={handleRegister}
           disabled={submitLoading}
-          className="flex w-full items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-4 text-base font-semibold text-white shadow-2xl shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center btn-primary text-base shadow-2xl shadow-slate-900/20"
         >
           {submitLoading ? "送出中..." : "送出報名"}
         </button>
@@ -2453,7 +2483,7 @@ function LandingPage() {
         ) : null}
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
-          <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between rounded-[2rem] border border-slate-200/80 bg-white p-6 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.9)] transition hover:-translate-y-1 hover:shadow-lg">
+          <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
@@ -2487,7 +2517,7 @@ function LandingPage() {
             </div>
           </div>
 
-          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-amber-200/70 bg-amber-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(120,53,15,0.4)] transition hover:-translate-y-1 hover:shadow-lg">
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--amber">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600/70">
@@ -2521,7 +2551,7 @@ function LandingPage() {
             </div>
           </div>
 
-          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-sky-200/70 bg-sky-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(14,116,144,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--sky">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-600/70">
@@ -2555,7 +2585,7 @@ function LandingPage() {
             </div>
           </div>
 
-          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-emerald-200/70 bg-emerald-50/70 p-6 shadow-[0_25px_70px_-60px_rgba(16,185,129,0.35)] transition hover:-translate-y-1 hover:shadow-lg">
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--emerald">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600/70">
@@ -2612,7 +2642,7 @@ function LandingPage() {
             {!loginCollapsed ? (
               <>
                 <div className="mt-4">
-                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-2 text-xs text-emerald-700">
+                  <div className="alert alert-success text-xs px-4 py-2">
                     已登入 Google：{googleLinkedStudent.email}
                   </div>
                 </div>
@@ -2652,7 +2682,7 @@ function LandingPage() {
           </div>
 
           {!showCalendarMobile ? (
-            <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 px-4 py-3 text-xs text-slate-500 sm:hidden">
+            <div className="mt-4 alert alert-info text-xs text-slate-500 sm:hidden">
               為了保持手機順暢，可先收合行李曆。
             </div>
           ) : null}
@@ -2891,6 +2921,14 @@ function OrderingPage() {
           <p className="mt-3 text-sm text-slate-500">週末與特別活動訂餐，前一日 23:59 截止。</p>
         </div>
       </header>
+      <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
+        <a
+          href="/"
+          className="btn-chip sm:px-4 sm:text-xs"
+        >
+          回首頁
+        </a>
+      </div>
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
         <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_25px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
@@ -2920,7 +2958,7 @@ function OrderingPage() {
           ) : null}
         </section>
 
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+        <section className="card p-6 sm:p-8">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-slate-900">本週訂餐</h2>
             {loading ? (
@@ -2931,7 +2969,7 @@ function OrderingPage() {
           </div>
 
           {error ? (
-            <div className="mt-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            <div className="mt-6 alert alert-warning">
               <p className="font-semibold">載入失敗</p>
               <p className="mt-1 text-amber-600">{error}</p>
             </div>
@@ -3716,9 +3754,17 @@ function FinancePage() {
           <p className="mt-3 text-sm text-slate-500">請購、請款與零用金申請。</p>
         </div>
       </header>
+      <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
+        <a
+          href="/"
+          className="btn-chip sm:px-4 sm:text-xs"
+        >
+          回首頁
+        </a>
+      </div>
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+        <section className="card p-6 sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">Google 登入</span>
             {googleLinkedStudent && googleLinkedStudent.email ? (
@@ -3747,17 +3793,17 @@ function FinancePage() {
         </section>
 
         {statusMessage ? (
-          <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+          <div className="mt-6 alert alert-success">
             {statusMessage}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-6 alert alert-error">
             {error}
           </div>
         ) : null}
 
-        <section className="mt-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+        <section className="mt-6 card p-4 sm:p-6">
           <div className="flex flex-wrap gap-2 text-sm font-semibold text-slate-600">
             {[
               { id: "requests", label: "請款/請購" },
@@ -3781,18 +3827,18 @@ function FinancePage() {
         {financeTab === "fund" ? (
           <>
             {fundStatusMessage ? (
-              <div className="mt-4 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+              <div className="mt-4 alert alert-success">
                 {fundStatusMessage}
               </div>
             ) : null}
             <section className="mt-6 grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
               <form
                 onSubmit={handleFundPaymentSubmit}
-                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+                className="card p-6 sm:p-8"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-slate-900">班費繳交回報</h2>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  <span className="badge">
                     {memberGroups.includes("J") ? "班董" : "一般同學"}
                   </span>
                 </div>
@@ -3834,7 +3880,7 @@ function FinancePage() {
                         <button
                           type="button"
                           onClick={loadFundEvents}
-                          className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-semibold text-rose-600"
+                          className="badge-error"
                         >
                           重新載入
                         </button>
@@ -3842,7 +3888,7 @@ function FinancePage() {
                     ) : null}
                   </div>
                   {fundPaymentForm.eventId && fundPayments.length ? (
-                    <div className="sm:col-span-2 rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-xs text-amber-700">
+                    <div className="sm:col-span-2 alert alert-warning text-xs">
                       已有 {fundPayments.length} 筆繳交回報紀錄。若是補登或更正可再送出；若非必要可先確認右側紀錄。
                     </div>
                   ) : null}
@@ -3873,7 +3919,7 @@ function FinancePage() {
                     <select
                       value={fundPaymentForm.method}
                       onChange={(event) => handleFundPaymentChange("method", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       {FUND_PAYMENT_METHODS.map((item) => (
                         <option key={item.value} value={item.value}>
@@ -3909,7 +3955,7 @@ function FinancePage() {
                       type="date"
                       value={fundPaymentForm.receivedAt}
                       onChange={(event) => handleFundPaymentChange("receivedAt", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2 sm:col-span-2">
@@ -3923,7 +3969,7 @@ function FinancePage() {
                   </div>
                 </div>
                 {error ? (
-                  <div className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+                  <div className="mt-4 alert alert-error text-xs">
                     {error}
                   </div>
                 ) : null}
@@ -3931,14 +3977,14 @@ function FinancePage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {loading ? "送出中..." : "送出繳費回報"}
                   </button>
                 </div>
               </form>
 
-              <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <section className="card p-6 sm:p-8">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">我的繳費回報</h2>
                 </div>
@@ -3962,8 +4008,8 @@ function FinancePage() {
                           <span
                             className={`mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                               item.accountedAt
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-amber-200 bg-amber-50 text-amber-700"
+                                ? "badge-success"
+                                : "badge-warning"
                             }`}
                           >
                             {item.accountedAt ? "已入帳" : "待入帳"}
@@ -3986,12 +4032,12 @@ function FinancePage() {
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <form
               onSubmit={handleSubmit}
-              className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+              className="card p-6 sm:p-8"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold text-slate-900">新建申請</h2>
                 {editingId ? (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                  <span className="badge">
                     編輯中 {editingId}
                   </span>
                 ) : null}
@@ -4004,7 +4050,7 @@ function FinancePage() {
                   <select
                     value={form.type}
                     onChange={(event) => handleFormChange("type", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FINANCE_TYPES.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -4022,7 +4068,7 @@ function FinancePage() {
                     onChange={(event) => handleApplicantInputChange(event.target.value)}
                     list="finance-students"
                     placeholder="請輸入或選擇學號 + 姓名"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                   <datalist id="finance-students">
                     {students.map((student) => {
@@ -4049,7 +4095,7 @@ function FinancePage() {
                   <select
                     value={form.applicantDepartment}
                     onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     <option value="">請選擇</option>
                     {CLASS_GROUPS.map((item) => (
@@ -4067,7 +4113,7 @@ function FinancePage() {
                   value={form.title}
                   onChange={(event) => handleFormChange("title", event.target.value)}
                   placeholder="例如壘球比賽"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
@@ -4089,7 +4135,7 @@ function FinancePage() {
                 <select
                   value={form.categoryType}
                   onChange={(event) => handleFormChange("categoryType", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 >
                   {!financeCategories.length ? (
                     <option value="">尚未設定</option>
@@ -4112,7 +4158,7 @@ function FinancePage() {
                     handleFormChange(isPurchase ? "amountEstimated" : "amountActual", event.target.value)
                   }
                   placeholder="NT$"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               {isPayment ? (
@@ -4121,7 +4167,7 @@ function FinancePage() {
                   <select
                     value={form.paymentMethod}
                     onChange={(event) => handleFormChange("paymentMethod", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FINANCE_PAYMENT_METHODS.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -4138,7 +4184,7 @@ function FinancePage() {
                     type="date"
                     value={form.expectedClearDate}
                     onChange={(event) => handleFormChange("expectedClearDate", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
               ) : null}
@@ -4150,7 +4196,7 @@ function FinancePage() {
                     onChange={(event) => handleFormChange("relatedPurchaseId", event.target.value)}
                     list="purchase-options"
                     placeholder="請購單號 (可選)"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                   <datalist id="purchase-options">
                     {purchaseOptions.map((item) => (
@@ -4184,7 +4230,7 @@ function FinancePage() {
                     <input
                       value={form.payeeName}
                       onChange={(event) => handleFormChange("payeeName", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -4193,7 +4239,7 @@ function FinancePage() {
                       value={form.payeeAccount}
                       onChange={(event) => handleFormChange("payeeAccount", event.target.value)}
                       placeholder="轉帳帳號"
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                 </>
@@ -4204,7 +4250,7 @@ function FinancePage() {
                   <input
                     value={form.vendorName}
                     onChange={(event) => handleFormChange("vendorName", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
               ) : null}
@@ -4217,7 +4263,7 @@ function FinancePage() {
                   href="https://drive.google.com/drive/my-drive"
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                  className="inline-flex items-center gap-2 btn-chip"
                 >
                   上傳到 Google Drive
                 </a>
@@ -4274,7 +4320,7 @@ function FinancePage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-primary"
               >
                 {loading ? "送出中..." : "送出申請"}
               </button>
@@ -4296,7 +4342,7 @@ function FinancePage() {
             </div>
           </form>
 
-            <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <section className="card p-6 sm:p-8">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">我的申請</h2>
               {loading ? (
@@ -4346,7 +4392,7 @@ function FinancePage() {
                                 event.stopPropagation();
                                 handleWithdraw(item);
                               }}
-                              className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                              className="badge-error hover:border-rose-300"
                             >
                               撤回
                             </button>
@@ -4782,7 +4828,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
 
   return (
     <div className={embedded ? "" : "mt-6"}>
-      <div className={embedded ? "" : "rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"}>
+      <div className={embedded ? "" : "card p-6 sm:p-8"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">簽核中心</h2>
@@ -4796,7 +4842,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
               id: "pending",
               label: "待簽核",
               count: pendingItems.length,
-              theme: "border-amber-200 bg-amber-50 text-amber-700",
+              theme: "badge-warning",
               active: "border-amber-500 bg-amber-500 text-white",
             },
             {
@@ -4810,14 +4856,14 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
               id: "completed",
               label: "已結案",
               count: completedItems.length,
-              theme: "border-emerald-200 bg-emerald-50 text-emerald-700",
+              theme: "badge-success",
               active: "border-emerald-500 bg-emerald-500 text-white",
             },
             {
               id: "returned",
               label: "已退回",
               count: returnedItems.length,
-              theme: "border-rose-200 bg-rose-50 text-rose-700",
+              theme: "badge-error",
               active: "border-rose-500 bg-rose-500 text-white",
             },
           ].map((item) => (
@@ -4840,7 +4886,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
           <p className="mt-4 text-xs text-slate-400">載入中...</p>
         ) : null}
         {error ? (
-          <div className="mt-4 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-xs text-rose-700">
+          <div className="mt-4 alert alert-error text-xs">
             {error}
           </div>
         ) : null}
@@ -4900,7 +4946,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
             {completedItems.length ? (
               completedItems.map((item) =>
                 renderRequestRow(item, (
-                  <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-600">
+                  <span className="badge-success text-[11px] font-medium">
                     已結案
                   </span>
                 ))
@@ -4914,7 +4960,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
             {returnedItems.length ? (
               returnedItems.map((item) =>
                 renderRequestRow(item, (
-                  <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] text-rose-600">
+                  <span className="badge-error text-[11px] font-medium">
                     已退回
                   </span>
                 ))
@@ -4927,7 +4973,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
       </div>
 
       {requestId ? (
-        <section className="mt-6 rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+        <section className="mt-6 card p-6 sm:p-8">
           {selectedRequest ? (
             <div className="space-y-4 text-sm text-slate-600">
               <div>
@@ -5009,7 +5055,7 @@ function ApprovalsCenter({ embedded = false, requestId = "" }) {
                     type="button"
                     disabled={acting}
                     onClick={() => handleAction("return")}
-                    className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="badge-error px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     退回
                   </button>
@@ -6043,7 +6089,15 @@ function FinanceAdminPage() {
           </div>
           <a
             href="/"
-            className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm hover:border-slate-300 sm:inline-flex"
+            className="hidden btn-ghost sm:inline-flex"
+          >
+            回首頁
+          </a>
+        </div>
+        <div className="mx-auto mt-4 flex max-w-6xl items-center sm:hidden">
+          <a
+            href="/"
+            className="btn-chip"
           >
             回首頁
           </a>
@@ -6051,7 +6105,7 @@ function FinanceAdminPage() {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+        <section className="card p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
             <div className="flex flex-wrap items-center gap-3">
               {availableRoles.length ? (
@@ -6104,12 +6158,12 @@ function FinanceAdminPage() {
         </section>
 
         {statusMessage ? (
-          <div className="mt-6 rounded-2xl border border-emerald-200/80 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700">
+          <div className="mt-6 alert alert-success">
             {statusMessage}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+          <div className="mt-6 alert alert-error">
             {error}
           </div>
         ) : null}
@@ -6117,7 +6171,7 @@ function FinanceAdminPage() {
         {adminTab === "requests" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="card p-6 sm:p-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
                 {loading ? (
@@ -6160,7 +6214,7 @@ function FinanceAdminPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="card p-6 sm:p-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">簽核中案件</h2>
                 <span className="text-xs text-slate-400">非目前角色待處理</span>
@@ -6200,7 +6254,7 @@ function FinanceAdminPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="card p-6 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h2 className="text-lg font-semibold text-slate-900">已結案</h2>
                 <div className="flex items-center gap-2">
@@ -6263,7 +6317,7 @@ function FinanceAdminPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+          <div className="card p-6 sm:p-8">
             <h2 className="text-lg font-semibold text-slate-900">案件細節</h2>
             {selectedRequest ? (
               <div className="mt-4 space-y-4 text-sm text-slate-600">
@@ -6354,7 +6408,7 @@ function FinanceAdminPage() {
                       type="button"
                       disabled={loading}
                       onClick={() => handleAction("return")}
-                      className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="badge-error px-4 py-2 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       退回
                     </button>
@@ -6391,7 +6445,7 @@ function FinanceAdminPage() {
 
         {adminTab === "funds" ? (
           <section className="mt-6 space-y-6">
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="card p-6 sm:p-8">
               <h2 className="text-lg font-semibold text-slate-900">班費收支概況</h2>
               <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -6422,7 +6476,7 @@ function FinanceAdminPage() {
             </div>
 
             <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="card p-6 sm:p-8">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">班費事件</h2>
                   <button
@@ -6492,7 +6546,7 @@ function FinanceAdminPage() {
                                   event.stopPropagation();
                                   handleDeleteFundEvent(item.id);
                                 }}
-                                className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                                className="badge-error hover:border-rose-300"
                               >
                                 刪除
                               </button>
@@ -6509,11 +6563,11 @@ function FinanceAdminPage() {
             </section>
 
             <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-              <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+              <div className="card p-6 sm:p-8">
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-slate-900">收款紀錄</h2>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
+                    <div className="badge">
                       {fundEvents.find((item) => item.id === fundPaymentForm.eventId)?.title ||
                         "尚未選擇班費事件"}
                     </div>
@@ -6554,8 +6608,8 @@ function FinanceAdminPage() {
                             <span
                               className={`mt-2 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
                                 item.accountedAt
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                                  ? "badge-success"
+                                  : "badge-warning"
                               }`}
                             >
                               {item.accountedAt ? "已入帳" : "待入帳"}
@@ -6577,7 +6631,7 @@ function FinanceAdminPage() {
                             <button
                               type="button"
                               onClick={() => handleDeleteFundPayment(item.id)}
-                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                              className="badge-error hover:border-rose-300"
                             >
                               刪除
                             </button>
@@ -6592,7 +6646,7 @@ function FinanceAdminPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <section className="card p-6 sm:p-8">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold text-slate-900">收齊狀況</h2>
@@ -6622,7 +6676,7 @@ function FinanceAdminPage() {
                   <button
                     type="button"
                     onClick={() => setFundPayerView((prev) => (prev === "collapsed" ? "all" : "collapsed"))}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    className="btn-chip"
                   >
                     {fundPayerView === "collapsed" ? "展開" : "收合"}
                   </button>
@@ -6643,7 +6697,7 @@ function FinanceAdminPage() {
                 <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
               ) : (
                 <div className="mt-4 space-y-6">
-                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
+                  <div className="alert alert-warning p-4">
                     <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
                       <span>班董</span>
                       <span>
@@ -6658,7 +6712,7 @@ function FinanceAdminPage() {
                             title={payer.email || ""}
                             className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
                               payer.paid
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "badge-success"
                                 : "border-slate-200 bg-slate-50 text-slate-600"
                             }`}
                           >
@@ -6685,7 +6739,7 @@ function FinanceAdminPage() {
                             title={payer.email || ""}
                             className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tabular-nums ${
                               payer.paid
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                ? "badge-success"
                                 : "border-slate-200 bg-slate-50 text-slate-600"
                             }`}
                           >
@@ -6708,7 +6762,7 @@ function FinanceAdminPage() {
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
               <div
                 id="fund-events-anchor"
-                className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+                className="card p-6 sm:p-8"
               >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">財務角色</h2>
@@ -6755,7 +6809,7 @@ function FinanceAdminPage() {
                               event.stopPropagation();
                               handleDeleteFinanceRole(item.id);
                             }}
-                            className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                            className="badge-error hover:border-rose-300"
                           >
                             刪除
                           </button>
@@ -6772,7 +6826,7 @@ function FinanceAdminPage() {
 
             <form
               onSubmit={handleSaveFinanceRole}
-              className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+              className="card p-6 sm:p-8"
             >
               <h3 className="text-lg font-semibold text-slate-900">設定財務角色</h3>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -6782,7 +6836,7 @@ function FinanceAdminPage() {
                     list="finance-role-students"
                     onChange={(event) => handleSelectFinanceRoleMember_(event.target.value)}
                     placeholder="輸入姓名/學號/Email"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                   <datalist id="finance-role-students">
                     {financeGroupOptions.map((item) => (
@@ -6800,7 +6854,7 @@ function FinanceAdminPage() {
                   <input
                     value={financeRoleForm.personId}
                     onChange={(event) => handleFinanceRoleChange("personId", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -6808,7 +6862,7 @@ function FinanceAdminPage() {
                   <input
                     value={financeRoleForm.personName}
                     onChange={(event) => handleFinanceRoleChange("personName", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
@@ -6816,7 +6870,7 @@ function FinanceAdminPage() {
                   <select
                     value={financeRoleForm.role}
                     onChange={(event) => handleFinanceRoleChange("role", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FINANCE_ROLE_OPTIONS.map((item) => (
                       <option key={item.id} value={item.id}>
@@ -6839,7 +6893,7 @@ function FinanceAdminPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="btn-primary"
                 >
                   {loading ? "儲存中..." : "儲存角色"}
                 </button>
@@ -6857,7 +6911,7 @@ function FinanceAdminPage() {
 
         {adminTab === "categories" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8">
+            <div className="card p-6 sm:p-8">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">班務性質</h2>
                 <button
@@ -6896,7 +6950,7 @@ function FinanceAdminPage() {
                               event.stopPropagation();
                               handleDeleteFinanceCategory(item.id);
                             }}
-                            className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                            className="badge-error hover:border-rose-300"
                           >
                             刪除
                           </button>
@@ -6913,7 +6967,7 @@ function FinanceAdminPage() {
 
             <form
               onSubmit={handleSaveFinanceCategory}
-              className="rounded-3xl border border-slate-200/80 bg-white/90 p-6 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-8"
+              className="card p-6 sm:p-8"
             >
               <h3 className="text-lg font-semibold text-slate-900">設定班務性質</h3>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -6923,7 +6977,7 @@ function FinanceAdminPage() {
                     value={financeCategoryForm.label}
                     onChange={(event) => handleFinanceCategoryChange("label", event.target.value)}
                     placeholder="例如：全班性的聯誼活動"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -6932,7 +6986,7 @@ function FinanceAdminPage() {
                     value={financeCategoryForm.sortOrder}
                     onChange={(event) => handleFinanceCategoryChange("sortOrder", event.target.value)}
                     placeholder="數字越小越前"
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
@@ -6949,7 +7003,7 @@ function FinanceAdminPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="btn-primary"
                 >
                   {loading ? "儲存中..." : "儲存性質"}
                 </button>
@@ -6986,7 +7040,7 @@ function FinanceAdminPage() {
                   <input
                     value={fundEventForm.title}
                     onChange={(event) => handleFundEventChange("title", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -6995,7 +7049,7 @@ function FinanceAdminPage() {
                     type="date"
                     value={fundEventForm.dueDate}
                     onChange={(event) => handleFundEventChange("dueDate", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7003,7 +7057,7 @@ function FinanceAdminPage() {
                   <select
                     value={fundEventForm.status}
                     onChange={(event) => handleFundEventChange("status", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FUND_EVENT_STATUS.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -7017,7 +7071,7 @@ function FinanceAdminPage() {
                   <input
                     value={fundEventForm.amountGeneral}
                     onChange={(event) => handleFundEventChange("amountGeneral", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7025,7 +7079,7 @@ function FinanceAdminPage() {
                   <input
                     value={fundEventForm.amountSponsor}
                     onChange={(event) => handleFundEventChange("amountSponsor", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7035,7 +7089,7 @@ function FinanceAdminPage() {
                     onChange={(event) =>
                       handleFundEventChange("expectedGeneralCount", event.target.value)
                     }
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7045,7 +7099,7 @@ function FinanceAdminPage() {
                     onChange={(event) =>
                       handleFundEventChange("expectedSponsorCount", event.target.value)
                     }
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
@@ -7061,7 +7115,7 @@ function FinanceAdminPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {loading ? "儲存中..." : "儲存事件"}
                   </button>
@@ -7180,7 +7234,12 @@ function FinanceAdminPage() {
                         }
                       }
                     }}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7200,7 +7259,7 @@ function FinanceAdminPage() {
                         handleFundPaymentChange("amount", amount || "");
                       }
                     }}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FUND_PAYER_TYPES.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -7233,7 +7292,7 @@ function FinanceAdminPage() {
                   <select
                     value={fundPaymentForm.method}
                     onChange={(event) => handleFundPaymentChange("method", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     {FUND_PAYMENT_METHODS.map((item) => (
                       <option key={item.value} value={item.value}>
@@ -7266,7 +7325,7 @@ function FinanceAdminPage() {
                     type="date"
                     value={fundPaymentForm.receivedAt}
                     onChange={(event) => handleFundPaymentChange("receivedAt", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -7277,7 +7336,7 @@ function FinanceAdminPage() {
                     onChange={(event) =>
                       handleFundPaymentChange("accountedAt", event.target.value)
                     }
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2 sm:col-span-2">
@@ -7293,7 +7352,7 @@ function FinanceAdminPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {loading ? "儲存中..." : "儲存收款"}
                   </button>
@@ -8247,6 +8306,14 @@ function SoftballPage() {
           </p>
         </div>
       </header>
+      <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
+        <a
+          href="/"
+          className="btn-chip sm:px-4 sm:text-xs"
+        >
+          回首頁
+        </a>
+      </div>
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
         <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_25px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
@@ -8275,7 +8342,7 @@ function SoftballPage() {
             </div>
           ) : null}
         </section>
-        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+        <section className="mb-6 card p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
               { id: "overview", label: "總覽" },
@@ -8300,19 +8367,19 @@ function SoftballPage() {
         </section>
 
         {statusMessage ? (
-          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+          <div className="mb-6 alert alert-warning">
             {statusMessage}
           </div>
         ) : null}
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+          <div className="mb-6 alert alert-error">
             {error}
           </div>
         ) : null}
 
         {activeTab === "overview" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 { label: "球員人數", value: players.length },
@@ -8348,7 +8415,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "practices" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -8396,7 +8463,7 @@ function SoftballPage() {
                     type="date"
                     value={practiceForm.date}
                     onChange={(event) => handlePracticeFormChange("date", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -8406,7 +8473,7 @@ function SoftballPage() {
                       type="time"
                       value={practiceForm.startAt}
                       onChange={(event) => handlePracticeFormChange("startAt", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -8415,7 +8482,7 @@ function SoftballPage() {
                       type="time"
                       value={practiceForm.endAt}
                       onChange={(event) => handlePracticeFormChange("endAt", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     />
                   </div>
                 </div>
@@ -8424,7 +8491,7 @@ function SoftballPage() {
                   <select
                     value={practiceForm.fieldId}
                     onChange={(event) => handlePracticeFormChange("fieldId", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-sm"
                   >
                     <option value="">選擇球場</option>
                     {fields.map((field) => (
@@ -8439,7 +8506,7 @@ function SoftballPage() {
                   <input
                     value={practiceForm.title}
                     onChange={(event) => handlePracticeFormChange("title", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -8447,7 +8514,7 @@ function SoftballPage() {
                   <input
                     value={practiceForm.focus}
                     onChange={(event) => handlePracticeFormChange("focus", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -8456,7 +8523,7 @@ function SoftballPage() {
                     value={practiceForm.logSummary}
                     onChange={(event) => handlePracticeFormChange("logSummary", event.target.value)}
                     rows="3"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-base"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -8465,7 +8532,7 @@ function SoftballPage() {
                     value={practiceForm.nextPlan}
                     onChange={(event) => handlePracticeFormChange("nextPlan", event.target.value)}
                     rows="2"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    className="input-base"
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -8474,7 +8541,7 @@ function SoftballPage() {
                     <select
                       value={practiceForm.status}
                       onChange={(event) => handlePracticeFormChange("status", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     >
                       <option value="scheduled">已排程</option>
                       <option value="closed">結束</option>
@@ -8486,7 +8553,7 @@ function SoftballPage() {
                     <input
                       value={practiceForm.notes}
                       onChange={(event) => handlePracticeFormChange("notes", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                      className="input-sm"
                     />
                   </div>
                 </div>
@@ -8494,7 +8561,7 @@ function SoftballPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {saving ? "儲存中..." : practiceForm.id ? "更新練習" : "新增練習"}
                   </button>
@@ -8502,7 +8569,7 @@ function SoftballPage() {
                     <button
                       type="button"
                       onClick={() => handleDeletePractice(practiceForm.id)}
-                      className="rounded-2xl border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                      className="badge-error hover:border-rose-300"
                     >
                       刪除
                     </button>
@@ -8514,7 +8581,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "attendance" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">練習點名</h3>
@@ -8525,7 +8592,7 @@ function SoftballPage() {
               <select
                 value={activePracticeId}
                 onChange={(event) => setActivePracticeId(event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                className="input-sm"
               >
                 <option value="">選擇練習</option>
                 {practices.map((item) => (
@@ -8625,7 +8692,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "players" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-lg font-semibold text-slate-900">球員管理</h3>
               <input
@@ -8638,7 +8705,7 @@ function SoftballPage() {
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-3">
                 {pendingRequests.length ? (
-                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4 text-xs text-amber-700">
+                  <div className="alert alert-warning text-xs p-4">
                     <p className="font-semibold text-amber-900">待審核申請</p>
                     <div className="mt-2 space-y-2">
                       {pendingRequests.map((player) => (
@@ -8658,13 +8725,13 @@ function SoftballPage() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleReviewRequest(player, "approved")}
-                              className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-600 hover:border-emerald-300"
+                              className="badge-success hover:border-emerald-300"
                             >
                               核准
                             </button>
                             <button
                               onClick={() => handleReviewRequest(player, "rejected")}
-                              className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                              className="badge-error hover:border-rose-300"
                             >
                               退回
                             </button>
@@ -8732,7 +8799,7 @@ function SoftballPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleDeletePlayer(player.id)}
-                          className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                          className="badge-error hover:border-rose-300"
                         >
                           刪除
                         </button>
@@ -8748,7 +8815,7 @@ function SoftballPage() {
                     <input
                       value={playerForm.name}
                       onChange={(event) => handlePlayerFormChange("name", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -8756,7 +8823,7 @@ function SoftballPage() {
                     <input
                       value={playerForm.nickname}
                       onChange={(event) => handlePlayerFormChange("nickname", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                 </div>
@@ -8766,7 +8833,7 @@ function SoftballPage() {
               <input
                 value={playerForm.phone}
                 onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                className="input-sm"
               />
             </div>
             <div className="grid gap-2">
@@ -8774,7 +8841,7 @@ function SoftballPage() {
               <input
                 value={playerForm.jerseyNumber}
                 onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
-                className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                className="input-sm"
               />
             </div>
           </div>
@@ -8815,7 +8882,7 @@ function SoftballPage() {
                     <select
                       value={playerForm.bats}
                       onChange={(event) => handlePlayerFormChange("bats", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       <option value="">未設定</option>
                       <option value="R">右打</option>
@@ -8828,7 +8895,7 @@ function SoftballPage() {
                     <select
                       value={playerForm.throws}
                       onChange={(event) => handlePlayerFormChange("throws", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       <option value="">未設定</option>
                       <option value="R">右投</option>
@@ -8842,7 +8909,7 @@ function SoftballPage() {
                     <select
                       value={playerForm.role}
                       onChange={(event) => handlePlayerFormChange("role", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       <option value="">球員</option>
                       {ROLE_OPTIONS.map((item) => (
@@ -8857,7 +8924,7 @@ function SoftballPage() {
                     <select
                       value={playerForm.status}
                       onChange={(event) => handlePlayerFormChange("status", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       <option value="active">可出席</option>
                       <option value="injured">傷兵</option>
@@ -8878,7 +8945,7 @@ function SoftballPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {saving ? "儲存中..." : "儲存球員"}
                   </button>
@@ -8905,7 +8972,7 @@ function SoftballPage() {
                 <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
               ) : (
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 p-4">
+                  <div className="alert alert-success p-4">
                     <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
                       <span>已登錄</span>
                       <span>{registeredStudents.length} 人</span>
@@ -8915,7 +8982,7 @@ function SoftballPage() {
                         registeredStudents.map((student) => (
                           <span
                             key={student.id || student.email}
-                            className="inline-flex items-center rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold text-emerald-700"
+                            className="badge-success-light"
                           >
                             {getStudentDisplayName_(student) || student.id || "未命名"}
                           </span>
@@ -8925,7 +8992,7 @@ function SoftballPage() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-2xl border border-amber-200/70 bg-amber-50/70 p-4">
+                  <div className="alert alert-warning p-4">
                     <div className="flex items-center justify-between text-xs font-semibold text-amber-700">
                       <span>未登錄</span>
                       <span>{unregisteredStudents.length} 人</span>
@@ -8935,7 +9002,7 @@ function SoftballPage() {
                         unregisteredStudents.map((student) => (
                           <span
                             key={student.id || student.email}
-                            className="inline-flex items-center rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700"
+                            className="badge-warning-light"
                           >
                             {getStudentDisplayName_(student) || student.id || "未命名"}
                           </span>
@@ -8952,7 +9019,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "fields" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
                 {fields.map((item) => {
@@ -8977,7 +9044,7 @@ function SoftballPage() {
                           event.stopPropagation();
                           handleDeleteField(item.id);
                         }}
-                        className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                        className="badge-error hover:border-rose-300"
                       >
                         刪除
                       </button>
@@ -8992,7 +9059,7 @@ function SoftballPage() {
                   <input
                     value={fieldForm.name}
                     onChange={(event) => handleFieldFormChange("name", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -9000,7 +9067,7 @@ function SoftballPage() {
                   <input
                     value={fieldForm.address}
                     onChange={(event) => handleFieldFormChange("address", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -9008,7 +9075,7 @@ function SoftballPage() {
                   <input
                     value={fieldForm.mapUrl}
                     onChange={(event) => handleFieldFormChange("mapUrl", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -9017,7 +9084,7 @@ function SoftballPage() {
                     <input
                       value={fieldForm.parking}
                       onChange={(event) => handleFieldFormChange("parking", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -9025,7 +9092,7 @@ function SoftballPage() {
                     <input
                       value={fieldForm.fee}
                       onChange={(event) => handleFieldFormChange("fee", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                 </div>
@@ -9042,7 +9109,7 @@ function SoftballPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {saving ? "儲存中..." : "儲存球場"}
                   </button>
@@ -9060,7 +9127,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "gear" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
               <div className="space-y-3">
                 {gear.map((item) => {
@@ -9087,7 +9154,7 @@ function SoftballPage() {
                           event.stopPropagation();
                           handleDeleteGear(item.id);
                         }}
-                        className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600 hover:border-rose-300"
+                        className="badge-error hover:border-rose-300"
                       >
                         刪除
                       </button>
@@ -9102,7 +9169,7 @@ function SoftballPage() {
                   <input
                     value={gearForm.name}
                     onChange={(event) => handleGearFormChange("name", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -9111,7 +9178,7 @@ function SoftballPage() {
                     <input
                       value={gearForm.category}
                       onChange={(event) => handleGearFormChange("category", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -9119,7 +9186,7 @@ function SoftballPage() {
                     <input
                       value={gearForm.quantity}
                       onChange={(event) => handleGearFormChange("quantity", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                 </div>
@@ -9129,7 +9196,7 @@ function SoftballPage() {
                     <input
                       value={gearForm.owner}
                       onChange={(event) => handleGearFormChange("owner", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     />
                   </div>
                   <div className="grid gap-2">
@@ -9137,7 +9204,7 @@ function SoftballPage() {
                     <select
                       value={gearForm.status}
                       onChange={(event) => handleGearFormChange("status", event.target.value)}
-                      className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                      className="input-sm"
                     >
                       <option value="available">可用</option>
                       <option value="borrowed">借出</option>
@@ -9159,7 +9226,7 @@ function SoftballPage() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="btn-primary"
                   >
                     {saving ? "儲存中..." : "儲存器材"}
                   </button>
@@ -9177,7 +9244,7 @@ function SoftballPage() {
         ) : null}
 
         {activeTab === "stats" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <h3 className="text-lg font-semibold text-slate-900">出席統計</h3>
             <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
@@ -9192,7 +9259,7 @@ function SoftballPage() {
                 </div>
               ))}
             </div>
-            <div className="mt-6 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+            <div className="mt-6 card-muted p-5 text-sm text-slate-600">
               <p className="font-semibold text-slate-900">備註</p>
               <p className="mt-2 text-xs text-slate-500">
                 統計基於目前選擇的練習。後續可加入跨場次出席率與球員歷史趨勢。
@@ -9766,9 +9833,17 @@ function SoftballPlayerPage() {
           <p className="mt-3 text-sm text-slate-500">背號申請、位置偏好、練習出席回覆。</p>
         </div>
       </header>
+      <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
+        <a
+          href="/"
+          className="btn-chip sm:px-4 sm:text-xs"
+        >
+          回首頁
+        </a>
+      </div>
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-        <section className="mb-6 rounded-3xl border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-6">
+        <section className="mb-6 card p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
               { id: "profile", label: "我的資料" },
@@ -9788,19 +9863,19 @@ function SoftballPlayerPage() {
         </section>
 
         {statusMessage ? (
-          <div className="mb-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+          <div className="mb-6 alert alert-warning">
             {statusMessage}
           </div>
         ) : null}
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-rose-200/80 bg-rose-50/80 px-4 py-3 text-sm text-rose-700">
+          <div className="mb-6 alert alert-error">
             {error}
           </div>
         ) : null}
 
         {activeTab === "profile" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
               <span className="font-semibold text-slate-900">Google 登入</span>
               {googleLinkedStudent && googleLinkedStudent.email ? (
@@ -9840,7 +9915,7 @@ function SoftballPlayerPage() {
                 <input
                   value={profileForm.name}
                   onChange={(event) => handleProfileChange("name", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2">
@@ -9848,7 +9923,7 @@ function SoftballPlayerPage() {
                 <input
                   value={profileForm.preferredName}
                   onChange={(event) => handleProfileChange("preferredName", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2">
@@ -9856,7 +9931,12 @@ function SoftballPlayerPage() {
                 <input
                   value={profileForm.email}
                   onChange={(event) => handleProfileChange("email", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2">
@@ -9867,7 +9947,7 @@ function SoftballPlayerPage() {
                   type="text"
                   inputMode="tel"
                   autoComplete="tel"
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2">
@@ -9887,7 +9967,7 @@ function SoftballPlayerPage() {
                 <input
                   value={profileForm.nickname}
                   onChange={(event) => handleProfileChange("nickname", event.target.value)}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  className="input-sm"
                 />
               </div>
               <div className="grid gap-2 sm:col-span-2">
@@ -9975,7 +10055,7 @@ function SoftballPlayerPage() {
                   <select
                     value={profileForm.bats}
                     onChange={(event) => handleProfileChange("bats", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     <option value="">未設定</option>
                     <option value="R">右打</option>
@@ -9988,7 +10068,7 @@ function SoftballPlayerPage() {
                   <select
                     value={profileForm.throws}
                     onChange={(event) => handleProfileChange("throws", event.target.value)}
-                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                    className="input-sm"
                   >
                     <option value="">未設定</option>
                     <option value="R">右投</option>
@@ -10009,7 +10089,7 @@ function SoftballPlayerPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="btn-primary"
                 >
                   {saving ? "送出中..." : "送出申請"}
                 </button>
@@ -10019,7 +10099,7 @@ function SoftballPlayerPage() {
         ) : null}
 
         {activeTab === "attendance" ? (
-          <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+          <section className="card p-7 sm:p-10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-slate-900">練習出席回覆</h3>
@@ -10033,7 +10113,7 @@ function SoftballPlayerPage() {
                   type="button"
                   onClick={handleRefreshPractices}
                   disabled={practiceRefreshing}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                  className="btn-chip disabled:opacity-60"
                 >
                   {practiceRefreshing ? "更新中..." : "重新整理"}
                 </button>
@@ -10225,7 +10305,7 @@ function SoftballPlayerPage() {
                   <button
                     type="button"
                     onClick={() => setHistoryExpanded((prev) => !prev)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                    className="btn-chip"
                   >
                     {historyExpanded ? "收合" : "展開"}
                   </button>
@@ -10495,19 +10575,30 @@ function CheckinPage() {
           <div className="flex items-center gap-3">
             <a
               href="/"
-              className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-white sm:inline-flex"
+              className="hidden btn-ghost sm:inline-flex"
             >
               回到首頁
             </a>
-            <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
+            <span className="hidden badge-muted sm:inline-flex">
               立即簽到
             </span>
           </div>
         </div>
+        <div className="mx-auto mt-4 flex max-w-4xl flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 sm:hidden">
+          <a
+            href="/"
+            className="btn-chip px-3 py-1.5"
+          >
+            回到首頁
+          </a>
+          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
+            立即簽到
+          </span>
+        </div>
       </header>
 
       <main className="mx-auto max-w-4xl px-6 pb-28 pt-10 sm:px-12">
-        <section className="rounded-3xl border border-slate-200/80 bg-white/90 p-7 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.8)] backdrop-blur sm:p-10">
+        <section className="card p-7 sm:p-10">
           <h2 className="text-lg font-semibold text-slate-900">確認簽到</h2>
           <p className="mt-2 text-sm text-slate-500">
             請輸入 Email 以完成簽到。{eventId && `活動：${eventTitle || eventId}`}
@@ -10533,7 +10624,7 @@ function CheckinPage() {
 
           <div className="mt-6 grid gap-4">
             {googleLinkedStudent && googleLinkedStudent.email ? (
-              <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+              <div className="alert alert-success">
                 已登入 Google：{googleLinkedStudent.email}
               </div>
             ) : (
@@ -10553,12 +10644,16 @@ function CheckinPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@emba115b.tw"
+                inputMode="email"
+                autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
                 disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
-                className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                className="input-base"
               />
             </div>
             {errorDisplay ? (
-              <div className="rounded-2xl border border-rose-200/70 bg-rose-50/70 px-4 py-3 text-sm text-rose-700">
+              <div className="alert alert-error">
                 <p className="font-semibold">{errorDisplay.title}</p>
                 <p className="mt-1 text-rose-600">{errorDisplay.message}</p>
                 {errorDisplay.action ? (
@@ -10571,18 +10666,18 @@ function CheckinPage() {
           <button
             onClick={handleSubmit}
             disabled={loading || isCheckinBlocked}
-            className="mt-8 hidden w-full items-center justify-center gap-2 rounded-2xl bg-[#1e293b] px-6 py-4 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 transition hover:-translate-y-0.5 hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60 sm:inline-flex"
+            className="mt-8 hidden w-full items-center justify-center gap-2 btn-primary sm:inline-flex"
           >
             {loading ? "簽到中..." : "確認簽到"}
           </button>
         </section>
       </main>
 
-      <div className="fixed bottom-5 left-4 right-4 z-20 sm:hidden">
+      <div className="fixed fixed-bottom-cta left-4 right-4 z-20 sm:hidden">
         <button
           onClick={handleSubmit}
           disabled={loading || isCheckinBlocked}
-          className="flex w-full items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-4 text-base font-semibold text-white shadow-2xl shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex w-full items-center justify-center btn-primary text-base shadow-2xl shadow-slate-900/20"
         >
           {loading ? "簽到中..." : "確認簽到"}
         </button>
@@ -10835,21 +10930,21 @@ function HomePage() {
     if (checkinStatus && checkinStatus.status === "not_registered") {
       return {
         label: "尚未報名",
-        badgeClass: "border-slate-200 bg-slate-50 text-slate-600",
+        badgeClass: "badge",
         statusKey: "not_registered",
       };
     }
     if (checkinStatus && checkinStatus.status === "not_attending") {
       return {
         label: "已報名不克出席",
-        badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
+        badgeClass: "badge-error",
         statusKey: "not_attending",
       };
     }
     if (checkinStatus && checkinStatus.status === "attendance_unknown") {
       return {
         label: "已報名還不確定",
-        badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+        badgeClass: "badge-warning",
         statusKey: "attendance_unknown",
       };
     }
@@ -10859,7 +10954,7 @@ function HomePage() {
     ) {
       return {
         label: "已報名會出席",
-        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        badgeClass: "badge-success",
         statusKey: "attending",
       };
     }
@@ -10868,20 +10963,20 @@ function HomePage() {
     if (attendance === "出席") {
       return {
         label: "已報名會出席",
-        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        badgeClass: "badge-success",
         statusKey: "attending",
       };
     }
     if (attendance === "不克出席") {
       return {
         label: "已報名不克出席",
-        badgeClass: "border-rose-200 bg-rose-50 text-rose-600",
+        badgeClass: "badge-error",
         statusKey: "not_attending",
       };
     }
     return {
       label: "已報名還不確定",
-      badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+      badgeClass: "badge-warning",
       statusKey: "attendance_unknown",
     };
   };
@@ -11004,10 +11099,10 @@ function HomePage() {
               NTU EMBA 115B
             </p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-              活動首頁
+              班級入口
             </h1>
           </div>
-          <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-medium text-slate-500 shadow-sm sm:inline-flex">
+          <span className="hidden badge-muted sm:inline-flex">
             班級活動中心
           </span>
         </div>
@@ -11047,7 +11142,7 @@ function HomePage() {
           <div className="mt-6 grid gap-6 sm:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-5">
               {googleLinkedStudent && googleLinkedStudent.email ? (
-                <div className="rounded-2xl border border-emerald-200/70 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-700">
+                <div className="alert alert-success">
                   已登入 Google：{googleLinkedStudent.email}
                 </div>
               ) : (
@@ -11067,14 +11162,18 @@ function HomePage() {
                   value={lookupEmail}
                   onChange={(event) => setLookupEmail(event.target.value)}
                   placeholder="you@emba115b.tw"
+                  inputMode="email"
+                  autoComplete="email"
+                  autoCapitalize="none"
+                  autoCorrect="off"
                   disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
-                  className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-400 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  className="input-base"
                 />
               </div>
               <button
                 onClick={() => handleLookup(lookupEmail)}
                 disabled={lookupLoading}
-                className="inline-flex items-center justify-center rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="btn-primary"
               >
                 {lookupLoading ? "查詢中..." : "查詢我的報名"}
               </button>
@@ -11088,7 +11187,7 @@ function HomePage() {
                 <p className="text-xs font-semibold text-amber-600">{lookupError}</p>
               ) : null}
             </div>
-            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-5 text-sm text-slate-600">
+            <div className="card-muted p-5 text-sm text-slate-600">
               <p className="font-semibold text-slate-900">報名小提醒</p>
               <ul className="mt-3 space-y-2 text-xs text-slate-500">
                 <li>若已報名，活動卡片會顯示你的報名狀態。</li>
@@ -11121,9 +11220,7 @@ function HomePage() {
                       <p className="font-semibold text-slate-900">
                         {(event && event.title) || item.eventId}
                       </p>
-                      <span
-                        className={`mt-2 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusInfo.badgeClass}`}
-                      >
+                      <span className={`mt-2 inline-flex ${statusInfo.badgeClass}`}>
                         {statusInfo.label}
                       </span>
                       <p className="mt-2 text-xs text-slate-500">{eventId}</p>
@@ -11140,7 +11237,7 @@ function HomePage() {
                           onClick={() =>
                             handleStartCancelCheckin(event, checkinStatus.checkinId || "")
                           }
-                          className="rounded-full border border-slate-200 px-3 py-1 font-semibold text-slate-600 hover:border-slate-300"
+                          className="btn-chip"
                         >
                           取消簽到
                         </button>
@@ -11156,7 +11253,7 @@ function HomePage() {
                     ) : checkinUrl && checkinState === "open" ? (
                       <button
                         onClick={() => handleStartCheckin(event)}
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                        className="btn-outline"
                       >
                         立即簽到
                       </button>
@@ -11212,7 +11309,7 @@ function HomePage() {
           </div>
 
           {error ? (
-            <div className="mt-6 rounded-2xl border border-amber-200/80 bg-amber-50/80 px-4 py-3 text-sm text-amber-700">
+            <div className="mt-6 alert alert-warning">
               <p className="font-semibold">載入失敗</p>
               <p className="mt-1 text-amber-600">{error}</p>
             </div>
@@ -11253,7 +11350,7 @@ function HomePage() {
                     ? getRegistrationStatusInfo_(registration, checkinStatus)
                     : {
                         label: "尚未報名",
-                        badgeClass: "border-slate-200 bg-slate-50 text-slate-600",
+                        badgeClass: "badge",
                         statusKey: "not_registered",
                       };
                   const accentClass =
@@ -11269,11 +11366,11 @@ function HomePage() {
                     : registrationStatus.badgeClass;
                   const registeredCtaClass =
                     registrationStatus.statusKey === "attending"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100"
+                      ? "badge-success hover:border-emerald-300 hover:bg-emerald-100"
                       : registrationStatus.statusKey === "not_attending"
-                        ? "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                        ? "badge-error hover:border-rose-300 hover:bg-rose-100"
                         : registrationStatus.statusKey === "attendance_unknown"
-                          ? "border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+                          ? "badge-warning hover:border-amber-300 hover:bg-amber-100"
                           : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white";
                   const ctaLabel = isRegistered ? "查看報名" : "前往報名";
                   const ctaClass = isRegistered
@@ -11291,9 +11388,7 @@ function HomePage() {
                         </div>
                         <h3 className="mt-3 text-lg font-semibold text-slate-900">{event.title}</h3>
                         {shouldShowRegistrationBadge ? (
-                          <span
-                            className={`mt-2 inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold ${badgeClass}`}
-                          >
+                          <span className={`mt-2 inline-flex ${badgeClass} text-[11px] font-semibold`}>
                             {registrationStatus.label}
                           </span>
                         ) : null}
