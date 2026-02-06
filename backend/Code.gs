@@ -702,7 +702,8 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "listSoftballAttendance") {
     const practiceId = String(payload.practiceId || "").trim();
-    const items = listSoftballAttendance_(practiceId);
+    const studentId = String(payload.studentId || "").trim();
+    const items = listSoftballAttendance_(practiceId, studentId);
     return { ok: true, data: { attendance: items }, error: null };
   }
 
@@ -1435,18 +1436,25 @@ function listSoftballPractices_() {
   });
 }
 
-function listSoftballAttendance_(practiceId) {
+function listSoftballAttendance_(practiceId, studentId) {
   const sheet = getSheet_(SHEETS.softballAttendance);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet).map(function (row) {
     return mapRowToObject_(headerMap, row);
   });
-  if (!practiceId) {
+  const normalizedPracticeId = String(practiceId || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+  if (!normalizedPracticeId && !normalizedStudentId) {
     return rows;
   }
-  const target = String(practiceId).trim();
   return rows.filter(function (row) {
-    return String(row.practiceId || "").trim() === target;
+    if (normalizedPracticeId && String(row.practiceId || "").trim() !== normalizedPracticeId) {
+      return false;
+    }
+    if (normalizedStudentId && String(row.studentId || "").trim() !== normalizedStudentId) {
+      return false;
+    }
+    return true;
   });
 }
 
