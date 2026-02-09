@@ -238,17 +238,24 @@ export default function ProfilePage({ shared }) {
                 載入中
               </span>
             ) : null}
+            {idToken ? (
+              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                已驗證
+              </span>
+            ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-500">
             請登入 Google，系統會讀取並更新你的同學名錄資料。
           </p>
-          <div className="mt-4">
-            <GoogleSigninPanel
-              title="Google 登入"
-              helperText="完成綁定後即可維護個人資訊。"
-              onLinkedStudent={handleLinkedStudent}
-            />
-          </div>
+          {!idToken ? (
+            <div className="mt-4">
+              <GoogleSigninPanel
+                title="Google 登入"
+                helperText="完成綁定後即可維護個人資訊。"
+                onLinkedStudent={handleLinkedStudent}
+              />
+            </div>
+          ) : null}
         </section>
 
         <section className="mt-6 card p-7 sm:p-10">
