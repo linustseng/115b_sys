@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
   const {
     apiRequest,
+    GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
     normalizeGroupId_,
