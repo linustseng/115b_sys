@@ -70,17 +70,49 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               共學 · 共餐 · 共練 · 2026-2028 and forever
             </p>
           </div>
-          <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
-            {hasGoogleLogin ? (
-              <div>
-                <p className="font-semibold text-slate-900">
-                  {displayName ? `${displayName} 已登入` : "已登入"}
-                </p>
-                <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
-              </div>
-            ) : (
-              <p className="font-semibold text-slate-600">尚未登入 Google</p>
-            )}
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-400 shadow-sm"
+              >
+                通知 (即將推出)
+              </button>
+              <a
+                href="/profile"
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
+              >
+                個人資訊維護
+              </a>
+            </div>
+            <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
+              {hasGoogleLogin ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    {googleLinkedStudent.photoUrl ? (
+                      <img
+                        src={googleLinkedStudent.photoUrl}
+                        alt="avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-400">
+                        {displayName ? displayName.slice(0, 2) : "NT"}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-slate-900">
+                      {displayName ? `${displayName} 已登入` : "已登入"}
+                    </p>
+                    <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="font-semibold text-slate-600">尚未登入 Google</p>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -249,6 +281,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               </a>
             </div>
           </div>
+
         </section>
 
         <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">

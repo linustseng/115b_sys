@@ -4,6 +4,7 @@ const SHEETS = {
   students: "Students",
   checkins: "Checkins",
   directory: "Directory",
+  directoryLogs: "DirectoryLogs",
   admins: "AdminUsers",
   orderPlans: "OrderPlans",
   orderResponses: "OrderResponses",
@@ -481,6 +482,71 @@ function handleActionPayload_(payload) {
     }
     const combined = buildStudentProfile_(updated || target, directory, profile.email);
     return { ok: true, data: { student: combined }, error: null };
+  }
+
+  if (payload.action === "getDirectoryProfile") {
+    const idToken = String(payload.idToken || "").trim();
+    if (!idToken) {
+      return { ok: false, data: null, error: "Missing idToken" };
+    }
+    const profile = verifyGoogleIdToken_(idToken);
+    const linkedStudent = findStudentByGoogleSub_(profile.sub);
+    const directory = linkedStudent
+      ? findDirectoryById_(linkedStudent.id)
+      : findDirectoryByEmail_(profile.email);
+    if (!directory) {
+      return { ok: false, data: null, error: "Directory profile missing" };
+    }
+    const student = linkedStudent || (directory.id ? findStudentById_(directory.id) : null);
+    return {
+      ok: true,
+      data: { profile: buildDirectoryProfile_(student, directory, profile.email) },
+      error: null,
+    };
+  }
+
+  if (payload.action === "updateDirectoryProfile") {
+    const idToken = String(payload.idToken || "").trim();
+    const data = payload.data || {};
+    if (!idToken) {
+      return { ok: false, data: null, error: "Missing idToken" };
+    }
+    const profile = verifyGoogleIdToken_(idToken);
+    const linkedStudent = findStudentByGoogleSub_(profile.sub);
+    const directory = linkedStudent
+      ? findDirectoryById_(linkedStudent.id)
+      : findDirectoryByEmail_(profile.email);
+    if (!directory) {
+      return { ok: false, data: null, error: "Directory profile missing" };
+    }
+    const normalized = normalizeDirectoryProfileInput_(data);
+    if (!normalized.email) {
+      normalized.email = normalizeEmail_(directory.email);
+    }
+    if (!linkedStudent && normalized.email !== normalizeEmail_(directory.email)) {
+      return { ok: false, data: null, error: "請先完成學號綁定再修改 Email" };
+    }
+    const merged = Object.assign({}, directory, normalized);
+    const changes = buildDirectoryProfileChanges_(directory, merged);
+    const updated = updateDirectoryByIdOrEmail_(directory.id, directory.email, normalized);
+    if (!updated) {
+      return { ok: false, data: null, error: "Directory profile missing" };
+    }
+    if (changes.length) {
+      appendDirectoryLog_({
+        actorEmail: profile.email,
+        targetId: directory.id,
+        targetEmail: directory.email,
+        action: "profile_update",
+        changes: JSON.stringify(changes),
+      });
+    }
+    const student = linkedStudent || (directory.id ? findStudentById_(directory.id) : null);
+    return {
+      ok: true,
+      data: { profile: buildDirectoryProfile_(student, updated, profile.email) },
+      error: null,
+    };
   }
 
   if (payload.action === "searchStudents") {
@@ -1225,6 +1291,21 @@ function normalizePhoneValue_(value) {
   return raw;
 }
 
+function normalizeBirthdayPart_(value, min, max) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  var raw = String(value).trim();
+  if (!raw) {
+    return "";
+  }
+  var parsed = parseInt(raw, 10);
+  if (isNaN(parsed) || parsed < min || parsed > max) {
+    return "";
+  }
+  return pad2_(parsed);
+}
+
 function parseCustomFields_(value) {
   if (!value) {
     return {};
@@ -1247,6 +1328,7 @@ function getSheet_(name) {
   }
   return sheet;
 }
+
 
 function getHeaderMap_(sheet) {
   const lastColumn = sheet.getLastColumn();
@@ -2216,6 +2298,86 @@ function upsertDirectoryBatch_(items) {
     }
   });
   return { created: created, updated: updated };
+}
+
+function updateDirectoryByIdOrEmail_(directoryId, email, data) {
+  const sheet = getSheet_(SHEETS.directory);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  const emailIndex = headerMap.email;
+  if (idIndex === undefined && emailIndex === undefined) {
+    throw new Error("Directory sheet missing id/email column");
+  }
+  const rows = getDataRows_(sheet);
+  const normalizedEmail = normalizeEmail_(email);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowId = idIndex === undefined ? "" : String(row[idIndex] || "").trim();
+    const rowEmail = emailIndex === undefined ? "" : normalizeEmail_(row[emailIndex]);
+    if ((directoryId && rowId === directoryId) || (normalizedEmail && rowEmail === normalizedEmail)) {
+      const merged = Object.assign({}, mapRowToObject_(headerMap, row), data);
+      const record = normalizeDirectoryRecord_(merged);
+      const headers = getHeaders_(sheet);
+      const values = new Array(headers.length).fill("");
+      headers.forEach(function (header, index) {
+        if (record.hasOwnProperty(header)) {
+          values[index] = record[header];
+        }
+      });
+      sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+      return record;
+    }
+  }
+  return null;
+}
+
+function buildDirectoryProfileChanges_(before, after) {
+  const beforeRecord = normalizeDirectoryRecord_(before || {});
+  const afterRecord = normalizeDirectoryRecord_(after || {});
+  const fields = [
+    "email",
+    "mobile",
+    "company",
+    "title",
+    "preferredName",
+    "backupPhone",
+    "emergencyContact",
+    "emergencyPhone",
+    "photoUrl",
+    "birthdayMonth",
+    "birthdayDay",
+  ];
+  const changes = [];
+  fields.forEach(function (field) {
+    const beforeValue = beforeRecord[field] || "";
+    const afterValue = afterRecord[field] || "";
+    if (beforeValue !== afterValue) {
+      changes.push({ field: field, from: beforeValue, to: afterValue });
+    }
+  });
+  return changes;
+}
+
+function appendDirectoryLog_(payload) {
+  const sheet = getSheet_(SHEETS.directoryLogs);
+  const headers = getHeaders_(sheet);
+  const values = new Array(headers.length).fill("");
+  const record = {
+    id: Utilities.getUuid(),
+    createdAt: payload.createdAt || new Date(),
+    actorEmail: normalizeEmail_(payload.actorEmail),
+    targetId: String(payload.targetId || "").trim(),
+    targetEmail: normalizeEmail_(payload.targetEmail),
+    action: String(payload.action || "profile_update").trim(),
+    changes: payload.changes || "",
+  };
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
 }
 
 function updateEvent_(eventId, data) {
@@ -4100,11 +4262,29 @@ function normalizeDirectoryRecord_(data) {
     company: String(data.company || "").trim(),
     title: String(data.title || "").trim(),
     socialUrl: String(data.socialUrl || "").trim(),
-    mobile: String(data.mobile || "").trim(),
-    backupPhone: String(data.backupPhone || "").trim(),
+    mobile: normalizePhoneValue_(data.mobile),
+    backupPhone: normalizePhoneValue_(data.backupPhone),
     emergencyContact: String(data.emergencyContact || "").trim(),
-    emergencyPhone: String(data.emergencyPhone || "").trim(),
+    emergencyPhone: normalizePhoneValue_(data.emergencyPhone),
     dietaryRestrictions: String(data.dietaryRestrictions || "").trim(),
+    photoUrl: String(data.photoUrl || "").trim(),
+    birthdayMonth: normalizeBirthdayPart_(data.birthdayMonth, 1, 12),
+    birthdayDay: normalizeBirthdayPart_(data.birthdayDay, 1, 31),
+  };
+}
+
+function normalizeDirectoryProfileInput_(data) {
+  return {
+    email: normalizeEmail_(data.email),
+    mobile: normalizePhoneValue_(data.phone || data.mobile),
+    company: String(data.company || "").trim(),
+    title: String(data.title || "").trim(),
+    preferredName: String(data.displayName || data.preferredName || "").trim(),
+    backupPhone: normalizePhoneValue_(data.backupPhone),
+    emergencyContact: String(data.emergencyContact || "").trim(),
+    emergencyPhone: normalizePhoneValue_(data.emergencyPhone),
+    birthdayMonth: normalizeBirthdayPart_(data.birthdayMonth, 1, 12),
+    birthdayDay: normalizeBirthdayPart_(data.birthdayDay, 1, 31),
   };
 }
 
@@ -4359,8 +4539,28 @@ function buildStudentProfile_(student, directory, fallbackEmail) {
     company: String((directory && directory.company) || "").trim(),
     title: String((directory && directory.title) || "").trim(),
     phone: normalizePhoneValue_(directory && directory.mobile),
+    photoUrl: String((directory && directory.photoUrl) || "").trim(),
     dietaryPreference: String((directory && directory.dietaryRestrictions) || "").trim(),
     group: String((directory && directory.group) || "").trim(),
+  };
+}
+
+function buildDirectoryProfile_(student, directory, fallbackEmail) {
+  return {
+    id: String((student && student.id) || (directory && directory.id) || "").trim(),
+    email: normalizeEmail_((directory && directory.email) || fallbackEmail),
+    nameZh: String((directory && directory.nameZh) || "").trim(),
+    nameEn: String((directory && directory.nameEn) || "").trim(),
+    displayName: String((directory && directory.preferredName) || "").trim(),
+    company: String((directory && directory.company) || "").trim(),
+    title: String((directory && directory.title) || "").trim(),
+    phone: normalizePhoneValue_(directory && directory.mobile),
+    backupPhone: normalizePhoneValue_(directory && directory.backupPhone),
+    emergencyContact: String((directory && directory.emergencyContact) || "").trim(),
+    emergencyPhone: normalizePhoneValue_(directory && directory.emergencyPhone),
+    photoUrl: String((directory && directory.photoUrl) || "").trim(),
+    birthdayMonth: normalizeBirthdayPart_(directory && directory.birthdayMonth, 1, 12),
+    birthdayDay: normalizeBirthdayPart_(directory && directory.birthdayDay, 1, 31),
   };
 }
 

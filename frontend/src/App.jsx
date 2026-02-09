@@ -5,6 +5,7 @@ const AdminPage = React.lazy(() => import("./pages/AdminPage"));
 const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage"));
 const HomePage = React.lazy(() => import("./pages/HomePage"));
 const LandingPage = React.lazy(() => import("./pages/LandingPage"));
+const ProfilePage = React.lazy(() => import("./pages/ProfilePage"));
 const RegistrationPage = React.lazy(() => import("./pages/RegistrationPage"));
 const CheckinPage = React.lazy(() => import("./pages/CheckinPage"));
 const OrderingPage = React.lazy(() => import("./pages/OrderingPage"));
@@ -866,7 +867,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               setEmailMatch(payload.emailMatch || null);
               if (payload.student) {
                 setStatus("linked");
-                onLinkedRef.current(payload.student, payload.profile || null);
+                onLinkedRef.current(payload.student, payload.profile || null, response.credential);
                 storeGoogleStudent_(payload.student);
               } else {
                 setStatus("needs-link");
@@ -956,7 +957,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       setLinkedStudent(student);
       setStatus("linked");
       if (student) {
-        onLinkedRef.current(student, profile);
+        onLinkedRef.current(student, profile, idToken);
       }
     } catch (err) {
       setError(err.message || "綁定失敗");
@@ -1289,6 +1290,7 @@ function AppShell() {
   const isAdminFinancePage = pathname.includes("admin/finance");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
+  const isProfilePage = pathname.includes("profile");
   const isEventsPage = pathname.includes("events");
   const isOrderingPage = pathname.includes("ordering");
   const isFinancePage = pathname.includes("finance");
@@ -1514,6 +1516,8 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
+  } else if (isProfilePage) {
+    content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {
     content = <DirectoryPage apiRequest={apiRequest} />;
   } else if (isRegisterPage) {

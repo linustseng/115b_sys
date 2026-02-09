@@ -41,6 +41,10 @@ export function parseDirectoryImport_(text) {
     "緊急聯絡人電話": "emergencyPhone",
     飲食禁忌: "dietaryRestrictions",
     飲食限制: "dietaryRestrictions",
+    "生日(月)": "birthdayMonth",
+    "生日(日)": "birthdayDay",
+    生日月: "birthdayMonth",
+    生日日: "birthdayDay",
   };
   const mapped = headers.map((header) => map[header] || "");
   return lines

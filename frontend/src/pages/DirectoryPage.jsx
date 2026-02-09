@@ -216,7 +216,7 @@ export default function DirectoryPage({ apiRequest }) {
             ) : null}
           </div>
           <p className="mt-2 text-sm text-slate-500">
-            支援欄位：學號、組別、Email、中文姓名、英文姓名、稱呼、公司、職稱、社群網址、行動電話、備用電話、緊急聯絡人、緊急聯絡人電話。
+            支援欄位：學號、組別、Email、中文姓名、英文姓名、稱呼、公司、職稱、社群網址、行動電話、備用電話、緊急聯絡人、緊急聯絡人電話、生日(月)、生日(日)。
           </p>
           <textarea
             value={importText}
@@ -281,6 +281,12 @@ export default function DirectoryPage({ apiRequest }) {
                   <div>備用電話: {item.backupPhone || "-"}</div>
                   <div>緊急聯絡人: {item.emergencyContact || "-"}</div>
                   <div>緊急聯絡人電話: {item.emergencyPhone || "-"}</div>
+                  <div>
+                    生日:{" "}
+                    {item.birthdayMonth && item.birthdayDay
+                      ? `${item.birthdayMonth}/${item.birthdayDay}`
+                      : "-"}
+                  </div>
                   <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
                 </div>
               </div>

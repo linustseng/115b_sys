@@ -9,6 +9,7 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - Checkins
 - ShortLinks
 - Directory
+- DirectoryLogs
 - AdminUsers
 
 ## Required Columns
@@ -17,7 +18,8 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - Students: id, name, googleSub, googleEmail
 - Checkins: id, eventId, registrationId, checkinAt, checkinMethod
 - ShortLinks: id, eventId, type, slug, targetUrl, createdAt
-- Directory: id, group, email, nameZh, nameEn, preferredName, company, title, socialUrl, mobile, backupPhone, emergencyContact, emergencyPhone, dietaryRestrictions
+- Directory: id, group, email, nameZh, nameEn, preferredName, company, title, socialUrl, mobile, backupPhone, emergencyContact, emergencyPhone, dietaryRestrictions, photoUrl, birthdayMonth, birthdayDay
+- DirectoryLogs: id, createdAt, actorEmail, targetId, targetEmail, action, changes
 - AdminUsers: id, name, email, role, passwordHash
 
 `Students.id` should match `Directory.id` so the login can resolve profile details.
@@ -79,6 +81,8 @@ ShortLinks 目前用於報名連結。報名/簽到也可直接從 `Events.regis
 - verifyGoogle
 - linkGoogleStudent
 - searchStudents
+- getDirectoryProfile
+- updateDirectoryProfile
 
 ## Password Hash
 `AdminUsers.passwordHash` uses SHA-256 hex. You can compute it in Apps Script with `hashPassword_` or any SHA-256 tool.

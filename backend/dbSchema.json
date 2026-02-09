@@ -68,7 +68,19 @@
     "backupPhone": "string|null",
     "emergencyContact": "string|null",
     "emergencyPhone": "string|null",
-    "dietaryRestrictions": "string|null"
+    "dietaryRestrictions": "string|null",
+    "photoUrl": "string|null",
+    "birthdayMonth": "string|null",
+    "birthdayDay": "string|null"
+  },
+  "DirectoryLogs": {
+    "id": "string",
+    "createdAt": "datetime",
+    "actorEmail": "string",
+    "targetId": "string|null",
+    "targetEmail": "string|null",
+    "action": "string",
+    "changes": "string"
   },
   "ShortLink": {
     "id": "string",
