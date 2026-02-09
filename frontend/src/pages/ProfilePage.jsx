@@ -38,6 +38,7 @@ export default function ProfilePage({ shared }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showLoginPanel, setShowLoginPanel] = useState(false);
   const monthOptions = useMemo(() => buildNumberOptions_(12), []);
   const dayOptions = useMemo(() => buildNumberOptions_(31), []);
 
@@ -127,6 +128,12 @@ export default function ProfilePage({ shared }) {
     };
   }, [idToken, getGoogleIdTokenSilently_]);
 
+  useEffect(() => {
+    if (idToken && showLoginPanel) {
+      setShowLoginPanel(false);
+    }
+  }, [idToken, showLoginPanel]);
+
   const handleLinkedStudent = (student, _profile, token) => {
     setGoogleLinkedStudent(student || null);
     if (student) {
@@ -146,6 +153,7 @@ export default function ProfilePage({ shared }) {
     setError("");
     setSuccess("");
     if (!idToken) {
+      setShowLoginPanel(true);
       setError("請先登入 Google");
       return;
     }
@@ -238,7 +246,8 @@ export default function ProfilePage({ shared }) {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 pb-28 pt-8 sm:px-12">
-        <section className="card p-7 sm:p-10">
+        {!googleLinkedStudent || showLoginPanel ? (
+          <section className="card p-7 sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Google 驗證</h2>
             {loading ? (
@@ -264,7 +273,8 @@ export default function ProfilePage({ shared }) {
               />
             </div>
           ) : null}
-        </section>
+          </section>
+        ) : null}
 
         <section className="mt-6 card p-7 sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
