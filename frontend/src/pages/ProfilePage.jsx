@@ -226,7 +226,7 @@ export default function ProfilePage({ shared }) {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 pb-28 pt-8 sm:px-12">
-        {!googleLinkedStudent || showLoginPanel ? (
+        {!idToken ? (
           <section className="card p-7 sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Google 驗證</h2>
@@ -235,16 +235,23 @@ export default function ProfilePage({ shared }) {
                 載入中
               </span>
             ) : null}
-            {idToken ? (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                已驗證
-              </span>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => setShowLoginPanel((prev) => !prev)}
+              className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+            >
+              {showLoginPanel ? "收合" : "登入"}
+            </button>
           </div>
           <p className="mt-2 text-sm text-slate-500">
             請登入 Google，系統會讀取並更新你的同學名錄資料。
           </p>
-          {!idToken ? (
+          {!showLoginPanel && googleLinkedStudent ? (
+            <p className="mt-2 text-xs text-slate-400">
+              已登入 {googleLinkedStudent.email}，請先完成驗證以載入個人資料。
+            </p>
+          ) : null}
+          {showLoginPanel ? (
             <div className="mt-4">
               <GoogleSigninPanel
                 title="Google 登入"
