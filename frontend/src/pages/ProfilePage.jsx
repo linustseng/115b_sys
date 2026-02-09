@@ -213,6 +213,14 @@ export default function ProfilePage({ shared }) {
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
               個人資訊維護
             </h1>
+            <div className="mt-4">
+              <a
+                href="/"
+                className="btn-chip sm:px-4 sm:text-xs"
+              >
+                回首頁
+              </a>
+            </div>
           </div>
           <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-4 py-3 text-xs text-slate-600 shadow-sm">
             {googleLinkedStudent ? (
