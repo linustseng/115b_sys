@@ -25,6 +25,7 @@ export default function ProfilePage({ shared }) {
   const {
     apiRequest,
     GoogleSigninPanel,
+    getGoogleIdTokenSilently_,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
     normalizePhoneInputValue_,
@@ -37,7 +38,6 @@ export default function ProfilePage({ shared }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [showLoginPanel, setShowLoginPanel] = useState(false);
   const monthOptions = useMemo(() => buildNumberOptions_(12), []);
   const dayOptions = useMemo(() => buildNumberOptions_(31), []);
 
@@ -109,10 +109,23 @@ export default function ProfilePage({ shared }) {
   }, [idToken]);
 
   useEffect(() => {
-    if (idToken && showLoginPanel) {
-      setShowLoginPanel(false);
+    if (idToken) {
+      return;
     }
-  }, [idToken, showLoginPanel]);
+    let cancelled = false;
+    getGoogleIdTokenSilently_()
+      .then((token) => {
+        if (!cancelled && token) {
+          setIdToken(token);
+        }
+      })
+      .catch(() => {
+        // Silent login can fail; manual sign-in stays available.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [idToken, getGoogleIdTokenSilently_]);
 
   const handleLinkedStudent = (student, _profile, token) => {
     setGoogleLinkedStudent(student || null);
@@ -133,7 +146,6 @@ export default function ProfilePage({ shared }) {
     setError("");
     setSuccess("");
     if (!idToken) {
-      setShowLoginPanel(true);
       setError("請先登入 Google");
       return;
     }
@@ -235,31 +247,17 @@ export default function ProfilePage({ shared }) {
                 載入中
               </span>
             ) : null}
-            <button
-              type="button"
-              onClick={() => setShowLoginPanel((prev) => !prev)}
-              className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-            >
-              {showLoginPanel ? "收合" : "登入"}
-            </button>
           </div>
           <p className="mt-2 text-sm text-slate-500">
             請登入 Google，系統會讀取並更新你的同學名錄資料。
           </p>
-          {!showLoginPanel && googleLinkedStudent ? (
-            <p className="mt-2 text-xs text-slate-400">
-              已登入 {googleLinkedStudent.email}，請先完成驗證以載入個人資料。
-            </p>
-          ) : null}
-          {showLoginPanel ? (
-            <div className="mt-4">
-              <GoogleSigninPanel
-                title="Google 登入"
-                helperText="完成綁定後即可維護個人資訊。"
-                onLinkedStudent={handleLinkedStudent}
-              />
-            </div>
-          ) : null}
+          <div className="mt-4">
+            <GoogleSigninPanel
+              title="Google 登入"
+              helperText="完成綁定後即可維護個人資訊。"
+              onLinkedStudent={handleLinkedStudent}
+            />
+          </div>
           </section>
         ) : null}
 
