@@ -25,6 +25,7 @@ export default function ProfilePage({ shared }) {
   const {
     apiRequest,
     GoogleSigninPanel,
+    getGoogleIdTokenSilently_,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
     normalizePhoneInputValue_,
@@ -106,6 +107,25 @@ export default function ProfilePage({ shared }) {
     }
     loadProfile(idToken);
   }, [idToken]);
+
+  useEffect(() => {
+    if (idToken) {
+      return;
+    }
+    let cancelled = false;
+    getGoogleIdTokenSilently_()
+      .then((token) => {
+        if (!cancelled && token) {
+          setIdToken(token);
+        }
+      })
+      .catch(() => {
+        // Silent login can fail; manual sign-in stays available.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [idToken, getGoogleIdTokenSilently_]);
 
   const handleLinkedStudent = (student, _profile, token) => {
     setGoogleLinkedStudent(student || null);

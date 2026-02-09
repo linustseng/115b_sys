@@ -805,6 +805,43 @@ function waitForGoogleIdentity(timeoutMs = 6000) {
   });
 }
 
+function getGoogleIdTokenSilently_() {
+  if (typeof window === "undefined" || !GOOGLE_CLIENT_ID) {
+    return Promise.reject(new Error("Google Identity unavailable"));
+  }
+  return waitForGoogleIdentity().then(
+    () =>
+      new Promise((resolve, reject) => {
+        let settled = false;
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          use_fedcm_for_prompt: true,
+          auto_select: true,
+          callback: (response) => {
+            if (settled) {
+              return;
+            }
+            settled = true;
+            if (response && response.credential) {
+              resolve(response.credential);
+            } else {
+              reject(new Error("No credential"));
+            }
+          },
+        });
+        window.google.accounts.id.prompt((notification) => {
+          if (settled) {
+            return;
+          }
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            settled = true;
+            reject(new Error("Silent login unavailable"));
+          }
+        });
+      })
+  );
+}
+
 function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const buttonRef = useRef(null);
   const onLinkedRef = useRef(onLinkedStudent);
@@ -1334,6 +1371,7 @@ function AppShell() {
     mapRegistrationError,
     getCheckinErrorDisplay,
     GoogleSigninPanel,
+    getGoogleIdTokenSilently_,
     EVENT_CATEGORIES,
     FINANCE_TYPES,
     FINANCE_PAYMENT_METHODS,
