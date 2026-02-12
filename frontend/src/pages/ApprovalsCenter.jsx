@@ -249,7 +249,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     }
     const normalizeName_ = (value) => String(value || "").trim();
     const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
-    const addIfEligible = (acc, entry) => {
+    const addIfEligible = (acc, entry, label) => {
       const personId = String(entry.personId || "").trim();
       const personEmail = normalizeEmail_(entry.personEmail || entry.email || "");
       if (personId && excludeSet.has(`id:${personId}`)) {
@@ -264,11 +264,30 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         normalizeName_(entry.personEmail) ||
         normalizeName_(entry.email);
       if (name) {
-        acc.push(name);
+        acc.push({ name, label });
       }
     };
 
-    const uniqueNames = (list) => Array.from(new Set(list.filter(Boolean)));
+    const mergeByName = (list) => {
+      const rank = { "": 0, "副班代": 1, "班代": 2, "副組長": 1, "組長": 2, "會計": 2, "出納": 2 };
+      const byName = {};
+      list.forEach((item) => {
+        if (!item || !item.name) {
+          return;
+        }
+        const existing = byName[item.name];
+        if (!existing) {
+          byName[item.name] = item;
+          return;
+        }
+        const currentRank = rank[item.label || ""] || 0;
+        const existingRank = rank[existing.label || ""] || 0;
+        if (currentRank > existingRank) {
+          byName[item.name] = item;
+        }
+      });
+      return Object.values(byName);
+    };
 
     if (status === "pending_lead") {
       const groupId = normalizeGroupId_(item.applicantDepartment);
@@ -279,8 +298,8 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         return entryGroup === groupId && roles.includes(roleInGroup);
       });
       const names = [];
-      matches.forEach((entry) => addIfEligible(names, entry));
-      return uniqueNames(names);
+      matches.forEach((entry) => addIfEligible(names, entry, "組長"));
+      return mergeByName(names);
     }
 
     if (status === "pending_rep") {
@@ -290,8 +309,8 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         return entryGroup === "A" && (roleInGroup === "lead" || roleInGroup === "deputy");
       });
       const names = [];
-      matches.forEach((entry) => addIfEligible(names, entry));
-      return uniqueNames(names);
+      matches.forEach((entry) => addIfEligible(names, entry, "班代"));
+      return mergeByName(names);
     }
 
     if (status === "pending_committee") {
@@ -300,8 +319,8 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         return roleInGroup === "lead" || roleInGroup === "deputy";
       });
       const names = [];
-      matches.forEach((entry) => addIfEligible(names, entry));
-      return uniqueNames(names);
+      matches.forEach((entry) => addIfEligible(names, entry, "組長"));
+      return mergeByName(names);
     }
 
     if (status === "pending_accounting" || status === "pending_cashier") {
@@ -310,8 +329,9 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         (entry) => String(entry.role || "").trim().toLowerCase() === targetRole
       );
       const names = [];
-      matches.forEach((entry) => addIfEligible(names, entry));
-      return uniqueNames(names);
+      const label = status === "pending_accounting" ? "會計" : "出納";
+      matches.forEach((entry) => addIfEligible(names, entry, label));
+      return mergeByName(names);
     }
 
     return [];
@@ -446,6 +466,10 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
 
   const resolvedActorName = displayName || actorName || "";
   const approverCandidates = selectedRequest ? resolveApproverCandidates_(selectedRequest) : [];
+  const approverCandidatesLabel = approverCandidates
+    .map((item) => (item.label ? `${item.name}(${item.label})` : item.name))
+    .filter(Boolean)
+    .join("、");
 
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id || !selectedRole) {
@@ -732,7 +756,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
               <div className="grid gap-2">
                 <label className="text-xs font-semibold text-slate-600">應簽核人</label>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700">
-                  {approverCandidates.length ? approverCandidates.join("、") : "—"}
+                  {approverCandidatesLabel || "—"}
                 </div>
               </div>
               <div className="grid gap-2">
