@@ -210,6 +210,21 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     .map((item) => String(item.role || "").trim())
     .filter(Boolean);
 
+  const isSelfApplicant_ = (item) => {
+    if (!item) {
+      return false;
+    }
+    const applicantId = String(item.applicantId || "").trim();
+    const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
+    if (personId && applicantId && applicantId === personId) {
+      return true;
+    }
+    if (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail) {
+      return true;
+    }
+    return false;
+  };
+
   const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
   const hasRepPrivilege = adminLeadGroups.includes("A");
   const hasCommitteePrivilege = hasLeadPrivilege || hasRepPrivilege || adminDeputyGroups.includes("A");
@@ -239,6 +254,9 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     if (!item) {
       return "";
     }
+    if (isSelfApplicant_(item)) {
+      return "";
+    }
     for (let i = 0; i < availableRoles.length; i += 1) {
       const role = availableRoles[i];
       if (role === "auditor") {
@@ -250,10 +268,12 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
       }
       if (role === "lead") {
         const group = normalizeGroupId_(item.applicantDepartment);
-        if (
-          !adminLeadGroups.includes(group) &&
-          !adminDeputyGroups.includes(group)
-        ) {
+        const applicantRole = String(item.applicantRole || "").trim().toLowerCase();
+        if (applicantRole === "deputy") {
+          if (!adminLeadGroups.includes(group)) {
+            continue;
+          }
+        } else if (!adminLeadGroups.includes(group) && !adminDeputyGroups.includes(group)) {
           continue;
         }
       }
@@ -354,6 +374,8 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
         requestAction: actionType,
         actorRole: selectedRole,
         actorName: resolvedActorName,
+        actorId: personId,
+        actorEmail: normalizedEmail,
         actorNote: actorNote,
       });
       if (!result.ok) {

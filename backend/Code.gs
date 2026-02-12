@@ -1737,7 +1737,18 @@ function listFinanceRequests_(payload) {
         return normalizeEmail_(item.applicantEmail) === applicantEmail;
       })
     : list;
-  return filtered.sort(function (a, b) {
+  const memberships = listGroupMemberships_();
+  const enriched = filtered.map(function (item) {
+    if (String(item.applicantRole || "").trim()) {
+      return item;
+    }
+    var role = resolveApplicantGroupRoleByMemberships_(item, memberships);
+    if (!role) {
+      return item;
+    }
+    return Object.assign({}, item, { applicantRole: role });
+  });
+  return enriched.sort(function (a, b) {
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
   });
 }
@@ -1952,8 +1963,14 @@ function appendFinanceRequest_(data) {
   if (!base.id) {
     base.id = generateFinanceId_();
   }
-  if (!base.status || String(base.status).trim() === "") {
-    base.status = "pending_lead";
+  const normalizedStatus = String(base.status || "").trim();
+  const memberships = listGroupMemberships_();
+  const applicantRole = resolveApplicantGroupRoleByMemberships_(base, memberships);
+  if (!base.applicantRole && applicantRole) {
+    base.applicantRole = applicantRole;
+  }
+  if (!normalizedStatus || normalizedStatus === "pending_lead") {
+    base.status = resolveFinanceInitialStatus_(base, memberships);
   }
   if (String(base.status) !== "draft" && !base.submittedAt) {
     base.submittedAt = nowIso;
@@ -2794,11 +2811,29 @@ function updateFinanceRequestFlow_(requestId, payload) {
   const actorRole = String(payload.actorRole || "").trim();
   const actorName = String(payload.actorName || "").trim();
   const actorNote = String(payload.actorNote || "").trim();
+  const actorId = String(payload.actorId || "").trim();
+  const actorEmail = normalizeEmail_(payload.actorEmail || "");
   const data = payload.data || {};
   const merged = Object.assign({}, existing, data);
   let nextStatus = String(merged.status || existing.status || "").trim();
+  if (action === "approve" || action === "return") {
+    const memberships = listGroupMemberships_();
+    const financeRoles = listFinanceRoles_();
+    const applicantRole = resolveApplicantGroupRoleByMemberships_(merged, memberships);
+    if (!merged.applicantRole && applicantRole) {
+      merged.applicantRole = applicantRole;
+    }
+    if (!canFinanceActorApprove_(merged, actorRole, actorId, actorEmail, memberships, financeRoles)) {
+      throw new Error("Unauthorized");
+    }
+  }
   if (action === "submit") {
-    nextStatus = "pending_lead";
+    const memberships = listGroupMemberships_();
+    const applicantRole = resolveApplicantGroupRoleByMemberships_(merged, memberships);
+    if (!merged.applicantRole && applicantRole) {
+      merged.applicantRole = applicantRole;
+    }
+    nextStatus = resolveFinanceInitialStatus_(merged, memberships);
     merged.submittedAt = nowIso;
   } else if (action === "withdraw") {
     nextStatus = "withdrawn";
@@ -3807,6 +3842,164 @@ function requiresCommittee_(record) {
   return amount >= 200000 || categoryType === "special";
 }
 
+function normalizeGroupId_(value) {
+  var raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return "";
+  }
+  var match = raw.match(/[A-Z0-9]+/);
+  return match ? match[0] : raw;
+}
+
+function resolvePersonIdByEmail_(email) {
+  var normalized = normalizeEmail_(email);
+  if (!normalized) {
+    return "";
+  }
+  var directory = findDirectoryByEmail_(normalized);
+  return directory && directory.id ? String(directory.id || "").trim() : "";
+}
+
+function resolveApplicantGroupRoleByMemberships_(record, memberships) {
+  var applicantId = String(record.applicantId || "").trim();
+  if (!applicantId) {
+    applicantId = resolvePersonIdByEmail_(record.applicantEmail || "");
+  }
+  if (!applicantId) {
+    return "";
+  }
+  var groupId = normalizeGroupId_(record.applicantDepartment || "");
+  for (var i = 0; i < memberships.length; i += 1) {
+    var item = memberships[i];
+    if (String(item.personId || "").trim() !== applicantId) {
+      continue;
+    }
+    if (groupId && normalizeGroupId_(item.groupId || "") !== groupId) {
+      continue;
+    }
+    return String(item.roleInGroup || "").trim().toLowerCase();
+  }
+  return "";
+}
+
+function resolveFinanceInitialStatus_(record, memberships) {
+  var applicantRole = String(record.applicantRole || "").trim().toLowerCase();
+  if (!applicantRole) {
+    applicantRole = resolveApplicantGroupRoleByMemberships_(record, memberships);
+  }
+  if (applicantRole === "lead") {
+    return "pending_rep";
+  }
+  return "pending_lead";
+}
+
+function isSameApplicant_(record, actorId, actorEmail) {
+  var applicantId = String(record.applicantId || "").trim();
+  var applicantEmail = normalizeEmail_(record.applicantEmail || "");
+  if (actorId && applicantId && actorId === applicantId) {
+    return true;
+  }
+  if (actorEmail && applicantEmail && normalizeEmail_(actorEmail) === applicantEmail) {
+    return true;
+  }
+  return false;
+}
+
+function actorHasGroupRole_(memberships, actorId, groupId, roleList) {
+  var normalizedGroup = normalizeGroupId_(groupId || "");
+  var roleSet = (roleList || []).reduce(function (acc, item) {
+    acc[String(item || "").trim().toLowerCase()] = true;
+    return acc;
+  }, {});
+  for (var i = 0; i < memberships.length; i += 1) {
+    var item = memberships[i];
+    if (String(item.personId || "").trim() !== actorId) {
+      continue;
+    }
+    if (normalizedGroup && normalizeGroupId_(item.groupId || "") !== normalizedGroup) {
+      continue;
+    }
+    var roleInGroup = String(item.roleInGroup || "").trim().toLowerCase();
+    if (roleSet[roleInGroup] === true) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function actorHasFinanceRole_(roles, actorId, actorEmail, targetRole) {
+  var target = String(targetRole || "").trim().toLowerCase();
+  var normalizedEmail = normalizeEmail_(actorEmail || "");
+  return (roles || []).some(function (item) {
+    var role = String(item.role || "").trim().toLowerCase();
+    if (role !== target) {
+      return false;
+    }
+    var personId = String(item.personId || "").trim();
+    var personEmail = normalizeEmail_(item.personEmail || "");
+    if (actorId && personId && actorId === personId) {
+      return true;
+    }
+    if (normalizedEmail && personEmail && normalizedEmail === personEmail) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function canFinanceActorApprove_(record, actorRole, actorId, actorEmail, memberships, financeRoles) {
+  var status = String(record.status || "").trim().toLowerCase();
+  var role = String(actorRole || "").trim().toLowerCase();
+  if (!status || status.indexOf("pending_") !== 0) {
+    return false;
+  }
+  if (!actorId) {
+    actorId = resolvePersonIdByEmail_(actorEmail || "");
+  }
+  if (isSameApplicant_(record, actorId, actorEmail)) {
+    return false;
+  }
+  if (status === "pending_lead") {
+    if (role !== "lead") {
+      return false;
+    }
+    var applicantRole = String(record.applicantRole || "").trim().toLowerCase();
+    if (!applicantRole) {
+      applicantRole = resolveApplicantGroupRoleByMemberships_(record, memberships);
+    }
+    var groupId = String(record.applicantDepartment || "").trim();
+    if (applicantRole === "deputy") {
+      return actorHasGroupRole_(memberships, actorId, groupId, ["lead"]);
+    }
+    return actorHasGroupRole_(memberships, actorId, groupId, ["lead", "deputy"]);
+  }
+  if (status === "pending_rep") {
+    if (role !== "rep") {
+      return false;
+    }
+    return actorHasGroupRole_(memberships, actorId, "A", ["lead", "deputy"]);
+  }
+  if (status === "pending_committee") {
+    if (role !== "committee") {
+      return false;
+    }
+    return actorHasGroupRole_(memberships, actorId, "", ["lead", "deputy"]);
+  }
+  if (status === "pending_accounting") {
+    if (role !== "accounting") {
+      return false;
+    }
+    return actorHasFinanceRole_(financeRoles, actorId, actorEmail, "accounting");
+  }
+  if (status === "pending_cashier") {
+    if (role !== "cashier") {
+      return false;
+    }
+    return actorHasFinanceRole_(financeRoles, actorId, actorEmail, "cashier");
+  }
+  return false;
+}
+
 function resolveFinanceNextStatus_(record, actorRole) {
   var role = String(actorRole || "").trim().toLowerCase();
   var status = String(record.status || "").trim().toLowerCase();
@@ -3924,6 +4117,16 @@ function collectFinanceRoleEmails_(roles, targetRole) {
     });
 }
 
+function filterOutApplicantEmail_(emails, request) {
+  var applicantEmail = normalizeEmail_(request && request.applicantEmail);
+  if (!applicantEmail) {
+    return emails || [];
+  }
+  return (emails || []).filter(function (email) {
+    return normalizeEmail_(email || "") !== applicantEmail;
+  });
+}
+
 function resolveFinanceApprovalRecipients_(request, status) {
   var targetStatus = String(status || request.status || "").trim().toLowerCase();
   if (!targetStatus) {
@@ -3936,10 +4139,18 @@ function resolveFinanceApprovalRecipients_(request, status) {
     if (!groupId) {
       return [];
     }
-    return collectMembershipEmails_(memberships, [groupId], ["lead", "deputy"]);
+    var applicantRole = String(request.applicantRole || "").trim().toLowerCase();
+    var roleList = applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"];
+    return filterOutApplicantEmail_(
+      collectMembershipEmails_(memberships, [groupId], roleList),
+      request
+    );
   }
   if (targetStatus === "pending_rep") {
-    return collectMembershipEmails_(memberships, ["A"], ["lead", "deputy"]);
+    return filterOutApplicantEmail_(
+      collectMembershipEmails_(memberships, ["A"], ["lead", "deputy"]),
+      request
+    );
   }
   if (targetStatus === "pending_committee") {
     var leadGroups = memberships
@@ -3953,13 +4164,16 @@ function resolveFinanceApprovalRecipients_(request, status) {
       .filter(function (value) {
         return value;
       });
-    return collectMembershipEmails_(memberships, leadGroups, ["lead", "deputy"]);
+    return filterOutApplicantEmail_(
+      collectMembershipEmails_(memberships, leadGroups, ["lead", "deputy"]),
+      request
+    );
   }
   if (targetStatus === "pending_accounting") {
-    return collectFinanceRoleEmails_(financeRoles, "accounting");
+    return filterOutApplicantEmail_(collectFinanceRoleEmails_(financeRoles, "accounting"), request);
   }
   if (targetStatus === "pending_cashier") {
-    return collectFinanceRoleEmails_(financeRoles, "cashier");
+    return filterOutApplicantEmail_(collectFinanceRoleEmails_(financeRoles, "cashier"), request);
   }
   return [];
 }

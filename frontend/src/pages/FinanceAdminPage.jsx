@@ -322,6 +322,10 @@ function FinanceAdminPage({ shared }) {
 
   const memberships = adminProfile ? adminProfile.memberships || [] : [];
   const financeRoleItems = adminProfile ? adminProfile.financeRoles || [] : [];
+  const adminPersonId = adminProfile ? String(adminProfile.personId || "").trim() : "";
+  const adminEmail = String((googleLinkedStudent && googleLinkedStudent.email) || "")
+    .trim()
+    .toLowerCase();
 
   const adminLeadGroups = memberships
     .filter((item) => String(item.roleInGroup || "").trim() === "lead")
@@ -532,11 +536,26 @@ function FinanceAdminPage({ shared }) {
       : currentRoleKey
       ? FINANCE_ROLE_LABELS[currentRoleKey] || currentRoleKey
       : FINANCE_STATUS_LABELS[currentStatusKey] || "—";
+  const isSelfApplicant_ = (item) => {
+    if (!item) {
+      return false;
+    }
+    const applicantId = String(item.applicantId || "").trim();
+    const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
+    if (adminPersonId && applicantId && adminPersonId === applicantId) {
+      return true;
+    }
+    if (adminEmail && applicantEmail && adminEmail === applicantEmail) {
+      return true;
+    }
+    return false;
+  };
   const canAct =
     selectedRequest &&
     role !== "auditor" &&
     availableRoles.includes(role) &&
     selectedRequest.status === roleStatusMap[role] &&
+    !isSelfApplicant_(selectedRequest) &&
     (role !== "lead" ||
       adminLeadGroups.includes(String(selectedRequest.applicantDepartment || "").trim()) ||
       adminDeputyGroups.includes(String(selectedRequest.applicantDepartment || "").trim()));
@@ -557,6 +576,8 @@ function FinanceAdminPage({ shared }) {
         requestAction: actionType,
         actorRole: role,
         actorName: resolvedActorName,
+        actorId: adminPersonId,
+        actorEmail: adminEmail,
         actorNote: actorNote,
       });
       if (!result.ok) {
