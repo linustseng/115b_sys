@@ -232,6 +232,91 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
   const hasCashierPrivilege = adminRoles.includes("cashier");
   const hasAuditorPrivilege = adminRoles.includes("auditor");
 
+  const resolveApproverCandidates_ = (item) => {
+    if (!item) {
+      return [];
+    }
+    const status = String(item.status || "").trim().toLowerCase();
+    const applicantRole = String(item.applicantRole || "").trim().toLowerCase();
+    const applicantId = String(item.applicantId || "").trim();
+    const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
+    const excludeSet = new Set();
+    if (applicantId) {
+      excludeSet.add(`id:${applicantId}`);
+    }
+    if (applicantEmail) {
+      excludeSet.add(`email:${applicantEmail}`);
+    }
+    const normalizeName_ = (value) => String(value || "").trim();
+    const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
+    const addIfEligible = (acc, entry) => {
+      const personId = String(entry.personId || "").trim();
+      const personEmail = normalizeEmail_(entry.personEmail || entry.email || "");
+      if (personId && excludeSet.has(`id:${personId}`)) {
+        return;
+      }
+      if (personEmail && excludeSet.has(`email:${personEmail}`)) {
+        return;
+      }
+      const name =
+        normalizeName_(entry.personName) ||
+        normalizeName_(entry.name) ||
+        normalizeName_(entry.personEmail) ||
+        normalizeName_(entry.email);
+      if (name) {
+        acc.push(name);
+      }
+    };
+
+    const uniqueNames = (list) => Array.from(new Set(list.filter(Boolean)));
+
+    if (status === "pending_lead") {
+      const groupId = normalizeGroupId_(item.applicantDepartment);
+      const roles = applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"];
+      const matches = groupMemberships.filter((entry) => {
+        const entryGroup = normalizeGroupId_(entry.groupId);
+        const roleInGroup = String(entry.roleInGroup || "").trim();
+        return entryGroup === groupId && roles.includes(roleInGroup);
+      });
+      const names = [];
+      matches.forEach((entry) => addIfEligible(names, entry));
+      return uniqueNames(names);
+    }
+
+    if (status === "pending_rep") {
+      const matches = groupMemberships.filter((entry) => {
+        const entryGroup = normalizeGroupId_(entry.groupId);
+        const roleInGroup = String(entry.roleInGroup || "").trim();
+        return entryGroup === "A" && (roleInGroup === "lead" || roleInGroup === "deputy");
+      });
+      const names = [];
+      matches.forEach((entry) => addIfEligible(names, entry));
+      return uniqueNames(names);
+    }
+
+    if (status === "pending_committee") {
+      const matches = groupMemberships.filter((entry) => {
+        const roleInGroup = String(entry.roleInGroup || "").trim();
+        return roleInGroup === "lead" || roleInGroup === "deputy";
+      });
+      const names = [];
+      matches.forEach((entry) => addIfEligible(names, entry));
+      return uniqueNames(names);
+    }
+
+    if (status === "pending_accounting" || status === "pending_cashier") {
+      const targetRole = status === "pending_accounting" ? "accounting" : "cashier";
+      const matches = financeRoles.filter(
+        (entry) => String(entry.role || "").trim().toLowerCase() === targetRole
+      );
+      const names = [];
+      matches.forEach((entry) => addIfEligible(names, entry));
+      return uniqueNames(names);
+    }
+
+    return [];
+  };
+
   const roleStatusMap = {
     lead: "pending_lead",
     rep: "pending_rep",
@@ -360,6 +445,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
   const statusLabel = (status) => FINANCE_STATUS_LABELS[status] || status || "-";
 
   const resolvedActorName = displayName || actorName || "";
+  const approverCandidates = selectedRequest ? resolveApproverCandidates_(selectedRequest) : [];
 
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id || !selectedRole) {
@@ -644,9 +730,9 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
               ) : null}
 
               <div className="grid gap-2">
-                <label className="text-xs font-semibold text-slate-600">審核人</label>
+                <label className="text-xs font-semibold text-slate-600">應簽核人</label>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 text-xs text-slate-700">
-                  {resolvedActorName || "—"}
+                  {approverCandidates.length ? approverCandidates.join("、") : "—"}
                 </div>
               </div>
               <div className="grid gap-2">
