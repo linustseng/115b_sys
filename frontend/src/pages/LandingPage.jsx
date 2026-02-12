@@ -3,6 +3,7 @@ import emblem115b from "../assets/115b_icon.png";
 import ApprovalsCenter from "./ApprovalsCenter";
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
+  const { apiRequest } = shared;
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() =>
     loadStoredGoogleStudent_()
   );
@@ -29,6 +30,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   });
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
+  const [memberships, setMemberships] = useState([]);
+  const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -39,12 +42,58 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [hasGoogleLogin]);
 
   useEffect(() => {
+    if (!hasGoogleLogin) {
+      setMemberships([]);
+      setMembershipsLoaded(false);
+      return;
+    }
+    let ignore = false;
+    const loadMemberships = async () => {
+      try {
+        const { result } = await apiRequest({ action: "listGroupMemberships" });
+        if (!ignore) {
+          setMemberships(result.data && result.data.memberships ? result.data.memberships : []);
+          setMembershipsLoaded(true);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setMemberships([]);
+          setMembershipsLoaded(true);
+        }
+      }
+    };
+    loadMemberships();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin]);
+
+  useEffect(() => {
     try {
       localStorage.setItem("home_calendar_mobile_open", showCalendarMobile ? "1" : "0");
     } catch (error) {
       // Ignore write errors (private mode, blocked storage, etc.)
     }
   }, [showCalendarMobile]);
+
+  const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+  const userMemberships = memberships.filter((item) => {
+    const memberId = String(item.personId || "").trim();
+    return normalizedId && memberId && normalizedId === memberId;
+  });
+  const hasGroupAccess_ = (allowedGroupIds) =>
+    userMemberships.some((item) => {
+      const groupId = String(item.groupId || "").trim();
+      const roleInGroup = String(item.roleInGroup || "").trim();
+      if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
+        return true;
+      }
+      return allowedGroupIds.includes(groupId);
+    });
+  const canSeeEventAdmin = membershipsLoaded && hasGroupAccess_(["C", "E"]);
+  const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
+  const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
+  const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
 
   return (
     <div className="min-h-screen">
@@ -173,12 +222,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 同學入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
-              <a
-                href="/admin/events"
-                className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-slate-900/30 hover:bg-slate-800"
-              >
-                活動管理
-              </a>
+              {canSeeEventAdmin ? (
+                <a
+                  href="/admin/events"
+                  className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-slate-900/30 hover:bg-slate-800"
+                >
+                  活動管理
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -207,12 +258,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 同學入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
-              <a
-                href="/admin/ordering"
-                className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
-              >
-                訂餐管理
-              </a>
+              {canSeeOrderingAdmin ? (
+                <a
+                  href="/admin/ordering"
+                  className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+                >
+                  訂餐管理
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -241,12 +294,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 同學入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
-              <a
-                href="/admin/finance"
-                className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-sky-500/30 hover:bg-sky-500"
-              >
-                財務管理
-              </a>
+              {canSeeFinanceAdmin ? (
+                <a
+                  href="/admin/finance"
+                  className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-sky-500/30 hover:bg-sky-500"
+                >
+                  財務管理
+                </a>
+              ) : null}
             </div>
           </div>
 
@@ -273,12 +328,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 球員入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
-              <a
-                href="/softball"
-                className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-emerald-500/30 hover:bg-emerald-500"
-              >
-                前往管理
-              </a>
+              {canSeeSoftballAdmin ? (
+                <a
+                  href="/softball"
+                  className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-emerald-500/30 hover:bg-emerald-500"
+                >
+                  前往管理
+                </a>
+              ) : null}
             </div>
           </div>
 
