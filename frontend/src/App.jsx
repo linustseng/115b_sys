@@ -686,6 +686,7 @@ const normalizeCustomFieldsForSubmit_ = (fields, studentId) => {
 
 const STORAGE_KEYS = {
   googleStudent: "emba115b.googleStudent",
+  googleIdToken: "emba115b.googleIdToken",
 };
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
@@ -802,6 +803,36 @@ function loadStoredGoogleStudent_() {
     return parsed && parsed.student ? parsed.student : null;
   } catch (error) {
     return null;
+  }
+}
+
+function loadStoredGoogleIdToken_() {
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEYS.googleIdToken);
+    if (!raw) {
+      return "";
+    }
+    const parsed = JSON.parse(raw);
+    const token = parsed && parsed.token ? String(parsed.token) : "";
+    return token || "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function storeGoogleIdToken_(token) {
+  try {
+    const normalized = String(token || "").trim();
+    if (!normalized) {
+      window.sessionStorage.removeItem(STORAGE_KEYS.googleIdToken);
+      return;
+    }
+    window.sessionStorage.setItem(
+      STORAGE_KEYS.googleIdToken,
+      JSON.stringify({ token: normalized, savedAt: Date.now() })
+    );
+  } catch (error) {
+    // Ignore storage failures.
   }
 }
 
@@ -971,6 +1002,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
                 setStatus("linked");
                 onLinkedRef.current(payload.student, payload.profile || null, response.credential);
                 storeGoogleStudent_(payload.student);
+                storeGoogleIdToken_(response.credential);
               } else {
                 setStatus("needs-link");
               }
@@ -1060,6 +1092,8 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       setStatus("linked");
       if (student) {
         onLinkedRef.current(student, profile, idToken);
+        storeGoogleStudent_(student);
+        storeGoogleIdToken_(idToken);
       }
     } catch (err) {
       setError(err.message || "綁定失敗");
@@ -1243,7 +1277,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
 function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
-  const [googleIdToken, setGoogleIdToken] = useState("");
+  const [googleIdToken, setGoogleIdToken] = useState(() => loadStoredGoogleIdToken_());
   const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -1252,22 +1286,37 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     if (googleIdToken) {
       return googleIdToken;
     }
+    const storedToken = loadStoredGoogleIdToken_();
+    if (storedToken) {
+      setGoogleIdToken(storedToken);
+      return storedToken;
+    }
     try {
       const token = await getGoogleIdTokenSilently_();
       if (token) {
         setGoogleIdToken(token);
+        storeGoogleIdToken_(token);
       }
       return token;
     } catch (error) {
-      setGoogleLinkedStudent(null);
       setGoogleIdToken("");
+      storeGoogleIdToken_("");
       throw new Error("登入已過期，請重新使用 Google 登入。");
     }
   };
 
   const authedApiRequest = async (payload) => {
     const token = await ensureIdToken_();
-    return apiRequest({ ...(payload || {}), idToken: token });
+    const response = await apiRequest({ ...(payload || {}), idToken: token });
+    const result = response && response.result ? response.result : null;
+    const unauthorized = !result || result.ok !== false ? false : String(result.error || "") === "Unauthorized";
+    if (!unauthorized) {
+      return response;
+    }
+    setGoogleIdToken("");
+    storeGoogleIdToken_("");
+    const retryToken = await ensureIdToken_();
+    return apiRequest({ ...(payload || {}), idToken: retryToken });
   };
 
   const loadMemberships = async () => {
@@ -1334,6 +1383,8 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
               onLinkedStudent={(student, _profile, idToken) => {
                 setGoogleLinkedStudent(student);
                 setGoogleIdToken(String(idToken || "").trim());
+                storeGoogleStudent_(student || null);
+                storeGoogleIdToken_(idToken || "");
               }}
             />
           </section>
