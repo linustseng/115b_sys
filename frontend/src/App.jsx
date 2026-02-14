@@ -1187,11 +1187,17 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     if (googleIdToken) {
       return googleIdToken;
     }
-    const token = await getGoogleIdTokenSilently_();
-    if (token) {
-      setGoogleIdToken(token);
+    try {
+      const token = await getGoogleIdTokenSilently_();
+      if (token) {
+        setGoogleIdToken(token);
+      }
+      return token;
+    } catch (error) {
+      setGoogleLinkedStudent(null);
+      setGoogleIdToken("");
+      throw new Error("登入已過期，請重新使用 Google 登入。");
     }
-    return token;
   };
 
   const authedApiRequest = async (payload) => {
