@@ -35,6 +35,7 @@ export default function AdminPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState("");
+  const [isEventFormOpen, setIsEventFormOpen] = useState(false);
   const [eventListId, setEventListId] = useState("");
   const [activeTab, setActiveTab] = useState(() =>
     allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0]
@@ -626,6 +627,7 @@ export default function AdminPage({
   const handleEdit = (event) => {
     setEventListId(event.id || "");
     setActiveId(event.id || "");
+    setIsEventFormOpen(true);
     setForm({
       id: event.id || "",
       title: event.title || "",
@@ -647,6 +649,17 @@ export default function AdminPage({
       allowBringDrinks: event.allowBringDrinks || "yes",
       attachments: event.attachments || "[]",
     });
+  };
+
+  const handleSelectEventForEdit = (eventId) => {
+    const selectedId = String(eventId || "").trim();
+    setEventListId(selectedId);
+    const selected = sortedEvents.find(
+      (item) => normalizeEventId_(item.id) === normalizeEventId_(selectedId)
+    );
+    if (selected) {
+      handleEdit(selected);
+    }
   };
 
   const loadStudents = async () => {
@@ -1244,6 +1257,7 @@ export default function AdminPage({
       await loadEvents();
       if (activeId === eventId) {
         setActiveId("");
+        setIsEventFormOpen(false);
       }
     } catch (err) {
       setError(err.message || "刪除失敗");
@@ -1269,6 +1283,7 @@ export default function AdminPage({
         );
       }
       setActiveId("");
+      setIsEventFormOpen(false);
       setForm(buildDefaultForm(events));
       await loadEvents();
     } catch (err) {
@@ -1462,6 +1477,13 @@ export default function AdminPage({
   const handleResetDefaults = () => {
     setSeedTimestamp(Date.now());
     setForm(buildDefaultForm(events));
+  };
+
+  const handleStartCreateEvent = () => {
+    setError("");
+    setActiveId("");
+    setForm(buildDefaultForm(events));
+    setIsEventFormOpen(true);
   };
 
   const registrationsByEvent = registrations.reduce((acc, registration) => {
@@ -1765,22 +1787,31 @@ export default function AdminPage({
           ) : null}
           {activeTab === "events" ? (
             <div className="mt-6 space-y-4">
-              <div className="grid gap-2 text-sm">
-                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  選擇活動
-                </label>
-                <select
-                  value={eventListId}
-                  onChange={(event) => setEventListId(event.target.value)}
-                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+              <div className="flex items-end justify-between gap-3">
+                <div className="grid flex-1 gap-2 text-sm">
+                  <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                    選擇活動
+                  </label>
+                  <select
+                    value={eventListId}
+                    onChange={(event) => handleSelectEventForEdit(event.target.value)}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  >
+                    {sortedEvents.map((event) => (
+                      <option key={event.id} value={event.id}>
+                        {event.title}
+                        {isEventClosed_(event) ? " (已結束)" : ""} · {event.id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleStartCreateEvent}
+                  className="h-10 rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-slate-800"
                 >
-                  {sortedEvents.map((event) => (
-                    <option key={event.id} value={event.id}>
-                      {event.title}
-                      {isEventClosed_(event) ? " (已結束)" : ""} · {event.id}
-                    </option>
-                  ))}
-                </select>
+                  新增活動
+                </button>
               </div>
               {selectedEventForList ? (
                 <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600">
@@ -1803,13 +1834,6 @@ export default function AdminPage({
                         ⋯
                       </summary>
                       <div className="absolute right-0 z-10 mt-2 w-36 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(selectedEventForList)}
-                          className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                        >
-                          編輯活動
-                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(selectedEventForList.id)}
@@ -2709,11 +2733,20 @@ export default function AdminPage({
 
         </section>
 
-        {activeTab === "events" ? (
+        {activeTab === "events" && isEventFormOpen ? (
           <section className="card p-7 sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">
-              {activeId ? "編輯活動" : "新增活動"}
-            </h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">
+                {activeId ? "編輯活動" : "新增活動"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsEventFormOpen(false)}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                收合
+              </button>
+            </div>
             <form
               ref={uploadFormRef}
               action={API_URL}
@@ -3141,6 +3174,7 @@ export default function AdminPage({
                   onClick={() => {
                     setActiveId("");
                     setForm(buildDefaultForm(events));
+                    setIsEventFormOpen(false);
                   }}
                   className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600"
                 >
