@@ -25,6 +25,7 @@ function FinanceAdminPage({ shared }) {
     FUND_PAYMENT_METHODS,
     CLASS_GROUPS,
     normalizeId_,
+    adminGuardAccess,
   } = shared;
 
   const [requests, setRequests] = useState([]);
@@ -468,7 +469,7 @@ function FinanceAdminPage({ shared }) {
     hasCashierPrivilege ? "cashier" : null,
     hasAuditorPrivilege ? "auditor" : null,
   ].filter((value) => value);
-  const hasFinanceAccess = availableRoles.length > 0 || hasFinanceGroupPrivilege;
+  const hasFinanceAccess = Boolean(adminGuardAccess) || availableRoles.length > 0 || hasFinanceGroupPrivilege;
 
   useEffect(() => {
     if (!availableRoles.length) {

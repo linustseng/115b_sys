@@ -1447,7 +1447,11 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
       nextProps.apiRequest = authedApiRequest;
     }
     if (childProps.shared && typeof childProps.shared === "object") {
-      nextProps.shared = { ...childProps.shared, apiRequest: authedApiRequest };
+      nextProps.shared = {
+        ...childProps.shared,
+        apiRequest: authedApiRequest,
+        adminGuardAccess: true,
+      };
     }
     return React.cloneElement(children, nextProps);
   }
