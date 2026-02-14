@@ -199,10 +199,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
-                  System 01
-                </p>
+              <div className="flex items-center justify-end">
                 <img
                   src={emblem115b}
                   alt="NTU EMBA 115B"
@@ -235,10 +232,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--amber">
             <div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-amber-600/70">
-                  System 02
-                </p>
+              <div className="flex items-center justify-end">
                 <img
                   src={emblem115b}
                   alt="NTU EMBA 115B"
@@ -271,10 +265,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--sky">
             <div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-sky-600/70">
-                  System 03
-                </p>
+              <div className="flex items-center justify-end">
                 <img
                   src={emblem115b}
                   alt="NTU EMBA 115B"
@@ -307,10 +298,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--emerald">
             <div>
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-emerald-600/70">
-                  System 04
-                </p>
+              <div className="flex items-center justify-end">
                 <img
                   src={emblem115b}
                   alt="NTU EMBA 115B"

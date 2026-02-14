@@ -998,7 +998,9 @@ function SoftballPage({ shared }) {
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
             NTU EMBA 115B
           </p>
-          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">壘球隊管理</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+            壘球隊管理 · 後台
+          </h1>
           <p className="mt-3 text-sm text-slate-500">
             職業等級的隊務管理：球員、練習、場地、出席、器材與日誌。
           </p>

@@ -10,6 +10,7 @@ import {
 } from "../adminUtils";
 
 export default function AdminPage({
+  pageTitle = "系統管理 · 後台",
   apiRequest,
   API_URL,
   UPLOAD_FOLDER_ID,
@@ -1964,7 +1965,7 @@ export default function AdminPage({
               NTU EMBA 115B
             </p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-              後台管理 (MVP)
+              {pageTitle}
             </h1>
           </div>
           <div className="hidden items-center gap-3 sm:flex">

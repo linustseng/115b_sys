@@ -1640,6 +1640,7 @@ function AppShell() {
         allowedGroupIds={["C", "E"]}
       >
         <AdminPage
+          pageTitle="活動管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
@@ -1664,6 +1665,7 @@ function AppShell() {
         allowedGroupIds={["I", "E"]}
       >
         <AdminPage
+          pageTitle="訂餐管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
@@ -1693,11 +1695,12 @@ function AppShell() {
   } else if (isAdminPage) {
     content = (
       <AdminAccessGuard
-        title="後台管理 · MVP"
+        title="系統管理 · 後台"
         helperText="僅限班代、副班代、資管組成員。"
         allowedGroupIds={["E"]}
       >
         <AdminPage
+          pageTitle="系統管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
