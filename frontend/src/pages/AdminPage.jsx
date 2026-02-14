@@ -207,6 +207,25 @@ export default function AdminPage({
     }
   };
 
+  const normalizeAttendanceStatus_ = (value) => {
+    const attendanceValue = String(value || "").trim();
+    if (attendanceValue === "出席") {
+      return "attending";
+    }
+    if (attendanceValue === "不克出席") {
+      return "not_attending";
+    }
+    if (
+      attendanceValue === "尚未確定" ||
+      attendanceValue === "未定" ||
+      attendanceValue === "未確認" ||
+      !attendanceValue
+    ) {
+      return "unknown";
+    }
+    return "unknown";
+  };
+
   const normalizeBaseUrl_ = (value) => {
     const trimmed = String(value || "").trim();
     if (!trimmed) {
@@ -1489,18 +1508,11 @@ export default function AdminPage({
   const attendanceCounts = registrationList.reduce(
     (acc, registration) => {
       const fields = parseCustomFields_(registration.customFields);
-      const attendanceValue = String(fields.attendance || "").trim();
-      if (attendanceValue === "出席") {
+      const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
+      if (attendanceStatus === "attending") {
         acc.attending += 1;
-      } else if (attendanceValue === "不克出席") {
+      } else if (attendanceStatus === "not_attending") {
         acc.notAttending += 1;
-      } else if (
-        attendanceValue === "尚未確定" ||
-        attendanceValue === "未定" ||
-        attendanceValue === "未確認" ||
-        !attendanceValue
-      ) {
-        acc.unknown += 1;
       } else {
         acc.unknown += 1;
       }
@@ -2074,16 +2086,7 @@ export default function AdminPage({
                       ]
                         .filter(Boolean)
                         .join(" · ");
-                      const attendanceStatus =
-                        attendanceValue === "不克出席"
-                          ? "not_attending"
-                          : attendanceValue === "尚未確定" ||
-                            attendanceValue === "未定" ||
-                            attendanceValue === "未確認"
-                          ? "unknown"
-                          : attendanceValue === "出席"
-                          ? "attending"
-                          : "";
+                      const attendanceStatus = normalizeAttendanceStatus_(attendanceValue);
                       const badgeStyle = isRegistered
                         ? attendanceStatus === "not_attending"
                           ? "badge-error"
