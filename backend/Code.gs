@@ -28,11 +28,8 @@ const ACTION_GROUP_POLICIES = {
   createEvent: ["C", "E"],
   updateEvent: ["C", "E"],
   deleteEvent: ["C", "E"],
-  listRegistrations: ["C", "E"],
-  updateRegistration: ["C", "E"],
   deleteRegistration: ["C", "E"],
   listCheckins: ["C", "E"],
-  deleteCheckin: ["C", "E"],
   uploadBase64: ["C", "E"],
   createOrderPlan: ["I", "E"],
   updateOrderPlan: ["I", "E"],
@@ -970,7 +967,18 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listRegistrations") {
-    return { ok: true, data: { registrations: listRegistrations_() }, error: null };
+    const adminAuth = requireGoogleGroupAccess_(payload, ["C", "E"]);
+    if (adminAuth.ok) {
+      return { ok: true, data: { registrations: listRegistrations_() }, error: null };
+    }
+    const email = normalizeEmail_(payload.email);
+    if (!email) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    const ownRegistrations = listRegistrations_().filter(function (item) {
+      return normalizeEmail_(item.userEmail) === email;
+    });
+    return { ok: true, data: { registrations: ownRegistrations }, error: null };
   }
 
   if (payload.action === "getRegistrationByEmail") {
@@ -992,7 +1000,30 @@ function handleActionPayload_(payload) {
     if (!registrationId) {
       return { ok: false, data: null, error: "Missing registration id" };
     }
-    const updated = updateRegistration_(registrationId, data);
+    const existing = findRegistrationById_(registrationId);
+    if (!existing) {
+      return { ok: false, data: null, error: "Registration not found" };
+    }
+    const adminAuth = requireGoogleGroupAccess_(payload, ["C", "E"]);
+    const normalizedInputEmail = normalizeEmail_(data.userEmail || payload.email);
+    if (!adminAuth.ok) {
+      if (!normalizedInputEmail || normalizeEmail_(existing.userEmail) !== normalizedInputEmail) {
+        return { ok: false, data: null, error: "Unauthorized" };
+      }
+    }
+    const safeData = adminAuth.ok
+      ? data
+      : {
+          id: existing.id,
+          eventId: existing.eventId,
+          userEmail: existing.userEmail,
+          userName: String(data.userName || existing.userName || "").trim(),
+          userPhone: String(data.userPhone || existing.userPhone || "").trim(),
+          customFields: data.customFields || existing.customFields || "",
+          status: existing.status || "registered",
+          classYear: existing.classYear || "",
+        };
+    const updated = updateRegistration_(registrationId, safeData);
     if (!updated) {
       return { ok: false, data: null, error: "Registration not found" };
     }
@@ -1019,6 +1050,21 @@ function handleActionPayload_(payload) {
     const checkinId = String(payload.id || "").trim();
     if (!checkinId) {
       return { ok: false, data: null, error: "Missing checkin id" };
+    }
+    const checkin = findCheckinById_(checkinId);
+    if (!checkin) {
+      return { ok: false, data: null, error: "Checkin not found" };
+    }
+    const adminAuth = requireGoogleGroupAccess_(payload, ["C", "E"]);
+    if (!adminAuth.ok) {
+      const email = normalizeEmail_(payload.userEmail || payload.email);
+      if (!email) {
+        return { ok: false, data: null, error: "Unauthorized" };
+      }
+      const registration = findRegistrationById_(String(checkin.registrationId || "").trim());
+      if (!registration || normalizeEmail_(registration.userEmail) !== email) {
+        return { ok: false, data: null, error: "Unauthorized" };
+      }
     }
     const removed = deleteCheckin_(checkinId);
     if (!removed) {
@@ -4789,6 +4835,28 @@ function findRegistrationByEmail_(eventId, email) {
   return null;
 }
 
+function findRegistrationById_(registrationId) {
+  const sheet = getSheet_(SHEETS.registrations);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Registrations sheet missing id column");
+  }
+  const target = String(registrationId || "").trim();
+  if (!target) {
+    return null;
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== target) {
+      continue;
+    }
+    return mapRowToObject_(headerMap, row);
+  }
+  return null;
+}
+
 function isDuplicateCheckin_(eventId, registrationId) {
   const sheet = getSheet_(SHEETS.checkins);
   const headerMap = getHeaderMap_(sheet);
@@ -4827,6 +4895,28 @@ function findCheckinByRegistration_(eventId, registrationId) {
     if (String(row[registrationIndex]).trim() === registrationId) {
       return mapRowToObject_(headerMap, row);
     }
+  }
+  return null;
+}
+
+function findCheckinById_(checkinId) {
+  const sheet = getSheet_(SHEETS.checkins);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Checkins sheet missing id column");
+  }
+  const target = String(checkinId || "").trim();
+  if (!target) {
+    return null;
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[idIndex]).trim() !== target) {
+      continue;
+    }
+    return mapRowToObject_(headerMap, row);
   }
   return null;
 }

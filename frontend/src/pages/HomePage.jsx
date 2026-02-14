@@ -194,7 +194,15 @@ function HomePage({
     setCancelSubmitting(true);
     setCancelError("");
     try {
-      const { result } = await apiRequest({ action: "deleteCheckin", id: cancelTarget.checkinId });
+      const { result } = await apiRequest({
+        action: "deleteCheckin",
+        id: cancelTarget.checkinId,
+        userEmail: String(
+          (googleLinkedStudent && googleLinkedStudent.email) || lookupEmail || ""
+        )
+          .trim()
+          .toLowerCase(),
+      });
       if (!result.ok) {
         throw new Error(result.error || "取消簽到失敗");
       }
@@ -339,7 +347,10 @@ function HomePage({
     setLookupLoading(true);
     setLookupError("");
     try {
-      const { result } = await apiRequest({ action: "listRegistrations" });
+      const { result } = await apiRequest({
+        action: "listRegistrations",
+        email: normalizedEmail,
+      });
       if (!result.ok) {
         throw new Error(result.error || "查詢失敗");
       }
