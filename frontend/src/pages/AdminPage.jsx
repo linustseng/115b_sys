@@ -1567,13 +1567,28 @@ export default function AdminPage({
         if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
           return false;
         }
-        const attendance = String(parseCustomFields_(registration.customFields).attendance || "")
-          .trim();
-        if (attendance && attendance !== "出席") {
+        const attendanceStatus = normalizeAttendanceStatus_(
+          parseCustomFields_(registration.customFields).attendance
+        );
+        if (attendanceStatus !== "attending") {
           return false;
         }
         const registrationId = String(registration.id || "").trim();
         return registrationId && !checkinRegistrationSet.has(registrationId);
+      })
+    : [];
+  const checkinRegistrations = checkinEventId
+    ? (registrationsByEvent[normalizeEventId_(checkinEventId)] || []).filter((registration) => {
+        if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
+          return false;
+        }
+        const attendanceStatus = normalizeAttendanceStatus_(
+          parseCustomFields_(registration.customFields).attendance
+        );
+        if (attendanceStatus !== "attending") {
+          return false;
+        }
+        return Boolean(String(registration.id || "").trim());
       })
     : [];
 
@@ -2152,9 +2167,9 @@ export default function AdminPage({
                 <p className="text-xs text-slate-500">
                   色塊提示簽到狀態：綠色＝已簽到，琥珀＝未簽到。
                 </p>
-                {registrationList.length ? (
+                {checkinRegistrations.length ? (
                   <div className="flex flex-wrap gap-2">
-                    {registrationList.map((registration) => {
+                    {checkinRegistrations.map((registration) => {
                       const registrationId = String(registration.id || "").trim();
                       const checkin = checkinStatusByRegistrationId[registrationId] || null;
                       const studentId = registration.studentId;
