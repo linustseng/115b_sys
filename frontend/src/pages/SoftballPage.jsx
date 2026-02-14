@@ -498,6 +498,26 @@ function SoftballPage({ shared }) {
     todayStart.getFullYear() * 10000 + (todayStart.getMonth() + 1) * 100 + todayStart.getDate();
   const nextPractice =
     practices.find((practice) => getPracticeDayKey_(practice) >= todayKey) || practices[0] || null;
+  const isPracticeExpired_ = (practice) => {
+    const dayKey = getPracticeDayKey_(practice);
+    if (!dayKey) {
+      return true;
+    }
+    return dayKey < todayKey;
+  };
+  const practiceListItems = practices.slice().sort((a, b) => {
+    const aExpired = isPracticeExpired_(a);
+    const bExpired = isPracticeExpired_(b);
+    if (aExpired !== bExpired) {
+      return aExpired ? 1 : -1;
+    }
+    const aSort = getPracticeSortKey_(a);
+    const bSort = getPracticeSortKey_(b);
+    if (!aExpired) {
+      return aSort - bSort;
+    }
+    return bSort - aSort;
+  });
   const selectedPractice =
     practices.find((practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)) ||
     null;
@@ -1106,8 +1126,8 @@ function SoftballPage({ shared }) {
                   </button>
                 </div>
                 <div className="space-y-2">
-                  {practices.length ? (
-                    practices.map((item) => (
+                  {practiceListItems.length ? (
+                    practiceListItems.map((item) => (
                       <button
                         key={item.id}
                         onClick={() => setActivePracticeId(normalizeId_(item.id))}
