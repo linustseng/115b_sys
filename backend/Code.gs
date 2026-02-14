@@ -2465,7 +2465,7 @@ function buildTodoNotifications_(studentId, email) {
       message: String(event.title || eventId) + " 尚未報名。",
       level: "warning",
       ctaLabel: "前往活動",
-      ctaUrl: "/events",
+      ctaUrl: buildTodoCtaUrl_("events", { eventId: eventId }),
       createdAt: String(event.createdAt || event.registrationOpenAt || "").trim(),
       expiresAt: String(event.registrationCloseAt || "").trim(),
     });
@@ -2501,7 +2501,7 @@ function buildTodoNotifications_(studentId, email) {
       message: String(item.title || eventId) + " 尚未回報繳交。",
       level: "warning",
       ctaLabel: "前往財務",
-      ctaUrl: "/finance",
+      ctaUrl: buildTodoCtaUrl_("fund", { eventId: eventId }),
       createdAt: String(item.createdAt || "").trim(),
       expiresAt: String(item.dueDate || "").trim(),
     });
@@ -2524,7 +2524,7 @@ function buildTodoNotifications_(studentId, email) {
       message: "所有同學都需要完成球員資料。",
       level: "warning",
       ctaLabel: "前往填寫",
-      ctaUrl: "/softball/player",
+      ctaUrl: buildTodoCtaUrl_("softball-profile", {}),
       createdAt: new Date().toISOString(),
       expiresAt: "",
     });
@@ -2588,7 +2588,7 @@ function buildTodoNotifications_(studentId, email) {
         message: String(practice.title || "近期練習") + " 尚未回覆出席。",
         level: "warning",
         ctaLabel: "前往回覆",
-        ctaUrl: "/softball/player",
+        ctaUrl: buildTodoCtaUrl_("softball-attendance", { practiceId: practiceId }),
         createdAt: String(practice.createdAt || practice.date || "").trim(),
         expiresAt: String(practice.date || "").trim(),
       });
@@ -2596,6 +2596,37 @@ function buildTodoNotifications_(studentId, email) {
   }
 
   return notifications;
+}
+
+function buildTodoCtaUrl_(source, payload) {
+  const normalizedSource = String(source || "").trim().toLowerCase();
+  const data = payload || {};
+  const eventId = String(data.eventId || "").trim();
+  const practiceId = String(data.practiceId || "").trim();
+
+  if (normalizedSource === "events") {
+    return eventId ? "/register?eventId=" + encodeURIComponent(eventId) : "/events";
+  }
+  if (normalizedSource === "fund") {
+    return eventId
+      ? "/finance?tab=fund&eventId=" + encodeURIComponent(eventId)
+      : "/finance?tab=fund";
+  }
+  if (normalizedSource === "softball-profile") {
+    return "/softball/player?tab=profile";
+  }
+  if (normalizedSource === "softball-attendance") {
+    return practiceId
+      ? "/softball/player?tab=attendance&practiceId=" + encodeURIComponent(practiceId)
+      : "/softball/player?tab=attendance";
+  }
+  if (normalizedSource === "checkin") {
+    return eventId ? "/checkin?eventId=" + encodeURIComponent(eventId) : "/checkin";
+  }
+  if (normalizedSource === "finance-requests") {
+    return "/finance?tab=requests";
+  }
+  return "/";
 }
 
 function sortNotifications_(items) {

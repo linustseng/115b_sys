@@ -52,7 +52,13 @@ function SoftballPlayerPage({ shared }) {
     formatEventDate_,
   } = shared;
 
-  const [activeTab, setActiveTab] = useState("profile");
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window === "undefined") {
+      return "profile";
+    }
+    const queryTab = new URLSearchParams(window.location.search).get("tab");
+    return queryTab === "attendance" ? "attendance" : "profile";
+  });
   const [players, setPlayers] = useState([]);
   const [practices, setPractices] = useState([]);
   const [attendance, setAttendance] = useState([]);

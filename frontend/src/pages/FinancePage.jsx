@@ -52,6 +52,20 @@ function FinancePage({ shared }) {
     formatEventDate_,
     normalizeId_,
   } = shared;
+  const financeQueryParams =
+    typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
+  const initialFundEventId = financeQueryParams
+    ? String(financeQueryParams.get("eventId") || "").trim()
+    : "";
+  const initialFinanceTab = financeQueryParams
+    ? (function () {
+        const tab = String(financeQueryParams.get("tab") || "").trim().toLowerCase();
+        if (tab === "fund" || tab === "requests") {
+          return tab;
+        }
+        return initialFundEventId ? "fund" : "requests";
+      })()
+    : "requests";
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
@@ -68,10 +82,16 @@ function FinancePage({ shared }) {
   const [fundEvents, setFundEvents] = useState([]);
   const [fundEventsLoading, setFundEventsLoading] = useState(false);
   const [fundEventsError, setFundEventsError] = useState("");
-  const [fundPaymentForm, setFundPaymentForm] = useState(buildFundPaymentDraft_());
+  const [fundPaymentForm, setFundPaymentForm] = useState(() => {
+    const draft = buildFundPaymentDraft_(initialFundEventId);
+    if (initialFundEventId) {
+      draft.eventId = initialFundEventId;
+    }
+    return draft;
+  });
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
-  const [financeTab, setFinanceTab] = useState("requests");
+  const [financeTab, setFinanceTab] = useState(initialFinanceTab);
   const [requestsLoaded, setRequestsLoaded] = useState(false);
   const [requestBootstrapLoaded, setRequestBootstrapLoaded] = useState(false);
   const fundEventsCacheKey = "fund_events_cache_v1";
