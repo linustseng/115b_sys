@@ -2535,29 +2535,36 @@ function buildTodoNotifications_(studentId, email) {
       attendanceMap[practiceId] = String(item.status || "").trim().toLowerCase();
     }
   });
-  const futurePractices = listSoftballPracticesCached_().filter(function (item) {
-    const date = parseDateSafe_(item.date || item.startAt);
-    return date && date.getTime() >= nowTs;
-  });
-  const pendingPractice = futurePractices.find(function (item) {
-    const practiceId = String(item.id || "").trim();
+  const nearestPractice = listSoftballPracticesCached_()
+    .map(function (item) {
+      const date = parseDateSafe_(item.date || item.startAt);
+      return { item: item, date: date };
+    })
+    .filter(function (entry) {
+      return entry.date && entry.date.getTime() >= nowTs;
+    })
+    .sort(function (a, b) {
+      return a.date.getTime() - b.date.getTime();
+    })[0];
+
+  if (nearestPractice && nearestPractice.item) {
+    const practice = nearestPractice.item;
+    const practiceId = String(practice.id || "").trim();
     const status = attendanceMap[practiceId] || "unknown";
-    return status === "unknown" || status === "";
-  });
-  if (pendingPractice) {
-    const practiceId = String(pendingPractice.id || "").trim();
-    notifications.push({
-      id: "todo:softball:attendance:" + practiceId,
-      type: "todo",
-      source: "softball-attendance",
-      title: "請回覆練習出席狀態",
-      message: String(pendingPractice.title || "近期練習") + " 尚未回覆出席。",
-      level: "warning",
-      ctaLabel: "前往回覆",
-      ctaUrl: "/softball/player",
-      createdAt: String(pendingPractice.createdAt || pendingPractice.date || "").trim(),
-      expiresAt: String(pendingPractice.date || "").trim(),
-    });
+    if (status === "unknown" || status === "") {
+      notifications.push({
+        id: "todo:softball:attendance:" + practiceId,
+        type: "todo",
+        source: "softball-attendance",
+        title: "請回覆練習出席狀態",
+        message: String(practice.title || "近期練習") + " 尚未回覆出席。",
+        level: "warning",
+        ctaLabel: "前往回覆",
+        ctaUrl: "/softball/player",
+        createdAt: String(practice.createdAt || practice.date || "").trim(),
+        expiresAt: String(practice.date || "").trim(),
+      });
+    }
   }
 
   return notifications;
