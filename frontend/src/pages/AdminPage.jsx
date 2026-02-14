@@ -1671,6 +1671,17 @@ export default function AdminPage({
   const nonMeatAttendeeList = prepStats.nonMeatAttendees.slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
+  const nonMeatAttendeeGroups = nonMeatAttendeeList.reduce((acc, item) => {
+    const key = String(item.dietary || "其他").trim() || "其他";
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(item.name || "未命名");
+    return acc;
+  }, {});
+  const nonMeatAttendeeGroupList = Object.entries(nonMeatAttendeeGroups).sort((a, b) =>
+    String(a[0] || "").localeCompare(String(b[0] || ""), "zh-Hant")
+  );
   const attendingNameList = prepStats.attendees.slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
@@ -2445,15 +2456,28 @@ export default function AdminPage({
                       <p className="text-xs font-semibold text-slate-600">非葷食名單</p>
                       <span className="text-xs text-slate-500">共 {nonMeatAttendeeList.length} 位</span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                      {nonMeatAttendeeList.length ? (
-                        nonMeatAttendeeList.map((item, index) => (
-                          <span
-                            key={`${item.name}-${item.dietary}-${index}`}
-                            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700"
+                    <div className="mt-2 space-y-2 text-xs">
+                      {nonMeatAttendeeGroupList.length ? (
+                        nonMeatAttendeeGroupList.map(([dietary, names]) => (
+                          <div
+                            key={dietary}
+                            className="rounded-lg border border-amber-200/70 bg-amber-50/50 p-2"
                           >
-                            {item.name} · {item.dietary}
-                          </span>
+                            <div className="mb-1 flex items-center justify-between text-amber-700">
+                              <span className="font-semibold">{dietary}</span>
+                              <span className="tabular-nums">{names.length} 位</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {names.map((name, index) => (
+                                <span
+                                  key={`${dietary}-${name}-${index}`}
+                                  className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[11px] text-amber-700"
+                                >
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         ))
                       ) : (
                         <p className="text-slate-400">目前沒有非葷食名單。</p>
