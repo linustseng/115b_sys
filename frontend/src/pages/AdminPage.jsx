@@ -1587,6 +1587,7 @@ export default function AdminPage({
 
       const dietary = String(fields.dietary || "").trim() || "未填寫";
       acc.dietary[dietary] = (acc.dietary[dietary] || 0) + 1;
+      const attendeeName = String(registration.userName || fields.name || "").trim() || "未命名";
 
       const parking = String(fields.parking || "").trim() || "未填寫";
       acc.parking[parking] = (acc.parking[parking] || 0) + 1;
@@ -1620,6 +1621,19 @@ export default function AdminPage({
           acc.drinks[key] = (acc.drinks[key] || 0) + parsedQty;
         }
       });
+      acc.attendees.push({
+        name: attendeeName,
+        dietary: dietary,
+        parking: parking,
+        companions: !isNaN(companions) && companions > 0 ? companions : 0,
+        bringDrinks: bringDrinks || "",
+      });
+      if (dietary && dietary !== "無禁忌" && dietary !== "未填寫") {
+        acc.nonMeatAttendees.push({
+          name: attendeeName,
+          dietary: dietary,
+        });
+      }
       return acc;
     },
     {
@@ -1638,6 +1652,8 @@ export default function AdminPage({
         plumWineQty: 0,
         otherDrinkQty: 0,
       },
+      attendees: [],
+      nonMeatAttendees: [],
     }
   );
   const dietaryStatsList = Object.entries(prepStats.dietary).sort((a, b) => b[1] - a[1]);
@@ -1652,6 +1668,12 @@ export default function AdminPage({
   ]
     .map((item) => ({ ...item, qty: prepStats.drinks[item.key] || 0 }))
     .filter((item) => item.qty > 0);
+  const nonMeatAttendeeList = prepStats.nonMeatAttendees.slice().sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
+  );
+  const attendingNameList = prepStats.attendees.slice().sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
+  );
 
   const buildRegistrationStatsCsv_ = () => {
     const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
@@ -1710,6 +1732,24 @@ export default function AdminPage({
       } else {
         pushRow_(["(無資料)", 0]);
       }
+      pushRow_([]);
+    }
+
+    pushRow_(["出席名單", "飲食偏好", "停車", "攜伴", "自帶酒水"]);
+    if (attendingNameList.length) {
+      attendingNameList.forEach((item) =>
+        pushRow_([item.name, item.dietary || "-", item.parking || "-", item.companions || 0, item.bringDrinks || "-"])
+      );
+    } else {
+      pushRow_(["(無資料)", "", "", "", ""]);
+    }
+    pushRow_([]);
+
+    pushRow_(["非葷食名單", "飲食偏好"]);
+    if (nonMeatAttendeeList.length) {
+      nonMeatAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
+    } else {
+      pushRow_(["(無資料)", ""]);
     }
     return rows.join("\n");
   };
@@ -2399,6 +2439,26 @@ export default function AdminPage({
                         </div>
                       </div>
                     ) : null}
+                  </div>
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-600">非葷食名單</p>
+                      <span className="text-xs text-slate-500">共 {nonMeatAttendeeList.length} 位</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      {nonMeatAttendeeList.length ? (
+                        nonMeatAttendeeList.map((item, index) => (
+                          <span
+                            key={`${item.name}-${item.dietary}-${index}`}
+                            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-amber-700"
+                          >
+                            {item.name} · {item.dietary}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-slate-400">目前沒有非葷食名單。</p>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
