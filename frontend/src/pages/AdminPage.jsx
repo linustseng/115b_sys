@@ -1513,6 +1513,16 @@ export default function AdminPage({
   const registrationList = registrationEventId
     ? registrationsByEvent[normalizeEventId_(registrationEventId)] || []
     : registrations;
+  const selectedRegistrationEvent =
+    sortedEvents.find(
+      (event) => normalizeEventId_(event.id) === normalizeEventId_(registrationEventId)
+    ) || null;
+  const registrationAllowCompanions =
+    String((selectedRegistrationEvent && selectedRegistrationEvent.allowCompanions) || "yes").trim() !==
+    "no";
+  const registrationAllowBringDrinks =
+    String((selectedRegistrationEvent && selectedRegistrationEvent.allowBringDrinks) || "yes").trim() !==
+    "no";
   const attendanceByStudentId = new Map();
   const attendanceByName = new Map();
   registrationList.forEach((registration) => {
@@ -1563,6 +1573,163 @@ export default function AdminPage({
     },
     { attending: 0, notAttending: 0, unknown: 0 }
   );
+  const prepStats = registrationList.reduce(
+    (acc, registration) => {
+      if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
+        return acc;
+      }
+      const fields = parseCustomFields_(registration.customFields);
+      const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
+      if (attendanceStatus !== "attending") {
+        return acc;
+      }
+      acc.attendingTotal += 1;
+
+      const dietary = String(fields.dietary || "").trim() || "未填寫";
+      acc.dietary[dietary] = (acc.dietary[dietary] || 0) + 1;
+
+      const parking = String(fields.parking || "").trim() || "未填寫";
+      acc.parking[parking] = (acc.parking[parking] || 0) + 1;
+      if (parking === "需要" || parking.toLowerCase() === "yes") {
+        acc.parkingNeeded += 1;
+      }
+
+      const companions = parseInt(String(fields.companions || "0").trim(), 10);
+      if (!isNaN(companions) && companions > 0) {
+        acc.companionsTotal += companions;
+      }
+
+      const bringDrinks = String(fields.bringDrinks || "").trim();
+      if (bringDrinks === "攜帶") {
+        acc.bringDrinksCount += 1;
+      }
+      if (bringDrinks === "不攜帶") {
+        acc.notBringDrinksCount += 1;
+      }
+      const drinkQtyKeys = [
+        "redWineQty",
+        "whiteWineQty",
+        "whiskyQty",
+        "kaoliangQty",
+        "plumWineQty",
+        "otherDrinkQty",
+      ];
+      drinkQtyKeys.forEach((key) => {
+        const parsedQty = parseInt(String(fields[key] || "0").trim(), 10);
+        if (!isNaN(parsedQty) && parsedQty > 0) {
+          acc.drinks[key] = (acc.drinks[key] || 0) + parsedQty;
+        }
+      });
+      return acc;
+    },
+    {
+      attendingTotal: 0,
+      parkingNeeded: 0,
+      companionsTotal: 0,
+      bringDrinksCount: 0,
+      notBringDrinksCount: 0,
+      dietary: {},
+      parking: {},
+      drinks: {
+        redWineQty: 0,
+        whiteWineQty: 0,
+        whiskyQty: 0,
+        kaoliangQty: 0,
+        plumWineQty: 0,
+        otherDrinkQty: 0,
+      },
+    }
+  );
+  const dietaryStatsList = Object.entries(prepStats.dietary).sort((a, b) => b[1] - a[1]);
+  const parkingStatsList = Object.entries(prepStats.parking).sort((a, b) => b[1] - a[1]);
+  const drinkQtyStatsList = [
+    { key: "redWineQty", label: "紅酒" },
+    { key: "whiteWineQty", label: "白酒" },
+    { key: "whiskyQty", label: "威士忌" },
+    { key: "kaoliangQty", label: "高梁" },
+    { key: "plumWineQty", label: "梅酒" },
+    { key: "otherDrinkQty", label: "其他酒水" },
+  ]
+    .map((item) => ({ ...item, qty: prepStats.drinks[item.key] || 0 }))
+    .filter((item) => item.qty > 0);
+
+  const buildRegistrationStatsCsv_ = () => {
+    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
+    const eventId = String((selectedRegistrationEvent && selectedRegistrationEvent.id) || registrationEventId || "").trim();
+    const rows = [];
+    const pushRow_ = (values) =>
+      rows.push(
+        values
+          .map((value) => {
+            const raw = String(value == null ? "" : value);
+            if (raw.includes(",") || raw.includes("\"") || raw.includes("\n")) {
+              return `"${raw.replace(/"/g, "\"\"")}"`;
+            }
+            return raw;
+          })
+          .join(",")
+      );
+
+    pushRow_(["活動名稱", eventTitle || "-"]);
+    pushRow_(["活動ID", eventId || "-"]);
+    pushRow_(["匯出時間", new Date().toLocaleString()]);
+    pushRow_([]);
+
+    pushRow_(["摘要", "數值"]);
+    pushRow_(["出席人數", prepStats.attendingTotal]);
+    pushRow_(["停車位需求", prepStats.parkingNeeded]);
+    if (registrationAllowCompanions) {
+      pushRow_(["攜伴總人數", prepStats.companionsTotal]);
+    }
+    if (registrationAllowBringDrinks) {
+      pushRow_(["自帶酒水（人）", prepStats.bringDrinksCount]);
+      pushRow_(["不攜帶酒水（人）", prepStats.notBringDrinksCount]);
+    }
+    pushRow_([]);
+
+    pushRow_(["飲食偏好", "人數"]);
+    if (dietaryStatsList.length) {
+      dietaryStatsList.forEach(([label, count]) => pushRow_([label, count]));
+    } else {
+      pushRow_(["(無資料)", 0]);
+    }
+    pushRow_([]);
+
+    pushRow_(["停車偏好", "人數"]);
+    if (parkingStatsList.length) {
+      parkingStatsList.forEach(([label, count]) => pushRow_([label, count]));
+    } else {
+      pushRow_(["(無資料)", 0]);
+    }
+    pushRow_([]);
+
+    if (registrationAllowBringDrinks) {
+      pushRow_(["酒水品項", "數量"]);
+      if (drinkQtyStatsList.length) {
+        drinkQtyStatsList.forEach((item) => pushRow_([item.label, item.qty]));
+      } else {
+        pushRow_(["(無資料)", 0]);
+      }
+    }
+    return rows.join("\n");
+  };
+
+  const handleExportRegistrationStats = () => {
+    if (typeof window === "undefined" || !registrationEventId) {
+      return;
+    }
+    const csv = buildRegistrationStatsCsv_();
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeEventId = String(registrationEventId || "event").trim() || "event";
+    link.href = url;
+    link.download = `registration-stats-${safeEventId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   const filteredStudents = displayStudents.filter((item) =>
     matchesStudentQuery_(item, studentsQuery)
@@ -2141,6 +2308,99 @@ export default function AdminPage({
               </div>
 
               <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-800">活動準備統計（出席）</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">僅計算回覆「出席」的報名資料</span>
+                      <button
+                        type="button"
+                        onClick={handleExportRegistrationStats}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        匯出統計
+                      </button>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-xs text-slate-500">出席人數</p>
+                      <p className="text-lg font-semibold text-slate-900">{prepStats.attendingTotal}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-xs text-slate-500">停車位需求</p>
+                      <p className="text-lg font-semibold text-slate-900">{prepStats.parkingNeeded}</p>
+                    </div>
+                    {registrationAllowCompanions ? (
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                        <p className="text-xs text-slate-500">攜伴總人數</p>
+                        <p className="text-lg font-semibold text-slate-900">{prepStats.companionsTotal}</p>
+                      </div>
+                    ) : null}
+                    {registrationAllowBringDrinks ? (
+                      <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                        <p className="text-xs text-slate-500">自帶酒水（人）</p>
+                        <p className="text-lg font-semibold text-slate-900">{prepStats.bringDrinksCount}</p>
+                      </div>
+                    ) : null}
+                  </div>
+                  <div
+                    className={`mt-3 grid gap-3 ${
+                      registrationAllowBringDrinks ? "sm:grid-cols-3" : "sm:grid-cols-2"
+                    }`}
+                  >
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-xs font-semibold text-slate-600">飲食偏好統計</p>
+                      <div className="mt-2 space-y-1 text-xs text-slate-600">
+                        {dietaryStatsList.length ? (
+                          dietaryStatsList.map(([label, count]) => (
+                            <div key={label} className="flex items-center justify-between">
+                              <span>{label}</span>
+                              <span className="font-semibold tabular-nums">{count}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有出席資料。</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-xs font-semibold text-slate-600">停車偏好統計</p>
+                      <div className="mt-2 space-y-1 text-xs text-slate-600">
+                        {parkingStatsList.length ? (
+                          parkingStatsList.map(([label, count]) => (
+                            <div key={label} className="flex items-center justify-between">
+                              <span>{label}</span>
+                              <span className="font-semibold tabular-nums">{count}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有出席資料。</p>
+                        )}
+                      </div>
+                    </div>
+                    {registrationAllowBringDrinks ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-600">酒水數量統計</p>
+                        <div className="mt-2 space-y-1 text-xs text-slate-600">
+                          {drinkQtyStatsList.length ? (
+                            drinkQtyStatsList.map((item) => (
+                              <div key={item.key} className="flex items-center justify-between">
+                                <span>{item.label}</span>
+                                <span className="font-semibold tabular-nums">{item.qty}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-slate-400">目前沒有酒水數量資料。</p>
+                          )}
+                        </div>
+                        <div className="mt-2 border-t border-slate-200 pt-2 text-xs text-slate-500">
+                          不攜帶：{prepStats.notBringDrinksCount}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
                 <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
                   <span>報名狀態</span>
                 </div>
