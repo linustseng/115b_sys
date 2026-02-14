@@ -32,6 +32,11 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [memberships, setMemberships] = useState([]);
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationUnread, setNotificationUnread] = useState(0);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationError, setNotificationError] = useState("");
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -82,6 +87,86 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   }, [showCalendarMobile]);
 
+  const loadNotifications = async () => {
+    setNotificationLoading(true);
+    setNotificationError("");
+    try {
+      const { result } = await apiRequest({
+        action: "listNotifications",
+        studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
+        email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "通知載入失敗");
+      }
+      const items = result.data && result.data.notifications ? result.data.notifications : [];
+      const unreadCount = result.data && result.data.unreadCount ? Number(result.data.unreadCount) : 0;
+      setNotifications(items);
+      setNotificationUnread(unreadCount);
+    } catch (error) {
+      setNotificationError(error.message || "通知載入失敗");
+      setNotifications([]);
+      setNotificationUnread(0);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, [googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+
+  const markNotificationRead = async (notificationId) => {
+    if (!notificationId || !hasGoogleLogin) {
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "markNotificationRead",
+        notificationId: notificationId,
+        studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
+        email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
+      });
+      if (!result.ok) {
+        return;
+      }
+      setNotifications((prev) =>
+        prev.map((item) => (item.id === notificationId ? { ...item, isRead: true } : item))
+      );
+      setNotificationUnread((prev) => (prev > 0 ? prev - 1 : 0));
+    } catch (error) {
+      // Ignore read sync failures.
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    if (!hasGoogleLogin) {
+      return;
+    }
+    const unreadIds = notifications
+      .filter((item) => !item.isRead)
+      .map((item) => item.id)
+      .filter(Boolean);
+    if (!unreadIds.length) {
+      return;
+    }
+    try {
+      const { result } = await apiRequest({
+        action: "markAllNotificationsRead",
+        notificationIds: unreadIds,
+        studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
+        email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
+      });
+      if (!result.ok) {
+        return;
+      }
+      setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+      setNotificationUnread(0);
+    } catch (error) {
+      // Ignore read sync failures.
+    }
+  };
+
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
   const userMemberships = memberships.filter((item) => {
     const memberId = String(item.personId || "").trim();
@@ -129,10 +214,15 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                disabled
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-400 shadow-sm"
+                onClick={() => setNotificationOpen(true)}
+                className="relative rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
               >
-                通知 (即將推出)
+                通知
+                {notificationUnread > 0 ? (
+                  <span className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                    {notificationUnread > 99 ? "99+" : notificationUnread}
+                  </span>
+                ) : null}
               </button>
               <a
                 href="/profile"
@@ -444,6 +534,88 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </a>
         </div>
       </nav>
+
+      {notificationOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-900/40">
+          <div className="absolute inset-0" onClick={() => setNotificationOpen(false)} aria-hidden="true" />
+          <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-4 shadow-2xl sm:w-[420px] sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-base font-semibold text-slate-900">通知中心</h2>
+              <div className="flex items-center gap-2">
+                {hasGoogleLogin ? (
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    全部已讀
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setNotificationOpen(false)}
+                  className="rounded-full border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  關閉
+                </button>
+              </div>
+            </div>
+
+            {notificationLoading ? <p className="mt-4 text-xs text-slate-500">載入通知中...</p> : null}
+            {notificationError ? <p className="mt-4 text-xs text-rose-600">{notificationError}</p> : null}
+
+            {!notificationLoading && !notificationError ? (
+              <div className="mt-4 space-y-4">
+                {!notifications.length ? (
+                  <div className="alert alert-info text-xs">目前沒有新的待辦或公告。</div>
+                ) : null}
+                {notifications.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`rounded-2xl border p-3 ${
+                      item.isRead ? "border-slate-200 bg-slate-50/50" : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{item.title || "通知"}</p>
+                        <p className="mt-1 text-xs text-slate-600">{item.message || ""}</p>
+                      </div>
+                      {!item.isRead && hasGoogleLogin ? (
+                        <button
+                          type="button"
+                          onClick={() => markNotificationRead(item.id)}
+                          className="shrink-0 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          已讀
+                        </button>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {item.isRead ? "已讀" : "未讀"}
+                        </span>
+                      )}
+                    </div>
+                    {item.ctaUrl ? (
+                      <a
+                        href={item.ctaUrl}
+                        onClick={() => {
+                          setNotificationOpen(false);
+                          if (!item.isRead && hasGoogleLogin) {
+                            markNotificationRead(item.id);
+                          }
+                        }}
+                        className="mt-2 inline-flex items-center text-xs font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                      >
+                        {item.ctaLabel || "前往處理"}
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </aside>
+        </div>
+      ) : null}
     </div>
   );
 }

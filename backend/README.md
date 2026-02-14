@@ -11,6 +11,8 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - Directory
 - DirectoryLogs
 - AdminUsers
+- Announcements
+- NotificationReads
 
 ## Required Columns
 - Events: id, title, description, startAt, endAt, location, address, registrationOpenAt, registrationCloseAt, checkinOpenAt, checkinCloseAt, registerUrl, checkinUrl, capacity, status, category, formSchema
@@ -21,6 +23,8 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - Directory: id, group, email, nameZh, nameEn, preferredName, company, title, socialUrl, mobile, backupPhone, emergencyContact, emergencyPhone, dietaryRestrictions, photoUrl, birthdayMonth, birthdayDay
 - DirectoryLogs: id, createdAt, actorEmail, targetId, targetEmail, action, changes
 - AdminUsers: id, name, email, role, passwordHash
+- Announcements: id, type, scope, targetKey, title, message, level, ctaLabel, ctaUrl, status, startAt, endAt, createdAt, updatedAt
+- NotificationReads: id, notificationId, readerStudentId, readerEmail, readAt
 
 `Students.id` should match `Directory.id` so the login can resolve profile details.
 
@@ -83,6 +87,11 @@ ShortLinks 目前用於報名連結。報名/簽到也可直接從 `Events.regis
 - searchStudents
 - getDirectoryProfile
 - updateDirectoryProfile
+- listNotifications
+- markNotificationRead
+- markAllNotificationsRead
+- upsertAnnouncement
+- deleteAnnouncement
 
 ## Password Hash
 `AdminUsers.passwordHash` uses SHA-256 hex. You can compute it in Apps Script with `hashPassword_` or any SHA-256 tool.

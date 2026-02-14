@@ -21,6 +21,8 @@ const SHEETS = {
   softballFields: "SoftballFields",
   softballGear: "SoftballGear",
   softballConfig: "SoftballConfig",
+  announcements: "Announcements",
+  notificationReads: "NotificationReads",
 };
 
 const ACTION_GROUP_POLICIES = {
@@ -40,6 +42,8 @@ const ACTION_GROUP_POLICIES = {
   batchUpdateGroupMemberships: ["E"],
   upsertGroupMembership: ["E"],
   deleteGroupMembership: ["E"],
+  upsertAnnouncement: ["E"],
+  deleteAnnouncement: ["E"],
 };
 
 const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
@@ -206,6 +210,73 @@ function handleActionPayload_(payload) {
 
   if (payload.action === "listFinanceRequests") {
     return { ok: true, data: { requests: listFinanceRequests_(payload) }, error: null };
+  }
+
+  if (payload.action === "listNotifications") {
+    const studentId = String(payload.studentId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    const notifications = listNotifications_(studentId, email);
+    const readMap = listNotificationReadMap_(studentId, email);
+    const enriched = notifications.map(function (item) {
+      const id = String(item.id || "").trim();
+      const isRead = !!readMap[id];
+      return Object.assign({}, item, { isRead: isRead });
+    });
+    const sorted = sortNotifications_(enriched);
+    const unreadCount = sorted.filter(function (item) {
+      return !item.isRead;
+    }).length;
+    return { ok: true, data: { notifications: sorted, unreadCount: unreadCount }, error: null };
+  }
+
+  if (payload.action === "markNotificationRead") {
+    const notificationId = String(payload.notificationId || "").trim();
+    const studentId = String(payload.studentId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    if (!notificationId || (!studentId && !email)) {
+      return { ok: false, data: null, error: "Missing notificationId or user identity" };
+    }
+    const read = upsertNotificationRead_(notificationId, studentId, email);
+    return { ok: true, data: { read: read }, error: null };
+  }
+
+  if (payload.action === "markAllNotificationsRead") {
+    const studentId = String(payload.studentId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    const ids = Array.isArray(payload.notificationIds)
+      ? payload.notificationIds
+          .map(function (id) {
+            return String(id || "").trim();
+          })
+          .filter(function (id) {
+            return id;
+          })
+      : [];
+    if ((!studentId && !email) || !ids.length) {
+      return { ok: false, data: null, error: "Missing user identity or notificationIds" };
+    }
+    const reads = ids.map(function (notificationId) {
+      return upsertNotificationRead_(notificationId, studentId, email);
+    });
+    return { ok: true, data: { reads: reads }, error: null };
+  }
+
+  if (payload.action === "upsertAnnouncement") {
+    const data = payload.data || {};
+    const updated = upsertAnnouncement_(data);
+    return { ok: true, data: { announcement: updated }, error: null };
+  }
+
+  if (payload.action === "deleteAnnouncement") {
+    const announcementId = String(payload.id || "").trim();
+    if (!announcementId) {
+      return { ok: false, data: null, error: "Missing announcement id" };
+    }
+    const removed = deleteAnnouncement_(announcementId);
+    if (!removed) {
+      return { ok: false, data: null, error: "Announcement not found" };
+    }
+    return { ok: true, data: { id: announcementId }, error: null };
   }
 
   if (payload.action === "listAdminBootstrap") {
@@ -2070,6 +2141,457 @@ function listFundPayments_(eventId) {
     });
 }
 
+function listAnnouncements_() {
+  const sheet = getSheet_(SHEETS.announcements);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .map(function (item) {
+      return normalizeAnnouncementRecord_(item);
+    });
+}
+
+function listNotificationReads_() {
+  const sheet = getSheet_(SHEETS.notificationReads);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return mapRowToObject_(headerMap, row);
+    })
+    .map(function (item) {
+      return normalizeNotificationReadRecord_(item);
+    });
+}
+
+function listNotificationReadMap_(studentId, email) {
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  const reads = listNotificationReads_().filter(function (item) {
+    if (normalizedStudentId && String(item.readerStudentId || "").trim() === normalizedStudentId) {
+      return true;
+    }
+    return !!normalizedEmail && normalizeEmail_(item.readerEmail) === normalizedEmail;
+  });
+  return reads.reduce(function (acc, item) {
+    const id = String(item.notificationId || "").trim();
+    if (id) {
+      acc[id] = true;
+    }
+    return acc;
+  }, {});
+}
+
+function upsertNotificationRead_(notificationId, studentId, email) {
+  const sheet = getSheet_(SHEETS.notificationReads);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("NotificationReads sheet missing id column");
+  }
+  const normalizedNotificationId = String(notificationId || "").trim();
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  const readId = normalizedStudentId
+    ? normalizedNotificationId + "::" + normalizedStudentId
+    : normalizedNotificationId + "::" + normalizedEmail;
+  const nowIso = new Date().toISOString();
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex] || "").trim() !== readId) {
+      continue;
+    }
+    const existing = mapRowToObject_(headerMap, rows[i]);
+    const record = normalizeNotificationReadRecord_(
+      Object.assign({}, existing, {
+        id: readId,
+        notificationId: normalizedNotificationId,
+        readerStudentId: normalizedStudentId,
+        readerEmail: normalizedEmail,
+        readAt: nowIso,
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  const created = normalizeNotificationReadRecord_({
+    id: readId,
+    notificationId: normalizedNotificationId,
+    readerStudentId: normalizedStudentId,
+    readerEmail: normalizedEmail,
+    readAt: nowIso,
+  });
+  const headers = getHeaders_(sheet);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (created.hasOwnProperty(header)) {
+      values[index] = created[header];
+    }
+  });
+  sheet.appendRow(values);
+  return created;
+}
+
+function upsertAnnouncement_(data) {
+  const announcementId = String(data.id || "").trim();
+  if (!announcementId) {
+    return appendAnnouncement_(data);
+  }
+  const existing = findAnnouncementById_(announcementId);
+  if (!existing) {
+    return appendAnnouncement_(Object.assign({}, data, { id: announcementId }));
+  }
+  return updateAnnouncement_(announcementId, data);
+}
+
+function appendAnnouncement_(data) {
+  const sheet = getSheet_(SHEETS.announcements);
+  const headers = getHeaders_(sheet);
+  const nowIso = new Date().toISOString();
+  const record = normalizeAnnouncementRecord_(
+    Object.assign({}, data, {
+      id: String(data.id || generateAnnouncementId_()).trim(),
+      createdAt: String(data.createdAt || nowIso).trim(),
+      updatedAt: String(data.updatedAt || nowIso).trim(),
+    })
+  );
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (record.hasOwnProperty(header)) {
+      values[index] = record[header];
+    }
+  });
+  sheet.appendRow(values);
+  return record;
+}
+
+function updateAnnouncement_(announcementId, data) {
+  const sheet = getSheet_(SHEETS.announcements);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Announcements sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex] || "").trim() !== announcementId) {
+      continue;
+    }
+    const existing = mapRowToObject_(headerMap, rows[i]);
+    const record = normalizeAnnouncementRecord_(
+      Object.assign({}, existing, data, {
+        id: announcementId,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    const headers = getHeaders_(sheet);
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (record.hasOwnProperty(header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.getRange(i + 2, 1, 1, headers.length).setValues([values]);
+    return record;
+  }
+  throw new Error("Announcement not found");
+}
+
+function deleteAnnouncement_(announcementId) {
+  const sheet = getSheet_(SHEETS.announcements);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Announcements sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex] || "").trim() === announcementId) {
+      sheet.deleteRow(i + 2);
+      return true;
+    }
+  }
+  return false;
+}
+
+function findAnnouncementById_(announcementId) {
+  if (!announcementId) {
+    return null;
+  }
+  const sheet = getSheet_(SHEETS.announcements);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  if (idIndex === undefined) {
+    throw new Error("Announcements sheet missing id column");
+  }
+  const rows = getDataRows_(sheet);
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][idIndex] || "").trim() === announcementId) {
+      return normalizeAnnouncementRecord_(mapRowToObject_(headerMap, rows[i]));
+    }
+  }
+  return null;
+}
+
+function listNotifications_(studentId, email) {
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  const now = new Date();
+  const groups = normalizedStudentId
+    ? listGroupMemberships_()
+        .filter(function (item) {
+          return String(item.personId || "").trim() === normalizedStudentId;
+        })
+        .map(function (item) {
+          return String(item.groupId || "").trim();
+        })
+        .filter(function (value) {
+          return value;
+        })
+    : [];
+  const groupSet = {};
+  groups.forEach(function (groupId) {
+    groupSet[groupId] = true;
+  });
+  const announcements = listAnnouncements_()
+    .filter(function (item) {
+      return String(item.status || "active").trim().toLowerCase() === "active";
+    })
+    .filter(function (item) {
+      if (!item.startAt && !item.endAt) {
+        return true;
+      }
+      const start = parseDateSafe_(item.startAt);
+      const end = parseDateSafe_(item.endAt);
+      if (start && start.getTime() > now.getTime()) {
+        return false;
+      }
+      if (end && end.getTime() < now.getTime()) {
+        return false;
+      }
+      return true;
+    })
+    .filter(function (item) {
+      const scope = String(item.scope || "all").trim().toLowerCase();
+      const targetKey = String(item.targetKey || "all").trim();
+      if (scope === "all") {
+        return true;
+      }
+      if (scope === "person") {
+        if (!targetKey) {
+          return false;
+        }
+        if (normalizedStudentId && targetKey === normalizedStudentId) {
+          return true;
+        }
+        return !!normalizedEmail && normalizeEmail_(targetKey) === normalizedEmail;
+      }
+      if (scope === "group") {
+        return !!groupSet[targetKey];
+      }
+      return false;
+    })
+    .map(function (item) {
+      return {
+        id: String(item.id || "").trim(),
+        type: "announcement",
+        source: "announcement",
+        title: String(item.title || "").trim(),
+        message: String(item.message || "").trim(),
+        level: String(item.level || "info").trim().toLowerCase(),
+        ctaLabel: String(item.ctaLabel || "").trim(),
+        ctaUrl: String(item.ctaUrl || "").trim(),
+        createdAt: String(item.createdAt || "").trim(),
+        expiresAt: String(item.endAt || "").trim(),
+      };
+    });
+  const todos = buildTodoNotifications_(normalizedStudentId, normalizedEmail);
+  return announcements.concat(todos);
+}
+
+function buildTodoNotifications_(studentId, email) {
+  if (!studentId && !email) {
+    return [];
+  }
+  const notifications = [];
+  const now = new Date();
+  const nowTs = now.getTime();
+
+  const events = listEventsCached_().filter(function (event) {
+    const status = String(event.status || "").trim().toLowerCase();
+    if (status && status !== "open") {
+      return false;
+    }
+    const openAt = parseDateSafe_(event.registrationOpenAt);
+    const closeAt = parseDateSafe_(event.registrationCloseAt);
+    if (openAt && openAt.getTime() > nowTs) {
+      return false;
+    }
+    if (closeAt && closeAt.getTime() < nowTs) {
+      return false;
+    }
+    return true;
+  });
+  const registrations = listRegistrationsCached_().filter(function (item) {
+    return normalizeEmail_(item.userEmail) === email;
+  });
+  const registeredEventSet = {};
+  registrations.forEach(function (item) {
+    registeredEventSet[String(item.eventId || "").trim()] = true;
+  });
+  events.forEach(function (event) {
+    const eventId = String(event.id || "").trim();
+    if (!eventId || registeredEventSet[eventId]) {
+      return;
+    }
+    notifications.push({
+      id: "todo:event:" + eventId,
+      type: "todo",
+      source: "events",
+      title: "有新活動待報名",
+      message: String(event.title || eventId) + " 尚未報名。",
+      level: "warning",
+      ctaLabel: "前往活動",
+      ctaUrl: "/events",
+      createdAt: String(event.createdAt || event.registrationOpenAt || "").trim(),
+      expiresAt: String(event.registrationCloseAt || "").trim(),
+    });
+  });
+
+  const fundEvents = listFundEvents_().filter(function (item) {
+    return String(item.status || "").trim().toLowerCase() === "collecting";
+  });
+  const fundPayments = listFundPayments_("");
+  const paidSet = {};
+  fundPayments.forEach(function (item) {
+    const payerId = String(item.payerId || "").trim();
+    const payerEmail = normalizeEmail_(item.payerEmail);
+    if (payerId) {
+      paidSet["id:" + payerId + "::event:" + String(item.eventId || "").trim()] = true;
+    }
+    if (payerEmail) {
+      paidSet["email:" + payerEmail + "::event:" + String(item.eventId || "").trim()] = true;
+    }
+  });
+  fundEvents.forEach(function (item) {
+    const eventId = String(item.id || "").trim();
+    const byId = studentId && paidSet["id:" + studentId + "::event:" + eventId];
+    const byEmail = email && paidSet["email:" + email + "::event:" + eventId];
+    if (byId || byEmail) {
+      return;
+    }
+    notifications.push({
+      id: "todo:fund:" + eventId,
+      type: "todo",
+      source: "fund",
+      title: "班費待繳交回報",
+      message: String(item.title || eventId) + " 尚未回報繳交。",
+      level: "warning",
+      ctaLabel: "前往財務",
+      ctaUrl: "/finance",
+      createdAt: String(item.createdAt || "").trim(),
+      expiresAt: String(item.dueDate || "").trim(),
+    });
+  });
+
+  const players = listSoftballPlayersCached_();
+  const player = players.find(function (item) {
+    const id = String(item.id || "").trim();
+    if (studentId && id && id === studentId) {
+      return true;
+    }
+    return !!email && normalizeEmail_(item.email) === email;
+  });
+  if (!player || !String(player.name || "").trim()) {
+    notifications.push({
+      id: "todo:softball:profile:" + (studentId || email),
+      type: "todo",
+      source: "softball-profile",
+      title: "請完成球員資料登錄",
+      message: "所有同學都需要完成球員資料。",
+      level: "warning",
+      ctaLabel: "前往填寫",
+      ctaUrl: "/softball/player",
+      createdAt: new Date().toISOString(),
+      expiresAt: "",
+    });
+  }
+
+  const attendance = listSoftballAttendance_("", studentId);
+  const attendanceMap = {};
+  attendance.forEach(function (item) {
+    const practiceId = String(item.practiceId || "").trim();
+    if (practiceId) {
+      attendanceMap[practiceId] = String(item.status || "").trim().toLowerCase();
+    }
+  });
+  const futurePractices = listSoftballPracticesCached_().filter(function (item) {
+    const date = parseDateSafe_(item.date || item.startAt);
+    return date && date.getTime() >= nowTs;
+  });
+  const pendingPractice = futurePractices.find(function (item) {
+    const practiceId = String(item.id || "").trim();
+    const status = attendanceMap[practiceId] || "unknown";
+    return status === "unknown" || status === "";
+  });
+  if (pendingPractice) {
+    const practiceId = String(pendingPractice.id || "").trim();
+    notifications.push({
+      id: "todo:softball:attendance:" + practiceId,
+      type: "todo",
+      source: "softball-attendance",
+      title: "請回覆練習出席狀態",
+      message: String(pendingPractice.title || "近期練習") + " 尚未回覆出席。",
+      level: "warning",
+      ctaLabel: "前往回覆",
+      ctaUrl: "/softball/player",
+      createdAt: String(pendingPractice.createdAt || pendingPractice.date || "").trim(),
+      expiresAt: String(pendingPractice.date || "").trim(),
+    });
+  }
+
+  return notifications;
+}
+
+function sortNotifications_(items) {
+  const levelWeight = { urgent: 0, warning: 1, info: 2 };
+  return (items || []).slice().sort(function (a, b) {
+    const wA = levelWeight[String(a.level || "info").toLowerCase()];
+    const wB = levelWeight[String(b.level || "info").toLowerCase()];
+    const weightA = wA === undefined ? 9 : wA;
+    const weightB = wB === undefined ? 9 : wB;
+    if (weightA !== weightB) {
+      return weightA - weightB;
+    }
+    return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  });
+}
+
+function parseDateSafe_(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const normalized = /^\d{4}[-/]\d{2}[-/]\d{2}( \d{2}:\d{2})?$/.test(raw)
+    ? raw.replace(/\//g, "-").replace(" ", "T")
+    : raw;
+  const parsed = new Date(normalized);
+  if (isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
 function appendEvent_(data) {
   const sheet = getSheet_(SHEETS.events);
   const headers = getHeaders_(sheet);
@@ -3835,6 +4357,35 @@ function normalizeFinanceCategoryTypeRecord_(data) {
   };
 }
 
+function normalizeAnnouncementRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    type: String(data.type || "announcement").trim().toLowerCase(),
+    scope: String(data.scope || "all").trim().toLowerCase(),
+    targetKey: String(data.targetKey || "all").trim(),
+    title: String(data.title || "").trim(),
+    message: String(data.message || "").trim(),
+    level: String(data.level || "info").trim().toLowerCase(),
+    ctaLabel: String(data.ctaLabel || "").trim(),
+    ctaUrl: String(data.ctaUrl || "").trim(),
+    status: String(data.status || "active").trim().toLowerCase(),
+    startAt: String(data.startAt || "").trim(),
+    endAt: String(data.endAt || "").trim(),
+    createdAt: String(data.createdAt || "").trim(),
+    updatedAt: String(data.updatedAt || "").trim(),
+  };
+}
+
+function normalizeNotificationReadRecord_(data) {
+  return {
+    id: String(data.id || "").trim(),
+    notificationId: String(data.notificationId || "").trim(),
+    readerStudentId: String(data.readerStudentId || "").trim(),
+    readerEmail: normalizeEmail_(data.readerEmail),
+    readAt: String(data.readAt || "").trim(),
+  };
+}
+
 function normalizeFundEventRecord_(data) {
   return {
     id: String(data.id || "").trim(),
@@ -4487,6 +5038,19 @@ function generateFinanceCategoryTypeId_() {
   var now = new Date();
   return (
     "FIN-CAT-" +
+    pad2_(now.getFullYear() % 100) +
+    pad2_(now.getMonth() + 1) +
+    pad2_(now.getDate()) +
+    pad2_(now.getHours()) +
+    pad2_(now.getMinutes()) +
+    pad2_(now.getSeconds())
+  );
+}
+
+function generateAnnouncementId_() {
+  var now = new Date();
+  return (
+    "ANN-" +
     pad2_(now.getFullYear() % 100) +
     pad2_(now.getMonth() + 1) +
     pad2_(now.getDate()) +
