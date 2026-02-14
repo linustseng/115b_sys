@@ -196,6 +196,7 @@ const meetingFields = [
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
+const UPLOAD_FOLDER_ID = import.meta.env.VITE_UPLOAD_FOLDER_ID || "";
 const EVENT_ID = "24101801";
 const confirmDelete_ = (message) => {
   if (typeof window === "undefined") {
@@ -1522,6 +1523,7 @@ function AppShell() {
         <AdminPage
           apiRequest={apiRequest}
           API_URL={API_URL}
+          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
@@ -1545,6 +1547,7 @@ function AppShell() {
         <AdminPage
           apiRequest={apiRequest}
           API_URL={API_URL}
+          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
@@ -1578,6 +1581,7 @@ function AppShell() {
         <AdminPage
           apiRequest={apiRequest}
           API_URL={API_URL}
+          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}

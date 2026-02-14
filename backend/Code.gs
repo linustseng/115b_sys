@@ -45,6 +45,21 @@ const ACTION_GROUP_POLICIES = {
   deleteGroupMembership: ["E"],
 };
 
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const ALLOWED_UPLOAD_EXTENSIONS = {
+  pdf: true,
+  jpg: true,
+  jpeg: true,
+  png: true,
+  webp: true,
+  doc: true,
+  docx: true,
+  xls: true,
+  xlsx: true,
+  ppt: true,
+  pptx: true,
+};
+
 function doPost(e) {
   try {
     if (e && e.postData && e.postData.type && e.postData.type.indexOf("multipart/form-data") === 0) {
@@ -1263,6 +1278,21 @@ function handleUpload_(e) {
       "<script>window.parent.postMessage({type:'uploadResult',payload:{ok:false,error:'Missing file'}},'*');</script>"
     ).setMimeType(ContentService.MimeType.HTML);
   }
+  const blobName = String(blob.getName() || "").trim();
+  const extension = blobName && blobName.indexOf(".") !== -1
+    ? String(blobName.split(".").pop() || "").toLowerCase()
+    : "";
+  if (!extension || !ALLOWED_UPLOAD_EXTENSIONS[extension]) {
+    return ContentService.createTextOutput(
+      "<script>window.parent.postMessage({type:'uploadResult',payload:{ok:false,error:'Unsupported file type'}},'*');</script>"
+    ).setMimeType(ContentService.MimeType.HTML);
+  }
+  const bytes = blob.getBytes();
+  if (!bytes || bytes.length > UPLOAD_MAX_BYTES) {
+    return ContentService.createTextOutput(
+      "<script>window.parent.postMessage({type:'uploadResult',payload:{ok:false,error:'File exceeds 10MB limit'}},'*');</script>"
+    ).setMimeType(ContentService.MimeType.HTML);
+  }
   const eventId = String((e && e.parameter && e.parameter.eventId) || "").trim();
   const folderId = String((e && e.parameter && e.parameter.folderId) || "").trim();
   var folder = folderId ? DriveApp.getFolderById(folderId) : DriveApp.getRootFolder();
@@ -1275,7 +1305,13 @@ function handleUpload_(e) {
     var eventRecord = findEventById_(eventId);
     if (eventRecord) {
       var attachments = parseAttachments_(eventRecord.attachments);
-      attachments.push({ name: file.getName(), url: file.getUrl(), fileId: file.getId() });
+      attachments.push({
+        name: file.getName(),
+        url: file.getUrl(),
+        fileId: file.getId(),
+        size: bytes.length,
+        contentType: String(blob.getContentType() || "").trim(),
+      });
       updateEvent_(eventId, { attachments: JSON.stringify(attachments) });
     }
   }
@@ -1285,6 +1321,8 @@ function handleUpload_(e) {
       fileId: file.getId(),
       name: file.getName(),
       url: file.getUrl(),
+      size: bytes.length,
+      contentType: String(blob.getContentType() || "").trim(),
     },
     error: null,
   };

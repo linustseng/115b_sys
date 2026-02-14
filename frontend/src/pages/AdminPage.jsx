@@ -12,6 +12,7 @@ import {
 export default function AdminPage({
   apiRequest,
   API_URL,
+  UPLOAD_FOLDER_ID,
   buildGoogleMapsUrl_,
   formatDisplayDate_,
   getGroupLabel_,
@@ -105,6 +106,19 @@ export default function AdminPage({
   const uploadFormRef = useRef(null);
   const uploadFileRef = useRef(null);
   const uploadCompletedRef = useRef(false);
+  const ALLOWED_UPLOAD_EXTENSIONS = [
+    "pdf",
+    "jpg",
+    "jpeg",
+    "png",
+    "webp",
+    "doc",
+    "docx",
+    "xls",
+    "xlsx",
+    "ppt",
+    "pptx",
+  ];
 
   const normalizeEventId_ = (value) => String(value || "").trim();
   const normalizeOrderId_ = (value) => String(value || "").trim();
@@ -613,7 +627,13 @@ export default function AdminPage({
         setForm((prev) => {
           const current = parseEventAttachments_(prev.attachments);
           const next = current.concat([
-            { name: attachment.name || attachment.url, url: attachment.url, fileId: attachment.fileId || "" },
+            {
+              name: attachment.name || attachment.url,
+              url: attachment.url,
+              fileId: attachment.fileId || "",
+              size: attachment.size || 0,
+              contentType: attachment.contentType || "",
+            },
           ]);
           return { ...prev, attachments: JSON.stringify(next) };
         });
@@ -1416,8 +1436,18 @@ export default function AdminPage({
       }
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("檔案超過 5MB 上限");
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError("檔案超過 10MB 上限");
+      if (uploadFileRef.current) {
+        uploadFileRef.current.value = "";
+      }
+      return;
+    }
+    const extension = String(file.name || "").includes(".")
+      ? String(file.name || "").split(".").pop().toLowerCase()
+      : "";
+    if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
+      setUploadError("檔案格式不支援");
       if (uploadFileRef.current) {
         uploadFileRef.current.value = "";
       }
@@ -3100,11 +3130,13 @@ export default function AdminPage({
               className="hidden"
             >
               <input type="hidden" name="eventId" value={form.id} />
+              <input type="hidden" name="folderId" value={UPLOAD_FOLDER_ID || ""} />
               <input
                 ref={uploadFileRef}
                 id="event-upload-file"
                 type="file"
                 name="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
                 onChange={handleUploadChange}
               />
             </form>
