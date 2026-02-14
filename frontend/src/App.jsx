@@ -688,7 +688,37 @@ const STORAGE_KEYS = {
   googleStudent: "emba115b.googleStudent",
 };
 
-function apiRequest(payload) {
+const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
+const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
+const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
+const inflightReadRequests = new Map();
+
+function stableStringify_(value) {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify_(item)).join(",")}]`;
+  }
+  if (typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify_(value[key])}`)
+    .join(",")}}`;
+}
+
+function isReadAction_(payload) {
+  const action = String((payload && payload.action) || "").trim();
+  return API_READ_ACTION_PREFIXES.some((prefix) => action.indexOf(prefix) === 0);
+}
+
+function buildReadRequestKey_(payload) {
+  return stableStringify_(payload || {});
+}
+
+function requestWithJsonp_(payload) {
   return new Promise((resolve, reject) => {
     if (!API_URL || API_URL.includes("REPLACE_ME")) {
       reject(new Error("API URL 未設定"));
@@ -703,7 +733,7 @@ function apiRequest(payload) {
     const timeout = setTimeout(() => {
       cleanup();
       reject(new Error("Request timeout"));
-    }, 8000);
+    }, API_TIMEOUT_MS);
 
     function cleanup() {
       clearTimeout(timeout);
@@ -726,6 +756,40 @@ function apiRequest(payload) {
     script.src = url.toString();
     document.body.appendChild(script);
   });
+}
+
+async function requestWithReadRetry_(payload) {
+  let attempt = 0;
+  while (attempt <= API_READ_RETRY_LIMIT) {
+    try {
+      return await requestWithJsonp_(payload);
+    } catch (error) {
+      const message = String((error && error.message) || "");
+      const retryable = message === "Request timeout" || message === "Network error";
+      if (!retryable || attempt >= API_READ_RETRY_LIMIT) {
+        throw error;
+      }
+      attempt += 1;
+    }
+  }
+  throw new Error("Request failed");
+}
+
+function apiRequest(payload) {
+  const requestPayload = payload || {};
+  if (!isReadAction_(requestPayload)) {
+    return requestWithJsonp_(requestPayload);
+  }
+  const cacheKey = buildReadRequestKey_(requestPayload);
+  const inflight = inflightReadRequests.get(cacheKey);
+  if (inflight) {
+    return inflight;
+  }
+  const requestPromise = requestWithReadRetry_(requestPayload).finally(() => {
+    inflightReadRequests.delete(cacheKey);
+  });
+  inflightReadRequests.set(cacheKey, requestPromise);
+  return requestPromise;
 }
 
 function loadStoredGoogleStudent_() {

@@ -484,18 +484,20 @@ export default function AdminPage({
 
   useEffect(() => {
     if (activeTab === "registrations") {
-      loadRegistrations();
-      if (!students.length || !events.length) {
-        loadAdminBootstrap();
-      }
+      loadAdminBootstrap({ includeRegistrations: true }).then((ok) => {
+        if (!ok) {
+          loadRegistrations();
+        }
+      });
       loadDirectoryAdmin();
     }
     if (activeTab === "checkins") {
-      loadCheckins();
-      loadRegistrations();
-      if (!students.length || !events.length) {
-        loadAdminBootstrap();
-      }
+      loadAdminBootstrap({ includeRegistrations: true, includeCheckins: true }).then((ok) => {
+        if (!ok) {
+          loadCheckins();
+          loadRegistrations();
+        }
+      });
       loadDirectoryAdmin();
     }
     if (activeTab === "students") {
@@ -759,11 +761,15 @@ export default function AdminPage({
     }
   };
 
-  const loadAdminBootstrap = async () => {
+  const loadAdminBootstrap = async (options = {}) => {
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listAdminBootstrap" });
+      const { result } = await apiRequest({
+        action: "listAdminBootstrap",
+        includeRegistrations: options.includeRegistrations === true,
+        includeCheckins: options.includeCheckins === true,
+      });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -773,6 +779,12 @@ export default function AdminPage({
       setStudents(studentsList);
       setGroupMemberships(data.groupMemberships || []);
       setDraftMemberships(data.groupMemberships || []);
+      if (options.includeRegistrations && data.registrations) {
+        setRegistrations(data.registrations);
+      }
+      if (options.includeCheckins && data.checkins) {
+        setCheckins(data.checkins);
+      }
       setMembershipDirty(false);
       setMembershipStatus("");
       return true;

@@ -142,6 +142,14 @@ function listEventsCached_() {
   return getCachedJson_("events:list:v1", 60, listEvents_);
 }
 
+function listRegistrationsCached_() {
+  return getCachedJson_("registrations:list:v1", 20, listRegistrations_);
+}
+
+function listCheckinsCached_() {
+  return getCachedJson_("checkins:list:v1", 20, listCheckins_);
+}
+
 function listSoftballPlayersCached_() {
   return getCachedJson_("softballPlayers:list:v1", 60, listSoftballPlayers_);
 }
@@ -201,13 +209,22 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listAdminBootstrap") {
+    const includeRegistrations = payload.includeRegistrations === true;
+    const includeCheckins = payload.includeCheckins === true;
+    const data = {
+      events: listEventsCached_(),
+      students: listStudentsCached_(),
+      groupMemberships: listGroupMembershipsCached_(),
+    };
+    if (includeRegistrations) {
+      data.registrations = listRegistrationsCached_();
+    }
+    if (includeCheckins) {
+      data.checkins = listCheckinsCached_();
+    }
     return {
       ok: true,
-      data: {
-        events: listEventsCached_(),
-        students: listStudentsCached_(),
-        groupMemberships: listGroupMembershipsCached_(),
-      },
+      data: data,
       error: null,
     };
   }
@@ -896,6 +913,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Event already exists" };
     }
     const created = appendEvent_(data);
+    invalidateCacheKeys_(["events:list:v1"]);
     return { ok: true, data: { event: created }, error: null };
   }
 
@@ -909,6 +927,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Event not found" };
     }
+    invalidateCacheKeys_(["events:list:v1"]);
     return { ok: true, data: { event: updated }, error: null };
   }
 
@@ -921,11 +940,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Event not found" };
     }
+    invalidateCacheKeys_(["events:list:v1", "registrations:list:v1", "checkins:list:v1"]);
     return { ok: true, data: { eventId: eventId }, error: null };
   }
 
   if (payload.action === "listStudents") {
-    return { ok: true, data: { students: listStudents_() }, error: null };
+    return { ok: true, data: { students: listStudentsCached_() }, error: null };
   }
 
   if (payload.action === "createStudent") {
@@ -938,6 +958,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Student already exists" };
     }
     const created = appendStudent_(data);
+    invalidateCacheKeys_(["students:list:v1"]);
     return { ok: true, data: { student: created }, error: null };
   }
 
@@ -951,6 +972,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Student not found" };
     }
+    invalidateCacheKeys_(["students:list:v1"]);
     return { ok: true, data: { student: updated }, error: null };
   }
 
@@ -963,19 +985,21 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Student not found" };
     }
+    invalidateCacheKeys_(["students:list:v1"]);
     return { ok: true, data: { id: studentId }, error: null };
   }
 
   if (payload.action === "listRegistrations") {
+    const registrations = listRegistrationsCached_();
     const adminAuth = requireGoogleGroupAccess_(payload, ["C", "E"]);
     if (adminAuth.ok) {
-      return { ok: true, data: { registrations: listRegistrations_() }, error: null };
+      return { ok: true, data: { registrations: registrations }, error: null };
     }
     const email = normalizeEmail_(payload.email);
     if (!email) {
       return { ok: false, data: null, error: "Unauthorized" };
     }
-    const ownRegistrations = listRegistrations_().filter(function (item) {
+    const ownRegistrations = registrations.filter(function (item) {
       return normalizeEmail_(item.userEmail) === email;
     });
     return { ok: true, data: { registrations: ownRegistrations }, error: null };
@@ -1027,6 +1051,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Registration not found" };
     }
+    invalidateCacheKeys_(["registrations:list:v1"]);
     return { ok: true, data: { registration: updated }, error: null };
   }
 
@@ -1039,11 +1064,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Registration not found" };
     }
+    invalidateCacheKeys_(["registrations:list:v1", "checkins:list:v1"]);
     return { ok: true, data: { id: registrationId }, error: null };
   }
 
   if (payload.action === "listCheckins") {
-    return { ok: true, data: { checkins: listCheckins_() }, error: null };
+    return { ok: true, data: { checkins: listCheckinsCached_() }, error: null };
   }
 
   if (payload.action === "deleteCheckin") {
@@ -1070,6 +1096,7 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Checkin not found" };
     }
+    invalidateCacheKeys_(["checkins:list:v1"]);
     return { ok: true, data: { id: checkinId }, error: null };
   }
 
@@ -1184,6 +1211,7 @@ function handleActionPayload_(payload) {
     }
 
     const registrationId = appendRegistration_(eventId, data, email);
+    invalidateCacheKeys_(["registrations:list:v1"]);
     return { ok: true, data: { registrationId: registrationId }, error: null };
   }
 
@@ -1234,6 +1262,7 @@ function handleActionPayload_(payload) {
     }
 
     const checkin = appendCheckin_(eventId, registration.id);
+    invalidateCacheKeys_(["checkins:list:v1"]);
     return {
       ok: true,
       data: {
