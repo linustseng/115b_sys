@@ -2426,6 +2426,9 @@ function buildTodoNotifications_(studentId, email) {
   const notifications = [];
   const now = new Date();
   const nowTs = now.getTime();
+  const normalizeIdKey_ = function (value) {
+    return String(value || "").trim().toLowerCase();
+  };
 
   const events = listEventsCached_().filter(function (event) {
     const status = String(event.status || "").trim().toLowerCase();
@@ -2527,12 +2530,36 @@ function buildTodoNotifications_(studentId, email) {
     });
   }
 
-  const attendance = listSoftballAttendance_("", studentId);
+  const candidateStudentIdSet = {};
+  const normalizedStudentId = normalizeIdKey_(studentId);
+  if (normalizedStudentId) {
+    candidateStudentIdSet[normalizedStudentId] = true;
+  }
+  if (email) {
+    players.forEach(function (item) {
+      if (normalizeEmail_(item.email) !== email) {
+        return;
+      }
+      const playerIdKey = normalizeIdKey_(item.id);
+      if (playerIdKey) {
+        candidateStudentIdSet[playerIdKey] = true;
+      }
+    });
+  }
+  const hasCandidateStudentId = Object.keys(candidateStudentIdSet).length > 0;
+  const attendance = hasCandidateStudentId
+    ? listSoftballAttendance_("", "").filter(function (item) {
+        const itemStudentIdKey = normalizeIdKey_(item.studentId);
+        return !!itemStudentIdKey && !!candidateStudentIdSet[itemStudentIdKey];
+      })
+    : [];
   const attendanceMap = {};
+  const attendanceRespondedSet = {};
   attendance.forEach(function (item) {
     const practiceId = String(item.practiceId || "").trim();
     if (practiceId) {
       attendanceMap[practiceId] = String(item.status || "").trim().toLowerCase();
+      attendanceRespondedSet[practiceId] = true;
     }
   });
   const nearestPractice = listSoftballPracticesCached_()
@@ -2550,8 +2577,9 @@ function buildTodoNotifications_(studentId, email) {
   if (nearestPractice && nearestPractice.item) {
     const practice = nearestPractice.item;
     const practiceId = String(practice.id || "").trim();
+    const hasResponse = !!attendanceRespondedSet[practiceId];
     const status = attendanceMap[practiceId] || "unknown";
-    if (status === "unknown" || status === "") {
+    if (!hasResponse || status === "") {
       notifications.push({
         id: "todo:softball:attendance:" + practiceId,
         type: "todo",
