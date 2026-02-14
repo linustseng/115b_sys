@@ -94,6 +94,21 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
+  const moduleBadgeClassByTone = {
+    slate: "border-slate-200 bg-slate-50 text-slate-700",
+    amber: "border-amber-200 bg-amber-50 text-amber-700",
+    sky: "border-sky-200 bg-sky-50 text-sky-700",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+  const ModuleBadge = ({ code, tone }) => (
+    <span
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-2xl border text-[11px] font-bold tracking-[0.08em] ${moduleBadgeClassByTone[tone] || moduleBadgeClassByTone.slate}`}
+      aria-label={code}
+      title={code}
+    >
+      {code}
+    </span>
+  );
 
   return (
     <div className="min-h-screen">
@@ -200,11 +215,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
               <div className="flex items-center justify-end">
-                <img
-                  src={emblem115b}
-                  alt="NTU EMBA 115B"
-                  className="h-10 w-10 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
-                />
+                <ModuleBadge code="EV" tone="slate" />
               </div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理系統</h3>
               <p className="mt-3 text-sm text-slate-500">
@@ -233,11 +244,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--amber">
             <div>
               <div className="flex items-center justify-end">
-                <img
-                  src={emblem115b}
-                  alt="NTU EMBA 115B"
-                  className="h-10 w-10 rounded-2xl border border-amber-200 bg-white p-1 shadow-sm"
-                />
+                <ModuleBadge code="FO" tone="amber" />
               </div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐系統</h3>
               <p className="mt-3 text-sm text-amber-900/80">
@@ -266,11 +273,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--sky">
             <div>
               <div className="flex items-center justify-end">
-                <img
-                  src={emblem115b}
-                  alt="NTU EMBA 115B"
-                  className="h-10 w-10 rounded-2xl border border-sky-200 bg-white p-1 shadow-sm"
-                />
+                <ModuleBadge code="FN" tone="sky" />
               </div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">財務管理</h3>
               <p className="mt-3 text-sm text-sky-900/80">
@@ -299,11 +302,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--emerald">
             <div>
               <div className="flex items-center justify-end">
-                <img
-                  src={emblem115b}
-                  alt="NTU EMBA 115B"
-                  className="h-10 w-10 rounded-2xl border border-emerald-200 bg-white p-1 shadow-sm"
-                />
+                <ModuleBadge code="SB" tone="emerald" />
               </div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">壘球隊管理</h3>
               <p className="mt-3 text-sm text-emerald-900/80">練習排程、點名與出席統計。</p>
