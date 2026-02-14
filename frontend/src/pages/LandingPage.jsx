@@ -49,6 +49,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [hasGoogleLogin]);
 
   useEffect(() => {
+    if (hasGoogleLogin) {
+      setLoginCollapsed(true);
+    }
+  }, [hasGoogleLogin]);
+
+  useEffect(() => {
     if (!hasGoogleLogin) {
       setMemberships([]);
       setMembershipsLoaded(false);
@@ -193,7 +199,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         </div>
       </header>
 
-      <main className="relative mx-auto max-w-6xl px-6 pb-24 pt-6 sm:px-12">
+      <main className="relative mx-auto max-w-6xl px-6 pb-32 pt-6 sm:px-12 sm:pb-24">
         {!hasGoogleLogin ? (
           <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -265,9 +271,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <a
                   href="/admin/events"
                   onClick={() => rememberModule_("events")}
-                  className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-slate-900/30 hover:bg-slate-800"
+                  className="text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-slate-700"
                 >
-                  活動管理
+                  管理入口
                 </a>
               ) : null}
             </div>
@@ -293,9 +299,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <a
                   href="/admin/ordering"
                   onClick={() => rememberModule_("ordering")}
-                  className="rounded-full bg-amber-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+                  className="text-xs font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 hover:text-amber-800"
                 >
-                  訂餐管理
+                  管理入口
                 </a>
               ) : null}
             </div>
@@ -321,9 +327,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <a
                   href="/admin/finance"
                   onClick={() => rememberModule_("finance")}
-                  className="rounded-full bg-sky-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-sky-500/30 hover:bg-sky-500"
+                  className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-800"
                 >
-                  財務管理
+                  管理入口
                 </a>
               ) : null}
             </div>
@@ -347,9 +353,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <a
                   href="/softball"
                   onClick={() => rememberModule_("softball")}
-                  className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm shadow-emerald-500/30 hover:bg-emerald-500"
+                  className="text-xs font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-4 hover:text-emerald-800"
                 >
-                  前往管理
+                  管理入口
                 </a>
               ) : null}
             </div>
@@ -369,6 +375,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-semibold text-emerald-700">
                   已登入
                 </span>
+                <span className="text-xs text-slate-500">{googleLinkedStudent.email}</span>
                 <button
                   type="button"
                   onClick={() => setLoginCollapsed((prev) => !prev)}
@@ -381,9 +388,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             {!loginCollapsed ? (
               <>
                 <div className="mt-4">
-                  <div className="alert alert-success text-xs px-4 py-2">
-                    已登入 Google：{googleLinkedStudent.email}
-                  </div>
+                  <div className="alert alert-success text-xs px-4 py-2">已登入 Google</div>
                 </div>
                 <p className="mt-3 text-[11px] text-slate-500">
                   登入後會儲存在本機，後續進入活動、訂餐與壘球系統會自動帶入。
@@ -466,6 +471,38 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           )}
         </section>
       </main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur sm:hidden">
+        <div className="mx-auto grid max-w-6xl grid-cols-5 px-2 py-2">
+          <a href="/" className="py-1 text-center text-[11px] font-semibold text-slate-700">
+            首頁
+          </a>
+          <a
+            href="/events"
+            onClick={() => rememberModule_("events")}
+            className="py-1 text-center text-[11px] font-semibold text-slate-700"
+          >
+            活動
+          </a>
+          <a
+            href="/ordering"
+            onClick={() => rememberModule_("ordering")}
+            className="py-1 text-center text-[11px] font-semibold text-slate-700"
+          >
+            訂餐
+          </a>
+          <a
+            href="/finance"
+            onClick={() => rememberModule_("finance")}
+            className="py-1 text-center text-[11px] font-semibold text-slate-700"
+          >
+            財務
+          </a>
+          <a href="/profile" className="py-1 text-center text-[11px] font-semibold text-slate-700">
+            個人
+          </a>
+        </div>
+      </nav>
     </div>
   );
 }
