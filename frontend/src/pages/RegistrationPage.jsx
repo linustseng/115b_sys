@@ -32,6 +32,7 @@ function RegistrationPage({ shared }) {
 
   const [email, setEmail] = useState("");
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [showGoogleSigninPanel, setShowGoogleSigninPanel] = useState(false);
   const [student, setStudent] = useState({
     name: "",
     company: "",
@@ -567,17 +568,37 @@ function RegistrationPage({ shared }) {
           </div>
 
           <div className="mt-6 grid gap-6">
-            {googleLinkedStudent && googleLinkedStudent.email ? (
-              <div className="alert alert-success">
-                已登入 Google：{googleLinkedStudent.email}
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-600">
+                  <p className="font-semibold text-slate-800">可直接報名，不一定要先登入</p>
+                  <p className="mt-1">Google 登入僅用於快速帶入同學資料。</p>
+                </div>
+                {!googleLinkedStudent || !googleLinkedStudent.email ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleSigninPanel((prev) => !prev)}
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    {showGoogleSigninPanel ? "收合 Google 登入" : "使用 Google 快速帶入"}
+                  </button>
+                ) : null}
               </div>
-            ) : (
-              <GoogleSigninPanel
-                title="Google 登入"
-                helperText="登入後綁定同學資料，就不用再輸入 Email。"
-                onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
-              />
-            )}
+              {googleLinkedStudent && googleLinkedStudent.email ? (
+                <div className="mt-3 alert alert-success">
+                  已登入 Google：{googleLinkedStudent.email}
+                </div>
+              ) : null}
+            </div>
+            {!googleLinkedStudent || !googleLinkedStudent.email ? (
+              showGoogleSigninPanel ? (
+                <GoogleSigninPanel
+                  title="Google 登入"
+                  helperText="登入後綁定同學資料，就不用再輸入 Email。"
+                  onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                />
+              ) : null
+            ) : null}
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700" htmlFor="email">
                 Email

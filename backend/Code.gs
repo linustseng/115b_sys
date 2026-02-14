@@ -23,6 +23,28 @@ const SHEETS = {
   softballConfig: "SoftballConfig",
 };
 
+const ACTION_GROUP_POLICIES = {
+  listAdminBootstrap: ["C", "E"],
+  createEvent: ["C", "E"],
+  updateEvent: ["C", "E"],
+  deleteEvent: ["C", "E"],
+  listRegistrations: ["C", "E"],
+  updateRegistration: ["C", "E"],
+  deleteRegistration: ["C", "E"],
+  listCheckins: ["C", "E"],
+  deleteCheckin: ["C", "E"],
+  uploadBase64: ["C", "E"],
+  createOrderPlan: ["I", "E"],
+  updateOrderPlan: ["I", "E"],
+  listOrderResponses: ["I", "E"],
+  createStudent: ["E"],
+  updateStudent: ["E"],
+  deleteStudent: ["E"],
+  batchUpdateGroupMemberships: ["E"],
+  upsertGroupMembership: ["E"],
+  deleteGroupMembership: ["E"],
+};
+
 function doPost(e) {
   try {
     if (e && e.postData && e.postData.type && e.postData.type.indexOf("multipart/form-data") === 0) {
@@ -138,6 +160,14 @@ function handleAction_(payload) {
 }
 
 function handleActionPayload_(payload) {
+  const requiredGroups = ACTION_GROUP_POLICIES[String(payload.action || "").trim()];
+  if (requiredGroups) {
+    const auth = requireGoogleGroupAccess_(payload, requiredGroups);
+    if (!auth.ok) {
+      return auth;
+    }
+  }
+
   if (payload.action === "lookupStudent") {
     const email = normalizeEmail_(payload.email);
     if (!email) {
@@ -4552,6 +4582,52 @@ function requireAuth_(payload) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
   return { ok: true, data: { email: email }, error: null };
+}
+
+function requireGoogleGroupAccess_(payload, allowedGroupIds) {
+  const idToken = String(payload.idToken || "").trim();
+  if (!idToken) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+  try {
+    const profile = verifyGoogleIdToken_(idToken);
+    const student = findStudentByGoogleSub_(profile.sub);
+    if (!student || !String(student.id || "").trim()) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    const studentId = String(student.id || "").trim();
+    if (!hasGroupAccessForStudent_(studentId, allowedGroupIds)) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    return { ok: true, data: { studentId: studentId }, error: null };
+  } catch (error) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+}
+
+function hasGroupAccessForStudent_(studentId, allowedGroupIds) {
+  const targetId = String(studentId || "").trim();
+  if (!targetId) {
+    return false;
+  }
+  const memberships = listGroupMemberships_();
+  const allowed = Array.isArray(allowedGroupIds) ? allowedGroupIds : [];
+  for (var i = 0; i < memberships.length; i++) {
+    const membership = memberships[i] || {};
+    const personId = String(membership.personId || "").trim();
+    if (!personId || personId !== targetId) {
+      continue;
+    }
+    const groupId = String(membership.groupId || "").trim();
+    const roleInGroup = String(membership.roleInGroup || "").trim();
+    if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
+      return true;
+    }
+    if (allowed.indexOf(groupId) !== -1) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function countRegistrations_(eventId) {

@@ -1178,9 +1178,26 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
 function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [googleIdToken, setGoogleIdToken] = useState("");
   const [memberships, setMemberships] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const ensureIdToken_ = async () => {
+    if (googleIdToken) {
+      return googleIdToken;
+    }
+    const token = await getGoogleIdTokenSilently_();
+    if (token) {
+      setGoogleIdToken(token);
+    }
+    return token;
+  };
+
+  const authedApiRequest = async (payload) => {
+    const token = await ensureIdToken_();
+    return apiRequest({ ...(payload || {}), idToken: token });
+  };
 
   const loadMemberships = async () => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
@@ -1243,7 +1260,10 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
             <GoogleSigninPanel
               title="Google 登入"
               helperText="登入後會自動判斷可存取的後台權限。"
-              onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+              onLinkedStudent={(student, _profile, idToken) => {
+                setGoogleLinkedStudent(student);
+                setGoogleIdToken(String(idToken || "").trim());
+              }}
             />
           </section>
         </main>
@@ -1298,6 +1318,17 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     );
   }
 
+  if (React.isValidElement(children)) {
+    const childProps = children.props || {};
+    const nextProps = {};
+    if (typeof childProps.apiRequest === "function") {
+      nextProps.apiRequest = authedApiRequest;
+    }
+    if (childProps.shared && typeof childProps.shared === "object") {
+      nextProps.shared = { ...childProps.shared, apiRequest: authedApiRequest };
+    }
+    return React.cloneElement(children, nextProps);
+  }
   return children;
 }
 

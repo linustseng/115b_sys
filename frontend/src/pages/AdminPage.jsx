@@ -35,6 +35,7 @@ export default function AdminPage({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState("");
+  const [eventListId, setEventListId] = useState("");
   const [activeTab, setActiveTab] = useState(() =>
     allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0]
   );
@@ -312,6 +313,10 @@ export default function AdminPage({
       }
       return String(b.id || "").localeCompare(String(a.id || ""));
     });
+  const selectedEventForList =
+    sortedEvents.find((item) => normalizeEventId_(item.id) === normalizeEventId_(eventListId)) ||
+    sortedEvents[0] ||
+    null;
 
   const formatOrderDateLabel_ = (value) => {
     const parsed = parseLocalInputDate_(value);
@@ -533,6 +538,21 @@ export default function AdminPage({
   }, [sortedEvents, registrationEventId, checkinEventId]);
 
   useEffect(() => {
+    if (!sortedEvents.length) {
+      if (eventListId) {
+        setEventListId("");
+      }
+      return;
+    }
+    const hasSelected = sortedEvents.some(
+      (item) => normalizeEventId_(item.id) === normalizeEventId_(eventListId)
+    );
+    if (!eventListId || !hasSelected) {
+      setEventListId(sortedEvents[0].id || "");
+    }
+  }, [sortedEvents, eventListId]);
+
+  useEffect(() => {
     if (activeTab !== "ordering") {
       return;
     }
@@ -604,6 +624,7 @@ export default function AdminPage({
   }, []);
 
   const handleEdit = (event) => {
+    setEventListId(event.id || "");
     setActiveId(event.id || "");
     setForm({
       id: event.id || "",
@@ -1744,38 +1765,66 @@ export default function AdminPage({
           ) : null}
           {activeTab === "events" ? (
             <div className="mt-6 space-y-4">
-              {sortedEvents.map((event) => (
-                <div
-                  key={event.id}
-                  className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
+              <div className="grid gap-2 text-sm">
+                <label className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  選擇活動
+                </label>
+                <select
+                  value={eventListId}
+                  onChange={(event) => setEventListId(event.target.value)}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                 >
-                  <div>
-                    <p className="font-semibold text-slate-900">
+                  {sortedEvents.map((event) => (
+                    <option key={event.id} value={event.id}>
                       {event.title}
-                      {isEventClosed_(event) ? " (已結束)" : ""}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {formatDisplayDate_(event.startAt, { withTime: true }) || "-"} ·{" "}
-                      {event.location}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handleEdit(event)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      編輯
-                    </button>
-                    <button
-                      onClick={() => handleDelete(event.id)}
-                      disabled={saving}
-                      className="badge-error hover:border-rose-300 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      刪除
-                    </button>
+                      {isEventClosed_(event) ? " (已結束)" : ""} · {event.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedEventForList ? (
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-semibold text-slate-900">
+                        {selectedEventForList.title}
+                        {isEventClosed_(selectedEventForList) ? " (已結束)" : ""}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {formatDisplayDate_(selectedEventForList.startAt, { withTime: true }) || "-"} ·{" "}
+                        {selectedEventForList.location || "-"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {selectedEventForList.id || "-"}
+                      </p>
+                    </div>
+                    <details className="relative">
+                      <summary className="cursor-pointer list-none rounded-xl border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300">
+                        ⋯
+                      </summary>
+                      <div className="absolute right-0 z-10 mt-2 w-36 rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(selectedEventForList)}
+                          className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                        >
+                          編輯活動
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(selectedEventForList.id)}
+                          disabled={saving}
+                          className="block w-full rounded-lg px-3 py-2 text-left text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                        >
+                          刪除活動
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 </div>
-              ))}
+              ) : (
+                <p className="text-sm text-slate-500">目前沒有活動資料。</p>
+              )}
             </div>
           ) : null}
 
