@@ -502,8 +502,9 @@ function RegistrationPage({ shared }) {
               NTU EMBA 115B
             </p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-              {eventInfo.title} 報名
+              活動報名 · 同學入口
             </h1>
+            <p className="mt-2 text-sm text-slate-500">活動：{eventInfo.title}</p>
           </div>
           <div className="flex items-center gap-3">
             <a

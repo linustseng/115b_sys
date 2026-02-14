@@ -144,7 +144,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   NTU EMBA 115B
                 </p>
                 <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-                  115B 班務系統
+                  首頁 · 同學入口
                 </h1>
               </div>
             </div>

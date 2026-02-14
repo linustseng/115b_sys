@@ -646,7 +646,7 @@ function SoftballPlayerPage({ shared }) {
             NTU EMBA 115B
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-            壘球隊 · 球員入口
+            壘球隊管理 · 同學入口
           </h1>
           <p className="mt-3 text-sm text-slate-500">背號申請、位置偏好、練習出席回覆。</p>
         </div>
