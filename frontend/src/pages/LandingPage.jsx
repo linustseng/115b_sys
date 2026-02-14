@@ -34,13 +34,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
-  const [recentModule, setRecentModule] = useState(() => {
-    try {
-      return localStorage.getItem("home_recent_module") || "";
-    } catch (error) {
-      return "";
-    }
-  });
 
   useEffect(() => {
     if (!hasGoogleLogin) {
@@ -89,19 +82,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   }, [showCalendarMobile]);
 
-  const rememberModule_ = (moduleId) => {
-    const value = String(moduleId || "").trim();
-    if (!value) {
-      return;
-    }
-    setRecentModule(value);
-    try {
-      localStorage.setItem("home_recent_module", value);
-    } catch (error) {
-      // Ignore write errors.
-    }
-  };
-
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
   const userMemberships = memberships.filter((item) => {
     const memberId = String(item.personId || "").trim();
@@ -120,13 +100,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
-  const moduleEntryMap = {
-    events: { href: "/events", label: "進入活動" },
-    ordering: { href: "/ordering", label: "進入訂餐" },
-    finance: { href: "/finance", label: "進入財務" },
-    softball: { href: "/softball/player", label: "進入壘球" },
-  };
-  const primaryEntry = moduleEntryMap[recentModule] || moduleEntryMap.events;
 
   return (
     <div className="min-h-screen">
@@ -229,27 +202,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </section>
         ) : null}
 
-        <section className="entrance entrance-delay-2 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                {recentModule ? "繼續上次使用" : "快速開始"}
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {hasGoogleLogin ? "已登入，可直接進入常用模組。" : "建議先登入，再使用完整功能。"}
-              </p>
-            </div>
-            <a
-              href={primaryEntry.href}
-              onClick={() => rememberModule_(recentModule || "events")}
-              className="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-slate-900/30 hover:bg-slate-800"
-            >
-              {primaryEntry.label}
-              <span className="ml-2 text-base">→</span>
-            </a>
-          </div>
-        </section>
-
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
@@ -261,7 +213,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
                 href="/events"
-                onClick={() => rememberModule_("events")}
                 className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400"
               >
                 同學入口
@@ -270,7 +221,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               {canSeeEventAdmin ? (
                 <a
                   href="/admin/events"
-                  onClick={() => rememberModule_("events")}
                   className="text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-slate-700"
                 >
                   管理入口
@@ -289,7 +239,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
                 href="/ordering"
-                onClick={() => rememberModule_("ordering")}
                 className="inline-flex items-center rounded-full border border-amber-300 bg-white px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm hover:border-amber-400"
               >
                 同學入口
@@ -298,7 +247,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               {canSeeOrderingAdmin ? (
                 <a
                   href="/admin/ordering"
-                  onClick={() => rememberModule_("ordering")}
                   className="text-xs font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 hover:text-amber-800"
                 >
                   管理入口
@@ -317,7 +265,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
                 href="/finance"
-                onClick={() => rememberModule_("finance")}
                 className="inline-flex items-center rounded-full border border-sky-300 bg-white px-4 py-1.5 text-sm font-semibold text-sky-700 shadow-sm hover:border-sky-400"
               >
                 同學入口
@@ -326,7 +273,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               {canSeeFinanceAdmin ? (
                 <a
                   href="/admin/finance"
-                  onClick={() => rememberModule_("finance")}
                   className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-800"
                 >
                   管理入口
@@ -343,7 +289,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
                 href="/softball/player"
-                onClick={() => rememberModule_("softball")}
                 className="inline-flex items-center rounded-full border border-emerald-300 bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm hover:border-emerald-400"
               >
                 球員入口
@@ -352,7 +297,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               {canSeeSoftballAdmin ? (
                 <a
                   href="/softball"
-                  onClick={() => rememberModule_("softball")}
                   className="text-xs font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-4 hover:text-emerald-800"
                 >
                   管理入口
@@ -479,21 +423,18 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </a>
           <a
             href="/events"
-            onClick={() => rememberModule_("events")}
             className="py-1 text-center text-[11px] font-semibold text-slate-700"
           >
             活動
           </a>
           <a
             href="/ordering"
-            onClick={() => rememberModule_("ordering")}
             className="py-1 text-center text-[11px] font-semibold text-slate-700"
           >
             訂餐
           </a>
           <a
             href="/finance"
-            onClick={() => rememberModule_("finance")}
             className="py-1 text-center text-[11px] font-semibold text-slate-700"
           >
             財務
