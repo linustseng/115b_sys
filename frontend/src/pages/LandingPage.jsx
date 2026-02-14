@@ -202,7 +202,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   NTU EMBA 115B
                 </p>
                 <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-                  首頁 · 同學入口
+                  NTU EMBA 115B 班級系統
                 </h1>
               </div>
             </div>
@@ -295,7 +295,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
-              <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理系統</h3>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理</h3>
               <p className="mt-3 text-sm text-slate-500">
                 報名、簽到與活動資訊一站完成。
               </p>
@@ -321,7 +321,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--amber">
             <div>
-              <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐系統</h3>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐管理</h3>
               <p className="mt-3 text-sm text-amber-900/80">
                 週末與特別課程訂餐，前一日 23:59 截止。
               </p>

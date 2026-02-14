@@ -252,7 +252,7 @@ function OrderingPage({ shared }) {
             NTU EMBA 115B
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-            訂餐管理 · 同學入口
+            訂餐管理 · 同學版
           </h1>
           <p className="mt-3 text-sm text-slate-500">週末與特別活動訂餐，前一日 23:59 截止。</p>
         </div>

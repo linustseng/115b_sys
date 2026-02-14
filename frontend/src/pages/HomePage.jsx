@@ -426,7 +426,7 @@ function HomePage({
               NTU EMBA 115B
             </p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-              活動管理 · 同學入口
+              活動管理 · 同學版
             </h1>
           </div>
           <span className="hidden badge-muted sm:inline-flex">

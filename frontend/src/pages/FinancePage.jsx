@@ -759,7 +759,7 @@ function FinancePage({ shared }) {
             NTU EMBA 115B
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-            財務管理 · 同學入口
+            財務管理 · 同學版
           </h1>
           <p className="mt-3 text-sm text-slate-500">請購、請款與零用金申請。</p>
         </div>

@@ -63,7 +63,7 @@ function ApprovalsPage({ shared }) {
             NTU EMBA 115B
           </p>
           <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
-            簽核中心 · 同學入口
+            簽核中心 · 同學版
           </h1>
           <p className="mt-3 text-sm text-slate-500">待簽與已簽清單。</p>
         </div>
