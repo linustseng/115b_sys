@@ -2589,14 +2589,58 @@ function parseDateSafe_(value) {
   if (!raw) {
     return null;
   }
-  const normalized = /^\d{4}[-/]\d{2}[-/]\d{2}( \d{2}:\d{2})?$/.test(raw)
-    ? raw.replace(/\//g, "-").replace(" ", "T")
-    : raw;
-  const parsed = new Date(normalized);
-  if (isNaN(parsed.getTime())) {
-    return null;
+  const buildDate_ = function (year, month, day, hour, minute) {
+    const y = Number(year);
+    const m = Number(month);
+    const d = Number(day);
+    const h = Number(hour || 0);
+    const min = Number(minute || 0);
+    if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+      return null;
+    }
+    if (m < 1 || m > 12 || d < 1 || d > 31 || h < 0 || h > 23 || min < 0 || min > 59) {
+      return null;
+    }
+    const date = new Date(y, m - 1, d, h, min, 0, 0);
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) {
+      return null;
+    }
+    return date;
+  };
+
+  // YYYY-MM-DD / YYYY/M/D with optional HH:mm
+  var fullMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/);
+  if (fullMatch) {
+    return buildDate_(fullMatch[1], fullMatch[2], fullMatch[3], fullMatch[4], fullMatch[5]);
   }
-  return parsed;
+
+  // M/D or M-D with optional HH:mm. Assume current year.
+  var mdMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/);
+  if (mdMatch) {
+    var now = new Date();
+    var currentYear = now.getFullYear();
+    var month = Number(mdMatch[1]);
+    var dateThisYear = buildDate_(currentYear, month, mdMatch[2], mdMatch[3], mdMatch[4]);
+    if (!dateThisYear) {
+      return null;
+    }
+    // Cross-year fallback for short dates entered without year.
+    // Example: now=12/22, target=3/5 should map to next year.
+    var nowMonth = now.getMonth() + 1;
+    if (dateThisYear.getTime() < now.getTime() && nowMonth >= 10 && month <= 3) {
+      var dateNextYear = buildDate_(currentYear + 1, month, mdMatch[2], mdMatch[3], mdMatch[4]);
+      if (dateNextYear) {
+        return dateNextYear;
+      }
+    }
+    return dateThisYear;
+  }
+
+  const parsed = new Date(raw);
+  return isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function appendEvent_(data) {
