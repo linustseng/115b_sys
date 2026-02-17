@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import emblem115b from "../assets/115b_icon.png";
-import ApprovalsCenter from "./ApprovalsCenter";
+const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const { apiRequest } = shared;
@@ -69,6 +69,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const [showApprovalsCenter, setShowApprovalsCenter] = useState(false);
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -125,6 +126,31 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       } catch (error) {
         // Ignore cache read errors.
       }
+
+      // Memberships drive admin-entry visibility. If we don't have fresh cache yet,
+      // fetch them in parallel so entry links appear before notifications finish.
+      if (!hasValidCachedMemberships) {
+        apiRequest({ action: "listGroupMemberships" })
+          .then(({ result }) => {
+            if (ignore || !result || !result.ok) {
+              return;
+            }
+            const all = result.data && Array.isArray(result.data.memberships) ? result.data.memberships : [];
+            const mine = studentId
+              ? all.filter((item) => String(item.personId || "").trim() === studentId)
+              : [];
+            setMemberships(mine);
+            setMembershipsLoaded(true);
+            try {
+              localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
+            } catch (error) {
+              // Ignore cache write errors.
+            }
+          })
+          .catch(() => {
+            // Ignore parallel fallback errors.
+          });
+      }
       try {
         const { result } = await apiRequest({
           action: "listLandingBootstrap",
@@ -170,6 +196,31 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       ignore = true;
     };
   }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin) {
+      setShowApprovalsCenter(false);
+      return;
+    }
+    let cancelled = false;
+    const reveal = () => {
+      if (!cancelled) {
+        setShowApprovalsCenter(true);
+      }
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(reveal, { timeout: 600 });
+      return () => {
+        cancelled = true;
+        window.cancelIdleCallback(id);
+      };
+    }
+    const timer = setTimeout(reveal, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [hasGoogleLogin]);
 
   const markNotificationRead = async (notificationId) => {
     if (!notificationId || !hasGoogleLogin) {
@@ -453,7 +504,25 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         </section>
 
         <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
-          <ApprovalsCenter shared={shared} embedded requestId="" />
+          {showApprovalsCenter ? (
+            <Suspense
+              fallback={
+                <div className="space-y-3">
+                  <div className="h-6 w-28 rounded-full bg-slate-100" />
+                  <div className="h-16 rounded-2xl bg-slate-100/70" />
+                  <div className="h-16 rounded-2xl bg-slate-100/70" />
+                </div>
+              }
+            >
+              <ApprovalsCenter shared={shared} embedded requestId="" />
+            </Suspense>
+          ) : (
+            <div className="space-y-3">
+              <div className="h-6 w-28 rounded-full bg-slate-100" />
+              <div className="h-16 rounded-2xl bg-slate-100/70" />
+              <div className="h-16 rounded-2xl bg-slate-100/70" />
+            </div>
+          )}
         </section>
 
         {hasGoogleLogin ? (
