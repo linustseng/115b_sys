@@ -1,5 +1,8 @@
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
+const API_CACHE = `api-${CACHE_VERSION}`;
+const API_CACHE_TTL_MS = 60 * 1000;
+const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
 const PRECACHE_ASSETS = [
   "/",
   "/index.html",
@@ -22,15 +25,108 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key.startsWith("static-") && key !== STATIC_CACHE)
+          .filter(
+            (key) =>
+              (key.startsWith("static-") && key !== STATIC_CACHE) ||
+              (key.startsWith("api-") && key !== API_CACHE)
+          )
           .map((key) => caches.delete(key))
       )
     ).then(() => self.clients.claim())
   );
 });
 
+function stableStringify_(value) {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify_(item)).join(",")}]`;
+  }
+  if (typeof value !== "object") {
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return String(value);
+    }
+  }
+  const keys = Object.keys(value).sort();
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify_(value[key])}`).join(",")}}`;
+}
+
+function hashKey_(text) {
+  const input = String(text || "");
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33) ^ input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function isReadAction_(action) {
+  const normalized = String(action || "").trim();
+  return API_READ_ACTION_PREFIXES.some((prefix) => normalized.indexOf(prefix) === 0);
+}
+
+function buildApiCacheKeys_(payload) {
+  const bodyKey = hashKey_(stableStringify_(payload || {}));
+  const bucket = Math.floor(Date.now() / API_CACHE_TTL_MS);
+  const current = new Request(`/__api_cache__/${bodyKey}/${bucket}`);
+  const previous = new Request(`/__api_cache__/${bodyKey}/${bucket - 1}`);
+  return { current, previous };
+}
+
+async function handleApiPostRequest_(event, request) {
+  const cloned = request.clone();
+  let payload;
+  try {
+    payload = await cloned.json();
+  } catch (error) {
+    return fetch(request);
+  }
+  const action = String((payload && payload.action) || "").trim();
+  if (!action) {
+    return fetch(request);
+  }
+
+  const apiCache = await caches.open(API_CACHE);
+
+  if (isReadAction_(action)) {
+    const keys = buildApiCacheKeys_(payload);
+    const cached = (await apiCache.match(keys.current)) || (await apiCache.match(keys.previous));
+    const revalidatePromise = fetch(request.clone())
+      .then((response) => {
+        if (response && response.ok) {
+          apiCache.put(keys.current, response.clone());
+        }
+        return response;
+      })
+      .catch(() => null);
+    if (cached) {
+      event.waitUntil(revalidatePromise);
+      return cached;
+    }
+    const fresh = await revalidatePromise;
+    if (fresh) {
+      return fresh;
+    }
+    return fetch(request);
+  }
+
+  const response = await fetch(request);
+  if (response && response.ok) {
+    event.waitUntil(caches.delete(API_CACHE));
+  }
+  return response;
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
+  if (request.method === "POST") {
+    event.respondWith(handleApiPostRequest_(event, request));
+    return;
+  }
+
   if (request.method !== "GET") {
     return;
   }
@@ -51,14 +147,20 @@ self.addEventListener("fetch", (event) => {
   const destination = request.destination;
   if (["script", "style", "image", "font"].includes(destination)) {
     event.respondWith(
-      caches.match(request).then((cached) =>
-        cached ||
-        fetch(request).then((response) => {
-          const responseClone = response.clone();
-          caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
-          return response;
-        })
-      )
+      caches.match(request).then((cached) => {
+        const networkFetch = fetch(request)
+          .then((response) => {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then((cache) => cache.put(request, responseClone));
+            return response;
+          })
+          .catch(() => null);
+        if (cached) {
+          event.waitUntil(networkFetch);
+          return cached;
+        }
+        return networkFetch;
+      })
     );
   }
 });

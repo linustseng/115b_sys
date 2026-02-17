@@ -694,6 +694,10 @@ const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT ||
 const API_READ_CACHE_TTL_MS = Number(import.meta.env.VITE_API_READ_CACHE_TTL_MS || 2500);
 const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
 const API_ENABLE_POST = String(import.meta.env.VITE_API_ENABLE_POST || "").trim() === "1";
+const IS_PWA_STANDALONE =
+  typeof window !== "undefined" &&
+  (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true);
+const API_ENABLE_POST_EFFECTIVE = API_ENABLE_POST || IS_PWA_STANDALONE;
 const API_POST_ACTIONS = new Set([
   "listAdminBootstrap",
   "listFinanceAdminBootstrap",
@@ -806,7 +810,7 @@ function setCachedReadResponse_(cacheKey, response, ttlMs) {
 }
 
 function shouldTryPost_(payload) {
-  if (!API_ENABLE_POST) {
+  if (!API_ENABLE_POST_EFFECTIVE) {
     return false;
   }
   const action = String((payload && payload.action) || "").trim();
