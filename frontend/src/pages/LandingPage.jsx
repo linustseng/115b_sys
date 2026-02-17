@@ -576,7 +576,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const approvalsSection = (
     <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-slate-900">簽核中心</h2>
+        <h2 className="text-base font-semibold text-slate-900">簽核摘要</h2>
         {!showApprovalsCenter ? (
           <button
             type="button"

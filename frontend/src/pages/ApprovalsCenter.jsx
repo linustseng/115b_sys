@@ -670,8 +670,12 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
       <div className={embedded ? "" : "card p-6 sm:p-8"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">簽核中心</h2>
-            <p className="mt-1 text-xs text-slate-500">待簽核、簽核中與結案清單。</p>
+            <h2 className="text-lg font-semibold text-slate-900">
+              {embedded ? "詳細簽核清單" : "簽核中心"}
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              {embedded ? "可在此查看與操作完整簽核案件。" : "待簽核、簽核中與結案清單。"}
+            </p>
           </div>
         </div>
 
