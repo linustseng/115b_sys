@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
+function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab = "pending" }) {
   const {
     apiRequest,
     GoogleSigninPanel,
@@ -63,7 +63,13 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
   const [students, setStudents] = useState(initialApprovalsCache ? initialApprovalsCache.students : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState("pending");
+  const normalizeTab_ = (value) => {
+    const candidate = String(value || "").trim().toLowerCase();
+    return ["pending", "inprogress", "completed", "returned"].includes(candidate)
+      ? candidate
+      : "pending";
+  };
+  const [tab, setTab] = useState(normalizeTab_(initialTab));
   const [completedView, setCompletedView] = useState("relevant");
   const [actorName, setActorName] = useState("");
   const [actorNote, setActorNote] = useState("");
@@ -286,6 +292,10 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     }
     loadActions(requestId).catch(() => {});
   }, [requestId]);
+
+  useEffect(() => {
+    setTab(normalizeTab_(initialTab));
+  }, [initialTab]);
 
   const normalizedEmail = String((googleLinkedStudent && googleLinkedStudent.email) || "")
     .trim()

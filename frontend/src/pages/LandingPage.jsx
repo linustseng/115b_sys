@@ -114,6 +114,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [approvalsOverviewError, setApprovalsOverviewError] = useState("");
   const [showApprovalsCenter, setShowApprovalsCenter] = useState(false);
   const [mountApprovalsCenter, setMountApprovalsCenter] = useState(false);
+  const [approvalsDetailTab, setApprovalsDetailTab] = useState("pending");
   const [birthdaySummary, setBirthdaySummary] = useState(() => ({
     currentMonth: new Date().getMonth() + 1,
     nextMonth: new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2,
@@ -465,7 +466,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   };
 
-  const openApprovalsCenter = () => {
+  const openApprovalsCenter = (targetTab = "pending") => {
+    setApprovalsDetailTab(String(targetTab || "pending").trim().toLowerCase());
     setShowApprovalsCenter(true);
     if (mountApprovalsCenter) {
       return;
@@ -617,22 +619,38 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       ) : (
         <div className="mt-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 px-4 py-3">
+            <button
+              type="button"
+              onClick={() => openApprovalsCenter("pending")}
+              className="rounded-2xl border border-rose-200/80 bg-rose-50/70 px-4 py-3 text-left hover:border-rose-300"
+            >
               <p className="text-[11px] font-semibold text-rose-700">待我簽核</p>
               <p className="mt-2 text-xl font-semibold text-rose-900">{approvalsOverview.pending}</p>
-            </div>
-            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3">
+            </button>
+            <button
+              type="button"
+              onClick={() => openApprovalsCenter("inprogress")}
+              className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3 text-left hover:border-amber-300"
+            >
               <p className="text-[11px] font-semibold text-amber-700">處理中</p>
               <p className="mt-2 text-xl font-semibold text-amber-900">{approvalsOverview.inProgress}</p>
-            </div>
-            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3">
+            </button>
+            <button
+              type="button"
+              onClick={() => openApprovalsCenter("completed")}
+              className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3 text-left hover:border-emerald-300"
+            >
               <p className="text-[11px] font-semibold text-emerald-700">已結案</p>
               <p className="mt-2 text-xl font-semibold text-emerald-900">{approvalsOverview.completed}</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+            </button>
+            <button
+              type="button"
+              onClick={() => openApprovalsCenter("returned")}
+              className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3 text-left hover:border-slate-300"
+            >
               <p className="text-[11px] font-semibold text-slate-600">退回補件</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">{approvalsOverview.returned}</p>
-            </div>
+            </button>
           </div>
           {approvalsOverviewError ? (
             <p className="mt-3 text-xs text-rose-600">{approvalsOverviewError}</p>
@@ -652,7 +670,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 </div>
               }
             >
-              <ApprovalsCenter shared={shared} embedded requestId="" />
+              <ApprovalsCenter
+                shared={shared}
+                embedded
+                requestId=""
+                initialTab={approvalsDetailTab}
+              />
             </Suspense>
           ) : (
             <div className="space-y-3">
