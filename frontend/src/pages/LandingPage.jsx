@@ -39,6 +39,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationError, setNotificationError] = useState("");
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
+  const membershipsCacheTtlMs = 90 * 1000;
+  const membershipsCachePrefix = "landing_memberships_cache_v1";
 
   useEffect(() => {
     if (!hasGoogleLogin) {
@@ -64,6 +66,64 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     if (!hasGoogleLogin) {
       setMemberships([]);
       setMembershipsLoaded(false);
+      return;
+    }
+    let ignore = false;
+    const studentId = googleLinkedStudent && googleLinkedStudent.id ? String(googleLinkedStudent.id).trim() : "";
+    const email = googleLinkedStudent && googleLinkedStudent.email ? String(googleLinkedStudent.email).trim().toLowerCase() : "";
+    const cacheKey = `${membershipsCachePrefix}:${studentId || email}`;
+
+    const loadMemberships = async () => {
+      let hasValidCachedMemberships = false;
+      try {
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          const ts = Number(cached && cached.ts ? cached.ts : 0);
+          const items = cached && Array.isArray(cached.memberships) ? cached.memberships : null;
+          if (items && Date.now() - ts <= membershipsCacheTtlMs && !ignore) {
+            setMemberships(items);
+            setMembershipsLoaded(true);
+            hasValidCachedMemberships = true;
+          }
+        }
+      } catch (error) {
+        // Ignore cache read errors.
+      }
+      try {
+        const { result } = await apiRequest({ action: "listGroupMemberships" });
+        if (!result.ok) {
+          throw new Error(result.error || "載入失敗");
+        }
+        if (ignore) {
+          return;
+        }
+        const all = result.data && result.data.memberships ? result.data.memberships : [];
+        const mine = studentId
+          ? all.filter((item) => String(item.personId || "").trim() === studentId)
+          : [];
+        setMemberships(mine);
+        setMembershipsLoaded(true);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      } catch (error) {
+        if (!ignore && !hasValidCachedMemberships) {
+          setMemberships([]);
+          setMembershipsLoaded(true);
+        }
+      }
+    };
+    loadMemberships();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin) {
       setNotifications([]);
       setNotificationUnread(0);
       setNotificationError("");
@@ -87,16 +147,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           return;
         }
         const data = result.data || {};
-        setMemberships(data.memberships || []);
-        setMembershipsLoaded(true);
         setNotifications(data.notifications || []);
         setNotificationUnread(Number(data.unreadCount || 0));
       } catch (error) {
         if (ignore) {
           return;
         }
-        setMemberships([]);
-        setMembershipsLoaded(true);
         setNotificationError(error.message || "通知載入失敗");
         setNotifications([]);
         setNotificationUnread(0);
