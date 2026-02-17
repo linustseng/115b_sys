@@ -75,6 +75,7 @@ const CACHE_KEYS = {
   softballFields: "softballFields:list:v1",
   softballGear: "softballGear:list:v1",
   softballConfig: "softballConfig:list:v1",
+  softballAttendance: "softballAttendance:list:v1",
   directory: "directory:list:v1",
   orderPlans: "orderPlans:list:v1",
   orderResponses: "orderResponses:list:v1",
@@ -225,6 +226,10 @@ function listSoftballGearCached_() {
 
 function listSoftballConfigCached_() {
   return getCachedJson_(CACHE_KEYS.softballConfig, 90, listSoftballConfig_);
+}
+
+function listSoftballAttendanceCached_() {
+  return getCachedJson_(CACHE_KEYS.softballAttendance, 60, listSoftballAttendanceCore_);
 }
 
 function listDirectoryCached_() {
@@ -1161,6 +1166,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing practiceId/studentId" };
     }
     const record = upsertSoftballAttendance_(data);
+    invalidateCacheKeys_([CACHE_KEYS.softballAttendance]);
     return { ok: true, data: { attendance: record }, error: null };
   }
 
@@ -1793,6 +1799,87 @@ function getEventsIndex_() {
   });
 }
 
+function getFinanceActionsIndex_() {
+  return getMemoValue_("index:financeActions", function () {
+    const byRequest = {};
+    const byActor = {};
+    const latestByRequest = {};
+    listFinanceActionsCached_().forEach(function (item) {
+      const requestId = String(item.requestId || "").trim();
+      if (requestId) {
+        if (!byRequest[requestId]) {
+          byRequest[requestId] = [];
+        }
+        byRequest[requestId].push(item);
+        const currentLatest = latestByRequest[requestId];
+        if (!currentLatest) {
+          latestByRequest[requestId] = item;
+        } else {
+          const currentCreated = String(currentLatest.createdAt || "");
+          const nextCreated = String(item.createdAt || "");
+          if (nextCreated.localeCompare(currentCreated) > 0) {
+            latestByRequest[requestId] = item;
+          }
+        }
+      }
+      const actorName = String(item.actorName || "").trim();
+      if (actorName) {
+        if (!byActor[actorName]) {
+          byActor[actorName] = [];
+        }
+        byActor[actorName].push(item);
+      }
+    });
+    return { byRequest: byRequest, byActor: byActor, latestByRequest: latestByRequest };
+  });
+}
+
+function getRegistrationsIndex_() {
+  return getMemoValue_("index:registrations", function () {
+    const byId = {};
+    const byEventEmail = {};
+    listRegistrationsCached_().forEach(function (item) {
+      const id = String(item.id || "").trim();
+      if (id) {
+        byId[id] = item;
+      }
+      const eventId = String(item.eventId || "").trim();
+      const email = normalizeEmail_(item.userEmail);
+      if (!eventId || !email) {
+        return;
+      }
+      const key = eventId + "::" + email;
+      if (!Object.prototype.hasOwnProperty.call(byEventEmail, key)) {
+        byEventEmail[key] = item;
+      }
+    });
+    return { byId: byId, byEventEmail: byEventEmail };
+  });
+}
+
+function getCheckinsIndex_() {
+  return getMemoValue_("index:checkins", function () {
+    const byId = {};
+    const byEventRegistration = {};
+    listCheckinsCached_().forEach(function (item) {
+      const id = String(item.id || "").trim();
+      if (id) {
+        byId[id] = item;
+      }
+      const eventId = String(item.eventId || "").trim();
+      const registrationId = String(item.registrationId || "").trim();
+      if (!eventId || !registrationId) {
+        return;
+      }
+      const key = eventId + "::" + registrationId;
+      if (!Object.prototype.hasOwnProperty.call(byEventRegistration, key)) {
+        byEventRegistration[key] = item;
+      }
+    });
+    return { byId: byId, byEventRegistration: byEventRegistration };
+  });
+}
+
 function findStudentById_(studentId) {
   const id = String(studentId || "").trim();
   if (!id) {
@@ -1956,12 +2043,16 @@ function listSoftballPractices_() {
   });
 }
 
-function listSoftballAttendance_(practiceId, studentId) {
+function listSoftballAttendanceCore_() {
   const sheet = getSheet_(SHEETS.softballAttendance);
   const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet).map(function (row) {
+  return getDataRows_(sheet).map(function (row) {
     return mapRowToObject_(headerMap, row);
   });
+}
+
+function listSoftballAttendance_(practiceId, studentId) {
+  const rows = listSoftballAttendanceCached_();
   const normalizedPracticeId = String(practiceId || "").trim();
   const normalizedStudentId = String(studentId || "").trim();
   if (!normalizedPracticeId && !normalizedStudentId) {
@@ -2119,12 +2210,66 @@ function listFinanceRequests_(payload) {
         return normalizeEmail_(item.applicantEmail) === applicantEmail;
       })
     : list;
-  const memberships = listGroupMembershipsCached_();
+  const needsApplicantRoleResolve = filtered.some(function (item) {
+    return !String(item.applicantRole || "").trim();
+  });
+  const memberships = needsApplicantRoleResolve ? listGroupMembershipsCached_() : [];
+  const roleByPerson = {};
+  const roleByPersonGroup = {};
+  if (needsApplicantRoleResolve) {
+    for (var i = 0; i < memberships.length; i += 1) {
+      const membership = memberships[i] || {};
+      const personId = String(membership.personId || "").trim();
+      if (!personId) {
+        continue;
+      }
+      const role = String(membership.roleInGroup || "").trim().toLowerCase();
+      if (role && !Object.prototype.hasOwnProperty.call(roleByPerson, personId)) {
+        roleByPerson[personId] = role;
+      }
+      const groupId = normalizeGroupId_(membership.groupId || "");
+      if (!groupId || !role) {
+        continue;
+      }
+      const personGroupKey = personId + "::" + groupId;
+      if (!Object.prototype.hasOwnProperty.call(roleByPersonGroup, personGroupKey)) {
+        roleByPersonGroup[personGroupKey] = role;
+      }
+    }
+  }
+  const personIdByEmail = {};
+  const resolveApplicantRoleFast_ = function (record) {
+    const explicitRole = String(record.applicantRole || "").trim().toLowerCase();
+    if (explicitRole) {
+      return explicitRole;
+    }
+    var applicantId = String(record.applicantId || "").trim();
+    if (!applicantId) {
+      const email = normalizeEmail_(record.applicantEmail || "");
+      if (email) {
+        if (!Object.prototype.hasOwnProperty.call(personIdByEmail, email)) {
+          personIdByEmail[email] = resolvePersonIdByEmail_(email);
+        }
+        applicantId = String(personIdByEmail[email] || "").trim();
+      }
+    }
+    if (!applicantId) {
+      return "";
+    }
+    const groupId = normalizeGroupId_(record.applicantDepartment || "");
+    if (groupId) {
+      const groupRole = roleByPersonGroup[applicantId + "::" + groupId];
+      if (groupRole) {
+        return groupRole;
+      }
+    }
+    return roleByPerson[applicantId] || "";
+  };
   const enriched = filtered.map(function (item) {
     if (String(item.applicantRole || "").trim()) {
       return item;
     }
-    var role = resolveApplicantGroupRoleByMemberships_(item, memberships);
+    var role = resolveApplicantRoleFast_(item);
     if (!role) {
       return item;
     }
@@ -2136,11 +2281,12 @@ function listFinanceRequests_(payload) {
 }
 
 function listFinanceActions_(requestId) {
-  const rows = listFinanceActionsCached_();
   const id = String(requestId || "").trim();
-  const list = rows.filter(function (item) {
-    return String(item.requestId || "").trim() === id;
-  });
+  if (!id) {
+    return [];
+  }
+  const index = getFinanceActionsIndex_();
+  const list = index.byRequest[id] ? index.byRequest[id].slice() : [];
   return list.sort(function (a, b) {
     return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
   });
@@ -2156,7 +2302,6 @@ function listFinanceActionsCore_() {
 }
 
 function listFinanceActionsByActor_(actorNames) {
-  const rows = listFinanceActionsCached_();
   const normalized = (actorNames || [])
     .map(function (name) {
       return String(name || "").trim();
@@ -2167,17 +2312,25 @@ function listFinanceActionsByActor_(actorNames) {
   if (!normalized.length) {
     return [];
   }
+  const actorNameSet = normalized.reduce(function (acc, name) {
+    acc[name] = true;
+    return acc;
+  }, {});
+  const index = getFinanceActionsIndex_();
   const list = [];
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const actorName = String(row.actorName || "").trim();
+  const dedupedNames = Object.keys(actorNameSet);
+  for (var i = 0; i < dedupedNames.length; i++) {
+    const actorName = dedupedNames[i];
     if (!actorName) {
       continue;
     }
-    if (normalized.indexOf(actorName) === -1) {
+    const rows = index.byActor[actorName] || [];
+    if (!rows.length) {
       continue;
     }
-    list.push(mapRowToObject_(headerMap, row));
+    for (var j = 0; j < rows.length; j++) {
+      list.push(rows[j]);
+    }
   }
   return list.sort(function (a, b) {
     return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
@@ -2185,7 +2338,7 @@ function listFinanceActionsByActor_(actorNames) {
 }
 
 function listFinanceActionsSummary_(requestIds) {
-  const rows = listFinanceActionsCached_();
+  const index = getFinanceActionsIndex_();
   const idSet = (requestIds || []).reduce(function (acc, id) {
     const key = String(id || "").trim();
     if (key) {
@@ -2194,20 +2347,14 @@ function listFinanceActionsSummary_(requestIds) {
     return acc;
   }, {});
   const latestById = {};
-  for (var i = 0; i < rows.length; i++) {
-    const item = rows[i];
-    const requestId = String(item.requestId || "").trim();
-    if (!requestId || !idSet[requestId]) {
+  const ids = Object.keys(idSet);
+  for (var i = 0; i < ids.length; i++) {
+    const requestId = ids[i];
+    if (!requestId) {
       continue;
     }
-    const current = latestById[requestId];
-    if (!current) {
-      latestById[requestId] = item;
-      continue;
-    }
-    const currentCreated = String(current.createdAt || "");
-    const nextCreated = String(item.createdAt || "");
-    if (nextCreated.localeCompare(currentCreated) > 0) {
+    const item = index.latestByRequest[requestId];
+    if (item) {
       latestById[requestId] = item;
     }
   }
@@ -5791,47 +5938,23 @@ function appendCheckin_(eventId, registrationId) {
 }
 
 function findRegistrationByEmail_(eventId, email) {
-  const sheet = getSheet_(SHEETS.registrations);
-  const headerMap = getHeaderMap_(sheet);
-  const eventIndex = headerMap.eventId;
-  const emailIndex = headerMap.userEmail;
-  if (eventIndex === undefined || emailIndex === undefined) {
-    throw new Error("Registrations sheet missing eventId or userEmail column");
+  const normalizedEventId = String(eventId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  if (!normalizedEventId || !normalizedEmail) {
+    return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[eventIndex]).trim() !== eventId) {
-      continue;
-    }
-    const rowEmail = normalizeEmail_(row[emailIndex]);
-    if (rowEmail === email) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getRegistrationsIndex_();
+  const key = normalizedEventId + "::" + normalizedEmail;
+  return index.byEventEmail[key] || null;
 }
 
 function findRegistrationById_(registrationId) {
-  const sheet = getSheet_(SHEETS.registrations);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    throw new Error("Registrations sheet missing id column");
-  }
   const target = String(registrationId || "").trim();
   if (!target) {
     return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() !== target) {
-      continue;
-    }
-    return mapRowToObject_(headerMap, row);
-  }
-  return null;
+  const index = getRegistrationsIndex_();
+  return index.byId[target] || null;
 }
 
 function isDuplicateCheckin_(eventId, registrationId) {
@@ -5856,46 +5979,23 @@ function isDuplicateCheckin_(eventId, registrationId) {
 }
 
 function findCheckinByRegistration_(eventId, registrationId) {
-  const sheet = getSheet_(SHEETS.checkins);
-  const headerMap = getHeaderMap_(sheet);
-  const eventIndex = headerMap.eventId;
-  const registrationIndex = headerMap.registrationId;
-  if (eventIndex === undefined || registrationIndex === undefined) {
-    throw new Error("Checkins sheet missing eventId or registrationId column");
+  const normalizedEventId = String(eventId || "").trim();
+  const normalizedRegistrationId = String(registrationId || "").trim();
+  if (!normalizedEventId || !normalizedRegistrationId) {
+    return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[eventIndex]).trim() !== eventId) {
-      continue;
-    }
-    if (String(row[registrationIndex]).trim() === registrationId) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getCheckinsIndex_();
+  const key = normalizedEventId + "::" + normalizedRegistrationId;
+  return index.byEventRegistration[key] || null;
 }
 
 function findCheckinById_(checkinId) {
-  const sheet = getSheet_(SHEETS.checkins);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    throw new Error("Checkins sheet missing id column");
-  }
   const target = String(checkinId || "").trim();
   if (!target) {
     return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() !== target) {
-      continue;
-    }
-    return mapRowToObject_(headerMap, row);
-  }
-  return null;
+  const index = getCheckinsIndex_();
+  return index.byId[target] || null;
 }
 
 function isWithinWindow_(openAt, closeAt) {
