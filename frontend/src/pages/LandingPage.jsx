@@ -53,33 +53,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [hasGoogleLogin]);
 
   useEffect(() => {
-    if (!hasGoogleLogin) {
-      setMemberships([]);
-      setMembershipsLoaded(false);
-      return;
-    }
-    let ignore = false;
-    const loadMemberships = async () => {
-      try {
-        const { result } = await apiRequest({ action: "listGroupMemberships" });
-        if (!ignore) {
-          setMemberships(result.data && result.data.memberships ? result.data.memberships : []);
-          setMembershipsLoaded(true);
-        }
-      } catch (error) {
-        if (!ignore) {
-          setMemberships([]);
-          setMembershipsLoaded(true);
-        }
-      }
-    };
-    loadMemberships();
-    return () => {
-      ignore = true;
-    };
-  }, [apiRequest, hasGoogleLogin]);
-
-  useEffect(() => {
     try {
       localStorage.setItem("home_calendar_mobile_open", showCalendarMobile ? "1" : "0");
     } catch (error) {
@@ -87,34 +60,57 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   }, [showCalendarMobile]);
 
-  const loadNotifications = async () => {
-    setNotificationLoading(true);
-    setNotificationError("");
-    try {
-      const { result } = await apiRequest({
-        action: "listNotifications",
-        studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
-        email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "通知載入失敗");
-      }
-      const items = result.data && result.data.notifications ? result.data.notifications : [];
-      const unreadCount = result.data && result.data.unreadCount ? Number(result.data.unreadCount) : 0;
-      setNotifications(items);
-      setNotificationUnread(unreadCount);
-    } catch (error) {
-      setNotificationError(error.message || "通知載入失敗");
+  useEffect(() => {
+    if (!hasGoogleLogin) {
+      setMemberships([]);
+      setMembershipsLoaded(false);
       setNotifications([]);
       setNotificationUnread(0);
-    } finally {
+      setNotificationError("");
       setNotificationLoading(false);
+      return;
     }
-  };
-
-  useEffect(() => {
-    loadNotifications();
-  }, [googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+    let ignore = false;
+    const loadBootstrap = async () => {
+      setNotificationLoading(true);
+      setNotificationError("");
+      try {
+        const { result } = await apiRequest({
+          action: "listLandingBootstrap",
+          studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
+          email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
+        });
+        if (!result.ok) {
+          throw new Error(result.error || "載入失敗");
+        }
+        if (ignore) {
+          return;
+        }
+        const data = result.data || {};
+        setMemberships(data.memberships || []);
+        setMembershipsLoaded(true);
+        setNotifications(data.notifications || []);
+        setNotificationUnread(Number(data.unreadCount || 0));
+      } catch (error) {
+        if (ignore) {
+          return;
+        }
+        setMemberships([]);
+        setMembershipsLoaded(true);
+        setNotificationError(error.message || "通知載入失敗");
+        setNotifications([]);
+        setNotificationUnread(0);
+      } finally {
+        if (!ignore) {
+          setNotificationLoading(false);
+        }
+      }
+    };
+    loadBootstrap();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
 
   const markNotificationRead = async (notificationId) => {
     if (!notificationId || !hasGoogleLogin) {

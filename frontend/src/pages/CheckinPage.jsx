@@ -44,65 +44,44 @@ function CheckinPage({ shared }) {
   }, [googleLinkedStudent]);
 
   useEffect(() => {
-    if (!email || !eventId) {
+    if (!eventId) {
+      setEventTitle("");
       setCheckinStatus(null);
       setAttendanceStatus("");
       return;
     }
     let ignore = false;
-    const fetchStatus = async () => {
+    const fetchBootstrap = async () => {
       try {
         const { result } = await apiRequest({
-          action: "listCheckinStatus",
+          action: "getCheckinBootstrap",
+          eventId: eventId,
           email: String(email || "").trim().toLowerCase(),
-          eventIds: [eventId],
         });
         if (!result.ok) {
-          throw new Error(result.error || "Status not available");
+          throw new Error(result.error || "載入失敗");
         }
-        const statusEntry = result.data && result.data.statuses ? result.data.statuses[eventId] : null;
-        if (!ignore) {
-          setCheckinStatus(statusEntry ? statusEntry.status : null);
-          setAttendanceStatus(statusEntry && statusEntry.attendance ? statusEntry.attendance : "");
+        if (ignore) {
+          return;
         }
+        const data = result.data || {};
+        const event = data.event || null;
+        setEventTitle(event && event.title ? event.title : "");
+        setCheckinStatus(data.checkinStatus || null);
+        setAttendanceStatus(String(data.attendance || ""));
       } catch (err) {
         if (!ignore) {
+          setEventTitle("");
           setCheckinStatus(null);
           setAttendanceStatus("");
         }
       }
     };
-    fetchStatus();
+    fetchBootstrap();
     return () => {
       ignore = true;
     };
   }, [email, eventId]);
-
-  useEffect(() => {
-    if (!eventId) {
-      return;
-    }
-    let ignore = false;
-    const fetchEvent = async () => {
-      try {
-        const { result } = await apiRequest({ action: "getEvent", eventId: eventId });
-        if (!result.ok) {
-          throw new Error(result.error || "Event not found");
-        }
-        if (!ignore && result.data && result.data.event) {
-          setEventTitle(result.data.event.title || "");
-        }
-      } catch (err) {
-        if (!ignore) {
-          setEventTitle("");
-        }
-      }
-    };
-    fetchEvent();
-    return () => {
-      ignore = true;
-    };
-  }, [eventId]);
 
   const handleSubmit = async () => {
     if (!String(email || "").trim()) {

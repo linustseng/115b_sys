@@ -703,6 +703,11 @@ const API_POST_ACTIONS = new Set([
   "listSoftballBootstrap",
   "listStudents",
   "listGroupMemberships",
+  "listHomeBootstrap",
+  "listLandingBootstrap",
+  "getCheckinBootstrap",
+  "getRegistrationBootstrap",
+  "listEvents",
 ]);
 const inflightReadRequests = new Map();
 

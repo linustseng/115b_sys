@@ -283,21 +283,64 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { requests: listFinanceRequests_(payload) }, error: null };
   }
 
+  if (payload.action === "listHomeBootstrap") {
+    const email = normalizeEmail_(payload.email);
+    const events = listEventsCached_();
+    const registrations = email
+      ? listRegistrationsCached_().filter(function (item) {
+          const rowEmail = normalizeEmail_(item.userEmail);
+          const status = String(item.status || "").trim().toLowerCase();
+          return rowEmail === email && status !== "cancelled";
+        })
+      : [];
+    const eventIds = registrations
+      .map(function (item) {
+        return String(item.eventId || "").trim();
+      })
+      .filter(function (id) {
+        return id;
+      });
+    const statuses = email ? buildCheckinStatusMapByEmail_(email, eventIds) : {};
+    return {
+      ok: true,
+      data: {
+        events: events,
+        registrations: registrations,
+        checkinStatuses: statuses,
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listLandingBootstrap") {
+    const studentId = String(payload.studentId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    const memberships = studentId
+      ? listGroupMembershipsCached_().filter(function (item) {
+          return String(item.personId || "").trim() === studentId;
+        })
+      : [];
+    const notificationsData = buildNotificationsPayload_(studentId, email);
+    return {
+      ok: true,
+      data: {
+        memberships: memberships,
+        notifications: notificationsData.notifications,
+        unreadCount: notificationsData.unreadCount,
+      },
+      error: null,
+    };
+  }
+
   if (payload.action === "listNotifications") {
     const studentId = String(payload.studentId || "").trim();
     const email = normalizeEmail_(payload.email);
-    const notifications = listNotifications_(studentId, email);
-    const readMap = listNotificationReadMap_(studentId, email);
-    const enriched = notifications.map(function (item) {
-      const id = String(item.id || "").trim();
-      const isRead = !!readMap[id];
-      return Object.assign({}, item, { isRead: isRead });
-    });
-    const sorted = sortNotifications_(enriched);
-    const unreadCount = sorted.filter(function (item) {
-      return !item.isRead;
-    }).length;
-    return { ok: true, data: { notifications: sorted, unreadCount: unreadCount }, error: null };
+    const payloadData = buildNotificationsPayload_(studentId, email);
+    return {
+      ok: true,
+      data: { notifications: payloadData.notifications, unreadCount: payloadData.unreadCount },
+      error: null,
+    };
   }
 
   if (payload.action === "markNotificationRead") {
@@ -789,6 +832,28 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Event not found" };
     }
     return { ok: true, data: { event: event }, error: null };
+  }
+
+  if (payload.action === "getCheckinBootstrap") {
+    const eventId = String(payload.eventId || "").trim();
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing eventId" };
+    }
+    const event = findEventById_(eventId);
+    if (!event) {
+      return { ok: false, data: null, error: "Event not found" };
+    }
+    const email = normalizeEmail_(payload.email);
+    const statusEntry = email ? buildCheckinStatusMapByEmail_(email, [eventId])[eventId] : null;
+    return {
+      ok: true,
+      data: {
+        event: event,
+        checkinStatus: statusEntry ? String(statusEntry.status || "") : null,
+        attendance: statusEntry ? String(statusEntry.attendance || "") : "",
+      },
+      error: null,
+    };
   }
 
   if (payload.action === "getRegistrationBootstrap") {
@@ -1458,39 +1523,7 @@ function handleActionPayload_(payload) {
     if (!eventIds.length) {
       return { ok: true, data: { statuses: {} }, error: null };
     }
-    const statuses = {};
-    for (var i = 0; i < eventIds.length; i++) {
-      const eventId = String(eventIds[i] || "").trim();
-      if (!eventId) {
-        continue;
-      }
-      const registration = findRegistrationByEmail_(eventId, email);
-      if (!registration) {
-        statuses[eventId] = { status: "not_registered" };
-        continue;
-      }
-      const customFields = parseCustomFields_(registration.customFields);
-      const attendance = String(customFields.attendance || "").trim();
-      if (!attendance) {
-        statuses[eventId] = { status: "attendance_unknown", attendance: "" };
-        continue;
-      }
-      if (attendance !== "出席") {
-        statuses[eventId] = { status: "not_attending", attendance: attendance };
-        continue;
-      }
-      const checkin = findCheckinByRegistration_(eventId, registration.id);
-      if (checkin) {
-        statuses[eventId] = {
-          status: "checked_in",
-          attendance: attendance,
-          checkinId: checkin.id || "",
-          checkinAt: checkin.checkinAt || "",
-        };
-      } else {
-        statuses[eventId] = { status: "not_checked_in", attendance: attendance };
-      }
-    }
+    const statuses = buildCheckinStatusMapByEmail_(email, eventIds);
     return { ok: true, data: { statuses: statuses }, error: null };
   }
 
@@ -2290,6 +2323,102 @@ function listNotificationReadMap_(studentId, email) {
     }
     return acc;
   }, {});
+}
+
+function buildNotificationsPayload_(studentId, email) {
+  const notifications = listNotifications_(studentId, email);
+  const readMap = listNotificationReadMap_(studentId, email);
+  const enriched = notifications.map(function (item) {
+    const id = String(item.id || "").trim();
+    const isRead = !!readMap[id];
+    return Object.assign({}, item, { isRead: isRead });
+  });
+  const sorted = sortNotifications_(enriched);
+  const unreadCount = sorted.filter(function (item) {
+    return !item.isRead;
+  }).length;
+  return { notifications: sorted, unreadCount: unreadCount };
+}
+
+function buildCheckinStatusMapByEmail_(email, eventIds) {
+  const normalizedEmail = normalizeEmail_(email);
+  const ids = Array.isArray(eventIds)
+    ? eventIds
+        .map(function (id) {
+          return String(id || "").trim();
+        })
+        .filter(function (id) {
+          return id;
+        })
+    : [];
+  if (!normalizedEmail || !ids.length) {
+    return {};
+  }
+
+  const registrations = listRegistrationsCached_();
+  const registrationByEventEmail = {};
+  for (var i = 0; i < registrations.length; i++) {
+    const item = registrations[i];
+    const eventId = String(item.eventId || "").trim();
+    const rowEmail = normalizeEmail_(item.userEmail);
+    if (!eventId || !rowEmail) {
+      continue;
+    }
+    const key = eventId + "::" + rowEmail;
+    if (!Object.prototype.hasOwnProperty.call(registrationByEventEmail, key)) {
+      registrationByEventEmail[key] = item;
+    }
+  }
+
+  const checkins = listCheckinsCached_();
+  const checkinByEventRegistration = {};
+  for (var j = 0; j < checkins.length; j++) {
+    const checkinItem = checkins[j];
+    const eventId = String(checkinItem.eventId || "").trim();
+    const registrationId = String(checkinItem.registrationId || "").trim();
+    if (!eventId || !registrationId) {
+      continue;
+    }
+    const key = eventId + "::" + registrationId;
+    if (!Object.prototype.hasOwnProperty.call(checkinByEventRegistration, key)) {
+      checkinByEventRegistration[key] = checkinItem;
+    }
+  }
+
+  const statuses = {};
+  for (var k = 0; k < ids.length; k++) {
+    const eventId = ids[k];
+    const registrationKey = eventId + "::" + normalizedEmail;
+    const registration = registrationByEventEmail[registrationKey];
+    if (!registration) {
+      statuses[eventId] = { status: "not_registered" };
+      continue;
+    }
+    const customFields = parseCustomFields_(registration.customFields);
+    const attendance = String(customFields.attendance || "").trim();
+    if (!attendance) {
+      statuses[eventId] = { status: "attendance_unknown", attendance: "" };
+      continue;
+    }
+    if (attendance !== "出席") {
+      statuses[eventId] = { status: "not_attending", attendance: attendance };
+      continue;
+    }
+    const checkinKey = eventId + "::" + String(registration.id || "").trim();
+    const checkin = checkinByEventRegistration[checkinKey];
+    if (checkin) {
+      statuses[eventId] = {
+        status: "checked_in",
+        attendance: attendance,
+        checkinId: checkin.id || "",
+        checkinAt: checkin.checkinAt || "",
+      };
+    } else {
+      statuses[eventId] = { status: "not_checked_in", attendance: attendance };
+    }
+  }
+
+  return statuses;
 }
 
 function upsertNotificationRead_(notificationId, studentId, email) {

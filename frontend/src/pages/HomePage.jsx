@@ -311,62 +311,41 @@ function HomePage({
   const shouldShowRegistrationBadge =
     myRegistrations.length > 0 || lookupError === "查無報名紀錄。";
 
-  const loadCheckinStatuses_ = async (emailValue, registrations) => {
-    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
-    if (!normalizedEmail) {
-      return;
-    }
-    const eventIds = (registrations || [])
-      .map((item) => normalizeEventId_(item.eventId))
-      .filter((value) => value);
-    if (!eventIds.length) {
-      return;
-    }
-    try {
-      const { result } = await apiRequest({
-        action: "listCheckinStatus",
-        email: normalizedEmail,
-        eventIds: eventIds,
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "查詢失敗");
-      }
-      setCheckinStatuses(result.data && result.data.statuses ? result.data.statuses : {});
-    } catch (err) {
-      setCheckinStatuses({});
-    }
-  };
-
   const handleLookup = async (emailValue) => {
     const normalizedEmail = String(emailValue || "").trim().toLowerCase();
     if (!normalizedEmail) {
       setLookupError("請先輸入 Email 以查詢報名紀錄。");
       setMyRegistrations([]);
+      setCheckinStatuses({});
       return;
     }
     setLookupLoading(true);
     setLookupError("");
     try {
       const { result } = await apiRequest({
-        action: "listRegistrations",
+        action: "listHomeBootstrap",
         email: normalizedEmail,
       });
       if (!result.ok) {
         throw new Error(result.error || "查詢失敗");
       }
-      const registrations = result.data && result.data.registrations ? result.data.registrations : [];
-      const matches = registrations.filter((item) => {
-        const email = String(item.userEmail || "").trim().toLowerCase();
-        const status = String(item.status || "").trim().toLowerCase();
-        return email === normalizedEmail && status !== "cancelled";
-      });
-      if (!matches.length) {
+      const data = result.data || {};
+      const eventsList = data.events || [];
+      const registrations = data.registrations || [];
+      const statuses = data.checkinStatuses || {};
+      setEvents(eventsList);
+      setMyRegistrations(registrations);
+      setCheckinStatuses(statuses);
+      try {
+        localStorage.setItem(eventsCacheKey, JSON.stringify({ ts: Date.now(), events: eventsList }));
+      } catch (err) {
+        // Ignore cache errors
+      }
+      if (!registrations.length) {
         setMyRegistrations([]);
         setCheckinStatuses({});
         setLookupError("查無報名紀錄。");
-      } else {
-        setMyRegistrations(matches);
-        await loadCheckinStatuses_(normalizedEmail, matches);
+        return;
       }
     } catch (err) {
       setLookupError(err.message || "查詢失敗");
@@ -386,16 +365,17 @@ function HomePage({
     let ignore = false;
     const fetchEvents = async () => {
       try {
-        const { result, url } = await apiRequest({ action: "listEvents" });
+        const { result } = await apiRequest({ action: "listHomeBootstrap" });
         if (!result.ok) {
           throw new Error(result.error || "載入失敗");
         }
         if (!ignore) {
-          setEvents(result.data && result.data.events ? result.data.events : []);
+          const data = result.data || {};
+          setEvents(data.events || []);
           try {
             localStorage.setItem(
               eventsCacheKey,
-              JSON.stringify({ ts: Date.now(), events: result.data && result.data.events ? result.data.events : [] })
+              JSON.stringify({ ts: Date.now(), events: data.events || [] })
             );
           } catch (err) {
             // Ignore cache errors
