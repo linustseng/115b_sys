@@ -61,8 +61,40 @@ const ALLOWED_UPLOAD_EXTENSIONS = {
   pptx: true,
 };
 
+const CACHE_KEYS = {
+  students: "students:list:v1",
+  groupMemberships: "groupMemberships:list:v1",
+  financeRoles: "financeRoles:list:v1",
+  financeCategoryTypes: "financeCategoryTypes:list:v1",
+  fundEvents: "fundEvents:list:v1",
+  events: "events:list:v1",
+  registrations: "registrations:list:v1",
+  checkins: "checkins:list:v1",
+  softballPlayers: "softballPlayers:list:v1",
+  softballPractices: "softballPractices:list:v1",
+  softballFields: "softballFields:list:v1",
+  softballGear: "softballGear:list:v1",
+  softballConfig: "softballConfig:list:v1",
+  directory: "directory:list:v1",
+  orderPlans: "orderPlans:list:v1",
+  orderResponses: "orderResponses:list:v1",
+  financeRequests: "financeRequests:list:v1",
+  financeActions: "financeActions:list:v1",
+  fundPayments: "fundPayments:list:v1",
+  announcements: "announcements:list:v1",
+  notificationReads: "notificationReads:list:v1",
+  fundSummary: "fundSummary:v1",
+};
+
+let REQUEST_MEMO_ = {};
+
+function resetRequestMemo_() {
+  REQUEST_MEMO_ = {};
+}
+
 function doPost(e) {
   try {
+    resetRequestMemo_();
     if (e && e.postData && e.postData.type && e.postData.type.indexOf("multipart/form-data") === 0) {
       return handleUpload_(e);
     }
@@ -79,6 +111,7 @@ function doPost(e) {
 
 function doGet(e) {
   try {
+    resetRequestMemo_();
     const payload = parseGetPayload_(e);
     if (!payload.action) {
       return jsonpResponse_(e, { ok: true, data: { service: "ntu-emba-115b" }, error: null });
@@ -123,59 +156,97 @@ function invalidateCacheKeys_(keys) {
 }
 
 function listStudentsCached_() {
-  return getCachedJson_("students:list:v1", 60, listStudents_);
+  return getCachedJson_(CACHE_KEYS.students, 90, listStudents_);
 }
 
 function listGroupMembershipsCached_() {
-  return getCachedJson_("groupMemberships:list:v1", 60, listGroupMemberships_);
+  return getCachedJson_(CACHE_KEYS.groupMemberships, 90, listGroupMemberships_);
 }
 
 function listFinanceRolesCached_() {
-  return getCachedJson_("financeRoles:list:v1", 60, listFinanceRoles_);
+  return getCachedJson_(CACHE_KEYS.financeRoles, 90, listFinanceRoles_);
 }
 
 function listFinanceCategoryTypesCached_() {
-  return getCachedJson_("financeCategoryTypes:list:v1", 120, listFinanceCategoryTypes_);
+  return getCachedJson_(CACHE_KEYS.financeCategoryTypes, 120, listFinanceCategoryTypes_);
 }
 
 function listFundEventsCached_() {
-  return getCachedJson_("fundEvents:list:v1", 60, listFundEvents_);
+  return getCachedJson_(CACHE_KEYS.fundEvents, 90, listFundEvents_);
 }
 
 function listEventsCached_() {
-  return getCachedJson_("events:list:v1", 60, listEvents_);
+  return getCachedJson_(CACHE_KEYS.events, 90, listEvents_);
 }
 
 function listRegistrationsCached_() {
-  return getCachedJson_("registrations:list:v1", 20, listRegistrations_);
+  return getCachedJson_(CACHE_KEYS.registrations, 90, listRegistrations_);
 }
 
 function listCheckinsCached_() {
-  return getCachedJson_("checkins:list:v1", 20, listCheckins_);
+  return getCachedJson_(CACHE_KEYS.checkins, 90, listCheckins_);
 }
 
 function listSoftballPlayersCached_() {
-  return getCachedJson_("softballPlayers:list:v1", 60, listSoftballPlayers_);
+  return getCachedJson_(CACHE_KEYS.softballPlayers, 90, listSoftballPlayers_);
 }
 
 function listSoftballPracticesCached_() {
-  return getCachedJson_("softballPractices:list:v1", 60, listSoftballPractices_);
+  return getCachedJson_(CACHE_KEYS.softballPractices, 90, listSoftballPractices_);
 }
 
 function listSoftballFieldsCached_() {
-  return getCachedJson_("softballFields:list:v1", 60, listSoftballFields_);
+  return getCachedJson_(CACHE_KEYS.softballFields, 90, listSoftballFields_);
 }
 
 function listSoftballGearCached_() {
-  return getCachedJson_("softballGear:list:v1", 60, listSoftballGear_);
+  return getCachedJson_(CACHE_KEYS.softballGear, 90, listSoftballGear_);
 }
 
 function listSoftballConfigCached_() {
-  return getCachedJson_("softballConfig:list:v1", 60, listSoftballConfig_);
+  return getCachedJson_(CACHE_KEYS.softballConfig, 90, listSoftballConfig_);
+}
+
+function listDirectoryCached_() {
+  return getCachedJson_(CACHE_KEYS.directory, 90, listDirectory_);
+}
+
+function listOrderPlansCached_() {
+  return getCachedJson_(CACHE_KEYS.orderPlans, 90, listOrderPlans_);
+}
+
+function listOrderResponsesCached_() {
+  return getCachedJson_(CACHE_KEYS.orderResponses, 90, function () {
+    return listOrderResponsesCore_();
+  });
+}
+
+function listFinanceRequestsCached_() {
+  return getCachedJson_(CACHE_KEYS.financeRequests, 90, function () {
+    return listFinanceRequestsCore_();
+  });
+}
+
+function listFinanceActionsCached_() {
+  return getCachedJson_(CACHE_KEYS.financeActions, 90, listFinanceActionsCore_);
+}
+
+function listFundPaymentsCached_() {
+  return getCachedJson_(CACHE_KEYS.fundPayments, 90, function () {
+    return listFundPaymentsCore_();
+  });
+}
+
+function listAnnouncementsCached_() {
+  return getCachedJson_(CACHE_KEYS.announcements, 90, listAnnouncements_);
+}
+
+function listNotificationReadsCached_() {
+  return getCachedJson_(CACHE_KEYS.notificationReads, 90, listNotificationReads_);
 }
 
 function buildFundSummaryCached_() {
-  return getCachedJson_("fundSummary:v1", 60, buildFundSummary_);
+  return getCachedJson_(CACHE_KEYS.fundSummary, 90, buildFundSummary_);
 }
 
 function handleAction_(payload) {
@@ -237,6 +308,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing notificationId or user identity" };
     }
     const read = upsertNotificationRead_(notificationId, studentId, email);
+    invalidateCacheKeys_([CACHE_KEYS.notificationReads]);
     return { ok: true, data: { read: read }, error: null };
   }
 
@@ -258,12 +330,14 @@ function handleActionPayload_(payload) {
     const reads = ids.map(function (notificationId) {
       return upsertNotificationRead_(notificationId, studentId, email);
     });
+    invalidateCacheKeys_([CACHE_KEYS.notificationReads]);
     return { ok: true, data: { reads: reads }, error: null };
   }
 
   if (payload.action === "upsertAnnouncement") {
     const data = payload.data || {};
     const updated = upsertAnnouncement_(data);
+    invalidateCacheKeys_([CACHE_KEYS.announcements]);
     return { ok: true, data: { announcement: updated }, error: null };
   }
 
@@ -276,6 +350,7 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Announcement not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.announcements]);
     return { ok: true, data: { id: announcementId }, error: null };
   }
 
@@ -388,6 +463,7 @@ function handleActionPayload_(payload) {
       });
       sendFinanceApprovalEmail_(created);
     }
+    invalidateCacheKeys_([CACHE_KEYS.financeRequests, CACHE_KEYS.financeActions, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { request: created }, error: null };
   }
 
@@ -397,6 +473,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing request id" };
     }
     const updated = updateFinanceRequestFlow_(requestId, payload);
+    invalidateCacheKeys_([CACHE_KEYS.financeRequests, CACHE_KEYS.financeActions, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { request: updated }, error: null };
   }
 
@@ -433,7 +510,7 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listGroupMemberships") {
-    return { ok: true, data: { memberships: listGroupMemberships_() }, error: null };
+    return { ok: true, data: { memberships: listGroupMembershipsCached_() }, error: null };
   }
 
   if (payload.action === "batchUpdateGroupMemberships") {
@@ -461,16 +538,17 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listFinanceRoles") {
-    return { ok: true, data: { roles: listFinanceRoles_() }, error: null };
+    return { ok: true, data: { roles: listFinanceRolesCached_() }, error: null };
   }
 
   if (payload.action === "listFinanceCategoryTypes") {
-    return { ok: true, data: { categories: listFinanceCategoryTypes_() }, error: null };
+    return { ok: true, data: { categories: listFinanceCategoryTypesCached_() }, error: null };
   }
 
   if (payload.action === "upsertFinanceCategoryType") {
     const data = payload.data || {};
     const updated = upsertFinanceCategoryType_(data);
+    invalidateCacheKeys_([CACHE_KEYS.financeCategoryTypes]);
     return { ok: true, data: { category: updated }, error: null };
   }
 
@@ -483,12 +561,14 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Category not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.financeCategoryTypes]);
     return { ok: true, data: { id: categoryId }, error: null };
   }
 
   if (payload.action === "upsertFinanceRole") {
     const data = payload.data || {};
     const updated = upsertFinanceRole_(data);
+    invalidateCacheKeys_([CACHE_KEYS.financeRoles]);
     return { ok: true, data: { role: updated }, error: null };
   }
 
@@ -501,11 +581,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Role not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.financeRoles]);
     return { ok: true, data: { id: roleId }, error: null };
   }
 
   if (payload.action === "listFundEvents") {
-    return { ok: true, data: { events: listFundEvents_() }, error: null };
+    return { ok: true, data: { events: listFundEventsCached_() }, error: null };
   }
 
   if (payload.action === "listFundPayments") {
@@ -516,12 +597,14 @@ function handleActionPayload_(payload) {
   if (payload.action === "upsertFundEvent") {
     const data = payload.data || {};
     const updated = upsertFundEvent_(data);
+    invalidateCacheKeys_([CACHE_KEYS.fundEvents, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { event: updated }, error: null };
   }
 
   if (payload.action === "upsertFundPayment") {
     const data = payload.data || {};
     const updated = upsertFundPayment_(data);
+    invalidateCacheKeys_([CACHE_KEYS.fundPayments, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { payment: updated }, error: null };
   }
 
@@ -534,6 +617,7 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Event not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.fundEvents, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { id: eventId }, error: null };
   }
 
@@ -546,11 +630,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Payment not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.fundPayments, CACHE_KEYS.fundSummary]);
     return { ok: true, data: { id: paymentId }, error: null };
   }
 
   if (payload.action === "getFundSummary") {
-    return { ok: true, data: buildFundSummary_(), error: null };
+    return { ok: true, data: buildFundSummaryCached_(), error: null };
   }
 
   if (payload.action === "verifyGoogle") {
@@ -558,7 +643,7 @@ function handleActionPayload_(payload) {
     if (!idToken) {
       return { ok: false, data: null, error: "Missing idToken" };
     }
-    const profile = verifyGoogleIdToken_(idToken);
+    const profile = verifyGoogleIdTokenCached_(idToken);
     const linkedStudent = findStudentByGoogleSub_(profile.sub);
     const linkedDirectory = linkedStudent ? findDirectoryById_(linkedStudent.id) : null;
     if (linkedStudent && (!linkedDirectory || !linkedDirectory.email)) {
@@ -590,7 +675,7 @@ function handleActionPayload_(payload) {
     if (!idToken || !studentId) {
       return { ok: false, data: null, error: "Missing idToken or studentId" };
     }
-    const profile = verifyGoogleIdToken_(idToken);
+    const profile = verifyGoogleIdTokenCached_(idToken);
     const existingLinked = findStudentByGoogleSub_(profile.sub);
     if (existingLinked && String(existingLinked.id || "").trim() !== studentId) {
       return { ok: false, data: null, error: "Google account already linked" };
@@ -606,6 +691,7 @@ function handleActionPayload_(payload) {
       googleSub: profile.sub,
       googleEmail: profile.email,
     });
+    invalidateCacheKeys_([CACHE_KEYS.students]);
     const directory = findDirectoryById_(studentId);
     if (!directory || !directory.email) {
       return { ok: false, data: null, error: "Directory profile missing" };
@@ -619,7 +705,7 @@ function handleActionPayload_(payload) {
     if (!idToken) {
       return { ok: false, data: null, error: "Missing idToken" };
     }
-    const profile = verifyGoogleIdToken_(idToken);
+    const profile = verifyGoogleIdTokenCached_(idToken);
     const linkedStudent = findStudentByGoogleSub_(profile.sub);
     const directory = linkedStudent
       ? findDirectoryById_(linkedStudent.id)
@@ -641,7 +727,7 @@ function handleActionPayload_(payload) {
     if (!idToken) {
       return { ok: false, data: null, error: "Missing idToken" };
     }
-    const profile = verifyGoogleIdToken_(idToken);
+    const profile = verifyGoogleIdTokenCached_(idToken);
     const linkedStudent = findStudentByGoogleSub_(profile.sub);
     const directory = linkedStudent
       ? findDirectoryById_(linkedStudent.id)
@@ -662,6 +748,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Directory profile missing" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.directory]);
     if (changes.length) {
       appendDirectoryLog_({
         actorEmail: profile.email,
@@ -685,7 +772,7 @@ function handleActionPayload_(payload) {
     if (!idToken) {
       return { ok: false, data: null, error: "Missing idToken" };
     }
-    verifyGoogleIdToken_(idToken);
+    verifyGoogleIdTokenCached_(idToken);
     if (!query || query.length < 2) {
       return { ok: true, data: { students: [] }, error: null };
     }
@@ -739,7 +826,7 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listOrderPlans") {
-    const plans = listOrderPlans_();
+    const plans = listOrderPlansCached_();
     return { ok: true, data: { plans: plans }, error: null };
   }
 
@@ -752,6 +839,7 @@ function handleActionPayload_(payload) {
     if (!created) {
       return { ok: false, data: null, error: "Order plan already exists" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.orderPlans]);
     return { ok: true, data: { plan: created }, error: null };
   }
 
@@ -764,6 +852,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Order plan not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.orderPlans]);
     return { ok: true, data: { plan: updated }, error: null };
   }
 
@@ -798,20 +887,22 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Order plan closed" };
     }
     const response = upsertOrderResponse_(orderId, data);
+    invalidateCacheKeys_([CACHE_KEYS.orderResponses]);
     return { ok: true, data: { response: response }, error: null };
   }
 
   if (payload.action === "listSoftballPlayers") {
-    return { ok: true, data: { players: listSoftballPlayers_() }, error: null };
+    return { ok: true, data: { players: listSoftballPlayersCached_() }, error: null };
   }
 
   if (payload.action === "listSoftballConfig") {
-    return { ok: true, data: { config: getSoftballConfig_() }, error: null };
+    return { ok: true, data: { config: listSoftballConfigCached_() }, error: null };
   }
 
   if (payload.action === "updateSoftballConfig") {
     const data = payload.data || {};
     const updated = updateSoftballConfig_(data);
+    invalidateCacheKeys_([CACHE_KEYS.softballConfig]);
     return { ok: true, data: { config: updated }, error: null };
   }
 
@@ -821,6 +912,7 @@ function handleActionPayload_(payload) {
     if (!created.ok) {
       return { ok: false, data: null, error: created.error };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballPlayers]);
     return { ok: true, data: { player: created.player }, error: null };
   }
 
@@ -830,6 +922,7 @@ function handleActionPayload_(payload) {
     if (!created.ok) {
       return { ok: false, data: null, error: created.error };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballPlayers]);
     return { ok: true, data: { player: created.player }, error: null };
   }
 
@@ -842,11 +935,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Player not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballPlayers]);
     return { ok: true, data: { id: playerId }, error: null };
   }
 
   if (payload.action === "listSoftballPractices") {
-    return { ok: true, data: { practices: listSoftballPractices_() }, error: null };
+    return { ok: true, data: { practices: listSoftballPracticesCached_() }, error: null };
   }
 
   if (payload.action === "createSoftballPractice") {
@@ -855,6 +949,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing date" };
     }
     const created = createSoftballPractice_(data);
+    invalidateCacheKeys_([CACHE_KEYS.softballPractices]);
     return { ok: true, data: { practice: created }, error: null };
   }
 
@@ -867,6 +962,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Practice not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballPractices]);
     return { ok: true, data: { practice: updated }, error: null };
   }
 
@@ -879,11 +975,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Practice not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballPractices]);
     return { ok: true, data: { id: practiceId }, error: null };
   }
 
   if (payload.action === "listSoftballFields") {
-    return { ok: true, data: { fields: listSoftballFields_() }, error: null };
+    return { ok: true, data: { fields: listSoftballFieldsCached_() }, error: null };
   }
 
   if (payload.action === "createSoftballField") {
@@ -892,6 +989,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing field name" };
     }
     const created = createSoftballField_(data);
+    invalidateCacheKeys_([CACHE_KEYS.softballFields]);
     return { ok: true, data: { field: created }, error: null };
   }
 
@@ -904,6 +1002,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Field not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballFields]);
     return { ok: true, data: { field: updated }, error: null };
   }
 
@@ -916,11 +1015,12 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Field not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballFields]);
     return { ok: true, data: { id: fieldId }, error: null };
   }
 
   if (payload.action === "listSoftballGear") {
-    return { ok: true, data: { gear: listSoftballGear_() }, error: null };
+    return { ok: true, data: { gear: listSoftballGearCached_() }, error: null };
   }
 
   if (payload.action === "createSoftballGear") {
@@ -929,6 +1029,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Missing gear name" };
     }
     const created = createSoftballGear_(data);
+    invalidateCacheKeys_([CACHE_KEYS.softballGear]);
     return { ok: true, data: { gear: created }, error: null };
   }
 
@@ -941,6 +1042,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Gear not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballGear]);
     return { ok: true, data: { gear: updated }, error: null };
   }
 
@@ -953,6 +1055,7 @@ function handleActionPayload_(payload) {
     if (!removed) {
       return { ok: false, data: null, error: "Gear not found" };
     }
+    invalidateCacheKeys_([CACHE_KEYS.softballGear]);
     return { ok: true, data: { id: gearId }, error: null };
   }
 
@@ -1223,7 +1326,7 @@ function handleActionPayload_(payload) {
     if (!auth.ok) {
       return auth;
     }
-    return { ok: true, data: { directory: listDirectory_() }, error: null };
+    return { ok: true, data: { directory: listDirectoryCached_() }, error: null };
   }
 
   if (payload.action === "upsertDirectory") {
@@ -1236,6 +1339,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Empty items" };
     }
     const result = upsertDirectoryBatch_(items);
+    invalidateCacheKeys_([CACHE_KEYS.directory]);
     return { ok: true, data: result, error: null };
   }
 
@@ -1576,113 +1680,118 @@ function getDataRows_(sheet) {
   return sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
 }
 
+function getMemoValue_(key, loader) {
+  if (Object.prototype.hasOwnProperty.call(REQUEST_MEMO_, key)) {
+    return REQUEST_MEMO_[key];
+  }
+  const value = loader();
+  REQUEST_MEMO_[key] = value;
+  return value;
+}
+
+function getStudentsIndex_() {
+  return getMemoValue_("index:students", function () {
+    const byId = {};
+    const byGoogleSub = {};
+    listStudentsCached_().forEach(function (item) {
+      const id = String(item.id || "").trim();
+      if (id) {
+        byId[id] = item;
+      }
+      const sub = String(item.googleSub || "").trim();
+      if (sub) {
+        byGoogleSub[sub] = item;
+      }
+    });
+    return { byId: byId, byGoogleSub: byGoogleSub };
+  });
+}
+
+function getDirectoryIndex_() {
+  return getMemoValue_("index:directory", function () {
+    const byId = {};
+    const byEmail = {};
+    listDirectoryCached_().forEach(function (item) {
+      const id = String(item.id || "").trim();
+      if (id) {
+        byId[id] = item;
+      }
+      const email = normalizeEmail_(item.email);
+      if (email) {
+        byEmail[email] = item;
+      }
+    });
+    return { byId: byId, byEmail: byEmail };
+  });
+}
+
+function getEventsIndex_() {
+  return getMemoValue_("index:events", function () {
+    const byId = {};
+    listEventsCached_().forEach(function (item) {
+      const id = String(item.id || "").trim();
+      if (id) {
+        byId[id] = item;
+      }
+    });
+    return byId;
+  });
+}
+
 function findStudentById_(studentId) {
-  if (!studentId) {
+  const id = String(studentId || "").trim();
+  if (!id) {
     return null;
   }
-  const sheet = getSheet_(SHEETS.students);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    throw new Error("Students sheet missing id column");
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() === studentId) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getStudentsIndex_();
+  return index.byId[id] || null;
 }
 
 function findDirectoryById_(directoryId) {
-  if (!directoryId) {
+  const id = String(directoryId || "").trim();
+  if (!id) {
     return null;
   }
-  const sheet = getSheet_(SHEETS.directory);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    return null;
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() === directoryId) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getDirectoryIndex_();
+  return index.byId[id] || null;
 }
 
 function findDirectoryByEmail_(email) {
-  const sheet = getSheet_(SHEETS.directory);
-  const headerMap = getHeaderMap_(sheet);
-  const emailIndex = headerMap.email;
-  if (emailIndex === undefined) {
+  const normalized = normalizeEmail_(email);
+  if (!normalized) {
     return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const rowEmail = normalizeEmail_(row[emailIndex]);
-    if (rowEmail === email) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getDirectoryIndex_();
+  return index.byEmail[normalized] || null;
 }
 
 function findStudentByGoogleSub_(googleSub) {
-  if (!googleSub) {
+  const sub = String(googleSub || "").trim();
+  if (!sub) {
     return null;
   }
-  const sheet = getSheet_(SHEETS.students);
-  const headerMap = getHeaderMap_(sheet);
-  const subIndex = headerMap.googleSub;
-  if (subIndex === undefined) {
-    return null;
-  }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[subIndex] || "").trim() === googleSub) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getStudentsIndex_();
+  return index.byGoogleSub[sub] || null;
 }
 
 function findEventById_(eventId) {
-  const sheet = getSheet_(SHEETS.events);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    throw new Error("Events sheet missing id column");
+  const id = String(eventId || "").trim();
+  if (!id) {
+    return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() === eventId) {
-      return mapRowToObject_(headerMap, row);
-    }
-  }
-  return null;
+  const index = getEventsIndex_();
+  return index[id] || null;
 }
 
 function findOrderPlanById_(orderId) {
-  const sheet = getSheet_(SHEETS.orderPlans);
-  const headerMap = getHeaderMap_(sheet);
-  const idIndex = headerMap.id;
-  if (idIndex === undefined) {
-    throw new Error("OrderPlans sheet missing id column");
+  const target = String(orderId || "").trim();
+  if (!target) {
+    return null;
   }
-  const rows = getDataRows_(sheet);
-  for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (String(row[idIndex]).trim() === orderId) {
-      return mapRowToObject_(headerMap, row);
+  const plans = listOrderPlansCached_();
+  for (var i = 0; i < plans.length; i++) {
+    if (String(plans[i].id || "").trim() === target) {
+      return plans[i];
     }
   }
   return null;
@@ -1875,12 +1984,16 @@ function updateSoftballConfig_(data) {
   return getSoftballConfig_();
 }
 
-function listOrderResponses_(orderId) {
+function listOrderResponsesCore_() {
   const sheet = getSheet_(SHEETS.orderResponses);
   const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet).map(function (row) {
+  return getDataRows_(sheet).map(function (row) {
     return mapRowToObject_(headerMap, row);
   });
+}
+
+function listOrderResponses_(orderId) {
+  const rows = listOrderResponsesCached_();
   if (!orderId) {
     return rows;
   }
@@ -1891,11 +2004,7 @@ function listOrderResponses_(orderId) {
 }
 
 function listOrderResponsesByStudent_(studentId) {
-  const sheet = getSheet_(SHEETS.orderResponses);
-  const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet).map(function (row) {
-    return mapRowToObject_(headerMap, row);
-  });
+  const rows = listOrderResponsesCached_();
   const targetId = String(studentId || "").trim();
   return rows.filter(function (row) {
     return String(row.studentId || "").trim() === targetId;
@@ -1938,20 +2047,24 @@ function listDirectory_() {
   });
 }
 
-function listFinanceRequests_(payload) {
+function listFinanceRequestsCore_() {
   const sheet = getSheet_(SHEETS.financeRequests);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
-  const applicantEmail = normalizeEmail_(payload && payload.applicantEmail);
-  const list = rows.map(function (row) {
+  return rows.map(function (row) {
     return mapRowToObject_(headerMap, row);
   });
+}
+
+function listFinanceRequests_(payload) {
+  const applicantEmail = normalizeEmail_(payload && payload.applicantEmail);
+  const list = listFinanceRequestsCached_();
   const filtered = applicantEmail
     ? list.filter(function (item) {
         return normalizeEmail_(item.applicantEmail) === applicantEmail;
       })
     : list;
-  const memberships = listGroupMemberships_();
+  const memberships = listGroupMembershipsCached_();
   const enriched = filtered.map(function (item) {
     if (String(item.applicantRole || "").trim()) {
       return item;
@@ -1968,30 +2081,27 @@ function listFinanceRequests_(payload) {
 }
 
 function listFinanceActions_(requestId) {
-  const sheet = getSheet_(SHEETS.financeActions);
-  const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet);
+  const rows = listFinanceActionsCached_();
   const id = String(requestId || "").trim();
-  const list = rows
-    .map(function (row) {
-      return mapRowToObject_(headerMap, row);
-    })
-    .filter(function (item) {
-      return String(item.requestId || "").trim() === id;
-    });
+  const list = rows.filter(function (item) {
+    return String(item.requestId || "").trim() === id;
+  });
   return list.sort(function (a, b) {
     return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
   });
 }
 
-function listFinanceActionsByActor_(actorNames) {
+function listFinanceActionsCore_() {
   const sheet = getSheet_(SHEETS.financeActions);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
-  const nameIndex = headerMap.actorName;
-  if (nameIndex === undefined) {
-    throw new Error("FinanceActions sheet missing actorName column");
-  }
+  return rows.map(function (row) {
+    return mapRowToObject_(headerMap, row);
+  });
+}
+
+function listFinanceActionsByActor_(actorNames) {
+  const rows = listFinanceActionsCached_();
   const normalized = (actorNames || [])
     .map(function (name) {
       return String(name || "").trim();
@@ -2005,7 +2115,7 @@ function listFinanceActionsByActor_(actorNames) {
   const list = [];
   for (var i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const actorName = String(row[nameIndex] || "").trim();
+    const actorName = String(row.actorName || "").trim();
     if (!actorName) {
       continue;
     }
@@ -2020,13 +2130,7 @@ function listFinanceActionsByActor_(actorNames) {
 }
 
 function listFinanceActionsSummary_(requestIds) {
-  const sheet = getSheet_(SHEETS.financeActions);
-  const headerMap = getHeaderMap_(sheet);
-  const rows = getDataRows_(sheet);
-  const idIndex = headerMap.requestId;
-  if (idIndex === undefined) {
-    throw new Error("FinanceActions sheet missing requestId column");
-  }
+  const rows = listFinanceActionsCached_();
   const idSet = (requestIds || []).reduce(function (acc, id) {
     const key = String(id || "").trim();
     if (key) {
@@ -2036,12 +2140,11 @@ function listFinanceActionsSummary_(requestIds) {
   }, {});
   const latestById = {};
   for (var i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const requestId = String(row[idIndex] || "").trim();
+    const item = rows[i];
+    const requestId = String(item.requestId || "").trim();
     if (!requestId || !idSet[requestId]) {
       continue;
     }
-    const item = mapRowToObject_(headerMap, row);
     const current = latestById[requestId];
     if (!current) {
       latestById[requestId] = item;
@@ -2124,15 +2227,19 @@ function listFundEvents_() {
     });
 }
 
-function listFundPayments_(eventId) {
+function listFundPaymentsCore_() {
   const sheet = getSheet_(SHEETS.fundPayments);
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
-  const id = String(eventId || "").trim();
   return rows
     .map(function (row) {
       return mapRowToObject_(headerMap, row);
-    })
+    });
+}
+
+function listFundPayments_(eventId) {
+  const id = String(eventId || "").trim();
+  return listFundPaymentsCached_()
     .filter(function (item) {
       return !id || String(item.eventId || "").trim() === id;
     })
@@ -2170,7 +2277,7 @@ function listNotificationReads_() {
 function listNotificationReadMap_(studentId, email) {
   const normalizedStudentId = String(studentId || "").trim();
   const normalizedEmail = normalizeEmail_(email);
-  const reads = listNotificationReads_().filter(function (item) {
+  const reads = listNotificationReadsCached_().filter(function (item) {
     if (normalizedStudentId && String(item.readerStudentId || "").trim() === normalizedStudentId) {
       return true;
     }
@@ -2348,7 +2455,7 @@ function listNotifications_(studentId, email) {
   const normalizedEmail = normalizeEmail_(email);
   const now = new Date();
   const groups = normalizedStudentId
-    ? listGroupMemberships_()
+    ? listGroupMembershipsCached_()
         .filter(function (item) {
           return String(item.personId || "").trim() === normalizedStudentId;
         })
@@ -2363,7 +2470,7 @@ function listNotifications_(studentId, email) {
   groups.forEach(function (groupId) {
     groupSet[groupId] = true;
   });
-  const announcements = listAnnouncements_()
+  const announcements = listAnnouncementsCached_()
     .filter(function (item) {
       return String(item.status || "active").trim().toLowerCase() === "active";
     })
@@ -2471,10 +2578,10 @@ function buildTodoNotifications_(studentId, email) {
     });
   });
 
-  const fundEvents = listFundEvents_().filter(function (item) {
+  const fundEvents = listFundEventsCached_().filter(function (item) {
     return String(item.status || "").trim().toLowerCase() === "collecting";
   });
-  const fundPayments = listFundPayments_("");
+  const fundPayments = listFundPaymentsCached_();
   const paidSet = {};
   fundPayments.forEach(function (item) {
     const payerId = String(item.payerId || "").trim();
@@ -2739,7 +2846,7 @@ function appendFinanceRequest_(data) {
     base.id = generateFinanceId_();
   }
   const normalizedStatus = String(base.status || "").trim();
-  const memberships = listGroupMemberships_();
+  const memberships = listGroupMembershipsCached_();
   const applicantRole = resolveApplicantGroupRoleByMemberships_(base, memberships);
   if (!base.applicantRole && applicantRole) {
     base.applicantRole = applicantRole;
@@ -3486,7 +3593,7 @@ function upsertSoftballAttendance_(data) {
 }
 
 function createOrderPlan_(data) {
-  const existing = listOrderPlans_();
+  const existing = listOrderPlansCached_();
   const orderId = String(data.id || generateOrderPlanId_(data.date, existing)).trim();
   if (findOrderPlanById_(orderId)) {
     return null;
@@ -3592,8 +3699,8 @@ function updateFinanceRequestFlow_(requestId, payload) {
   const merged = Object.assign({}, existing, data);
   let nextStatus = String(merged.status || existing.status || "").trim();
   if (action === "approve" || action === "return") {
-    const memberships = listGroupMemberships_();
-    const financeRoles = listFinanceRoles_();
+    const memberships = listGroupMembershipsCached_();
+    const financeRoles = listFinanceRolesCached_();
     const applicantRole = resolveApplicantGroupRoleByMemberships_(merged, memberships);
     if (!merged.applicantRole && applicantRole) {
       merged.applicantRole = applicantRole;
@@ -3603,7 +3710,7 @@ function updateFinanceRequestFlow_(requestId, payload) {
     }
   }
   if (action === "submit") {
-    const memberships = listGroupMemberships_();
+    const memberships = listGroupMembershipsCached_();
     const applicantRole = resolveApplicantGroupRoleByMemberships_(merged, memberships);
     if (!merged.applicantRole && applicantRole) {
       merged.applicantRole = applicantRole;
@@ -4113,7 +4220,7 @@ function findFundPaymentById_(paymentId) {
 }
 
 function buildFundSummary_() {
-  const payments = listFundPayments_("");
+  const payments = listFundPaymentsCached_();
   const requests = listFinanceRequests_({});
   var totalReceived = 0;
   var totalAccounted = 0;
@@ -4936,8 +5043,8 @@ function resolveFinanceApprovalRecipients_(request, status) {
   if (!targetStatus) {
     return [];
   }
-  var memberships = listGroupMemberships_();
-  var financeRoles = listFinanceRoles_();
+  var memberships = listGroupMembershipsCached_();
+  var financeRoles = listFinanceRolesCached_();
   if (targetStatus === "pending_lead") {
     var groupId = String(request.applicantDepartment || "").trim();
     if (!groupId) {
@@ -5377,7 +5484,7 @@ function requireGoogleGroupAccess_(payload, allowedGroupIds) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
   try {
-    const profile = verifyGoogleIdToken_(idToken);
+    const profile = verifyGoogleIdTokenCached_(idToken);
     const student = findStudentByGoogleSub_(profile.sub);
     if (!student || !String(student.id || "").trim()) {
       return { ok: false, data: null, error: "Unauthorized" };
@@ -5397,7 +5504,7 @@ function hasGroupAccessForStudent_(studentId, allowedGroupIds) {
   if (!targetId) {
     return false;
   }
-  const memberships = listGroupMemberships_();
+  const memberships = listGroupMembershipsCached_();
   const allowed = Array.isArray(allowedGroupIds) ? allowedGroupIds : [];
   for (var i = 0; i < memberships.length; i++) {
     const membership = memberships[i] || {};
@@ -5748,6 +5855,27 @@ function verifyGoogleIdToken_(idToken) {
     name: String(data.name || "").trim(),
     picture: String(data.picture || "").trim(),
   };
+}
+
+function verifyGoogleIdTokenCached_(idToken) {
+  const normalized = String(idToken || "").trim();
+  if (!normalized) {
+    throw new Error("Invalid Google token");
+  }
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    normalized,
+    Utilities.Charset.UTF_8
+  );
+  const tokenHash = digest
+    .map(function (byte) {
+      const value = (byte < 0 ? byte + 256 : byte).toString(16);
+      return value.length === 1 ? "0" + value : value;
+    })
+    .join("");
+  return getCachedJson_("googleToken:profile:" + tokenHash, 300, function () {
+    return verifyGoogleIdToken_(normalized);
+  });
 }
 
 function isAllowedGoogleClient_(aud) {

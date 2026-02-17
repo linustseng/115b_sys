@@ -458,7 +458,8 @@ function SoftballPage({ shared }) {
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
-      const ok = await loadSoftballBootstrap();
+      const [bootstrapOk] = await Promise.all([loadSoftballBootstrap(), loadStudents()]);
+      const ok = bootstrapOk;
       if (!ok) {
         setLoading(true);
         setError("");
@@ -469,15 +470,12 @@ function SoftballPage({ shared }) {
             loadFields(),
             loadGear(),
             loadSoftballConfig(),
-            loadStudents(),
           ]);
         } finally {
           if (!ignore) {
             setLoading(false);
           }
         }
-      } else {
-        await loadStudents();
       }
     };
     loadAll();

@@ -692,6 +692,18 @@ const STORAGE_KEYS = {
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
 const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
 const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
+const API_ENABLE_POST = String(import.meta.env.VITE_API_ENABLE_POST || "").trim() === "1";
+const API_POST_ACTIONS = new Set([
+  "listAdminBootstrap",
+  "listFinanceAdminBootstrap",
+  "listFinanceRequests",
+  "listFinanceActionsSummary",
+  "listOrderPlans",
+  "listOrderResponses",
+  "listSoftballBootstrap",
+  "listStudents",
+  "listGroupMemberships",
+]);
 const inflightReadRequests = new Map();
 
 function stableStringify_(value) {
@@ -717,6 +729,14 @@ function isReadAction_(payload) {
 
 function buildReadRequestKey_(payload) {
   return stableStringify_(payload || {});
+}
+
+function shouldTryPost_(payload) {
+  if (!API_ENABLE_POST) {
+    return false;
+  }
+  const action = String((payload && payload.action) || "").trim();
+  return API_POST_ACTIONS.has(action);
 }
 
 function requestWithJsonp_(payload) {
@@ -759,11 +779,62 @@ function requestWithJsonp_(payload) {
   });
 }
 
+function requestWithPost_(payload) {
+  return new Promise((resolve, reject) => {
+    if (!API_URL || API_URL.includes("REPLACE_ME")) {
+      reject(new Error("API URL 未設定"));
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, API_TIMEOUT_MS);
+    fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload || {}),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const text = await response.text();
+        try {
+          return JSON.parse(text);
+        } catch (error) {
+          throw new Error("Invalid JSON response");
+        }
+      })
+      .then((result) => {
+        resolve({ result, url: API_URL });
+      })
+      .catch((error) => {
+        if (error && error.name === "AbortError") {
+          reject(new Error("Request timeout"));
+          return;
+        }
+        reject(error || new Error("Network error"));
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
+  });
+}
+
+async function requestWithTransportFallback_(payload) {
+  if (shouldTryPost_(payload)) {
+    try {
+      return await requestWithPost_(payload);
+    } catch (error) {
+      return requestWithJsonp_(payload);
+    }
+  }
+  return requestWithJsonp_(payload);
+}
+
 async function requestWithReadRetry_(payload) {
   let attempt = 0;
   while (attempt <= API_READ_RETRY_LIMIT) {
     try {
-      return await requestWithJsonp_(payload);
+      return await requestWithTransportFallback_(payload);
     } catch (error) {
       const message = String((error && error.message) || "");
       const retryable = message === "Request timeout" || message === "Network error";
@@ -779,7 +850,7 @@ async function requestWithReadRetry_(payload) {
 function apiRequest(payload) {
   const requestPayload = payload || {};
   if (!isReadAction_(requestPayload)) {
-    return requestWithJsonp_(requestPayload);
+    return requestWithTransportFallback_(requestPayload);
   }
   const cacheKey = buildReadRequestKey_(requestPayload);
   const inflight = inflightReadRequests.get(cacheKey);
