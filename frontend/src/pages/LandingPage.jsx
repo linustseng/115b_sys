@@ -6,6 +6,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const { apiRequest } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
+  const approvalsOverviewCacheTtlMs = 45 * 1000;
+  const approvalsOverviewCachePrefix = "landing_approvals_overview_v1";
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() =>
     loadStoredGoogleStudent_()
   );
@@ -69,7 +71,47 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const initialApprovalsOverview = (() => {
+    try {
+      const studentId =
+        googleLinkedStudent && googleLinkedStudent.id
+          ? String(googleLinkedStudent.id).trim()
+          : "";
+      const email =
+        googleLinkedStudent && googleLinkedStudent.email
+          ? String(googleLinkedStudent.email).trim().toLowerCase()
+          : "";
+      if (!studentId && !email) {
+        return null;
+      }
+      const cacheKey = `${approvalsOverviewCachePrefix}:${studentId || email}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+      if (!ts || Date.now() - ts > approvalsOverviewCacheTtlMs) {
+        return null;
+      }
+      return {
+        pending: Number(parsed.pending || 0),
+        inProgress: Number(parsed.inProgress || 0),
+        completed: Number(parsed.completed || 0),
+        returned: Number(parsed.returned || 0),
+        total: Number(parsed.total || 0),
+      };
+    } catch (error) {
+      return null;
+    }
+  })();
+  const [approvalsOverview, setApprovalsOverview] = useState(
+    initialApprovalsOverview || { pending: 0, inProgress: 0, completed: 0, returned: 0, total: 0 }
+  );
+  const [approvalsOverviewLoaded, setApprovalsOverviewLoaded] = useState(Boolean(initialApprovalsOverview));
+  const [approvalsOverviewError, setApprovalsOverviewError] = useState("");
   const [showApprovalsCenter, setShowApprovalsCenter] = useState(false);
+  const [mountApprovalsCenter, setMountApprovalsCenter] = useState(false);
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -101,6 +143,11 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setNotificationUnread(0);
       setNotificationError("");
       setNotificationLoading(false);
+      setApprovalsOverview({ pending: 0, inProgress: 0, completed: 0, returned: 0, total: 0 });
+      setApprovalsOverviewLoaded(false);
+      setApprovalsOverviewError("");
+      setShowApprovalsCenter(false);
+      setMountApprovalsCenter(false);
       return;
     }
     let ignore = false;
@@ -199,28 +246,82 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
   useEffect(() => {
     if (!hasGoogleLogin) {
-      setShowApprovalsCenter(false);
       return;
     }
-    let cancelled = false;
-    const reveal = () => {
-      if (!cancelled) {
-        setShowApprovalsCenter(true);
+    let ignore = false;
+    setApprovalsOverviewError("");
+    const studentId = googleLinkedStudent && googleLinkedStudent.id ? String(googleLinkedStudent.id).trim() : "";
+    const email =
+      googleLinkedStudent && googleLinkedStudent.email
+        ? String(googleLinkedStudent.email).trim().toLowerCase()
+        : "";
+    const cacheKey = `${approvalsOverviewCachePrefix}:${studentId || email}`;
+    let hasValidCache = false;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+        if (ts && Date.now() - ts <= approvalsOverviewCacheTtlMs) {
+          setApprovalsOverview({
+            pending: Number(parsed.pending || 0),
+            inProgress: Number(parsed.inProgress || 0),
+            completed: Number(parsed.completed || 0),
+            returned: Number(parsed.returned || 0),
+            total: Number(parsed.total || 0),
+          });
+          setApprovalsOverviewLoaded(true);
+          hasValidCache = true;
+        }
+      }
+    } catch (error) {
+      // Ignore cache read errors.
+    }
+    if (!hasValidCache) {
+      setApprovalsOverview({ pending: 0, inProgress: 0, completed: 0, returned: 0, total: 0 });
+      setApprovalsOverviewLoaded(false);
+    }
+    const loadOverview = async () => {
+      try {
+        const { result } = await apiRequest({
+          action: "listApprovalsOverview",
+          studentId: studentId,
+          email: email,
+        });
+        if (!result || !result.ok) {
+          throw new Error((result && result.error) || "簽核總覽載入失敗");
+        }
+        if (ignore) {
+          return;
+        }
+        const data = result.data || {};
+        const payload = {
+          pending: Number(data.pending || 0),
+          inProgress: Number(data.inProgress || 0),
+          completed: Number(data.completed || 0),
+          returned: Number(data.returned || 0),
+          total: Number(data.total || 0),
+        };
+        setApprovalsOverview(payload);
+        setApprovalsOverviewLoaded(true);
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), ...payload }));
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      } catch (error) {
+        if (ignore) {
+          return;
+        }
+        setApprovalsOverviewError(error.message || "簽核總覽載入失敗");
+        setApprovalsOverviewLoaded(true);
       }
     };
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      const id = window.requestIdleCallback(reveal, { timeout: 600 });
-      return () => {
-        cancelled = true;
-        window.cancelIdleCallback(id);
-      };
-    }
-    const timer = setTimeout(reveal, 300);
+    loadOverview();
     return () => {
-      cancelled = true;
-      clearTimeout(timer);
+      ignore = true;
     };
-  }, [hasGoogleLogin]);
+  }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
 
   const markNotificationRead = async (notificationId) => {
     if (!notificationId || !hasGoogleLogin) {
@@ -271,6 +372,23 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     } catch (error) {
       // Ignore read sync failures.
     }
+  };
+
+  const openApprovalsCenter = () => {
+    setShowApprovalsCenter(true);
+    if (mountApprovalsCenter) {
+      return;
+    }
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      window.requestIdleCallback(
+        () => {
+          setMountApprovalsCenter(true);
+        },
+        { timeout: 300 }
+      );
+      return;
+    }
+    setTimeout(() => setMountApprovalsCenter(true), 0);
   };
 
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
@@ -504,25 +622,83 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         </section>
 
         <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-slate-900">簽核中心</h2>
+            {!showApprovalsCenter ? (
+              <button
+                type="button"
+                onClick={openApprovalsCenter}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+              >
+                查看詳細簽核
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowApprovalsCenter(false)}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                收合詳細簽核
+              </button>
+            )}
+          </div>
+
+          {!approvalsOverviewLoaded ? (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+            </div>
+          ) : (
+            <div className="mt-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 px-4 py-3">
+                  <p className="text-[11px] font-semibold text-rose-700">待我簽核</p>
+                  <p className="mt-2 text-xl font-semibold text-rose-900">{approvalsOverview.pending}</p>
+                </div>
+                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3">
+                  <p className="text-[11px] font-semibold text-amber-700">處理中</p>
+                  <p className="mt-2 text-xl font-semibold text-amber-900">{approvalsOverview.inProgress}</p>
+                </div>
+                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3">
+                  <p className="text-[11px] font-semibold text-emerald-700">已結案</p>
+                  <p className="mt-2 text-xl font-semibold text-emerald-900">{approvalsOverview.completed}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+                  <p className="text-[11px] font-semibold text-slate-600">退回補件</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-900">{approvalsOverview.returned}</p>
+                </div>
+              </div>
+              {approvalsOverviewError ? (
+                <p className="mt-3 text-xs text-rose-600">{approvalsOverviewError}</p>
+              ) : null}
+            </div>
+          )}
+
           {showApprovalsCenter ? (
-            <Suspense
-              fallback={
+            <div className="mt-5 border-t border-slate-200/80 pt-5">
+              {mountApprovalsCenter ? (
+                <Suspense
+                  fallback={
+                    <div className="space-y-3">
+                      <div className="h-6 w-28 rounded-full bg-slate-100" />
+                      <div className="h-16 rounded-2xl bg-slate-100/70" />
+                      <div className="h-16 rounded-2xl bg-slate-100/70" />
+                    </div>
+                  }
+                >
+                  <ApprovalsCenter shared={shared} embedded requestId="" />
+                </Suspense>
+              ) : (
                 <div className="space-y-3">
                   <div className="h-6 w-28 rounded-full bg-slate-100" />
                   <div className="h-16 rounded-2xl bg-slate-100/70" />
                   <div className="h-16 rounded-2xl bg-slate-100/70" />
                 </div>
-              }
-            >
-              <ApprovalsCenter shared={shared} embedded requestId="" />
-            </Suspense>
-          ) : (
-            <div className="space-y-3">
-              <div className="h-6 w-28 rounded-full bg-slate-100" />
-              <div className="h-16 rounded-2xl bg-slate-100/70" />
-              <div className="h-16 rounded-2xl bg-slate-100/70" />
+              )}
             </div>
-          )}
+          ) : null}
         </section>
 
         {hasGoogleLogin ? (

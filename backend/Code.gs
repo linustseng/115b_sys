@@ -87,6 +87,7 @@ const CACHE_KEYS = {
   fundSummary: "fundSummary:v1",
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
+  approvalsOverviewPrefix: "approvalsOverview:v1",
 };
 
 let REQUEST_MEMO_ = {};
@@ -355,6 +356,13 @@ function handleActionPayload_(payload) {
       },
       error: null,
     };
+  }
+
+  if (payload.action === "listApprovalsOverview") {
+    const studentId = String(payload.studentId || "").trim();
+    const email = normalizeEmail_(payload.email);
+    const overview = buildApprovalsOverviewPayload_(studentId, email);
+    return { ok: true, data: overview, error: null };
   }
 
   if (payload.action === "listNotifications") {
@@ -2515,6 +2523,89 @@ function buildNotificationsPayload_(studentId, email) {
       return !item.isRead;
     }).length;
     return { notifications: sorted, unreadCount: unreadCount };
+  });
+}
+
+function canApproveFinanceRequestForIdentity_(record, actorId, actorEmail, memberships, financeRoles) {
+  var roles = ["lead", "rep", "committee", "accounting", "cashier"];
+  for (var i = 0; i < roles.length; i++) {
+    if (canFinanceActorApprove_(record, roles[i], actorId, actorEmail, memberships, financeRoles)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildApprovalsOverviewPayload_(studentId, email) {
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  if (!normalizedStudentId && !normalizedEmail) {
+    return {
+      pending: 0,
+      inProgress: 0,
+      completed: 0,
+      returned: 0,
+      total: 0,
+    };
+  }
+
+  const identityKey = normalizedStudentId + "::" + normalizedEmail;
+  const cacheKey = buildDynamicCacheKey_(CACHE_KEYS.approvalsOverviewPrefix, identityKey);
+  return getCachedJson_(cacheKey, 30, function () {
+    const actorId = normalizedStudentId || resolvePersonIdByEmail_(normalizedEmail);
+    const memberships = listGroupMembershipsCached_();
+    const financeRoles = listFinanceRolesCached_();
+    const requests = listFinanceRequestsCached_();
+    var pending = 0;
+    var inProgress = 0;
+    var completed = 0;
+    var returned = 0;
+
+    requests.forEach(function (record) {
+      const status = String(record.status || "").trim().toLowerCase();
+      const isMine = isSameApplicant_(record, actorId, normalizedEmail);
+
+      if (status === "closed") {
+        if (isMine) {
+          completed += 1;
+        }
+        return;
+      }
+
+      if (status === "returned") {
+        if (isMine) {
+          returned += 1;
+        }
+        return;
+      }
+
+      if (status.indexOf("pending_") !== 0) {
+        return;
+      }
+
+      const canApprove = canApproveFinanceRequestForIdentity_(
+        record,
+        actorId,
+        normalizedEmail,
+        memberships,
+        financeRoles
+      );
+      if (canApprove) {
+        pending += 1;
+        return;
+      }
+      if (isMine) {
+        inProgress += 1;
+      }
+    });
+
+    return {
+      pending: pending,
+      inProgress: inProgress,
+      completed: completed,
+      returned: returned,
+      total: pending + inProgress + completed + returned,
+    };
   });
 }
 
