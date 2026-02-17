@@ -14,6 +14,7 @@ function RegistrationPage({ shared }) {
     buildGoogleMapsUrl_,
     getCategoryLabel_,
     loadCachedEventInfo_,
+    saveCachedEventInfo_,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
     hasDrinkSelection_,
@@ -29,6 +30,20 @@ function RegistrationPage({ shared }) {
   const titleParam = params.get("title");
   const locationParam = params.get("location");
   const cachedEventInfo = loadCachedEventInfo_(eventId);
+  const buildEmptyEventInfo_ = () => ({
+    ...DEFAULT_EVENT,
+    title: "",
+    location: "",
+    address: "",
+    startAt: "",
+    endAt: "",
+    registrationCloseAt: "",
+    category: categoryParam || DEFAULT_EVENT.category,
+    capacity: "",
+    status: "",
+    allowCompanions: "yes",
+    allowBringDrinks: "yes",
+  });
 
   const [email, setEmail] = useState("");
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -47,7 +62,17 @@ function RegistrationPage({ shared }) {
   const [updateSubmitting, setUpdateSubmitting] = useState(false);
   const [autoFilled, setAutoFilled] = useState(false);
   const [lookupStatus, setLookupStatus] = useState("idle");
-  const [eventInfo, setEventInfo] = useState(cachedEventInfo || DEFAULT_EVENT);
+  const [eventInfo, setEventInfo] = useState(
+    cachedEventInfo
+      ? {
+          ...DEFAULT_EVENT,
+          ...cachedEventInfo,
+          title: titleParam || cachedEventInfo.title || "",
+          location: locationParam || cachedEventInfo.location || "",
+          category: categoryParam || cachedEventInfo.category || DEFAULT_EVENT.category,
+        }
+      : buildEmptyEventInfo_()
+  );
   const [eventLoading, setEventLoading] = useState(!cachedEventInfo);
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -235,18 +260,13 @@ function RegistrationPage({ shared }) {
       setEventInfo({
         ...DEFAULT_EVENT,
         ...cached,
-        title: titleParam || cached.title || DEFAULT_EVENT.title,
-        location: locationParam || cached.location || DEFAULT_EVENT.location,
+        title: titleParam || cached.title || "",
+        location: locationParam || cached.location || "",
         category: categoryParam || cached.category || DEFAULT_EVENT.category,
       });
       setEventLoading(false);
     } else {
-      setEventInfo({
-        ...DEFAULT_EVENT,
-        title: titleParam || DEFAULT_EVENT.title,
-        location: locationParam || DEFAULT_EVENT.location,
-        category: categoryParam || DEFAULT_EVENT.category,
-      });
+      setEventInfo(buildEmptyEventInfo_());
       setEventLoading(true);
     }
     const fetchEvent = async () => {
@@ -258,15 +278,15 @@ function RegistrationPage({ shared }) {
         if (!ignore) {
           const event = result.data.event;
           const nextEventInfo = {
-            title: titleParam || event.title || DEFAULT_EVENT.title,
-            location: locationParam || event.location || DEFAULT_EVENT.location,
+            title: titleParam || event.title || "",
+            location: locationParam || event.location || "",
             address: event.address || DEFAULT_EVENT.address,
             startAt: event.startAt || DEFAULT_EVENT.startAt,
             endAt: event.endAt || DEFAULT_EVENT.endAt,
             registrationCloseAt: event.registrationCloseAt || DEFAULT_EVENT.registrationCloseAt,
             category: event.category || categoryParam || DEFAULT_EVENT.category,
-            capacity: event.capacity || DEFAULT_EVENT.capacity,
-            status: event.status || DEFAULT_EVENT.status,
+            capacity: event.capacity || "",
+            status: event.status || "",
             allowCompanions: event.allowCompanions || DEFAULT_EVENT.allowCompanions,
             allowBringDrinks: event.allowBringDrinks || DEFAULT_EVENT.allowBringDrinks,
           };
@@ -277,8 +297,8 @@ function RegistrationPage({ shared }) {
         if (!ignore && (titleParam || locationParam || categoryParam)) {
           setEventInfo((prev) => ({
             ...prev,
-            title: titleParam || prev.title,
-            location: locationParam || prev.location,
+            title: titleParam || prev.title || "",
+            location: locationParam || prev.location || "",
             address: prev.address,
             category: categoryParam || prev.category,
           }));
@@ -504,7 +524,9 @@ function RegistrationPage({ shared }) {
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
               活動報名 · 同學版
             </h1>
-            <p className="mt-2 text-sm text-slate-500">活動：{eventInfo.title}</p>
+            <p className="mt-2 text-sm text-slate-500">
+              活動：{eventLoading && !eventInfo.title ? "活動資料載入中..." : eventInfo.title || "-"}
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <a
@@ -518,9 +540,12 @@ function RegistrationPage({ shared }) {
                 活動資料載入中
               </span>
             ) : null}
-            <span className="hidden badge-muted sm:inline-flex">
-              {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
-            </span>
+            {!eventLoading ? (
+              <span className="hidden badge-muted sm:inline-flex">
+                {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"}
+                {eventInfo.capacity ? ` · 名額 ${eventInfo.capacity}` : ""}
+              </span>
+            ) : null}
           </div>
         </div>
         <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 sm:hidden">
@@ -535,9 +560,12 @@ function RegistrationPage({ shared }) {
               活動資料載入中
             </span>
           ) : null}
-          <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
-            {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"} · 名額 {eventInfo.capacity}
-          </span>
+          {!eventLoading ? (
+            <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
+              {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"}
+              {eventInfo.capacity ? ` · 名額 ${eventInfo.capacity}` : ""}
+            </span>
+          ) : null}
         </div>
       </header>
 
