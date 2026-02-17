@@ -4,9 +4,41 @@ import ApprovalsCenter from "./ApprovalsCenter";
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const { apiRequest } = shared;
+  const membershipsCacheTtlMs = 90 * 1000;
+  const membershipsCachePrefix = "landing_memberships_cache_v1";
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() =>
     loadStoredGoogleStudent_()
   );
+  const initialMembershipCache = (() => {
+    try {
+      const studentId =
+        googleLinkedStudent && googleLinkedStudent.id
+          ? String(googleLinkedStudent.id).trim()
+          : "";
+      const email =
+        googleLinkedStudent && googleLinkedStudent.email
+          ? String(googleLinkedStudent.email).trim().toLowerCase()
+          : "";
+      if (!studentId && !email) {
+        return { memberships: [], loaded: false };
+      }
+      const cacheKey = `${membershipsCachePrefix}:${studentId || email}`;
+      const cachedRaw = localStorage.getItem(cacheKey);
+      if (!cachedRaw) {
+        return { memberships: [], loaded: false };
+      }
+      const cached = JSON.parse(cachedRaw);
+      const ts = Number(cached && cached.ts ? cached.ts : 0);
+      const memberships =
+        cached && Array.isArray(cached.memberships) ? cached.memberships : [];
+      if (!memberships.length || Date.now() - ts > membershipsCacheTtlMs) {
+        return { memberships: [], loaded: false };
+      }
+      return { memberships: memberships, loaded: true };
+    } catch (error) {
+      return { memberships: [], loaded: false };
+    }
+  })();
   const displayName =
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
     (googleLinkedStudent && googleLinkedStudent.name) ||
@@ -30,8 +62,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   });
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
-  const [memberships, setMemberships] = useState([]);
-  const [membershipsLoaded, setMembershipsLoaded] = useState(false);
+  const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
+  const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationUnread, setNotificationUnread] = useState(0);
@@ -39,8 +71,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationError, setNotificationError] = useState("");
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
-  const membershipsCacheTtlMs = 90 * 1000;
-  const membershipsCachePrefix = "landing_memberships_cache_v1";
 
   useEffect(() => {
     if (!hasGoogleLogin) {

@@ -17,15 +17,50 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     FINANCE_ROLE_LABELS,
     CLASS_GROUPS,
   } = shared;
+  const approvalsCacheTtlMs = 60 * 1000;
+  const approvalsCachePrefix = "approvals_center_cache_v1";
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
-  const [requests, setRequests] = useState([]);
+  const initialApprovalsCache = (() => {
+    try {
+      const email =
+        googleLinkedStudent && googleLinkedStudent.email
+          ? String(googleLinkedStudent.email).trim().toLowerCase()
+          : "";
+      if (!email) {
+        return null;
+      }
+      const cacheKey = `${approvalsCachePrefix}:${email}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+      if (!ts || Date.now() - ts > approvalsCacheTtlMs) {
+        return null;
+      }
+      return {
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        students: Array.isArray(parsed.students) ? parsed.students : [],
+        groupMemberships: Array.isArray(parsed.groupMemberships) ? parsed.groupMemberships : [],
+        financeRoles: Array.isArray(parsed.financeRoles) ? parsed.financeRoles : [],
+      };
+    } catch (error) {
+      return null;
+    }
+  })();
+  const [requests, setRequests] = useState(initialApprovalsCache ? initialApprovalsCache.requests : []);
   const [actions, setActions] = useState([]);
   const [actionsByActor, setActionsByActor] = useState([]);
   const [actionsSummary, setActionsSummary] = useState({});
-  const [groupMemberships, setGroupMemberships] = useState([]);
-  const [financeRoles, setFinanceRoles] = useState([]);
-  const [students, setStudents] = useState([]);
+  const [groupMemberships, setGroupMemberships] = useState(
+    initialApprovalsCache ? initialApprovalsCache.groupMemberships : []
+  );
+  const [financeRoles, setFinanceRoles] = useState(
+    initialApprovalsCache ? initialApprovalsCache.financeRoles : []
+  );
+  const [students, setStudents] = useState(initialApprovalsCache ? initialApprovalsCache.students : []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [tab, setTab] = useState("pending");
@@ -38,6 +73,54 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     (googleLinkedStudent && googleLinkedStudent.name) ||
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
+  const readApprovalsCache_ = (emailValue) => {
+    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
+    if (!normalizedEmail) {
+      return null;
+    }
+    try {
+      const cacheKey = `${approvalsCachePrefix}:${normalizedEmail}`;
+      const raw = localStorage.getItem(cacheKey);
+      if (!raw) {
+        return null;
+      }
+      const parsed = JSON.parse(raw);
+      const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+      if (!ts || Date.now() - ts > approvalsCacheTtlMs) {
+        return null;
+      }
+      return {
+        requests: Array.isArray(parsed.requests) ? parsed.requests : [],
+        students: Array.isArray(parsed.students) ? parsed.students : [],
+        groupMemberships: Array.isArray(parsed.groupMemberships) ? parsed.groupMemberships : [],
+        financeRoles: Array.isArray(parsed.financeRoles) ? parsed.financeRoles : [],
+      };
+    } catch (error) {
+      return null;
+    }
+  };
+  const saveApprovalsCache_ = (emailValue, payload) => {
+    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
+    if (!normalizedEmail) {
+      return;
+    }
+    try {
+      const cacheKey = `${approvalsCachePrefix}:${normalizedEmail}`;
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify({
+          ts: Date.now(),
+          requests: payload && Array.isArray(payload.requests) ? payload.requests : [],
+          students: payload && Array.isArray(payload.students) ? payload.students : [],
+          groupMemberships:
+            payload && Array.isArray(payload.groupMemberships) ? payload.groupMemberships : [],
+          financeRoles: payload && Array.isArray(payload.financeRoles) ? payload.financeRoles : [],
+        })
+      );
+    } catch (error) {
+      // Ignore cache write errors.
+    }
+  };
 
   useEffect(() => {
     if (displayName && !actorName) {
@@ -90,6 +173,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     setStudents(data.students || []);
     setGroupMemberships(data.groupMemberships || []);
     setFinanceRoles(data.roles || []);
+    return data;
   };
 
   const loadRequests = async () => {
@@ -157,9 +241,29 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
       return;
     }
     let ignore = false;
-    setLoading(true);
+    const email = String(googleLinkedStudent.email || "").trim().toLowerCase();
+    const cached = readApprovalsCache_(email);
+    if (cached) {
+      setRequests(cached.requests || []);
+      setStudents(cached.students || []);
+      setGroupMemberships(cached.groupMemberships || []);
+      setFinanceRoles(cached.financeRoles || []);
+    }
+    setLoading(!cached);
     setError("");
     Promise.all([loadBootstrap({ includeRequests: true }), loadActionsByActor()])
+      .then((results) => {
+        if (ignore) {
+          return;
+        }
+        const bootstrapData = results && results[0] ? results[0] : {};
+        saveApprovalsCache_(email, {
+          requests: bootstrapData.requests || [],
+          students: bootstrapData.students || [],
+          groupMemberships: bootstrapData.groupMemberships || [],
+          financeRoles: bootstrapData.roles || [],
+        });
+      })
       .catch((err) => {
         if (!ignore) {
           setError(err.message || "載入失敗");
