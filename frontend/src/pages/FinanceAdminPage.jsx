@@ -202,13 +202,20 @@ function FinanceAdminPage({ shared }) {
     }
   };
 
-  const loadFinanceAdminBootstrap = async () => {
+  const loadFinanceAdminBootstrap = async (options = {}) => {
+    const includeRequests = options.includeRequests === true;
     try {
-      const { result } = await apiRequest({ action: "listFinanceAdminBootstrap" });
+      const { result } = await apiRequest({
+        action: "listFinanceAdminBootstrap",
+        includeRequests: includeRequests,
+      });
       if (!result.ok) {
         return false;
       }
       const data = result.data || {};
+      if (includeRequests && Array.isArray(data.requests)) {
+        setRequests(data.requests);
+      }
       setStudents(data.students || []);
       setGroupMemberships(data.groupMemberships || []);
       setFinanceRoles(data.roles || []);
@@ -237,9 +244,9 @@ function FinanceAdminPage({ shared }) {
   };
 
   useEffect(() => {
-    loadRequests();
-    loadFinanceAdminBootstrap().then((ok) => {
+    loadFinanceAdminBootstrap({ includeRequests: true }).then((ok) => {
       if (!ok) {
+        loadRequests();
         loadGroupMemberships();
         loadFinanceRoles();
         loadFinanceCategories();

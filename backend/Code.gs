@@ -84,6 +84,8 @@ const CACHE_KEYS = {
   announcements: "announcements:list:v1",
   notificationReads: "notificationReads:list:v1",
   fundSummary: "fundSummary:v1",
+  notificationsPayloadPrefix: "notificationsPayload:v1",
+  checkinStatusMapPrefix: "checkinStatusMap:v1",
 };
 
 let REQUEST_MEMO_ = {};
@@ -135,6 +137,24 @@ function getCachedJson_(key, ttlSeconds, loader) {
   const data = loader();
   cache.put(key, JSON.stringify(data || null), ttlSeconds);
   return data;
+}
+
+function hashString_(value) {
+  const digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    String(value || ""),
+    Utilities.Charset.UTF_8
+  );
+  return digest
+    .map(function (byte) {
+      const raw = (byte < 0 ? byte + 256 : byte).toString(16);
+      return raw.length === 1 ? "0" + raw : raw;
+    })
+    .join("");
+}
+
+function buildDynamicCacheKey_(prefix, value) {
+  return String(prefix || "cache") + ":" + hashString_(value);
 }
 
 function invalidateCacheKeys_(keys) {
@@ -448,9 +468,11 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listFinanceAdminBootstrap") {
+    const includeRequests = payload.includeRequests === true;
     return {
       ok: true,
       data: {
+        requests: includeRequests ? listFinanceRequests_(payload) : undefined,
         students: listStudentsCached_(),
         groupMemberships: listGroupMembershipsCached_(),
         roles: listFinanceRolesCached_(),
@@ -2326,18 +2348,27 @@ function listNotificationReadMap_(studentId, email) {
 }
 
 function buildNotificationsPayload_(studentId, email) {
-  const notifications = listNotifications_(studentId, email);
-  const readMap = listNotificationReadMap_(studentId, email);
-  const enriched = notifications.map(function (item) {
-    const id = String(item.id || "").trim();
-    const isRead = !!readMap[id];
-    return Object.assign({}, item, { isRead: isRead });
+  const normalizedStudentId = String(studentId || "").trim();
+  const normalizedEmail = normalizeEmail_(email);
+  if (!normalizedStudentId && !normalizedEmail) {
+    return { notifications: [], unreadCount: 0 };
+  }
+  const identityKey = normalizedStudentId + "::" + normalizedEmail;
+  const cacheKey = buildDynamicCacheKey_(CACHE_KEYS.notificationsPayloadPrefix, identityKey);
+  return getCachedJson_(cacheKey, 20, function () {
+    const notifications = listNotifications_(normalizedStudentId, normalizedEmail);
+    const readMap = listNotificationReadMap_(normalizedStudentId, normalizedEmail);
+    const enriched = notifications.map(function (item) {
+      const id = String(item.id || "").trim();
+      const isRead = !!readMap[id];
+      return Object.assign({}, item, { isRead: isRead });
+    });
+    const sorted = sortNotifications_(enriched);
+    const unreadCount = sorted.filter(function (item) {
+      return !item.isRead;
+    }).length;
+    return { notifications: sorted, unreadCount: unreadCount };
   });
-  const sorted = sortNotifications_(enriched);
-  const unreadCount = sorted.filter(function (item) {
-    return !item.isRead;
-  }).length;
-  return { notifications: sorted, unreadCount: unreadCount };
 }
 
 function buildCheckinStatusMapByEmail_(email, eventIds) {
@@ -2351,74 +2382,81 @@ function buildCheckinStatusMapByEmail_(email, eventIds) {
           return id;
         })
     : [];
-  if (!normalizedEmail || !ids.length) {
+  ids.sort();
+  const dedupedIds = ids.filter(function (id, index) {
+    return index === 0 || ids[index - 1] !== id;
+  });
+  if (!normalizedEmail || !dedupedIds.length) {
     return {};
   }
+  const cacheInput = normalizedEmail + "::" + dedupedIds.join(",");
+  const cacheKey = buildDynamicCacheKey_(CACHE_KEYS.checkinStatusMapPrefix, cacheInput);
+  return getCachedJson_(cacheKey, 20, function () {
+    const registrations = listRegistrationsCached_();
+    const registrationByEventEmail = {};
+    for (var i = 0; i < registrations.length; i++) {
+      const item = registrations[i];
+      const eventId = String(item.eventId || "").trim();
+      const rowEmail = normalizeEmail_(item.userEmail);
+      if (!eventId || !rowEmail) {
+        continue;
+      }
+      const key = eventId + "::" + rowEmail;
+      if (!Object.prototype.hasOwnProperty.call(registrationByEventEmail, key)) {
+        registrationByEventEmail[key] = item;
+      }
+    }
 
-  const registrations = listRegistrationsCached_();
-  const registrationByEventEmail = {};
-  for (var i = 0; i < registrations.length; i++) {
-    const item = registrations[i];
-    const eventId = String(item.eventId || "").trim();
-    const rowEmail = normalizeEmail_(item.userEmail);
-    if (!eventId || !rowEmail) {
-      continue;
+    const checkins = listCheckinsCached_();
+    const checkinByEventRegistration = {};
+    for (var j = 0; j < checkins.length; j++) {
+      const checkinItem = checkins[j];
+      const eventId = String(checkinItem.eventId || "").trim();
+      const registrationId = String(checkinItem.registrationId || "").trim();
+      if (!eventId || !registrationId) {
+        continue;
+      }
+      const key = eventId + "::" + registrationId;
+      if (!Object.prototype.hasOwnProperty.call(checkinByEventRegistration, key)) {
+        checkinByEventRegistration[key] = checkinItem;
+      }
     }
-    const key = eventId + "::" + rowEmail;
-    if (!Object.prototype.hasOwnProperty.call(registrationByEventEmail, key)) {
-      registrationByEventEmail[key] = item;
-    }
-  }
 
-  const checkins = listCheckinsCached_();
-  const checkinByEventRegistration = {};
-  for (var j = 0; j < checkins.length; j++) {
-    const checkinItem = checkins[j];
-    const eventId = String(checkinItem.eventId || "").trim();
-    const registrationId = String(checkinItem.registrationId || "").trim();
-    if (!eventId || !registrationId) {
-      continue;
+    const statuses = {};
+    for (var k = 0; k < dedupedIds.length; k++) {
+      const eventId = dedupedIds[k];
+      const registrationKey = eventId + "::" + normalizedEmail;
+      const registration = registrationByEventEmail[registrationKey];
+      if (!registration) {
+        statuses[eventId] = { status: "not_registered" };
+        continue;
+      }
+      const customFields = parseCustomFields_(registration.customFields);
+      const attendance = String(customFields.attendance || "").trim();
+      if (!attendance) {
+        statuses[eventId] = { status: "attendance_unknown", attendance: "" };
+        continue;
+      }
+      if (attendance !== "出席") {
+        statuses[eventId] = { status: "not_attending", attendance: attendance };
+        continue;
+      }
+      const checkinKey = eventId + "::" + String(registration.id || "").trim();
+      const checkin = checkinByEventRegistration[checkinKey];
+      if (checkin) {
+        statuses[eventId] = {
+          status: "checked_in",
+          attendance: attendance,
+          checkinId: checkin.id || "",
+          checkinAt: checkin.checkinAt || "",
+        };
+      } else {
+        statuses[eventId] = { status: "not_checked_in", attendance: attendance };
+      }
     }
-    const key = eventId + "::" + registrationId;
-    if (!Object.prototype.hasOwnProperty.call(checkinByEventRegistration, key)) {
-      checkinByEventRegistration[key] = checkinItem;
-    }
-  }
 
-  const statuses = {};
-  for (var k = 0; k < ids.length; k++) {
-    const eventId = ids[k];
-    const registrationKey = eventId + "::" + normalizedEmail;
-    const registration = registrationByEventEmail[registrationKey];
-    if (!registration) {
-      statuses[eventId] = { status: "not_registered" };
-      continue;
-    }
-    const customFields = parseCustomFields_(registration.customFields);
-    const attendance = String(customFields.attendance || "").trim();
-    if (!attendance) {
-      statuses[eventId] = { status: "attendance_unknown", attendance: "" };
-      continue;
-    }
-    if (attendance !== "出席") {
-      statuses[eventId] = { status: "not_attending", attendance: attendance };
-      continue;
-    }
-    const checkinKey = eventId + "::" + String(registration.id || "").trim();
-    const checkin = checkinByEventRegistration[checkinKey];
-    if (checkin) {
-      statuses[eventId] = {
-        status: "checked_in",
-        attendance: attendance,
-        checkinId: checkin.id || "",
-        checkinAt: checkin.checkinAt || "",
-      };
-    } else {
-      statuses[eventId] = { status: "not_checked_in", attendance: attendance };
-    }
-  }
-
-  return statuses;
+    return statuses;
+  });
 }
 
 function upsertNotificationRead_(notificationId, studentId, email) {
