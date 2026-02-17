@@ -74,12 +74,19 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     };
   }, [googleLinkedStudent]);
 
-  const loadBootstrap = async () => {
-    const { result } = await apiRequest({ action: "listFinanceAdminBootstrap" });
+  const loadBootstrap = async (options = {}) => {
+    const includeRequests = options.includeRequests === true;
+    const { result } = await apiRequest({
+      action: "listFinanceAdminBootstrap",
+      includeRequests: includeRequests,
+    });
     if (!result.ok) {
       throw new Error(result.error || "載入失敗");
     }
     const data = result.data || {};
+    if (includeRequests && Array.isArray(data.requests)) {
+      setRequests(data.requests);
+    }
     setStudents(data.students || []);
     setGroupMemberships(data.groupMemberships || []);
     setFinanceRoles(data.roles || []);
@@ -152,7 +159,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "" }) {
     let ignore = false;
     setLoading(true);
     setError("");
-    Promise.all([loadBootstrap(), loadRequests(), loadActionsByActor()])
+    Promise.all([loadBootstrap({ includeRequests: true }), loadActionsByActor()])
       .catch((err) => {
         if (!ignore) {
           setError(err.message || "載入失敗");

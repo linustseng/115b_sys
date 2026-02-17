@@ -163,6 +163,17 @@ function RegistrationPage({ shared }) {
       );
       setAutoFilled(true);
       setLookupStatus("found");
+      if (googleLinkedStudent && googleLinkedStudent.email) {
+        const merged = {
+          ...googleLinkedStudent,
+          ...matchedStudent,
+          email: String(matchedStudent.email || googleLinkedStudent.email || "")
+            .trim()
+            .toLowerCase(),
+        };
+        setGoogleLinkedStudent(merged);
+        storeGoogleStudent_(merged);
+      }
     }
     if (!registration) {
       setExistingRegistration(null);
@@ -341,14 +352,19 @@ function RegistrationPage({ shared }) {
     return () => {
       ignore = true;
     };
-  }, [eventId, titleParam, locationParam, categoryParam, email]);
+  }, [eventId, titleParam, locationParam, categoryParam]);
 
   useEffect(() => {
-    if (!email) {
+    const normalized = String(email || "").trim().toLowerCase();
+    const looksLikeEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+    if (!looksLikeEmail) {
+      setExistingRegistration(null);
+      if (!normalized) {
+        setLookupStatus("idle");
+      }
       return;
     }
     let ignore = false;
-    const normalized = String(email || "").trim().toLowerCase();
     setLookupStatus("loading");
     const timer = setTimeout(async () => {
       const status = await loadExistingRegistration(normalized);
