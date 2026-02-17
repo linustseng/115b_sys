@@ -174,11 +174,21 @@ function BirthdayPage({ shared }) {
     <div className="min-h-screen pb-24 sm:pb-16">
       <header className="px-4 pt-6 sm:px-8">
         <div className="mx-auto max-w-5xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
-            NTU EMBA 115B
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">壽星專區</h1>
-          <p className="mt-2 text-sm text-slate-500">每月初可快速查看壽星並複製慶生文案。</p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">
+                NTU EMBA 115B
+              </p>
+              <h1 className="mt-2 text-2xl font-semibold text-slate-900 sm:text-3xl">壽星專區</h1>
+              <p className="mt-2 text-sm text-slate-500">每月初可快速查看壽星並複製慶生文案。</p>
+            </div>
+            <a
+              href="/"
+              className="inline-flex h-10 shrink-0 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300"
+            >
+              回首頁
+            </a>
+          </div>
         </div>
       </header>
 
