@@ -29,8 +29,11 @@ export default function AdminPage({
   const [students, setStudents] = useState([]);
   const [directory, setDirectory] = useState([]);
   const [registrations, setRegistrations] = useState([]);
+  const [registrationsLoaded, setRegistrationsLoaded] = useState(false);
   const [checkins, setCheckins] = useState([]);
+  const [checkinsLoaded, setCheckinsLoaded] = useState(false);
   const [orderPlans, setOrderPlans] = useState([]);
+  const [orderPlansLoaded, setOrderPlansLoaded] = useState(false);
   const [orderResponses, setOrderResponses] = useState([]);
   const [orderActiveId, setOrderActiveId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -107,6 +110,7 @@ export default function AdminPage({
   const uploadFormRef = useRef(null);
   const uploadFileRef = useRef(null);
   const uploadCompletedRef = useRef(false);
+  const directoryLoadedTokenRef = useRef("");
   const ALLOWED_UPLOAD_EXTENSIONS = [
     "pdf",
     "jpg",
@@ -484,43 +488,70 @@ export default function AdminPage({
   }, [isMembershipSaving]);
 
   useEffect(() => {
+    const shouldLoadDirectory = () => {
+      const storedToken = localStorage.getItem("directoryToken") || "";
+      const activeToken = storedToken || directoryToken;
+      if (!activeToken) {
+        return false;
+      }
+      return directoryLoadedTokenRef.current !== activeToken;
+    };
     if (activeTab === "registrations") {
-      loadAdminBootstrap({ includeRegistrations: true }).then((ok) => {
-        if (!ok) {
-          loadRegistrations();
-        }
-      });
-      loadDirectoryAdmin();
+      if (!registrationsLoaded) {
+        loadAdminBootstrap({ includeRegistrations: true }).then((ok) => {
+          if (!ok) {
+            loadRegistrations();
+          }
+        });
+      }
+      if (shouldLoadDirectory()) {
+        loadDirectoryAdmin();
+      }
     }
     if (activeTab === "checkins") {
-      loadAdminBootstrap({ includeRegistrations: true, includeCheckins: true }).then((ok) => {
-        if (!ok) {
-          loadCheckins();
-          loadRegistrations();
-        }
-      });
-      loadDirectoryAdmin();
+      if (!checkinsLoaded || !registrationsLoaded) {
+        loadAdminBootstrap({ includeRegistrations: true, includeCheckins: true }).then((ok) => {
+          if (!ok) {
+            if (!checkinsLoaded) {
+              loadCheckins();
+            }
+            if (!registrationsLoaded) {
+              loadRegistrations();
+            }
+          }
+        });
+      }
+      if (shouldLoadDirectory()) {
+        loadDirectoryAdmin();
+      }
     }
     if (activeTab === "students") {
       if (!students.length) {
         loadAdminBootstrap();
-      } else {
-        loadStudents();
       }
-      loadDirectoryAdmin();
+      if (shouldLoadDirectory()) {
+        loadDirectoryAdmin();
+      }
     }
     if (activeTab === "roles") {
       if (!groupMemberships.length || !students.length) {
         loadAdminBootstrap();
-      } else {
-        loadGroupMemberships();
-        loadStudents();
       }
     }
     if (activeTab === "ordering") {
-      loadOrderPlans();
+      if (!orderPlansLoaded) {
+        loadOrderPlans();
+      }
     }
-  }, [activeTab]);
+  }, [
+    activeTab,
+    directoryToken,
+    registrationsLoaded,
+    checkinsLoaded,
+    orderPlansLoaded,
+    students.length,
+    groupMemberships.length,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "roles") {
@@ -709,6 +740,7 @@ export default function AdminPage({
     const activeToken = storedToken || directoryToken;
     if (!activeToken) {
       setDirectory([]);
+      directoryLoadedTokenRef.current = "";
       return;
     }
     setLoading(true);
@@ -719,6 +751,7 @@ export default function AdminPage({
         throw new Error(result.error || "載入失敗");
       }
       setDirectory(result.data && result.data.directory ? result.data.directory : []);
+      directoryLoadedTokenRef.current = activeToken;
     } catch (err) {
       setDirectory([]);
     } finally {
@@ -735,6 +768,7 @@ export default function AdminPage({
         throw new Error(result.error || "載入失敗");
       }
       setRegistrations(result.data && result.data.registrations ? result.data.registrations : []);
+      setRegistrationsLoaded(true);
     } catch (err) {
       setError("報名名單載入失敗。");
     } finally {
@@ -782,9 +816,11 @@ export default function AdminPage({
       setDraftMemberships(data.groupMemberships || []);
       if (options.includeRegistrations && data.registrations) {
         setRegistrations(data.registrations);
+        setRegistrationsLoaded(true);
       }
       if (options.includeCheckins && data.checkins) {
         setCheckins(data.checkins);
+        setCheckinsLoaded(true);
       }
       setMembershipDirty(false);
       setMembershipStatus("");
@@ -806,6 +842,7 @@ export default function AdminPage({
         throw new Error(result.error || "載入失敗");
       }
       setCheckins(result.data && result.data.checkins ? result.data.checkins : []);
+      setCheckinsLoaded(true);
     } catch (err) {
       setError("簽到名單載入失敗。");
     } finally {
@@ -824,6 +861,7 @@ export default function AdminPage({
       const items = result.data && result.data.plans ? result.data.plans : [];
       const sorted = items.slice().sort((a, b) => String(b.date || "").localeCompare(a.date || ""));
       setOrderPlans(sorted);
+      setOrderPlansLoaded(true);
     } catch (err) {
       setError("訂餐設定載入失敗。");
     } finally {

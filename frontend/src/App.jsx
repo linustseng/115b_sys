@@ -691,6 +691,7 @@ const STORAGE_KEYS = {
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
 const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
+const API_READ_CACHE_TTL_MS = Number(import.meta.env.VITE_API_READ_CACHE_TTL_MS || 2500);
 const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
 const API_ENABLE_POST = String(import.meta.env.VITE_API_ENABLE_POST || "").trim() === "1";
 const API_POST_ACTIONS = new Set([
@@ -714,6 +715,21 @@ const API_POST_ACTIONS = new Set([
   "listFundPayments",
 ]);
 const inflightReadRequests = new Map();
+const readResponseCache = new Map();
+const READ_CACHE_TTL_BY_ACTION_MS = {
+  listEvents: 8000,
+  listStudents: 8000,
+  listGroupMemberships: 8000,
+  listHomeBootstrap: 5000,
+  listLandingBootstrap: 5000,
+  listAdminBootstrap: 5000,
+  listFinanceBootstrap: 5000,
+  listFinanceApplicantBootstrap: 5000,
+  listFinanceAdminBootstrap: 5000,
+  listSoftballBootstrap: 5000,
+  getRegistrationBootstrap: 3000,
+  getCheckinBootstrap: 3000,
+};
 
 function stableStringify_(value) {
   if (value === null || value === undefined) {
@@ -738,6 +754,55 @@ function isReadAction_(payload) {
 
 function buildReadRequestKey_(payload) {
   return stableStringify_(payload || {});
+}
+
+function getReadCacheTtlMs_(payload) {
+  const action = String((payload && payload.action) || "").trim();
+  if (Object.prototype.hasOwnProperty.call(READ_CACHE_TTL_BY_ACTION_MS, action)) {
+    return Number(READ_CACHE_TTL_BY_ACTION_MS[action] || 0);
+  }
+  return API_READ_CACHE_TTL_MS;
+}
+
+function clearReadResponseCache_() {
+  readResponseCache.clear();
+}
+
+function getCachedReadResponse_(cacheKey) {
+  const cached = readResponseCache.get(cacheKey);
+  if (!cached) {
+    return null;
+  }
+  if (Date.now() > Number(cached.expiresAt || 0)) {
+    readResponseCache.delete(cacheKey);
+    return null;
+  }
+  return cached.response;
+}
+
+function setCachedReadResponse_(cacheKey, response, ttlMs) {
+  const ttl = Number(ttlMs || 0);
+  if (ttl <= 0) {
+    return;
+  }
+  readResponseCache.set(cacheKey, {
+    response: response,
+    expiresAt: Date.now() + ttl,
+  });
+  if (readResponseCache.size > 250) {
+    const now = Date.now();
+    for (const [key, value] of readResponseCache.entries()) {
+      if (now > Number((value && value.expiresAt) || 0)) {
+        readResponseCache.delete(key);
+      }
+    }
+    if (readResponseCache.size > 250) {
+      const oldestKey = readResponseCache.keys().next().value;
+      if (oldestKey) {
+        readResponseCache.delete(oldestKey);
+      }
+    }
+  }
 }
 
 function shouldTryPost_(payload) {
@@ -859,16 +924,29 @@ async function requestWithReadRetry_(payload) {
 function apiRequest(payload) {
   const requestPayload = payload || {};
   if (!isReadAction_(requestPayload)) {
+    clearReadResponseCache_();
     return requestWithTransportFallback_(requestPayload);
   }
   const cacheKey = buildReadRequestKey_(requestPayload);
+  const cachedResponse = getCachedReadResponse_(cacheKey);
+  if (cachedResponse) {
+    return Promise.resolve(cachedResponse);
+  }
   const inflight = inflightReadRequests.get(cacheKey);
   if (inflight) {
     return inflight;
   }
-  const requestPromise = requestWithReadRetry_(requestPayload).finally(() => {
-    inflightReadRequests.delete(cacheKey);
-  });
+  const ttlMs = getReadCacheTtlMs_(requestPayload);
+  const requestPromise = requestWithReadRetry_(requestPayload)
+    .then((response) => {
+      if (response && response.result && response.result.ok) {
+        setCachedReadResponse_(cacheKey, response, ttlMs);
+      }
+      return response;
+    })
+    .finally(() => {
+      inflightReadRequests.delete(cacheKey);
+    });
   inflightReadRequests.set(cacheKey, requestPromise);
   return requestPromise;
 }
