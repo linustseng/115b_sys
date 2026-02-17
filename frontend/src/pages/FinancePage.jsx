@@ -92,8 +92,7 @@ function FinancePage({ shared }) {
   const [fundPayments, setFundPayments] = useState([]);
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState(initialFinanceTab);
-  const [requestsLoaded, setRequestsLoaded] = useState(false);
-  const [requestBootstrapLoaded, setRequestBootstrapLoaded] = useState(false);
+  const [bootstrapLoaded, setBootstrapLoaded] = useState(false);
   const fundEventsCacheKey = "fund_events_cache_v1";
   const fundEventsCacheTtlMs = 10 * 60 * 1000;
   const fundPaymentErrorActive = financeTab === "fund" && !!error;
@@ -267,8 +266,7 @@ function FinancePage({ shared }) {
 
   useEffect(() => {
     if (googleLinkedStudent && googleLinkedStudent.email) {
-      setRequestsLoaded(false);
-      setRequestBootstrapLoaded(false);
+      setBootstrapLoaded(false);
       setFundPaymentForm((prev) => ({
         ...prev,
         payerId: String(googleLinkedStudent.id || "").trim(),
@@ -280,8 +278,7 @@ function FinancePage({ shared }) {
       setStudents([]);
       setFinanceCategories([]);
       setMemberGroups([]);
-      setRequestsLoaded(false);
-      setRequestBootstrapLoaded(false);
+      setBootstrapLoaded(false);
     }
   }, [googleLinkedStudent]);
 
@@ -289,25 +286,25 @@ function FinancePage({ shared }) {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
     }
-    if (financeTab !== "requests") {
+    if (bootstrapLoaded) {
       return;
     }
-    if (!requestsLoaded) {
-      loadApplicantBootstrap(googleLinkedStudent.email).then((ok) => {
-        if (!ok) {
-          loadRequests(googleLinkedStudent.email);
-          loadFinanceBootstrap(googleLinkedStudent.email).then((bootstrapOk) => {
-            if (!bootstrapOk) {
-              loadStudents();
-              loadFinanceCategories();
-            }
-          });
-        }
-        setRequestsLoaded(true);
-        setRequestBootstrapLoaded(true);
-      });
-    }
-  }, [financeTab, googleLinkedStudent, requestsLoaded, requestBootstrapLoaded]);
+    let ignore = false;
+    const runBootstrap = async () => {
+      const email = googleLinkedStudent.email;
+      const ok = await loadApplicantBootstrap(email);
+      if (!ok) {
+        await Promise.allSettled([loadRequests(email), loadFinanceBootstrap(email)]);
+      }
+      if (!ignore) {
+        setBootstrapLoaded(true);
+      }
+    };
+    runBootstrap();
+    return () => {
+      ignore = true;
+    };
+  }, [googleLinkedStudent, bootstrapLoaded]);
 
   useEffect(() => {
     if (!form.categoryType && financeCategories.length) {

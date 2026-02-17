@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 function RegistrationPage({ shared }) {
   const {
@@ -77,6 +77,7 @@ function RegistrationPage({ shared }) {
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const bootstrapCacheRef = useRef({});
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
   const registrationDeadlineLabel = eventInfo.registrationCloseAt
@@ -139,11 +140,61 @@ function RegistrationPage({ shared }) {
     }
   };
 
+  const applyBootstrapRegistrationData_ = (data) => {
+    const payload = data || {};
+    const registration = payload.registration || null;
+    const matchedStudent = payload.student || null;
+    if (matchedStudent) {
+      setStudent({
+        name: matchedStudent.name || "",
+        company: matchedStudent.company || "",
+        title: matchedStudent.title || "",
+        phone: normalizePhoneInputValue_(matchedStudent.phone),
+        dietaryPreference: matchedStudent.dietaryPreference || "",
+      });
+      setCustomFields((prev) =>
+        prev.dietary && prev.studentId
+          ? prev
+          : {
+              ...prev,
+              dietary: matchedStudent.dietaryPreference || prev.dietary || "無禁忌",
+              studentId: matchedStudent.id || prev.studentId || "",
+            }
+      );
+      setAutoFilled(true);
+      setLookupStatus("found");
+    }
+    if (!registration) {
+      setExistingRegistration(null);
+      return matchedStudent ? "student" : "none";
+    }
+    const storedFields = parseCustomFields_(registration.customFields);
+    const notesValue = storedFields.notes || "";
+    const { notes: _notes, ...restFields } = storedFields;
+    setExistingRegistration(registration);
+    setCustomFields((prev) => ({
+      ...prev,
+      ...restFields,
+    }));
+    setNotes(notesValue || "");
+    setStudent((prev) => ({
+      ...prev,
+      name: registration.userName || prev.name,
+      phone: normalizePhoneInputValue_(registration.userPhone || prev.phone),
+    }));
+    return "registration";
+  };
+
   const loadExistingRegistration = async (emailValue) => {
     const normalized = String(emailValue || "").trim().toLowerCase();
     if (!normalized || !eventId) {
       setExistingRegistration(null);
       return "none";
+    }
+    const cacheKey = `${eventId}::${normalized}`;
+    const cached = bootstrapCacheRef.current[cacheKey];
+    if (cached && Date.now() - Number(cached.ts || 0) < 60 * 1000) {
+      return applyBootstrapRegistrationData_(cached.data || {});
     }
     try {
       const { result } = await apiRequest({
@@ -155,46 +206,8 @@ function RegistrationPage({ shared }) {
         setExistingRegistration(null);
         return "none";
       }
-      const { registration, student: matchedStudent } = result.data || {};
-      if (matchedStudent) {
-        setStudent({
-          name: matchedStudent.name || "",
-          company: matchedStudent.company || "",
-          title: matchedStudent.title || "",
-          phone: normalizePhoneInputValue_(matchedStudent.phone),
-          dietaryPreference: matchedStudent.dietaryPreference || "",
-        });
-        setCustomFields((prev) =>
-          prev.dietary && prev.studentId
-            ? prev
-            : {
-                ...prev,
-                dietary: matchedStudent.dietaryPreference || prev.dietary || "無禁忌",
-                studentId: matchedStudent.id || prev.studentId || "",
-              }
-        );
-        setAutoFilled(true);
-        setLookupStatus("found");
-      }
-      if (!registration) {
-        setExistingRegistration(null);
-        return matchedStudent ? "student" : "none";
-      }
-      const storedFields = parseCustomFields_(registration.customFields);
-      const notesValue = storedFields.notes || "";
-      const { notes: _notes, ...restFields } = storedFields;
-      setExistingRegistration(registration);
-      setCustomFields((prev) => ({
-        ...prev,
-        ...restFields,
-      }));
-      setNotes(notesValue || "");
-      setStudent((prev) => ({
-        ...prev,
-        name: registration.userName || prev.name,
-        phone: normalizePhoneInputValue_(registration.userPhone || prev.phone),
-      }));
-      return "registration";
+      bootstrapCacheRef.current[cacheKey] = { ts: Date.now(), data: result.data };
+      return applyBootstrapRegistrationData_(result.data || {});
     } catch (error) {
       setExistingRegistration(null);
       return "none";
@@ -271,7 +284,12 @@ function RegistrationPage({ shared }) {
     }
     const fetchEvent = async () => {
       try {
-        const { result } = await apiRequest({ action: "getRegistrationBootstrap", eventId: eventId });
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        const payload = { action: "getRegistrationBootstrap", eventId: eventId };
+        if (normalizedEmail) {
+          payload.email = normalizedEmail;
+        }
+        const { result } = await apiRequest(payload);
         if (!result.ok || !result.data || !result.data.event) {
           throw new Error(result.error || "Event not found");
         }
@@ -292,6 +310,16 @@ function RegistrationPage({ shared }) {
           };
           setEventInfo(nextEventInfo);
           saveCachedEventInfo_(eventId, nextEventInfo);
+          if (normalizedEmail) {
+            const cacheKey = `${eventId}::${normalizedEmail}`;
+            bootstrapCacheRef.current[cacheKey] = { ts: Date.now(), data: result.data };
+            const status = applyBootstrapRegistrationData_(result.data);
+            if (status === "none") {
+              setLookupStatus("notfound");
+            } else if (status === "student" || status === "registration") {
+              setLookupStatus("found");
+            }
+          }
         }
       } catch (error) {
         if (!ignore && (titleParam || locationParam || categoryParam)) {
@@ -313,7 +341,7 @@ function RegistrationPage({ shared }) {
     return () => {
       ignore = true;
     };
-  }, [eventId, titleParam, locationParam, categoryParam]);
+  }, [eventId, titleParam, locationParam, categoryParam, email]);
 
   useEffect(() => {
     if (!email) {

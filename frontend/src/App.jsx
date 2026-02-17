@@ -708,6 +708,10 @@ const API_POST_ACTIONS = new Set([
   "getCheckinBootstrap",
   "getRegistrationBootstrap",
   "listEvents",
+  "listFinanceApplicantBootstrap",
+  "listFinanceBootstrap",
+  "listFundEvents",
+  "listFundPayments",
 ]);
 const inflightReadRequests = new Map();
 
