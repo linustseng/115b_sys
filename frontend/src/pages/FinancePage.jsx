@@ -93,8 +93,10 @@ function FinancePage({ shared }) {
   const [fundStatusMessage, setFundStatusMessage] = useState("");
   const [financeTab, setFinanceTab] = useState(initialFinanceTab);
   const [bootstrapLoaded, setBootstrapLoaded] = useState(false);
+  const fundPaymentsCacheRef = useRef({});
   const fundEventsCacheKey = "fund_events_cache_v1";
   const fundEventsCacheTtlMs = 10 * 60 * 1000;
+  const fundPaymentsCacheTtlMs = 60 * 1000;
   const fundPaymentErrorActive = financeTab === "fund" && !!error;
   const fundPaymentErrorFlags = {
     eventId: fundPaymentErrorActive && error.includes("班費事件"),
@@ -362,10 +364,21 @@ function FinancePage({ shared }) {
       setFundPayments([]);
       return;
     }
+    const normalizedEventId = String(eventId || "").trim();
+    const cached = fundPaymentsCacheRef.current[normalizedEventId];
+    if (cached && Date.now() - Number(cached.ts || 0) < fundPaymentsCacheTtlMs) {
+      setFundPayments(Array.isArray(cached.payments) ? cached.payments : []);
+      return;
+    }
     try {
-      const { result } = await apiRequest({ action: "listFundPayments", eventId: eventId });
+      const { result } = await apiRequest({ action: "listFundPayments", eventId: normalizedEventId });
       if (result.ok) {
-        setFundPayments(result.data && result.data.payments ? result.data.payments : []);
+        const payments = result.data && result.data.payments ? result.data.payments : [];
+        setFundPayments(payments);
+        fundPaymentsCacheRef.current[normalizedEventId] = {
+          ts: Date.now(),
+          payments: payments,
+        };
       }
     } catch (err) {
       setFundPayments([]);
@@ -376,18 +389,22 @@ function FinancePage({ shared }) {
     if (financeTab !== "fund") {
       return;
     }
+    let hasFreshCache = false;
     try {
       const cached = localStorage.getItem(fundEventsCacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         if (parsed && Array.isArray(parsed.events) && Date.now() - parsed.ts < fundEventsCacheTtlMs) {
           setFundEvents(parsed.events);
+          hasFreshCache = true;
         }
       }
     } catch (error) {
       // Ignore cache read errors.
     }
-    loadFundEvents();
+    if (!hasFreshCache || !fundEvents.length) {
+      loadFundEvents();
+    }
   }, [financeTab]);
 
   useEffect(() => {
@@ -749,6 +766,7 @@ function FinancePage({ shared }) {
         payerType: prev.payerType,
         amount: prev.amount,
       }));
+      delete fundPaymentsCacheRef.current[String(fundPaymentForm.eventId || "").trim()];
       await loadFundPayments(fundPaymentForm.eventId);
     } catch (err) {
       setError(err.message || "送出失敗");
