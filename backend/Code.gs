@@ -88,6 +88,7 @@ const CACHE_KEYS = {
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
   approvalsOverviewPrefix: "approvalsOverview:v1",
+  birthdays: "birthdays:list:v1",
 };
 
 let REQUEST_MEMO_ = {};
@@ -271,6 +272,10 @@ function listNotificationReadsCached_() {
   return getCachedJson_(CACHE_KEYS.notificationReads, 90, listNotificationReads_);
 }
 
+function listBirthdaysCached_() {
+  return getCachedJson_(CACHE_KEYS.birthdays, 300, listBirthdays_);
+}
+
 function buildFundSummaryCached_() {
   return getCachedJson_(CACHE_KEYS.fundSummary, 90, buildFundSummary_);
 }
@@ -356,6 +361,10 @@ function handleActionPayload_(payload) {
       },
       error: null,
     };
+  }
+
+  if (payload.action === "listBirthdays") {
+    return { ok: true, data: listBirthdaysCached_(), error: null };
   }
 
   if (payload.action === "listApprovalsOverview") {
@@ -826,7 +835,7 @@ function handleActionPayload_(payload) {
     if (!updated) {
       return { ok: false, data: null, error: "Directory profile missing" };
     }
-    invalidateCacheKeys_([CACHE_KEYS.directory]);
+    invalidateCacheKeys_([CACHE_KEYS.directory, CACHE_KEYS.birthdays]);
     if (changes.length) {
       appendDirectoryLog_({
         actorEmail: profile.email,
@@ -1440,7 +1449,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Empty items" };
     }
     const result = upsertDirectoryBatch_(items);
-    invalidateCacheKeys_([CACHE_KEYS.directory]);
+    invalidateCacheKeys_([CACHE_KEYS.directory, CACHE_KEYS.birthdays]);
     return { ok: true, data: result, error: null };
   }
 
@@ -2199,6 +2208,53 @@ function listDirectory_() {
   return rows.map(function (row) {
     return mapRowToObject_(headerMap, row);
   });
+}
+
+function listBirthdays_() {
+  const months = {};
+  for (var month = 1; month <= 12; month += 1) {
+    months[String(month)] = [];
+  }
+
+  const list = listDirectoryCached_();
+  for (var i = 0; i < list.length; i += 1) {
+    const item = normalizeDirectoryRecord_(list[i] || {});
+    const monthValue = Number(item.birthdayMonth || 0);
+    const dayValue = Number(item.birthdayDay || 0);
+    if (!monthValue || !dayValue || monthValue < 1 || monthValue > 12 || dayValue < 1 || dayValue > 31) {
+      continue;
+    }
+    const displayName = String(item.preferredName || item.nameZh || item.nameEn || item.id || "").trim();
+    if (!displayName) {
+      continue;
+    }
+    months[String(monthValue)].push({
+      id: String(item.id || "").trim(),
+      name: displayName,
+      month: monthValue,
+      day: dayValue,
+    });
+  }
+
+  Object.keys(months).forEach(function (key) {
+    months[key].sort(function (a, b) {
+      const dayA = Number(a.day || 0);
+      const dayB = Number(b.day || 0);
+      if (dayA !== dayB) {
+        return dayA - dayB;
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  });
+
+  const currentMonth = new Date().getMonth() + 1;
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  return {
+    months: months,
+    currentMonth: currentMonth,
+    nextMonth: nextMonth,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function listFinanceRequestsCore_() {

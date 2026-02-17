@@ -6,6 +6,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const { apiRequest } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
+  const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
+  const birthdaysCachePrefix = "landing_birthdays_v1";
   const approvalsOverviewCacheTtlMs = 45 * 1000;
   const approvalsOverviewCachePrefix = "landing_approvals_overview_v1";
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() =>
@@ -112,6 +114,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [approvalsOverviewError, setApprovalsOverviewError] = useState("");
   const [showApprovalsCenter, setShowApprovalsCenter] = useState(false);
   const [mountApprovalsCenter, setMountApprovalsCenter] = useState(false);
+  const [birthdaySummary, setBirthdaySummary] = useState(() => ({
+    currentMonth: new Date().getMonth() + 1,
+    nextMonth: new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2,
+    current: [],
+    next: [],
+  }));
+  const [birthdaySummaryLoaded, setBirthdaySummaryLoaded] = useState(false);
+  const [birthdaySummaryError, setBirthdaySummaryError] = useState("");
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -148,6 +158,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setApprovalsOverviewError("");
       setShowApprovalsCenter(false);
       setMountApprovalsCenter(false);
+      setBirthdaySummaryLoaded(false);
+      setBirthdaySummaryError("");
       return;
     }
     let ignore = false;
@@ -243,6 +255,85 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       ignore = true;
     };
   }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin) {
+      return;
+    }
+    let ignore = false;
+    setBirthdaySummaryError("");
+    try {
+      const raw = localStorage.getItem(birthdaysCachePrefix);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const ts = Number(parsed && parsed.ts ? parsed.ts : 0);
+        const currentMonth = Number(parsed && parsed.currentMonth ? parsed.currentMonth : 0);
+        const nextMonth = Number(parsed && parsed.nextMonth ? parsed.nextMonth : 0);
+        const months = parsed && parsed.months && typeof parsed.months === "object" ? parsed.months : null;
+        if (ts && months && Date.now() - ts <= birthdaysCacheTtlMs) {
+          const currentList = Array.isArray(months[String(currentMonth)]) ? months[String(currentMonth)] : [];
+          const nextList = Array.isArray(months[String(nextMonth)]) ? months[String(nextMonth)] : [];
+          setBirthdaySummary({
+            currentMonth: currentMonth || new Date().getMonth() + 1,
+            nextMonth: nextMonth || (new Date().getMonth() + 2 > 12 ? 1 : new Date().getMonth() + 2),
+            current: currentList,
+            next: nextList,
+          });
+          setBirthdaySummaryLoaded(true);
+        }
+      }
+    } catch (error) {
+      // Ignore cache read errors.
+    }
+
+    const loadBirthdays = async () => {
+      try {
+        const { result } = await apiRequest({ action: "listBirthdays" });
+        if (!result || !result.ok) {
+          throw new Error((result && result.error) || "壽星資料載入失敗");
+        }
+        if (ignore) {
+          return;
+        }
+        const data = result.data || {};
+        const months = data.months && typeof data.months === "object" ? data.months : {};
+        const currentMonth = Number(data.currentMonth || 0) || new Date().getMonth() + 1;
+        const nextMonth = Number(data.nextMonth || 0) || (currentMonth === 12 ? 1 : currentMonth + 1);
+        const currentList = Array.isArray(months[String(currentMonth)]) ? months[String(currentMonth)] : [];
+        const nextList = Array.isArray(months[String(nextMonth)]) ? months[String(nextMonth)] : [];
+        setBirthdaySummary({
+          currentMonth: currentMonth,
+          nextMonth: nextMonth,
+          current: currentList,
+          next: nextList,
+        });
+        setBirthdaySummaryLoaded(true);
+        try {
+          localStorage.setItem(
+            birthdaysCachePrefix,
+            JSON.stringify({
+              ts: Date.now(),
+              months: months,
+              currentMonth: currentMonth,
+              nextMonth: nextMonth,
+            })
+          );
+        } catch (error) {
+          // Ignore cache write errors.
+        }
+      } catch (error) {
+        if (!ignore) {
+          setBirthdaySummaryError(error.message || "壽星資料載入失敗");
+          setBirthdaySummaryLoaded(true);
+        }
+      }
+    };
+
+    loadBirthdays();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin]);
 
   useEffect(() => {
     if (!hasGoogleLogin) {
@@ -621,6 +712,69 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
         </section>
 
+        <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">壽星專區</h2>
+              <p className="mt-1 text-xs text-slate-500">每月初可快速查看壽星名單並複製慶生文案。</p>
+            </div>
+            <a
+              href="/birthdays"
+              className="inline-flex h-10 items-center rounded-full border border-pink-200 bg-pink-50 px-4 text-xs font-semibold text-pink-700 hover:border-pink-300"
+            >
+              前往壽星專區
+            </a>
+          </div>
+          {!hasGoogleLogin ? (
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+              請先登入 Google，即可查看每月壽星與複製慶生文案。
+            </div>
+          ) : !birthdaySummaryLoaded ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+              <div className="h-20 rounded-2xl bg-slate-100/70" />
+            </div>
+          ) : (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-pink-200/80 bg-pink-50/60 px-4 py-3">
+                <p className="text-xs font-semibold text-pink-700">
+                  本月 {birthdaySummary.currentMonth} 月壽星
+                </p>
+                <p className="mt-1 text-sm font-semibold text-pink-900">
+                  {birthdaySummary.current.length ? `${birthdaySummary.current.length} 位` : "目前無壽星"}
+                </p>
+                {birthdaySummary.current.length ? (
+                  <p className="mt-2 text-xs text-pink-800/90">
+                    {birthdaySummary.current
+                      .slice(0, 5)
+                      .map((item) => `${item.name} ${item.month}/${item.day}`)
+                      .join("、")}
+                  </p>
+                ) : null}
+              </div>
+              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-3">
+                <p className="text-xs font-semibold text-amber-700">
+                  下月 {birthdaySummary.nextMonth} 月壽星
+                </p>
+                <p className="mt-1 text-sm font-semibold text-amber-900">
+                  {birthdaySummary.next.length ? `${birthdaySummary.next.length} 位` : "目前無壽星"}
+                </p>
+                {birthdaySummary.next.length ? (
+                  <p className="mt-2 text-xs text-amber-800/90">
+                    {birthdaySummary.next
+                      .slice(0, 5)
+                      .map((item) => `${item.name} ${item.month}/${item.day}`)
+                      .join("、")}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          )}
+          {birthdaySummaryError ? (
+            <p className="mt-3 text-xs text-rose-600">{birthdaySummaryError}</p>
+          ) : null}
+        </section>
+
         <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-slate-900">簽核中心</h2>
@@ -807,7 +961,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur sm:hidden">
-        <div className="mx-auto grid max-w-6xl grid-cols-5 px-2 py-2">
+        <div className="mx-auto grid max-w-6xl grid-cols-6 px-2 py-2">
           <a href="/" className="py-1 text-center text-[11px] font-semibold text-slate-700">
             首頁
           </a>
@@ -828,6 +982,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             className="py-1 text-center text-[11px] font-semibold text-slate-700"
           >
             財務
+          </a>
+          <a
+            href="/birthdays"
+            className="py-1 text-center text-[11px] font-semibold text-slate-700"
+          >
+            壽星
           </a>
           <a href="/profile" className="py-1 text-center text-[11px] font-semibold text-slate-700">
             個人

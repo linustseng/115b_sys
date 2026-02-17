@@ -6,6 +6,7 @@ const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage"));
 const HomePage = React.lazy(() => import("./pages/HomePage"));
 const LandingPage = React.lazy(() => import("./pages/LandingPage"));
 const ProfilePage = React.lazy(() => import("./pages/ProfilePage"));
+const BirthdayPage = React.lazy(() => import("./pages/BirthdayPage"));
 const RegistrationPage = React.lazy(() => import("./pages/RegistrationPage"));
 const CheckinPage = React.lazy(() => import("./pages/CheckinPage"));
 const OrderingPage = React.lazy(() => import("./pages/OrderingPage"));
@@ -717,6 +718,7 @@ const API_POST_ACTIONS = new Set([
   "listFinanceBootstrap",
   "listFundEvents",
   "listFundPayments",
+  "listBirthdays",
 ]);
 const inflightReadRequests = new Map();
 const readResponseCache = new Map();
@@ -731,6 +733,7 @@ const READ_CACHE_TTL_BY_ACTION_MS = {
   listFinanceApplicantBootstrap: 5000,
   listFinanceAdminBootstrap: 5000,
   listSoftballBootstrap: 5000,
+  listBirthdays: 30000,
   getRegistrationBootstrap: 3000,
   getCheckinBootstrap: 3000,
 };
@@ -1650,6 +1653,7 @@ function AppShell() {
   const isEventsPage = pathname.includes("events");
   const isOrderingPage = pathname.includes("ordering");
   const isFinancePage = pathname.includes("finance");
+  const isBirthdayPage = pathname.includes("birthdays");
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
   const isApprovalsPage = pathname.startsWith("/approvals");
@@ -1901,6 +1905,8 @@ function AppShell() {
     content = <OrderingPage shared={shared} />;
   } else if (isFinancePage) {
     content = <FinancePage shared={shared} />;
+  } else if (isBirthdayPage) {
+    content = <BirthdayPage shared={shared} />;
   } else if (isApprovalsPage) {
     content = <ApprovalsPage shared={shared} />;
   } else if (isSoftballPlayerPage) {
