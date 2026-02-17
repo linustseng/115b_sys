@@ -500,6 +500,171 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
+  const pendingApprovalCount = Number(approvalsOverview.pending || 0);
+  const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
+  const returnedApprovalCount = Number(approvalsOverview.returned || 0);
+  const hasApprovalAttention =
+    approvalsOverviewLoaded &&
+    (pendingApprovalCount > 0 || inProgressApprovalCount > 0 || returnedApprovalCount > 0);
+  const prioritizeApprovalsFirst = hasApprovalAttention;
+
+  const birthdaySection = (
+    <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">壽星專區</h2>
+          <p className="mt-1 text-xs text-slate-500">每月初可快速查看壽星名單並複製慶生文案。</p>
+        </div>
+        <a
+          href="/birthdays"
+          className="inline-flex h-10 items-center rounded-full border border-pink-200 bg-pink-50 px-4 text-xs font-semibold text-pink-700 hover:border-pink-300"
+        >
+          前往壽星專區
+        </a>
+      </div>
+      {!hasGoogleLogin ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+          請先登入 Google，即可查看每月壽星與複製慶生文案。
+        </div>
+      ) : !birthdaySummaryLoaded ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-pink-200/80 bg-pink-50/60 px-4 py-3">
+            <p className="text-xs font-semibold text-pink-700">
+              本月 {birthdaySummary.currentMonth} 月壽星
+            </p>
+            <p className="mt-1 text-sm font-semibold text-pink-900">
+              {birthdaySummary.current.length ? `${birthdaySummary.current.length} 位` : "目前無壽星"}
+            </p>
+            {birthdaySummary.current.length ? (
+              <p className="mt-2 text-xs text-pink-800/90">
+                {birthdaySummary.current
+                  .slice(0, 5)
+                  .map((item) => `${item.name} ${item.month}/${item.day}`)
+                  .join("、")}
+              </p>
+            ) : null}
+          </div>
+          <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-3">
+            <p className="text-xs font-semibold text-amber-700">
+              下月 {birthdaySummary.nextMonth} 月壽星
+            </p>
+            <p className="mt-1 text-sm font-semibold text-amber-900">
+              {birthdaySummary.next.length ? `${birthdaySummary.next.length} 位` : "目前無壽星"}
+            </p>
+            {birthdaySummary.next.length ? (
+              <p className="mt-2 text-xs text-amber-800/90">
+                {birthdaySummary.next
+                  .slice(0, 5)
+                  .map((item) => `${item.name} ${item.month}/${item.day}`)
+                  .join("、")}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
+      {birthdaySummaryError ? (
+        <p className="mt-3 text-xs text-rose-600">{birthdaySummaryError}</p>
+      ) : null}
+    </section>
+  );
+
+  const approvalsSection = (
+    <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-slate-900">簽核中心</h2>
+        {!showApprovalsCenter ? (
+          <button
+            type="button"
+            onClick={openApprovalsCenter}
+            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+          >
+            查看詳細簽核
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowApprovalsCenter(false)}
+            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
+          >
+            收合詳細簽核
+          </button>
+        )}
+      </div>
+
+      {hasApprovalAttention && pendingApprovalCount > 0 ? (
+        <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700">
+          你目前有 {pendingApprovalCount} 筆待簽核，請優先處理。
+        </div>
+      ) : null}
+      {hasApprovalAttention && pendingApprovalCount === 0 && (inProgressApprovalCount > 0 || returnedApprovalCount > 0) ? (
+        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-700">
+          你有簽核流程進行中或退回補件，建議先查看。
+        </div>
+      ) : null}
+
+      {!approvalsOverviewLoaded ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+          <div className="h-20 rounded-2xl bg-slate-100/70" />
+        </div>
+      ) : (
+        <div className="mt-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold text-rose-700">待我簽核</p>
+              <p className="mt-2 text-xl font-semibold text-rose-900">{approvalsOverview.pending}</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold text-amber-700">處理中</p>
+              <p className="mt-2 text-xl font-semibold text-amber-900">{approvalsOverview.inProgress}</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold text-emerald-700">已結案</p>
+              <p className="mt-2 text-xl font-semibold text-emerald-900">{approvalsOverview.completed}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+              <p className="text-[11px] font-semibold text-slate-600">退回補件</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">{approvalsOverview.returned}</p>
+            </div>
+          </div>
+          {approvalsOverviewError ? (
+            <p className="mt-3 text-xs text-rose-600">{approvalsOverviewError}</p>
+          ) : null}
+        </div>
+      )}
+
+      {showApprovalsCenter ? (
+        <div className="mt-5 border-t border-slate-200/80 pt-5">
+          {mountApprovalsCenter ? (
+            <Suspense
+              fallback={
+                <div className="space-y-3">
+                  <div className="h-6 w-28 rounded-full bg-slate-100" />
+                  <div className="h-16 rounded-2xl bg-slate-100/70" />
+                  <div className="h-16 rounded-2xl bg-slate-100/70" />
+                </div>
+              }
+            >
+              <ApprovalsCenter shared={shared} embedded requestId="" />
+            </Suspense>
+          ) : (
+            <div className="space-y-3">
+              <div className="h-6 w-28 rounded-full bg-slate-100" />
+              <div className="h-16 rounded-2xl bg-slate-100/70" />
+              <div className="h-16 rounded-2xl bg-slate-100/70" />
+            </div>
+          )}
+        </div>
+      ) : null}
+    </section>
+  );
 
   return (
     <div className="min-h-screen">
@@ -712,148 +877,17 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
         </section>
 
-        <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">壽星專區</h2>
-              <p className="mt-1 text-xs text-slate-500">每月初可快速查看壽星名單並複製慶生文案。</p>
-            </div>
-            <a
-              href="/birthdays"
-              className="inline-flex h-10 items-center rounded-full border border-pink-200 bg-pink-50 px-4 text-xs font-semibold text-pink-700 hover:border-pink-300"
-            >
-              前往壽星專區
-            </a>
-          </div>
-          {!hasGoogleLogin ? (
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
-              請先登入 Google，即可查看每月壽星與複製慶生文案。
-            </div>
-          ) : !birthdaySummaryLoaded ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-            </div>
-          ) : (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-pink-200/80 bg-pink-50/60 px-4 py-3">
-                <p className="text-xs font-semibold text-pink-700">
-                  本月 {birthdaySummary.currentMonth} 月壽星
-                </p>
-                <p className="mt-1 text-sm font-semibold text-pink-900">
-                  {birthdaySummary.current.length ? `${birthdaySummary.current.length} 位` : "目前無壽星"}
-                </p>
-                {birthdaySummary.current.length ? (
-                  <p className="mt-2 text-xs text-pink-800/90">
-                    {birthdaySummary.current
-                      .slice(0, 5)
-                      .map((item) => `${item.name} ${item.month}/${item.day}`)
-                      .join("、")}
-                  </p>
-                ) : null}
-              </div>
-              <div className="rounded-2xl border border-amber-200/80 bg-amber-50/60 px-4 py-3">
-                <p className="text-xs font-semibold text-amber-700">
-                  下月 {birthdaySummary.nextMonth} 月壽星
-                </p>
-                <p className="mt-1 text-sm font-semibold text-amber-900">
-                  {birthdaySummary.next.length ? `${birthdaySummary.next.length} 位` : "目前無壽星"}
-                </p>
-                {birthdaySummary.next.length ? (
-                  <p className="mt-2 text-xs text-amber-800/90">
-                    {birthdaySummary.next
-                      .slice(0, 5)
-                      .map((item) => `${item.name} ${item.month}/${item.day}`)
-                      .join("、")}
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          )}
-          {birthdaySummaryError ? (
-            <p className="mt-3 text-xs text-rose-600">{birthdaySummaryError}</p>
-          ) : null}
-        </section>
-
-        <section className="entrance entrance-delay-3 mt-8 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-base font-semibold text-slate-900">簽核中心</h2>
-            {!showApprovalsCenter ? (
-              <button
-                type="button"
-                onClick={openApprovalsCenter}
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
-              >
-                查看詳細簽核
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowApprovalsCenter(false)}
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
-              >
-                收合詳細簽核
-              </button>
-            )}
-          </div>
-
-          {!approvalsOverviewLoaded ? (
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-              <div className="h-20 rounded-2xl bg-slate-100/70" />
-            </div>
-          ) : (
-            <div className="mt-4">
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-2xl border border-rose-200/80 bg-rose-50/70 px-4 py-3">
-                  <p className="text-[11px] font-semibold text-rose-700">待我簽核</p>
-                  <p className="mt-2 text-xl font-semibold text-rose-900">{approvalsOverview.pending}</p>
-                </div>
-                <div className="rounded-2xl border border-amber-200/80 bg-amber-50/70 px-4 py-3">
-                  <p className="text-[11px] font-semibold text-amber-700">處理中</p>
-                  <p className="mt-2 text-xl font-semibold text-amber-900">{approvalsOverview.inProgress}</p>
-                </div>
-                <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/70 px-4 py-3">
-                  <p className="text-[11px] font-semibold text-emerald-700">已結案</p>
-                  <p className="mt-2 text-xl font-semibold text-emerald-900">{approvalsOverview.completed}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
-                  <p className="text-[11px] font-semibold text-slate-600">退回補件</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-900">{approvalsOverview.returned}</p>
-                </div>
-              </div>
-              {approvalsOverviewError ? (
-                <p className="mt-3 text-xs text-rose-600">{approvalsOverviewError}</p>
-              ) : null}
-            </div>
-          )}
-
-          {showApprovalsCenter ? (
-            <div className="mt-5 border-t border-slate-200/80 pt-5">
-              {mountApprovalsCenter ? (
-                <Suspense
-                  fallback={
-                    <div className="space-y-3">
-                      <div className="h-6 w-28 rounded-full bg-slate-100" />
-                      <div className="h-16 rounded-2xl bg-slate-100/70" />
-                      <div className="h-16 rounded-2xl bg-slate-100/70" />
-                    </div>
-                  }
-                >
-                  <ApprovalsCenter shared={shared} embedded requestId="" />
-                </Suspense>
-              ) : (
-                <div className="space-y-3">
-                  <div className="h-6 w-28 rounded-full bg-slate-100" />
-                  <div className="h-16 rounded-2xl bg-slate-100/70" />
-                  <div className="h-16 rounded-2xl bg-slate-100/70" />
-                </div>
-              )}
-            </div>
-          ) : null}
-        </section>
+        {prioritizeApprovalsFirst ? (
+          <>
+            {approvalsSection}
+            {birthdaySection}
+          </>
+        ) : (
+          <>
+            {birthdaySection}
+            {approvalsSection}
+          </>
+        )}
 
         {hasGoogleLogin ? (
           <section className="entrance entrance-delay-2 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
