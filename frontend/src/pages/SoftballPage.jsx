@@ -61,6 +61,8 @@ function SoftballPage({ shared }) {
   const [gear, setGear] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [students, setStudents] = useState([]);
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [softballConfig, setSoftballConfig] = useState({});
   const [jerseyDeadline, setJerseyDeadline] = useState("");
   const [activePracticeId, setActivePracticeId] = useState("");
@@ -445,22 +447,30 @@ function SoftballPage({ shared }) {
   };
 
   const loadStudents = async () => {
+    if (studentsLoading) {
+      return;
+    }
+    setStudentsLoading(true);
     try {
       const { result } = await apiRequest({ action: "listStudents" });
       if (result.ok) {
         setStudents(result.data && result.data.students ? result.data.students : []);
+      } else {
+        setStudents([]);
       }
     } catch (err) {
       setStudents([]);
+    } finally {
+      setStudentsLoaded(true);
+      setStudentsLoading(false);
     }
   };
 
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
-      const [bootstrapOk] = await Promise.all([loadSoftballBootstrap(), loadStudents()]);
-      const ok = bootstrapOk;
-      if (!ok) {
+      const bootstrapOk = await loadSoftballBootstrap();
+      if (!bootstrapOk) {
         setLoading(true);
         setError("");
         try {
@@ -483,6 +493,14 @@ function SoftballPage({ shared }) {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    const needsStudents = activeTab === "players" || activeTab === "stats";
+    if (!needsStudents || studentsLoaded || studentsLoading) {
+      return;
+    }
+    loadStudents();
+  }, [activeTab, studentsLoaded, studentsLoading]);
 
   useEffect(() => {
     if (activePracticeId) {
@@ -1667,7 +1685,9 @@ function SoftballPage({ shared }) {
                 </div>
               </div>
               {!students.length ? (
-                <p className="mt-4 text-sm text-slate-500">尚未載入同學名單。</p>
+                <p className="mt-4 text-sm text-slate-500">
+                  {studentsLoading ? "同學名單載入中..." : "尚未載入同學名單。"}
+                </p>
               ) : (
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <div className="alert alert-success p-4">

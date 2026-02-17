@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 function HomePage({
   apiRequest,
@@ -29,6 +29,7 @@ function HomePage({
   const [cancelSubmitting, setCancelSubmitting] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState("");
+  const hasBootstrappedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -311,6 +312,60 @@ function HomePage({
   const shouldShowRegistrationBadge =
     myRegistrations.length > 0 || lookupError === "查無報名紀錄。";
 
+  const fetchHomeBootstrap_ = async (emailValue, options = {}) => {
+    const normalizedEmail = String(emailValue || "").trim().toLowerCase();
+    const includeLookup = options.includeLookup !== false;
+    if (includeLookup && normalizedEmail) {
+      setLookupLoading(true);
+      setLookupError("");
+    }
+    try {
+      const payload = { action: "listHomeBootstrap" };
+      if (normalizedEmail) {
+        payload.email = normalizedEmail;
+      }
+      const { result } = await apiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      const data = result.data || {};
+      const eventsList = data.events || [];
+      setEvents(eventsList);
+      try {
+        localStorage.setItem(eventsCacheKey, JSON.stringify({ ts: Date.now(), events: eventsList }));
+      } catch (err) {
+        // Ignore cache errors
+      }
+      if (includeLookup && normalizedEmail) {
+        const registrations = data.registrations || [];
+        const statuses = data.checkinStatuses || {};
+        setMyRegistrations(registrations);
+        setCheckinStatuses(statuses);
+        if (!registrations.length) {
+          setMyRegistrations([]);
+          setCheckinStatuses({});
+          setLookupError("查無報名紀錄。");
+        }
+      } else if (!normalizedEmail) {
+        setMyRegistrations([]);
+        setCheckinStatuses({});
+        setLookupError("");
+      }
+      return true;
+    } catch (err) {
+      if (includeLookup && normalizedEmail) {
+        setLookupError(err.message || "查詢失敗");
+      } else {
+        setError(err.message ? `活動列表暫時無法載入：${err.message}` : "活動列表暫時無法載入。");
+      }
+      return false;
+    } finally {
+      if (includeLookup && normalizedEmail) {
+        setLookupLoading(false);
+      }
+    }
+  };
+
   const handleLookup = async (emailValue) => {
     const normalizedEmail = String(emailValue || "").trim().toLowerCase();
     if (!normalizedEmail) {
@@ -319,83 +374,32 @@ function HomePage({
       setCheckinStatuses({});
       return;
     }
-    setLookupLoading(true);
-    setLookupError("");
-    try {
-      const { result } = await apiRequest({
-        action: "listHomeBootstrap",
-        email: normalizedEmail,
-      });
-      if (!result.ok) {
-        throw new Error(result.error || "查詢失敗");
-      }
-      const data = result.data || {};
-      const eventsList = data.events || [];
-      const registrations = data.registrations || [];
-      const statuses = data.checkinStatuses || {};
-      setEvents(eventsList);
-      setMyRegistrations(registrations);
-      setCheckinStatuses(statuses);
-      try {
-        localStorage.setItem(eventsCacheKey, JSON.stringify({ ts: Date.now(), events: eventsList }));
-      } catch (err) {
-        // Ignore cache errors
-      }
-      if (!registrations.length) {
-        setMyRegistrations([]);
-        setCheckinStatuses({});
-        setLookupError("查無報名紀錄。");
-        return;
-      }
-    } catch (err) {
-      setLookupError(err.message || "查詢失敗");
-    } finally {
-      setLookupLoading(false);
-    }
+    await fetchHomeBootstrap_(normalizedEmail, { includeLookup: true });
   };
 
   useEffect(() => {
-    if (googleLinkedStudent && googleLinkedStudent.email) {
-      setLookupEmail(googleLinkedStudent.email);
-      handleLookup(googleLinkedStudent.email);
-    }
-  }, [googleLinkedStudent]);
-
-  useEffect(() => {
     let ignore = false;
+    const googleEmail = String((googleLinkedStudent && googleLinkedStudent.email) || "")
+      .trim()
+      .toLowerCase();
+    if (googleEmail) {
+      setLookupEmail(googleEmail);
+    }
     const fetchEvents = async () => {
-      try {
-        const { result } = await apiRequest({ action: "listHomeBootstrap" });
-        if (!result.ok) {
-          throw new Error(result.error || "載入失敗");
-        }
-        if (!ignore) {
-          const data = result.data || {};
-          setEvents(data.events || []);
-          try {
-            localStorage.setItem(
-              eventsCacheKey,
-              JSON.stringify({ ts: Date.now(), events: data.events || [] })
-            );
-          } catch (err) {
-            // Ignore cache errors
-          }
-        }
-      } catch (err) {
-        if (!ignore) {
-          setError(err.message ? `活動列表暫時無法載入：${err.message}` : "活動列表暫時無法載入。");
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
+      if (!hasBootstrappedRef.current) {
+        setError("");
+      }
+      await fetchHomeBootstrap_(googleEmail, { includeLookup: Boolean(googleEmail) });
+      if (!ignore) {
+        hasBootstrappedRef.current = true;
+        setLoading(false);
       }
     };
     fetchEvents();
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [apiRequest, googleLinkedStudent && googleLinkedStudent.email]);
 
   return (
     <div className="min-h-screen">

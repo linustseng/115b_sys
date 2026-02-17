@@ -66,15 +66,20 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     if (!hasGoogleLogin) {
       setMemberships([]);
       setMembershipsLoaded(false);
+      setNotifications([]);
+      setNotificationUnread(0);
+      setNotificationError("");
+      setNotificationLoading(false);
       return;
     }
     let ignore = false;
-    const studentId = googleLinkedStudent && googleLinkedStudent.id ? String(googleLinkedStudent.id).trim() : "";
-    const email = googleLinkedStudent && googleLinkedStudent.email ? String(googleLinkedStudent.email).trim().toLowerCase() : "";
-    const cacheKey = `${membershipsCachePrefix}:${studentId || email}`;
-
-    const loadMemberships = async () => {
+    const loadBootstrap = async () => {
+      setNotificationLoading(true);
+      setNotificationError("");
       let hasValidCachedMemberships = false;
+      const studentId = googleLinkedStudent && googleLinkedStudent.id ? String(googleLinkedStudent.id).trim() : "";
+      const email = googleLinkedStudent && googleLinkedStudent.email ? String(googleLinkedStudent.email).trim().toLowerCase() : "";
+      const cacheKey = `${membershipsCachePrefix}:${studentId || email}`;
       try {
         const cachedRaw = localStorage.getItem(cacheKey);
         if (cachedRaw) {
@@ -91,54 +96,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         // Ignore cache read errors.
       }
       try {
-        const { result } = await apiRequest({ action: "listGroupMemberships" });
-        if (!result.ok) {
-          throw new Error(result.error || "載入失敗");
-        }
-        if (ignore) {
-          return;
-        }
-        const all = result.data && result.data.memberships ? result.data.memberships : [];
-        const mine = studentId
-          ? all.filter((item) => String(item.personId || "").trim() === studentId)
-          : [];
-        setMemberships(mine);
-        setMembershipsLoaded(true);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
-        } catch (error) {
-          // Ignore cache write errors.
-        }
-      } catch (error) {
-        if (!ignore && !hasValidCachedMemberships) {
-          setMemberships([]);
-          setMembershipsLoaded(true);
-        }
-      }
-    };
-    loadMemberships();
-    return () => {
-      ignore = true;
-    };
-  }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
-
-  useEffect(() => {
-    if (!hasGoogleLogin) {
-      setNotifications([]);
-      setNotificationUnread(0);
-      setNotificationError("");
-      setNotificationLoading(false);
-      return;
-    }
-    let ignore = false;
-    const loadBootstrap = async () => {
-      setNotificationLoading(true);
-      setNotificationError("");
-      try {
         const { result } = await apiRequest({
           action: "listLandingBootstrap",
-          studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
-          email: googleLinkedStudent && googleLinkedStudent.email ? googleLinkedStudent.email : "",
+          studentId: studentId,
+          email: email,
         });
         if (!result.ok) {
           throw new Error(result.error || "載入失敗");
@@ -147,8 +108,16 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           return;
         }
         const data = result.data || {};
+        const mine = Array.isArray(data.memberships) ? data.memberships : [];
+        setMemberships(mine);
+        setMembershipsLoaded(true);
         setNotifications(data.notifications || []);
         setNotificationUnread(Number(data.unreadCount || 0));
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
+        } catch (error) {
+          // Ignore cache write errors.
+        }
       } catch (error) {
         if (ignore) {
           return;
@@ -156,6 +125,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         setNotificationError(error.message || "通知載入失敗");
         setNotifications([]);
         setNotificationUnread(0);
+        if (!hasValidCachedMemberships) {
+          setMemberships([]);
+          setMembershipsLoaded(true);
+        }
       } finally {
         if (!ignore) {
           setNotificationLoading(false);
