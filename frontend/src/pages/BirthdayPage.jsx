@@ -184,7 +184,7 @@ function BirthdayPage({ shared }) {
             </div>
             <a
               href="/"
-              className="inline-flex h-10 shrink-0 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300"
+              className="inline-flex shrink-0 items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
             >
               回首頁
             </a>

@@ -38,7 +38,6 @@ function HomePage({
         const parsed = JSON.parse(cached);
         if (parsed && Array.isArray(parsed.events)) {
           setEvents(parsed.events);
-          setLoading(false);
         }
       }
     } catch (err) {
