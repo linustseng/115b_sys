@@ -1442,6 +1442,23 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { directory: listDirectoryCached_() }, error: null };
   }
 
+  if (payload.action === "debugDirectoryAccess") {
+    const idToken = String(payload.idToken || "").trim();
+    if (!idToken) {
+      return { ok: false, data: null, error: "Missing idToken" };
+    }
+    try {
+      const profile = verifyGoogleIdTokenCached_(idToken);
+      return {
+        ok: true,
+        data: buildDirectoryAccessDebug_(profile),
+        error: null,
+      };
+    } catch (error) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+  }
+
   if (payload.action === "upsertDirectory") {
     const auth = requireAuth_(payload);
     if (!auth.ok) {
@@ -1774,6 +1791,7 @@ function getStudentsIndex_() {
   return getMemoValue_("index:students", function () {
     const byId = {};
     const byGoogleSub = {};
+    const byGoogleEmail = {};
     listStudentsCached_().forEach(function (item) {
       const id = String(item.id || "").trim();
       if (id) {
@@ -1783,8 +1801,12 @@ function getStudentsIndex_() {
       if (sub) {
         byGoogleSub[sub] = item;
       }
+      const googleEmail = normalizeEmail_(item.googleEmail);
+      if (googleEmail) {
+        byGoogleEmail[googleEmail] = item;
+      }
     });
-    return { byId: byId, byGoogleSub: byGoogleSub };
+    return { byId: byId, byGoogleSub: byGoogleSub, byGoogleEmail: byGoogleEmail };
   });
 }
 
@@ -1934,6 +1956,15 @@ function findStudentByGoogleSub_(googleSub) {
   }
   const index = getStudentsIndex_();
   return index.byGoogleSub[sub] || null;
+}
+
+function findStudentByGoogleEmail_(email) {
+  const normalized = normalizeEmail_(email);
+  if (!normalized) {
+    return null;
+  }
+  const index = getStudentsIndex_();
+  return index.byGoogleEmail[normalized] || null;
 }
 
 function findEventById_(eventId) {
@@ -5971,11 +6002,7 @@ function requireDirectoryLeadAccess_(payload) {
   try {
     const profile = verifyGoogleIdTokenCached_(idToken);
     const linkedStudent = findStudentByGoogleSub_(profile.sub);
-    const directory = linkedStudent
-      ? findDirectoryById_(linkedStudent.id)
-      : findDirectoryByEmail_(profile.email);
-    const student = linkedStudent || (directory && directory.id ? findStudentById_(directory.id) : null);
-    const studentId = String((student && student.id) || "").trim();
+    const studentId = String((linkedStudent && linkedStudent.id) || "").trim();
     if (!studentId || !hasDirectoryLeadAccess_(studentId)) {
       return { ok: false, data: null, error: "Unauthorized" };
     }
@@ -5983,6 +6010,55 @@ function requireDirectoryLeadAccess_(payload) {
   } catch (error) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
+}
+
+function buildDirectoryAccessDebug_(profile) {
+  const safeProfile = profile || {};
+  const sub = String(safeProfile.sub || "").trim();
+  const email = normalizeEmail_(safeProfile.email);
+  const studentBySub = findStudentByGoogleSub_(sub);
+  const studentByGoogleEmail = findStudentByGoogleEmail_(email);
+  const directoryByEmail = findDirectoryByEmail_(email);
+  const studentIdBySub = String((studentBySub && studentBySub.id) || "").trim();
+  const memberships = studentIdBySub
+    ? listGroupMembershipsCached_().filter(function (item) {
+        return String(item.personId || "").trim() === studentIdBySub;
+      })
+    : [];
+  const hasStrictAccess = !!(studentIdBySub && hasDirectoryLeadAccess_(studentIdBySub));
+  return {
+    strictRule: "googleSub -> Students.id -> GroupMemberships(A/E lead)",
+    profile: {
+      email: email,
+      subTail: sub ? sub.slice(-10) : "",
+    },
+    studentBySub: studentBySub
+      ? {
+          id: String(studentBySub.id || "").trim(),
+          googleEmail: normalizeEmail_(studentBySub.googleEmail),
+        }
+      : null,
+    studentByGoogleEmail: studentByGoogleEmail
+      ? {
+          id: String(studentByGoogleEmail.id || "").trim(),
+          googleSubTail: String(studentByGoogleEmail.googleSub || "").trim().slice(-10),
+        }
+      : null,
+    directoryByEmail: directoryByEmail
+      ? {
+          id: String(directoryByEmail.id || "").trim(),
+          email: normalizeEmail_(directoryByEmail.email),
+        }
+      : null,
+    membershipsBySubStudent: memberships.map(function (item) {
+      return {
+        personId: String(item.personId || "").trim(),
+        groupId: normalizeGroupId_(item.groupId || ""),
+        roleInGroup: String(item.roleInGroup || "").trim().toLowerCase(),
+      };
+    }),
+    strictAccessGranted: hasStrictAccess,
+  };
 }
 
 function hasDirectoryLeadAccess_(studentId) {

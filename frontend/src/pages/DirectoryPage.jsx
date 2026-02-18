@@ -13,6 +13,7 @@ export default function DirectoryPage({ shared }) {
   const [directory, setDirectory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [debugInfo, setDebugInfo] = useState(null);
   const [directoryQuery, setDirectoryQuery] = useState("");
 
   const matchesDirectoryQuery_ = (item, query) => {
@@ -56,10 +57,21 @@ export default function DirectoryPage({ shared }) {
     }
     setLoading(true);
     setError("");
+    setDebugInfo(null);
     try {
       const idToken = await getIdToken_();
       const { result } = await apiRequest({ action: "listDirectory", idToken: idToken });
       if (!result || !result.ok) {
+        if (result && String(result.error || "") === "Unauthorized") {
+          try {
+            const debugResponse = await apiRequest({ action: "debugDirectoryAccess", idToken: idToken });
+            if (debugResponse && debugResponse.result && debugResponse.result.ok) {
+              setDebugInfo(debugResponse.result.data || null);
+            }
+          } catch (debugError) {
+            // Ignore debug call errors.
+          }
+        }
         throw new Error((result && result.error) || "載入失敗");
       }
       setDirectory(Array.isArray(result.data && result.data.directory) ? result.data.directory : []);
@@ -168,13 +180,25 @@ export default function DirectoryPage({ shared }) {
             </div>
           ) : null}
 
-          {error ? (
-            <div className="mt-4 alert alert-error">
-              {error}
-            </div>
-          ) : null}
+            {error ? (
+              <div className="mt-4 alert alert-error">
+                {error}
+              </div>
+            ) : null}
+            {debugInfo ? (
+              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+                <p className="font-semibold">Debug 資訊（嚴格規則）</p>
+                <p className="mt-2">規則：{debugInfo.strictRule}</p>
+                <p className="mt-1">profile.email：{debugInfo.profile && debugInfo.profile.email ? debugInfo.profile.email : "-"}</p>
+                <p className="mt-1">profile.sub 末 10 碼：{debugInfo.profile && debugInfo.profile.subTail ? debugInfo.profile.subTail : "-"}</p>
+                <p className="mt-1">studentBySub.id：{debugInfo.studentBySub && debugInfo.studentBySub.id ? debugInfo.studentBySub.id : "(無)"}</p>
+                <p className="mt-1">studentByGoogleEmail.id：{debugInfo.studentByGoogleEmail && debugInfo.studentByGoogleEmail.id ? debugInfo.studentByGoogleEmail.id : "(無)"}</p>
+                <p className="mt-1">directoryByEmail.id：{debugInfo.directoryByEmail && debugInfo.directoryByEmail.id ? debugInfo.directoryByEmail.id : "(無)"}</p>
+                <p className="mt-1">strictAccessGranted：{debugInfo.strictAccessGranted ? "true" : "false"}</p>
+              </div>
+            ) : null}
 
-          {!loading && !error ? (
+            {!loading && !error ? (
             <div className="mt-6 space-y-4">
               {filteredDirectory.map((item) => (
                 <div
