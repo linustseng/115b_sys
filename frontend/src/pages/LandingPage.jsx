@@ -739,7 +739,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   href="/admin"
                   className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
                 >
-                  Admin
+                  系統後台
                 </a>
               ) : null}
             </div>
