@@ -510,10 +510,8 @@ export default function AdminPage({
     const shouldLoadDirectory = () => {
       const storedToken = localStorage.getItem("directoryToken") || "";
       const activeToken = storedToken || directoryToken;
-      if (!activeToken) {
-        return false;
-      }
-      return directoryLoadedTokenRef.current !== activeToken;
+      const marker = activeToken || "__idtoken__";
+      return directoryLoadedTokenRef.current !== marker;
     };
     if (activeTab === "registrations") {
       if (!registrationsLoaded) {
@@ -757,22 +755,22 @@ export default function AdminPage({
       setDirectoryToken(storedToken);
     }
     const activeToken = storedToken || directoryToken;
-    if (!activeToken) {
-      setDirectory([]);
-      directoryLoadedTokenRef.current = "";
-      return;
-    }
+    const marker = activeToken || "__idtoken__";
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listDirectory", authToken: activeToken });
+      const payload = activeToken
+        ? { action: "listDirectory", authToken: activeToken }
+        : { action: "listDirectory" };
+      const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
       setDirectory(result.data && result.data.directory ? result.data.directory : []);
-      directoryLoadedTokenRef.current = activeToken;
+      directoryLoadedTokenRef.current = marker;
     } catch (err) {
       setDirectory([]);
+      setError(String((err && err.message) || "通訊錄載入失敗"));
     } finally {
       setLoading(false);
     }
@@ -2090,7 +2088,7 @@ export default function AdminPage({
               { id: "ordering", label: "訂餐" },
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
-              { id: "students", label: "Directory" },
+              { id: "students", label: "通訊錄" },
               { id: "roles", label: "班務分組" },
             ]
               .filter((item) => allowedTabs.includes(item.id))
@@ -2123,7 +2121,7 @@ export default function AdminPage({
                 : activeTab === "checkins"
                 ? "簽到名單"
                 : activeTab === "students"
-                ? "通訊錄（Directory）"
+                ? "通訊錄"
                 : "班務分組"}
             </h2>
             {loading ? (
@@ -3720,9 +3718,9 @@ export default function AdminPage({
 
         {activeTab === "students" ? (
           <section className="card p-7 sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">Directory 全欄位視圖</h2>
+            <h2 className="text-lg font-semibold text-slate-900">通訊錄全欄位視圖</h2>
             <p className="mt-2 text-sm text-slate-500">
-              此 tab 直接顯示 Directory 全部欄位，並提供即時搜尋、分組篩選與欄位排序。
+              此 tab 直接顯示通訊錄全部欄位，並提供即時搜尋、分組篩選與欄位排序。
             </p>
           </section>
         ) : null}
