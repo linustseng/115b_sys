@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays_,
   addMinutes_,
@@ -89,6 +89,9 @@ export default function AdminPage({
     notes: "",
   });
   const [studentsQuery, setStudentsQuery] = useState("");
+  const [studentsGroupFilter, setStudentsGroupFilter] = useState("all");
+  const [studentsSortKey, setStudentsSortKey] = useState("nameZh");
+  const [studentsSortDir, setStudentsSortDir] = useState("asc");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
   const [groupMemberships, setGroupMemberships] = useState([]);
@@ -211,6 +214,22 @@ export default function AdminPage({
       .map((value) => String(value || "").toLowerCase())
       .join(" ");
     return haystack.includes(needle);
+  };
+
+  const getDirectorySortValue_ = (item, key) => {
+    if (key === "birthday") {
+      return `${String(item.birthdayMonth || "").padStart(2, "0")}${String(item.birthdayDay || "").padStart(2, "0")}`;
+    }
+    return String(item && item[key] ? item[key] : "").toLowerCase();
+  };
+
+  const toggleStudentsSort_ = (nextKey) => {
+    if (studentsSortKey === nextKey) {
+      setStudentsSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setStudentsSortKey(nextKey);
+    setStudentsSortDir("asc");
   };
 
   const parseCustomFields_ = (value) => {
@@ -1863,9 +1882,41 @@ export default function AdminPage({
     window.URL.revokeObjectURL(url);
   };
 
-  const filteredStudents = displayStudents.filter((item) =>
-    matchesStudentQuery_(item, studentsQuery)
+  const directoryGroupOptions = useMemo(() => {
+    const map = {};
+    directory.forEach((item) => {
+      const groupId = String(item.group || "").trim();
+      if (groupId) {
+        map[groupId] = true;
+      }
+    });
+    return Object.keys(map).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true }));
+  }, [directory]);
+
+  const filteredDirectoryStudents = useMemo(
+    () =>
+      directory.filter((item) => {
+        const groupMatch =
+          studentsGroupFilter === "all" ? true : String(item.group || "").trim() === studentsGroupFilter;
+        return groupMatch && matchesStudentQuery_(item, studentsQuery);
+      }),
+    [directory, studentsGroupFilter, studentsQuery]
   );
+
+  const sortedDirectoryStudents = useMemo(() => {
+    const list = filteredDirectoryStudents.slice();
+    list.sort((a, b) => {
+      const left = getDirectorySortValue_(a, studentsSortKey);
+      const right = getDirectorySortValue_(b, studentsSortKey);
+      const cmp = String(left).localeCompare(String(right), "zh-Hant", {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return studentsSortDir === "asc" ? cmp : -cmp;
+    });
+    return list;
+  }, [filteredDirectoryStudents, studentsSortDir, studentsSortKey]);
+
   const filteredStudentsForRegistrations = displayStudents.filter((item) =>
     matchesStudentQuery_(item, unregisteredQuery)
   );
@@ -2039,7 +2090,7 @@ export default function AdminPage({
               { id: "ordering", label: "訂餐" },
               { id: "registrations", label: "報名" },
               { id: "checkins", label: "簽到" },
-              { id: "students", label: "同學" },
+              { id: "students", label: "Directory" },
               { id: "roles", label: "班務分組" },
             ]
               .filter((item) => allowedTabs.includes(item.id))
@@ -2071,7 +2122,9 @@ export default function AdminPage({
                 ? "報名名單"
                 : activeTab === "checkins"
                 ? "簽到名單"
-                : "同學名單"}
+                : activeTab === "students"
+                ? "通訊錄（Directory）"
+                : "班務分組"}
             </h2>
             {loading ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -2702,47 +2755,99 @@ export default function AdminPage({
           {activeTab === "students" ? (
             <div className="mt-6 space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-slate-500">共 {filteredStudents.length} 筆</p>
-                <input
-                  value={studentsQuery}
-                  onChange={(event) => setStudentsQuery(event.target.value)}
-                  placeholder="搜尋姓名、Email、學號..."
-                  className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
-                />
-              </div>
-              {filteredStudents.map((item) => (
-                <div
-                  key={item.id || item.googleEmail}
-                  className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-900">
-                        {getDisplayName_(item) || "未命名"}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        <span className="tabular-nums">{item.id || "-"}</span> · {item.googleEmail || item.email || "-"}
-                      </p>
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {item.nameEn ? `EN: ${item.nameEn}` : item.googleSub || "-"}
-                    </div>
-                  </div>
-                  {item.company ||
-                  item.title ||
-                  item.dietaryRestrictions ||
-                  item.preferredName ||
-                  item.nameEn ? (
-                    <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                      <div>稱呼: {item.preferredName || "-"}</div>
-                      <div>英文姓名: {item.nameEn || "-"}</div>
-                      <div>公司: {item.company || "-"}</div>
-                      <div>職稱: {item.title || "-"}</div>
-                      <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
-                    </div>
-                  ) : null}
+                <p className="text-xs text-slate-500">共 {sortedDirectoryStudents.length} 筆</p>
+                <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                  <input
+                    value={studentsQuery}
+                    onChange={(event) => setStudentsQuery(event.target.value)}
+                    placeholder="搜尋姓名、Email、學號、公司..."
+                    className="h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 sm:w-72"
+                  />
+                  <select
+                    value={studentsGroupFilter}
+                    onChange={(event) => setStudentsGroupFilter(event.target.value)}
+                    className="h-9 min-w-[110px] rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                  >
+                    <option value="all">全部分組</option>
+                    {directoryGroupOptions.map((groupId) => (
+                      <option key={groupId} value={groupId}>
+                        {groupId}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              ))}
+              </div>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white">
+                <table className="w-full min-w-[1660px] text-left text-sm text-slate-700">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3">
+                        <button type="button" onClick={() => toggleStudentsSort_("nameZh")} className="font-semibold">
+                          姓名 {studentsSortKey === "nameZh" ? (studentsSortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="px-3 py-3">
+                        <button type="button" onClick={() => toggleStudentsSort_("id")} className="font-semibold">
+                          學號 {studentsSortKey === "id" ? (studentsSortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="px-3 py-3">
+                        <button type="button" onClick={() => toggleStudentsSort_("group")} className="font-semibold">
+                          分組 {studentsSortKey === "group" ? (studentsSortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="px-3 py-3">Email</th>
+                      <th className="px-3 py-3">稱呼</th>
+                      <th className="px-3 py-3">英文名</th>
+                      <th className="px-3 py-3">
+                        <button type="button" onClick={() => toggleStudentsSort_("company")} className="font-semibold">
+                          公司 {studentsSortKey === "company" ? (studentsSortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="px-3 py-3">職稱</th>
+                      <th className="px-3 py-3">手機</th>
+                      <th className="px-3 py-3">社群</th>
+                      <th className="px-3 py-3">備用電話</th>
+                      <th className="px-3 py-3">緊急聯絡人</th>
+                      <th className="px-3 py-3">緊急聯絡人電話</th>
+                      <th className="px-3 py-3">
+                        <button type="button" onClick={() => toggleStudentsSort_("birthday")} className="font-semibold">
+                          生日 {studentsSortKey === "birthday" ? (studentsSortDir === "asc" ? "↑" : "↓") : ""}
+                        </button>
+                      </th>
+                      <th className="px-3 py-3">飲食禁忌</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedDirectoryStudents.map((item) => (
+                      <tr key={item.id || item.email} className="border-t border-slate-100 align-top">
+                        <td className="px-3 py-3 font-semibold text-slate-900">{item.nameZh || "未命名"}</td>
+                        <td className="px-3 py-3 text-xs text-slate-500">{item.id || "-"}</td>
+                        <td className="px-3 py-3">{item.group || "-"}</td>
+                        <td className="px-3 py-3 text-xs">{item.email || "-"}</td>
+                        <td className="px-3 py-3">{item.preferredName || "-"}</td>
+                        <td className="px-3 py-3">{item.nameEn || "-"}</td>
+                        <td className="px-3 py-3">{item.company || "-"}</td>
+                        <td className="px-3 py-3">{item.title || "-"}</td>
+                        <td className="px-3 py-3">{item.mobile || "-"}</td>
+                        <td className="px-3 py-3 text-xs">{item.socialUrl || "-"}</td>
+                        <td className="px-3 py-3">{item.backupPhone || "-"}</td>
+                        <td className="px-3 py-3">{item.emergencyContact || "-"}</td>
+                        <td className="px-3 py-3">{item.emergencyPhone || "-"}</td>
+                        <td className="px-3 py-3 text-xs text-slate-500">
+                          {item.birthdayMonth && item.birthdayDay ? `${item.birthdayMonth}/${item.birthdayDay}` : "-"}
+                        </td>
+                        <td className="px-3 py-3">{item.dietaryRestrictions || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {!sortedDirectoryStudents.length ? (
+                  <div className="border-t border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                    目前沒有可顯示資料
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
@@ -3615,9 +3720,9 @@ export default function AdminPage({
 
         {activeTab === "students" ? (
           <section className="card p-7 sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">同學列表</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Directory 全欄位視圖</h2>
             <p className="mt-2 text-sm text-slate-500">
-              此處顯示 Students 名單，提供未報名統計與快速查詢。
+              此 tab 直接顯示 Directory 全部欄位，並提供即時搜尋、分組篩選與欄位排序。
             </p>
           </section>
         ) : null}

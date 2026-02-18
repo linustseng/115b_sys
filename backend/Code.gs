@@ -1435,7 +1435,7 @@ function handleActionPayload_(payload) {
     const hasLegacyAuthToken = String(payload.authToken || "").trim() !== "";
     const auth = hasLegacyAuthToken
       ? requireAuth_(payload)
-      : requireDirectoryLeadAccess_(payload);
+      : requireDirectoryOrAdminAccess_(payload);
     if (!auth.ok) {
       return auth;
     }
@@ -5979,6 +5979,18 @@ function requireDirectoryLeadAccess_(payload) {
   } catch (error) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
+}
+
+function requireDirectoryOrAdminAccess_(payload) {
+  const strictAccess = requireDirectoryLeadAccess_(payload);
+  if (strictAccess && strictAccess.ok) {
+    return strictAccess;
+  }
+  const adminAccess = requireGoogleGroupAccess_(payload, ["E"]);
+  if (adminAccess && adminAccess.ok) {
+    return adminAccess;
+  }
+  return { ok: false, data: null, error: "Unauthorized" };
 }
 
 function hasDirectoryLeadAccess_(studentId) {

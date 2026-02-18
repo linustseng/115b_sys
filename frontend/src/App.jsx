@@ -2,7 +2,6 @@ import React, { Suspense, useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
 import lineLinkGuide from "./assets/line_link.jpg";
 const AdminPage = React.lazy(() => import("./pages/AdminPage"));
-const DirectoryPage = React.lazy(() => import("./pages/DirectoryPage"));
 const HomePage = React.lazy(() => import("./pages/HomePage"));
 const LandingPage = React.lazy(() => import("./pages/LandingPage"));
 const ProfilePage = React.lazy(() => import("./pages/ProfilePage"));
@@ -1886,7 +1885,30 @@ function AppShell() {
   } else if (isProfilePage) {
     content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {
-    content = <DirectoryPage shared={shared} />;
+    content = (
+      <AdminAccessGuard
+        title="系統管理 · 後台"
+        helperText="僅限班代、副班代、資管組成員。"
+        allowedGroupIds={["E"]}
+      >
+        <AdminPage
+          pageTitle="系統管理 · 後台"
+          apiRequest={apiRequest}
+          API_URL={API_URL}
+          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          buildGoogleMapsUrl_={buildGoogleMapsUrl_}
+          formatDisplayDate_={formatDisplayDate_}
+          getGroupLabel_={getGroupLabel_}
+          EVENT_CATEGORIES={EVENT_CATEGORIES}
+          PUBLIC_SITE_URL={PUBLIC_SITE_URL}
+          GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
+          ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
+          CLASS_GROUPS={CLASS_GROUPS}
+          initialTab="students"
+          allowedTabs={["students"]}
+        />
+      </AdminAccessGuard>
+    );
   } else if (isRegisterPage) {
     content = <RegistrationPage shared={shared} />;
   } else if (isEventsPage) {
