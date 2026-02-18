@@ -502,6 +502,15 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
+  const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
+  const canSeeDirectory =
+    membershipsLoaded &&
+    userMemberships.some((item) => {
+      const groupId = String(item.groupId || "").trim();
+      const roleInGroup = String(item.roleInGroup || "").trim();
+      const isLead = roleInGroup === "lead";
+      return isLead && (groupId === "A" || groupId === "E");
+    });
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
   const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
   const returnedApprovalCount = Number(approvalsOverview.returned || 0);
@@ -899,6 +908,35 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </div>
 
         </section>
+
+        {hasGoogleLogin && (canSeeAdminPortal || canSeeDirectory) ? (
+          <section className="entrance entrance-delay-2 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">管理快捷</h2>
+                <p className="mt-1 text-xs text-slate-500">依照你的權限顯示可用管理功能。</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {canSeeAdminPortal ? (
+                  <a
+                    href="/admin"
+                    className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+                  >
+                    Admin
+                  </a>
+                ) : null}
+                {canSeeDirectory ? (
+                  <a
+                    href="/directory"
+                    className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+                  >
+                    Directory
+                  </a>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {prioritizeApprovalsFirst ? (
           <>

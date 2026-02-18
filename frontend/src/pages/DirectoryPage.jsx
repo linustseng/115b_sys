@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 export default function DirectoryPage({ shared }) {
   const {
@@ -13,8 +13,10 @@ export default function DirectoryPage({ shared }) {
   const [directory, setDirectory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [debugInfo, setDebugInfo] = useState(null);
   const [directoryQuery, setDirectoryQuery] = useState("");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [sortKey, setSortKey] = useState("nameZh");
+  const [sortDir, setSortDir] = useState("asc");
 
   const matchesDirectoryQuery_ = (item, query) => {
     const needle = String(query || "").trim().toLowerCase();
@@ -41,7 +43,54 @@ export default function DirectoryPage({ shared }) {
     return haystack.includes(needle);
   };
 
-  const filteredDirectory = directory.filter((item) => matchesDirectoryQuery_(item, directoryQuery));
+  const getSortValue_ = (item, key) => {
+    switch (key) {
+      case "birthday":
+        return `${String(item.birthdayMonth || "").padStart(2, "0")}${String(item.birthdayDay || "").padStart(2, "0")}`;
+      default:
+        return String(item && item[key] ? item[key] : "").toLowerCase();
+    }
+  };
+
+  const filteredDirectory = useMemo(
+    () =>
+      directory.filter((item) => {
+        const groupMatch = groupFilter === "all" ? true : String(item.group || "") === groupFilter;
+        return groupMatch && matchesDirectoryQuery_(item, directoryQuery);
+      }),
+    [directory, directoryQuery, groupFilter]
+  );
+
+  const sortedDirectory = useMemo(() => {
+    const next = filteredDirectory.slice();
+    next.sort((a, b) => {
+      const left = getSortValue_(a, sortKey);
+      const right = getSortValue_(b, sortKey);
+      const cmp = String(left).localeCompare(String(right), "zh-Hant", { numeric: true, sensitivity: "base" });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return next;
+  }, [filteredDirectory, sortKey, sortDir]);
+
+  const groupOptions = useMemo(() => {
+    const map = {};
+    directory.forEach((item) => {
+      const group = String(item.group || "").trim();
+      if (group) {
+        map[group] = true;
+      }
+    });
+    return Object.keys(map).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true }));
+  }, [directory]);
+
+  const toggleSort_ = (nextKey) => {
+    if (sortKey === nextKey) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortKey(nextKey);
+    setSortDir("asc");
+  };
 
   const getIdToken_ = async () => {
     const token = await getGoogleIdTokenSilently_();
@@ -57,21 +106,10 @@ export default function DirectoryPage({ shared }) {
     }
     setLoading(true);
     setError("");
-    setDebugInfo(null);
     try {
       const idToken = await getIdToken_();
       const { result } = await apiRequest({ action: "listDirectory", idToken: idToken });
       if (!result || !result.ok) {
-        if (result && String(result.error || "") === "Unauthorized") {
-          try {
-            const debugResponse = await apiRequest({ action: "debugDirectoryAccess", idToken: idToken });
-            if (debugResponse && debugResponse.result && debugResponse.result.ok) {
-              setDebugInfo(debugResponse.result.data || null);
-            }
-          } catch (debugError) {
-            // Ignore debug call errors.
-          }
-        }
         throw new Error((result && result.error) || "載入失敗");
       }
       setDirectory(Array.isArray(result.data && result.data.directory) ? result.data.directory : []);
@@ -172,6 +210,18 @@ export default function DirectoryPage({ shared }) {
               inputMode="search"
               className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
             />
+            <select
+              value={groupFilter}
+              onChange={(event) => setGroupFilter(event.target.value)}
+              className="h-10 min-w-[110px] rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none focus:border-slate-400"
+            >
+              <option value="all">全部分組</option>
+              {groupOptions.map((group) => (
+                <option key={group} value={group}>
+                  {group}
+                </option>
+              ))}
+            </select>
           </div>
 
           {loading ? (
@@ -180,61 +230,67 @@ export default function DirectoryPage({ shared }) {
             </div>
           ) : null}
 
-            {error ? (
-              <div className="mt-4 alert alert-error">
-                {error}
-              </div>
-            ) : null}
-            {debugInfo ? (
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-                <p className="font-semibold">Debug 資訊（嚴格規則）</p>
-                <p className="mt-2">規則：{debugInfo.strictRule}</p>
-                <p className="mt-1">profile.email：{debugInfo.profile && debugInfo.profile.email ? debugInfo.profile.email : "-"}</p>
-                <p className="mt-1">profile.sub 末 10 碼：{debugInfo.profile && debugInfo.profile.subTail ? debugInfo.profile.subTail : "-"}</p>
-                <p className="mt-1">studentBySub.id：{debugInfo.studentBySub && debugInfo.studentBySub.id ? debugInfo.studentBySub.id : "(無)"}</p>
-                <p className="mt-1">studentByGoogleEmail.id：{debugInfo.studentByGoogleEmail && debugInfo.studentByGoogleEmail.id ? debugInfo.studentByGoogleEmail.id : "(無)"}</p>
-                <p className="mt-1">directoryByEmail.id：{debugInfo.directoryByEmail && debugInfo.directoryByEmail.id ? debugInfo.directoryByEmail.id : "(無)"}</p>
-                <p className="mt-1">strictAccessGranted：{debugInfo.strictAccessGranted ? "true" : "false"}</p>
-              </div>
-            ) : null}
+          {error ? (
+            <div className="mt-4 alert alert-error">{error}</div>
+          ) : null}
 
-            {!loading && !error ? (
-            <div className="mt-6 space-y-4">
-              {filteredDirectory.map((item) => (
-                <div
-                  key={item.id || item.email}
-                  className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-sm text-slate-600"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.nameZh || "未命名"}</p>
-                      <p className="text-xs text-slate-500">
-                        {item.id || "-"} · {item.email}
-                      </p>
-                    </div>
-                    <div className="text-xs text-slate-500">
-                      {item.group ? `${item.group} · ` : ""}
-                      {item.mobile}
-                    </div>
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-                    <div>英文姓名: {item.nameEn || "-"}</div>
-                    <div>稱呼: {item.preferredName || "-"}</div>
-                    <div>公司: {item.company || "-"}</div>
-                    <div>職稱: {item.title || "-"}</div>
-                    <div>社群: {item.socialUrl || "-"}</div>
-                    <div>備用電話: {item.backupPhone || "-"}</div>
-                    <div>緊急聯絡人: {item.emergencyContact || "-"}</div>
-                    <div>緊急聯絡人電話: {item.emergencyPhone || "-"}</div>
-                    <div>
-                      生日: {item.birthdayMonth && item.birthdayDay ? `${item.birthdayMonth}/${item.birthdayDay}` : "-"}
-                    </div>
-                    <div>飲食禁忌: {item.dietaryRestrictions || "-"}</div>
-                  </div>
-                </div>
-              ))}
-              {!filteredDirectory.length ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+          {!loading && !error ? (
+            <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white">
+              <table className="min-w-[980px] w-full text-left text-sm text-slate-700">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("nameZh")} className="font-semibold">
+                        姓名 {sortKey === "nameZh" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("id")} className="font-semibold">
+                        學號 {sortKey === "id" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("group")} className="font-semibold">
+                        分組 {sortKey === "group" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">Email</th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("company")} className="font-semibold">
+                        公司 {sortKey === "company" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">職稱</th>
+                    <th className="px-3 py-3">手機</th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("birthday")} className="font-semibold">
+                        生日 {sortKey === "birthday" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedDirectory.map((item) => (
+                    <tr key={item.id || item.email} className="border-t border-slate-100 align-top">
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-slate-900">{item.nameZh || "未命名"}</p>
+                        <p className="mt-1 text-xs text-slate-500">{item.preferredName || item.nameEn || "-"}</p>
+                      </td>
+                      <td className="px-3 py-3 text-xs text-slate-500">{item.id || "-"}</td>
+                      <td className="px-3 py-3">{item.group || "-"}</td>
+                      <td className="px-3 py-3 text-xs">{item.email || "-"}</td>
+                      <td className="px-3 py-3">{item.company || "-"}</td>
+                      <td className="px-3 py-3">{item.title || "-"}</td>
+                      <td className="px-3 py-3">{item.mobile || "-"}</td>
+                      <td className="px-3 py-3 text-xs text-slate-500">
+                        {item.birthdayMonth && item.birthdayDay ? `${item.birthdayMonth}/${item.birthdayDay}` : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!sortedDirectory.length ? (
+                <div className="rounded-2xl border-t border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                   目前沒有可顯示資料
                 </div>
               ) : null}
