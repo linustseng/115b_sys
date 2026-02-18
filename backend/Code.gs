@@ -1432,7 +1432,10 @@ function handleActionPayload_(payload) {
   }
 
   if (payload.action === "listDirectory") {
-    const auth = requireAuth_(payload);
+    const hasLegacyAuthToken = String(payload.authToken || "").trim() !== "";
+    const auth = hasLegacyAuthToken
+      ? requireAuth_(payload)
+      : requireDirectoryLeadAccess_(payload);
     if (!auth.ok) {
       return auth;
     }
@@ -5958,6 +5961,51 @@ function requireGoogleGroupAccess_(payload, allowedGroupIds) {
   } catch (error) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
+}
+
+function requireDirectoryLeadAccess_(payload) {
+  const idToken = String(payload.idToken || "").trim();
+  if (!idToken) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+  try {
+    const profile = verifyGoogleIdTokenCached_(idToken);
+    const linkedStudent = findStudentByGoogleSub_(profile.sub);
+    const directory = linkedStudent
+      ? findDirectoryById_(linkedStudent.id)
+      : findDirectoryByEmail_(profile.email);
+    const student = linkedStudent || (directory && directory.id ? findStudentById_(directory.id) : null);
+    const studentId = String((student && student.id) || "").trim();
+    if (!studentId || !hasDirectoryLeadAccess_(studentId)) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    return { ok: true, data: { studentId: studentId }, error: null };
+  } catch (error) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+}
+
+function hasDirectoryLeadAccess_(studentId) {
+  const targetId = String(studentId || "").trim();
+  if (!targetId) {
+    return false;
+  }
+  const memberships = listGroupMembershipsCached_();
+  for (var i = 0; i < memberships.length; i++) {
+    const item = memberships[i] || {};
+    if (String(item.personId || "").trim() !== targetId) {
+      continue;
+    }
+    const roleInGroup = String(item.roleInGroup || "").trim().toLowerCase();
+    if (roleInGroup !== "lead") {
+      continue;
+    }
+    const groupId = String(item.groupId || "").trim().toUpperCase();
+    if (groupId === "A" || groupId === "E") {
+      return true;
+    }
+  }
+  return false;
 }
 
 function hasGroupAccessForStudent_(studentId, allowedGroupIds) {

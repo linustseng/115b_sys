@@ -1886,7 +1886,7 @@ function AppShell() {
   } else if (isProfilePage) {
     content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {
-    content = <DirectoryPage apiRequest={apiRequest} />;
+    content = <DirectoryPage shared={shared} />;
   } else if (isRegisterPage) {
     content = <RegistrationPage shared={shared} />;
   } else if (isEventsPage) {
