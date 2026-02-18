@@ -5990,17 +5990,33 @@ function hasDirectoryLeadAccess_(studentId) {
   if (!targetId) {
     return false;
   }
+  const normalizeRole_ = function (value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (!raw) {
+      return "";
+    }
+    if (raw === "lead" || raw === "組長") {
+      return "lead";
+    }
+    if (raw === "deputy" || raw === "副組長" || raw === "副班代") {
+      return "deputy";
+    }
+    if (raw === "member" || raw === "成員") {
+      return "member";
+    }
+    return raw;
+  };
   const memberships = listGroupMembershipsCached_();
   for (var i = 0; i < memberships.length; i++) {
     const item = memberships[i] || {};
     if (String(item.personId || "").trim() !== targetId) {
       continue;
     }
-    const roleInGroup = String(item.roleInGroup || "").trim().toLowerCase();
+    const roleInGroup = normalizeRole_(item.roleInGroup || "");
     if (roleInGroup !== "lead") {
       continue;
     }
-    const groupId = String(item.groupId || "").trim().toUpperCase();
+    const groupId = normalizeGroupId_(item.groupId || "");
     if (groupId === "A" || groupId === "E") {
       return true;
     }
