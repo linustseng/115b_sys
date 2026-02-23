@@ -135,6 +135,9 @@ export default function AdminPage({
 
   const normalizeName_ = (value) => String(value || "").trim();
 
+  const getChineseName_ = (student) =>
+    String((student && (student.nameZh || student.name || student.preferredName || student.nameEn)) || "").trim();
+
   const getDisplayName_ = (student) =>
     String(
       (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
@@ -1621,42 +1624,38 @@ export default function AdminPage({
   const registrationAllowBringDrinks =
     String((selectedRegistrationEvent && selectedRegistrationEvent.allowBringDrinks) || "yes").trim() !==
     "no";
+  const displayStudents = directory.length ? directory : students;
+  const studentNameByStudentId = new Map(
+    displayStudents
+      .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
+      .filter(([studentId]) => studentId)
+  );
+  const activeRegistrationList = registrationList.filter(
+    (item) => item && String(item.status || "").toLowerCase() !== "cancelled"
+  );
   const attendanceByStudentId = new Map();
-  const attendanceByName = new Map();
-  registrationList.forEach((registration) => {
+  activeRegistrationList.forEach((registration) => {
     const fields = parseCustomFields_(registration.customFields);
     const attendanceValue = String(fields.attendance || "").trim();
-    const studentId = String(registration.studentId || "").trim();
+    const studentId = String(registration.studentId || fields.studentId || "").trim();
     if (studentId) {
       attendanceByStudentId.set(studentId, attendanceValue);
     }
-    const nameKey = normalizeName_(registration.userName);
-    if (nameKey) {
-      attendanceByName.set(nameKey, attendanceValue);
-    }
   });
   const registeredStudentIdSet = new Set(
-    registrationList
+    activeRegistrationList
       .map((item) => {
         const fields = parseCustomFields_(item.customFields);
         return String(item.studentId || fields.studentId || "").trim();
       })
       .filter((value) => value)
   );
-  const registeredNameSet = new Set(
-    registrationList
-      .map((item) => normalizeName_(item.userName))
-      .filter((value) => value)
-  );
-
-  const displayStudents = directory.length ? directory : students;
   const totalStudents = displayStudents.length;
-  const registeredCount =
-    registeredStudentIdSet.size || registeredNameSet.size ? registrationList.length : 0;
+  const registeredCount = activeRegistrationList.length;
   const unregisteredCount = totalStudents
-    ? Math.max(totalStudents - registeredCount, 0)
+    ? Math.max(totalStudents - registeredStudentIdSet.size, 0)
     : 0;
-  const attendanceCounts = registrationList.reduce(
+  const attendanceCounts = activeRegistrationList.reduce(
     (acc, registration) => {
       const fields = parseCustomFields_(registration.customFields);
       const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
@@ -1671,11 +1670,8 @@ export default function AdminPage({
     },
     { attending: 0, notAttending: 0, unknown: 0 }
   );
-  const prepStats = registrationList.reduce(
+  const prepStats = activeRegistrationList.reduce(
     (acc, registration) => {
-      if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
-        return acc;
-      }
       const fields = parseCustomFields_(registration.customFields);
       const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
       if (attendanceStatus !== "attending") {
@@ -1685,7 +1681,11 @@ export default function AdminPage({
 
       const dietary = String(fields.dietary || "").trim() || "未填寫";
       acc.dietary[dietary] = (acc.dietary[dietary] || 0) + 1;
-      const attendeeName = String(registration.userName || fields.name || "").trim() || "未命名";
+      const attendeeStudentId = String(registration.studentId || fields.studentId || "").trim();
+      const attendeeName =
+        (attendeeStudentId && studentNameByStudentId.get(attendeeStudentId)) ||
+        String(fields.name || registration.userName || "").trim() ||
+        "未命名";
 
       const parking = String(fields.parking || "").trim() || "未填寫";
       acc.parking[parking] = (acc.parking[parking] || 0) + 1;
@@ -2635,15 +2635,9 @@ export default function AdminPage({
                   <div className="flex flex-wrap gap-2">
                     {filteredStudentsForRegistrations.map((student) => {
                       const studentId = String(student.id || "").trim();
-                      const displayName = getDisplayName_(student);
-                      const normalizedName = normalizeName_(displayName);
-                      const isRegistered =
-                        (studentId && registeredStudentIdSet.has(studentId)) ||
-                        (normalizedName && registeredNameSet.has(normalizedName));
-                      const attendanceValue =
-                        (studentId && attendanceByStudentId.get(studentId)) ||
-                        (normalizedName && attendanceByName.get(normalizedName)) ||
-                        "";
+                      const displayName = getChineseName_(student) || "未命名";
+                      const isRegistered = studentId && registeredStudentIdSet.has(studentId);
+                      const attendanceValue = (studentId && attendanceByStudentId.get(studentId)) || "";
                       const hoverTitle = [
                         studentId ? `學號 ${studentId}` : "",
                         student.googleEmail || student.email || "",
@@ -2664,7 +2658,7 @@ export default function AdminPage({
                           title={hoverTitle}
                           className={`inline-flex items-center gap-2 tabular-nums ${badgeStyle}`}
                         >
-                          {displayName || "未命名"}
+                          {displayName}
                         </span>
                       );
                     })}
@@ -2721,7 +2715,12 @@ export default function AdminPage({
                     {checkinRegistrations.map((registration) => {
                       const registrationId = String(registration.id || "").trim();
                       const checkin = checkinStatusByRegistrationId[registrationId] || null;
-                      const studentId = registration.studentId;
+                      const fields = parseCustomFields_(registration.customFields);
+                      const studentId = String(registration.studentId || fields.studentId || "").trim();
+                      const displayName =
+                        (studentId && studentNameByStudentId.get(studentId)) ||
+                        String(fields.name || "").trim() ||
+                        "未命名";
                       const hoverTitle = [
                         studentId ? `學號 ${studentId}` : "",
                         checkin && checkin.checkinAt ? checkin.checkinAt : "",
@@ -2738,7 +2737,7 @@ export default function AdminPage({
                               : "badge-warning"
                           }`}
                         >
-                          {registration.userName || "未命名"}
+                          {displayName}
                         </span>
                       );
                     })}
