@@ -113,6 +113,10 @@ export function parseDateTimeLikeLocal_(value) {
   if (!raw) {
     return null;
   }
+  if (/(?:Z|[+-]\d{2}:\d{2})$/i.test(raw)) {
+    const parsedAbsolute = new Date(raw);
+    return isNaN(parsedAbsolute.getTime()) ? null : parsedAbsolute;
+  }
   const normalized = raw.replace(/\//g, "-");
   const match = normalized.match(
     /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
