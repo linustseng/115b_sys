@@ -4,6 +4,7 @@ import {
   addMinutes_,
   generateEventId_,
   pad2_,
+  parseDateTimeLikeLocal_,
   parseLocalInputDate_,
   toLocalInput_,
   toLocalInputValue_,
@@ -296,7 +297,7 @@ export default function AdminPage({
       /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
         ? raw.replace(/\//g, "-").replace(" ", "T")
         : raw;
-    const parsed = parseLocalInputDate_(normalized);
+    const parsed = parseDateTimeLikeLocal_(normalized);
     if (parsed) {
       return toLocalInputValue_(parsed);
     }
@@ -319,8 +320,8 @@ export default function AdminPage({
       /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
         ? raw.replace(/\//g, "-").replace(" ", "T")
         : raw;
-    const parsed = new Date(normalized);
-    return isNaN(parsed.getTime()) ? null : parsed;
+    const parsed = parseDateTimeLikeLocal_(normalized);
+    return parsed && !isNaN(parsed.getTime()) ? parsed : null;
   };
 
   const isEventClosed_ = (event) => {

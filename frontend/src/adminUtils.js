@@ -98,6 +98,48 @@ export function parseLocalInputDate_(value) {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
+export function parseDateTimeLikeLocal_(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : new Date(value.getTime());
+  }
+  if (typeof value === "number") {
+    const parsedNumber = new Date(value);
+    return isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const normalized = raw.replace(/\//g, "-");
+  const match = normalized.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{2})(?::(\d{2}))?)?/
+  );
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const hour = Number(match[4] || "0");
+    const minute = Number(match[5] || "0");
+    const second = Number(match[6] || "0");
+    const parsedLocal = new Date(year, month - 1, day, hour, minute, second, 0);
+    if (
+      !isNaN(parsedLocal.getTime()) &&
+      parsedLocal.getFullYear() === year &&
+      parsedLocal.getMonth() + 1 === month &&
+      parsedLocal.getDate() === day &&
+      parsedLocal.getHours() === hour &&
+      parsedLocal.getMinutes() === minute
+    ) {
+      return parsedLocal;
+    }
+  }
+  const parsed = new Date(raw);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function addMinutes_(date, minutes) {
   const next = new Date(date);
   next.setMinutes(next.getMinutes() + minutes);

@@ -19,6 +19,7 @@ import {
   addMinutes_,
   generateEventId_,
   pad2_,
+  parseDateTimeLikeLocal_,
   parseLocalInputDate_,
   toLocalInput_,
   toLocalInputValue_,
@@ -402,13 +403,7 @@ const formatDisplayDate_ = (value, options = {}) => {
     /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
       ? raw.replace(/\//g, "-").replace(" ", "T")
       : raw;
-  const parsed = dateOnlyMatch
-    ? (() => {
-        const parts = raw.split(/[-/]/).map((part) => Number(part));
-        const date = new Date(parts[0], parts[1] - 1, parts[2]);
-        return isNaN(date.getTime()) ? null : date;
-      })()
-    : new Date(normalized);
+  const parsed = dateOnlyMatch ? parseDateTimeLikeLocal_(raw) : parseDateTimeLikeLocal_(normalized);
   if (!parsed || isNaN(parsed.getTime())) {
     return raw;
   }
@@ -607,8 +602,8 @@ const formatEventTime_ = (value) => {
     /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
       ? raw.replace(/\//g, "-").replace(" ", "T")
       : raw;
-  const parsed = new Date(normalized);
-  if (isNaN(parsed.getTime())) {
+  const parsed = parseDateTimeLikeLocal_(normalized);
+  if (!parsed || isNaN(parsed.getTime())) {
     return raw;
   }
   return `${pad2_(parsed.getHours())}:${pad2_(parsed.getMinutes())}`;
@@ -623,12 +618,12 @@ const formatEventSchedule_ = (startValue, endValue) => {
   }
   const startRaw = String(startValue || "").trim();
   const endRaw = String(endValue || "").trim();
-  const startParsed = new Date(
+  const startParsed = parseDateTimeLikeLocal_(
     /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(startRaw)
       ? startRaw.replace(/\//g, "-").replace(" ", "T")
       : startRaw
   );
-  const endParsed = new Date(
+  const endParsed = parseDateTimeLikeLocal_(
     /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(endRaw)
       ? endRaw.replace(/\//g, "-").replace(" ", "T")
       : endRaw
