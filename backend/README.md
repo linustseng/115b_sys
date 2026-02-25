@@ -69,6 +69,7 @@ ShortLinks 目前用於報名連結。報名/簽到也可直接從 `Events.regis
 - updateStudent
 - deleteStudent
 - listRegistrations
+- adminCreateRegistration
 - updateRegistration
 - deleteRegistration
 - listCheckins

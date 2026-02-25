@@ -72,6 +72,11 @@ export default function AdminPage({
     id: "",
     status: "registered",
   });
+  const [manualRegistrationForm, setManualRegistrationForm] = useState({
+    studentQuery: "",
+    attendance: "出席",
+    notes: "",
+  });
   const [copyStatus, setCopyStatus] = useState("");
   const [registerCopyStatus, setRegisterCopyStatus] = useState("");
   const [registrationEventId, setRegistrationEventId] = useState("");
@@ -95,6 +100,7 @@ export default function AdminPage({
   const [studentsSortDir, setStudentsSortDir] = useState("asc");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
+  const [manualRegistrationStatusMessage, setManualRegistrationStatusMessage] = useState("");
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [draftMemberships, setDraftMemberships] = useState([]);
   const [membershipDirty, setMembershipDirty] = useState(false);
@@ -973,6 +979,119 @@ export default function AdminPage({
     }
   };
 
+  const resolveStudentForManualRegistration_ = (inputValue, sourceStudents) => {
+    const keyword = String(inputValue || "").trim();
+    if (!keyword) {
+      return null;
+    }
+    const candidates = Array.isArray(sourceStudents) ? sourceStudents : [];
+    const normalizedKeyword = normalizeEmail_(keyword);
+    const normalizedNameKeyword = keyword.toLowerCase();
+
+    const idMatches = candidates.filter((item) => String(item.id || "").trim() === keyword);
+    if (idMatches.length > 1) {
+      throw new Error("找到多筆同學資料，請改用 Email。");
+    }
+    if (idMatches.length === 1) {
+      return idMatches[0];
+    }
+
+    const emailMatches = candidates.filter((item) => {
+      const email = normalizeEmail_(item.email);
+      const googleEmail = normalizeEmail_(item.googleEmail);
+      return normalizedKeyword && (email === normalizedKeyword || googleEmail === normalizedKeyword);
+    });
+    if (emailMatches.length > 1) {
+      throw new Error("找到多筆相同 Email 的同學資料，請聯繫資管組處理。");
+    }
+    if (emailMatches.length === 1) {
+      return emailMatches[0];
+    }
+
+    const nameMatches = candidates.filter((item) => {
+      const names = [
+        item.nameZh,
+        item.name,
+        item.preferredName,
+        item.nameEn,
+      ]
+        .map((value) => normalizeName_(value).toLowerCase())
+        .filter(Boolean);
+      return names.includes(normalizedNameKeyword);
+    });
+    if (nameMatches.length > 1) {
+      throw new Error("找到多筆同名同學，請改用學號或 Email。");
+    }
+    if (nameMatches.length === 1) {
+      return nameMatches[0];
+    }
+    return null;
+  };
+
+  const handleManualRegistrationSubmit = async (event) => {
+    event.preventDefault();
+    const studentQuery = String(manualRegistrationForm.studentQuery || "").trim();
+    if (!registrationEventId) {
+      setError("請先選擇活動。");
+      return;
+    }
+    if (!studentQuery) {
+      setError("請先輸入學號、Email 或姓名。");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setManualRegistrationStatusMessage("");
+    try {
+      const sourceStudents = directory.length ? directory : students;
+      const targetStudent = resolveStudentForManualRegistration_(studentQuery, sourceStudents);
+      if (!targetStudent) {
+        throw new Error("找不到對應同學，請確認學號/Email/姓名。");
+      }
+      const studentId = String(targetStudent.id || "").trim();
+      const userEmail = normalizeEmail_(targetStudent.email || targetStudent.googleEmail);
+      if (!userEmail) {
+        throw new Error("該同學缺少 Email，無法補報名。");
+      }
+      const userName =
+        getChineseName_(targetStudent) ||
+        getDisplayName_(targetStudent) ||
+        String(targetStudent.name || "").trim() ||
+        userEmail;
+      const attendance = String(manualRegistrationForm.attendance || "").trim() || "尚未確定";
+      const notes = String(manualRegistrationForm.notes || "").trim();
+      const customFields = {
+        attendance: attendance,
+        studentId: studentId,
+        name: userName,
+      };
+      if (notes) {
+        customFields.notes = notes;
+      }
+      const { result } = await apiRequest({
+        action: "adminCreateRegistration",
+        data: {
+          eventId: registrationEventId,
+          studentId: studentId,
+          userEmail: userEmail,
+          userName: userName,
+          userPhone: String(targetStudent.mobile || targetStudent.phone || "").trim(),
+          customFields: customFields,
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "補報名失敗");
+      }
+      await loadRegistrations();
+      setManualRegistrationForm((prev) => ({ ...prev, studentQuery: "", notes: "" }));
+      setManualRegistrationStatusMessage("已完成補報名");
+    } catch (err) {
+      setError(err.message || "補報名失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleOrderFormChange = (key, value) => {
     if ((key === "optionAImage" || key === "optionBImage") && String(value || "").startsWith("data:")) {
       setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
@@ -1626,6 +1745,13 @@ export default function AdminPage({
     String((selectedRegistrationEvent && selectedRegistrationEvent.allowBringDrinks) || "yes").trim() !==
     "no";
   const displayStudents = directory.length ? directory : students;
+  const parseTimestampValue_ = (value) => {
+    if (!value) {
+      return 0;
+    }
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+  };
   const studentNameByStudentId = new Map(
     displayStudents
       .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
@@ -1784,6 +1910,30 @@ export default function AdminPage({
   const attendingNameList = prepStats.attendees.slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
+  const manualRegistrationEntries = registrationList
+    .map((registration) => {
+      const fields = parseCustomFields_(registration.customFields);
+      const meta =
+        fields && typeof fields._manualRegistration === "object" ? fields._manualRegistration : {};
+      const actorEmail = String(registration.manualCreatedBy || meta.actorEmail || "").trim();
+      const actorName = String(registration.manualCreatedByName || meta.actorName || "").trim();
+      const createdAt = registration.manualCreatedAt || meta.at || "";
+      if (!actorEmail && !createdAt) {
+        return null;
+      }
+      const studentId = String(registration.studentId || fields.studentId || "").trim();
+      return {
+        id: String(registration.id || "").trim(),
+        userName: String(registration.userName || fields.name || "未命名").trim(),
+        studentId: studentId,
+        actorEmail: actorEmail,
+        actorName: actorName,
+        createdAt: createdAt,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => parseTimestampValue_(b.createdAt) - parseTimestampValue_(a.createdAt))
+    .slice(0, 10);
 
   const buildRegistrationStatsCsv_ = () => {
     const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
@@ -3727,43 +3877,153 @@ export default function AdminPage({
 
         {activeTab === "registrations" ? (
           <section className="card p-7 sm:p-10">
-            <h2 className="text-lg font-semibold text-slate-900">更新報名狀態</h2>
-            <form onSubmit={handleRegistrationSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">報名 ID</label>
-                <input
-                  value={registrationForm.id}
-                  onChange={(event) => setRegistrationForm((prev) => ({ ...prev, id: event.target.value }))}
-                  placeholder="輸入報名 ID / 學號 (P...) / 姓名"
-                  className="input-sm"
-                />
+            <h2 className="text-lg font-semibold text-slate-900">報名操作</h2>
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <form onSubmit={handleRegistrationSubmit} className="grid gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 sm:grid-cols-2">
+                <p className="text-sm font-semibold text-slate-800 sm:col-span-2">更新報名狀態</p>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">報名 ID</label>
+                  <input
+                    value={registrationForm.id}
+                    onChange={(event) => setRegistrationForm((prev) => ({ ...prev, id: event.target.value }))}
+                    placeholder="輸入報名 ID / 學號 (P...) / 姓名"
+                    className="input-sm"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">狀態</label>
+                  <select
+                    value={registrationForm.status}
+                    onChange={(event) => setRegistrationForm((prev) => ({ ...prev, status: event.target.value }))}
+                    className="input-sm"
+                  >
+                    <option value="registered">已報名</option>
+                    <option value="cancelled">已取消</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "更新中..." : "更新狀態"}
+                  </button>
+                  {registrationStatusMessage ? (
+                    <span className="text-xs font-semibold text-emerald-600">
+                      {registrationStatusMessage}
+                    </span>
+                  ) : null}
+                </div>
+              </form>
+
+              <form onSubmit={handleManualRegistrationSubmit} className="grid gap-4 rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <p className="text-sm font-semibold text-slate-800">補報名</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    目前活動：
+                    {selectedRegistrationEvent
+                      ? ` ${selectedRegistrationEvent.title || selectedRegistrationEvent.id} · ${selectedRegistrationEvent.id}`
+                      : " 請先在上方選擇活動"}
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:col-span-2">
+                  <label className="text-sm font-medium text-slate-700">同學</label>
+                  <input
+                    value={manualRegistrationForm.studentQuery}
+                    onChange={(event) =>
+                      setManualRegistrationForm((prev) => ({ ...prev, studentQuery: event.target.value }))
+                    }
+                    list="manual-registration-students"
+                    placeholder="輸入學號 / Email / 姓名"
+                    className="input-sm"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">出席回覆</label>
+                  <select
+                    value={manualRegistrationForm.attendance}
+                    onChange={(event) =>
+                      setManualRegistrationForm((prev) => ({ ...prev, attendance: event.target.value }))
+                    }
+                    className="input-sm"
+                  >
+                    <option value="出席">出席</option>
+                    <option value="不克出席">不克出席</option>
+                    <option value="尚未確定">尚未確定</option>
+                  </select>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">備註</label>
+                  <input
+                    value={manualRegistrationForm.notes}
+                    onChange={(event) =>
+                      setManualRegistrationForm((prev) => ({ ...prev, notes: event.target.value }))
+                    }
+                    placeholder="例如：電話確認後補登"
+                    className="input-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-3 sm:col-span-2">
+                  <button
+                    type="submit"
+                    disabled={saving || !registrationEventId}
+                    className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? "處理中..." : "送出補報名"}
+                  </button>
+                  {manualRegistrationStatusMessage ? (
+                    <span className="text-xs font-semibold text-emerald-600">
+                      {manualRegistrationStatusMessage}
+                    </span>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+
+            <datalist id="manual-registration-students">
+              {displayStudents.map((item, index) => {
+                const optionValue = String(item.id || item.email || item.googleEmail || "").trim();
+                if (!optionValue) {
+                  return null;
+                }
+                const optionLabel = [
+                  getChineseName_(item) || getDisplayName_(item) || String(item.name || "").trim() || optionValue,
+                  String(item.email || item.googleEmail || "").trim(),
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+                return (
+                  <option key={`${optionValue}-${index}`} value={optionValue}>
+                    {optionLabel}
+                  </option>
+                );
+              })}
+            </datalist>
+
+            {manualRegistrationEntries.length ? (
+              <div className="mt-6 rounded-2xl border border-slate-200/80 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-800">最近補報名紀錄</p>
+                <div className="mt-3 space-y-2">
+                  {manualRegistrationEntries.map((item) => (
+                    <div
+                      key={item.id || `${item.userName}-${item.createdAt}`}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                    >
+                      <span className="font-semibold text-slate-800">
+                        {item.userName}
+                        {item.studentId ? ` · ${item.studentId}` : ""}
+                      </span>
+                      <span>
+                        {item.actorName ? `${item.actorName} · ` : ""}
+                        {item.actorEmail || "未知操作者"} ·{" "}
+                        {item.createdAt ? formatDisplayDate_(item.createdAt, { withTime: true }) : "-"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid gap-2">
-                <label className="text-sm font-medium text-slate-700">狀態</label>
-                <select
-                  value={registrationForm.status}
-                  onChange={(event) => setRegistrationForm((prev) => ({ ...prev, status: event.target.value }))}
-                  className="input-sm"
-                >
-                  <option value="registered">已報名</option>
-                  <option value="cancelled">已取消</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-3 sm:col-span-2">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? "更新中..." : "更新狀態"}
-                </button>
-                {registrationStatusMessage ? (
-                  <span className="text-xs font-semibold text-emerald-600">
-                    {registrationStatusMessage}
-                  </span>
-                ) : null}
-              </div>
-            </form>
+            ) : null}
           </section>
         ) : null}
       </main>

@@ -31,6 +31,7 @@ const ACTION_GROUP_POLICIES = {
   updateEvent: ["C", "E"],
   deleteEvent: ["C", "E"],
   deleteRegistration: ["C", "E"],
+  adminCreateRegistration: ["C", "E"],
   listCheckins: ["C", "E"],
   uploadBase64: ["C", "E"],
   createOrderPlan: ["I", "E"],
@@ -1337,6 +1338,47 @@ function handleActionPayload_(payload) {
     }
     invalidateCacheKeys_(["registrations:list:v1"]);
     return { ok: true, data: { registration: updated }, error: null };
+  }
+
+  if (payload.action === "adminCreateRegistration") {
+    const data = payload.data || {};
+    const eventId = String(data.eventId || "").trim();
+    const email = normalizeEmail_(data.userEmail || data.email);
+    if (!eventId || !email) {
+      return { ok: false, data: null, error: "Missing eventId or email" };
+    }
+    const event = findEventById_(eventId);
+    if (!event) {
+      return { ok: false, data: null, error: "Event not found" };
+    }
+    if (isDuplicateRegistration_(eventId, email)) {
+      return { ok: false, data: null, error: "Duplicate registration" };
+    }
+    const actor = getAdminActorInfo_(payload);
+    const customFields = parseCustomFields_(data.customFields);
+    const studentId = String(data.studentId || customFields.studentId || "").trim();
+    if (studentId && !customFields.studentId) {
+      customFields.studentId = studentId;
+    }
+    if (!customFields.name && data.userName) {
+      customFields.name = String(data.userName || "").trim();
+    }
+    const registrationId = appendRegistration_(
+      eventId,
+      Object.assign({}, data, {
+        studentId: studentId,
+        customFields: customFields,
+      }),
+      email,
+      {
+        source: "admin_manual",
+        actorEmail: actor.email,
+        actorName: actor.name,
+        actorStudentId: actor.studentId,
+      }
+    );
+    invalidateCacheKeys_(["registrations:list:v1"]);
+    return { ok: true, data: { registrationId: registrationId }, error: null };
   }
 
   if (payload.action === "deleteRegistration") {
@@ -5838,6 +5880,12 @@ function parseAttachments_(value) {
 }
 
 function normalizeRegistrationRecord_(data) {
+  const customFieldsValue =
+    typeof data.customFields === "string"
+      ? data.customFields
+      : data.customFields
+      ? JSON.stringify(parseCustomFields_(data.customFields))
+      : "";
   return {
     id: String(data.id || "").trim(),
     eventId: String(data.eventId || "").trim(),
@@ -5846,10 +5894,13 @@ function normalizeRegistrationRecord_(data) {
     userEmail: normalizeEmail_(data.userEmail),
     userPhone: data.userPhone || "",
     classYear: data.classYear || "",
-    customFields: data.customFields || "",
+    customFields: customFieldsValue,
     status: String(data.status || "registered").trim(),
     createdAt: data.createdAt || "",
     updatedAt: data.updatedAt || new Date(),
+    manualCreatedBy: normalizeEmail_(data.manualCreatedBy),
+    manualCreatedByName: String(data.manualCreatedByName || "").trim(),
+    manualCreatedAt: data.manualCreatedAt || "",
   };
 }
 
@@ -5960,6 +6011,24 @@ function requireGoogleGroupAccess_(payload, allowedGroupIds) {
     return { ok: true, data: { studentId: studentId }, error: null };
   } catch (error) {
     return { ok: false, data: null, error: "Unauthorized" };
+  }
+}
+
+function getAdminActorInfo_(payload) {
+  const idToken = String(payload.idToken || "").trim();
+  if (!idToken) {
+    return { email: "", name: "", studentId: "" };
+  }
+  try {
+    const profile = verifyGoogleIdTokenCached_(idToken);
+    const student = findStudentByGoogleSub_(profile.sub);
+    return {
+      email: normalizeEmail_(profile.email),
+      name: String((student && student.name) || profile.name || "").trim(),
+      studentId: String((student && student.id) || "").trim(),
+    };
+  } catch (error) {
+    return { email: "", name: "", studentId: "" };
   }
 }
 
@@ -6106,23 +6175,45 @@ function isDuplicateRegistration_(eventId, email) {
   return false;
 }
 
-function appendRegistration_(eventId, data, email) {
+function appendRegistration_(eventId, data, email, options) {
   const sheet = getSheet_(SHEETS.registrations);
-  const headerMap = getHeaderMap_(sheet);
   const headers = getHeaders_(sheet);
+  const opts = options || {};
   const now = new Date();
+  const customFields = parseCustomFields_(data.customFields);
+  const manualMeta =
+    String(opts.source || "").trim() === "admin_manual"
+      ? {
+          source: "admin_manual",
+          actorEmail: normalizeEmail_(opts.actorEmail),
+          actorName: String(opts.actorName || "").trim(),
+          actorStudentId: String(opts.actorStudentId || "").trim(),
+          at: now.toISOString(),
+        }
+      : null;
+  if (manualMeta) {
+    customFields._manualRegistration = manualMeta;
+  }
+  const studentId = String(data.studentId || customFields.studentId || "").trim();
+  if (studentId && !customFields.studentId) {
+    customFields.studentId = studentId;
+  }
   const values = new Array(headers.length).fill("");
   const record = {
     id: Utilities.getUuid(),
     eventId: eventId,
+    studentId: studentId,
     userName: data.userName || data.name || "",
     userEmail: email,
     userPhone: data.userPhone || data.phone || "",
     classYear: data.classYear || "",
-    customFields: JSON.stringify(data.customFields || {}),
+    customFields: JSON.stringify(customFields),
     status: "registered",
     createdAt: now,
     updatedAt: now,
+    manualCreatedBy: manualMeta ? manualMeta.actorEmail : "",
+    manualCreatedByName: manualMeta ? manualMeta.actorName : "",
+    manualCreatedAt: manualMeta ? now : "",
   };
 
   headers.forEach(function (header, index) {

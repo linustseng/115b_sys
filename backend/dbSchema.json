@@ -26,6 +26,7 @@
   "Registration": {
     "id": "string",
     "eventId": "string",
+    "studentId": "string|null",
     "userName": "string",
     "userEmail": "string",
     "userPhone": "string",
@@ -33,7 +34,10 @@
     "customFields": "object",
     "status": "registered|cancelled",
     "createdAt": "datetime",
-    "updatedAt": "datetime"
+    "updatedAt": "datetime",
+    "manualCreatedBy": "string|null",
+    "manualCreatedByName": "string|null",
+    "manualCreatedAt": "datetime|null"
   },
   "Checkin": {
     "id": "string",
