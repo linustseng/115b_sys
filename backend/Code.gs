@@ -2276,6 +2276,7 @@ function listBirthdays_() {
     months[String(monthValue)].push({
       id: String(item.id || "").trim(),
       name: displayName,
+      nameZh: String(item.nameZh || "").trim(),
       month: monthValue,
       day: dayValue,
     });

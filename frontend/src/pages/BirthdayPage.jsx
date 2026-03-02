@@ -106,6 +106,15 @@ function BirthdayPage({ shared }) {
     ? birthdaysByMonth[String(currentMonth)]
     : [];
 
+  const formatBirthdayName_ = (item) => {
+    const displayName = String((item && item.name) || "").trim();
+    const chineseName = String((item && item.nameZh) || "").trim();
+    if (displayName && chineseName && displayName !== chineseName) {
+      return `${displayName} (${chineseName})`;
+    }
+    return displayName || chineseName || "未命名";
+  };
+
   const buildBirthdayMessage_ = (month, list) => {
     const safeMonth = Number(month || 0) || currentMonth;
     if (!Array.isArray(list) || !list.length) {
@@ -113,7 +122,7 @@ function BirthdayPage({ shared }) {
     }
     const lines = [`${safeMonth}月壽星名單`];
     list.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item.name}（${item.month}/${item.day}）`);
+      lines.push(`${index + 1}. ${formatBirthdayName_(item)}（${item.month}/${item.day}）`);
     });
     lines.push("祝壽星們生日快樂！");
     return lines.join("\n");
@@ -258,7 +267,7 @@ function BirthdayPage({ shared }) {
                   key={`${item.id || item.name}-${item.month}-${item.day}`}
                   className="flex items-center justify-between rounded-2xl border border-slate-200/80 bg-slate-50/60 px-4 py-3"
                 >
-                  <p className="text-sm font-medium text-slate-900">{item.name}</p>
+                  <p className="text-sm font-medium text-slate-900">{formatBirthdayName_(item)}</p>
                   <p className="text-sm font-semibold text-slate-600">
                     {item.month}/{item.day}
                   </p>

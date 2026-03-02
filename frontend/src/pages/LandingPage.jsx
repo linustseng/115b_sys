@@ -48,6 +48,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     (googleLinkedStudent && googleLinkedStudent.name) ||
     "";
   const hasGoogleLogin = Boolean(googleLinkedStudent && googleLinkedStudent.email);
+  const formatBirthdayName_ = (item) => {
+    const preferred = String((item && item.name) || "").trim();
+    const zh = String((item && item.nameZh) || "").trim();
+    if (preferred && zh && preferred !== zh) {
+      return `${preferred} (${zh})`;
+    }
+    return preferred || zh || "未命名";
+  };
   const [loginCollapsed, setLoginCollapsed] = useState(() => {
     if (typeof window === "undefined") {
       return true;
@@ -547,7 +555,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               <p className="mt-2 text-xs text-pink-800/90">
                 {birthdaySummary.current
                   .slice(0, 5)
-                  .map((item) => `${item.name} ${item.month}/${item.day}`)
+                  .map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`)
                   .join("、")}
               </p>
             ) : null}
@@ -563,7 +571,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               <p className="mt-2 text-xs text-amber-800/90">
                 {birthdaySummary.next
                   .slice(0, 5)
-                  .map((item) => `${item.name} ${item.month}/${item.day}`)
+                  .map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`)
                   .join("、")}
               </p>
             ) : null}
