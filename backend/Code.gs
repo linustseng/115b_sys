@@ -89,7 +89,7 @@ const CACHE_KEYS = {
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
   approvalsOverviewPrefix: "approvalsOverview:v1",
-  birthdays: "birthdays:list:v2",
+  birthdays: "birthdays:list:v3",
 };
 
 let REQUEST_MEMO_ = {};
@@ -2274,10 +2274,7 @@ function listBirthdays_() {
     if (!displayName && !nameZh) {
       continue;
     }
-    const hasCjkInDisplayName = /[\u3400-\u9fff]/.test(displayName);
-    const birthdayName = displayName && hasCjkInDisplayName
-      ? displayName
-      : displayName && nameZh && displayName !== nameZh
+    const birthdayName = displayName && nameZh && displayName !== nameZh
       ? displayName + " (" + nameZh + ")"
       : displayName || nameZh;
     months[String(monthValue)].push({
