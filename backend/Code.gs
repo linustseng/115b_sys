@@ -23,6 +23,8 @@ const SHEETS = {
   softballConfig: "SoftballConfig",
   announcements: "Announcements",
   notificationReads: "NotificationReads",
+  lineBindings: "LineBindings",
+  agentAudit: "AgentAudit",
 };
 
 const ACTION_GROUP_POLICIES = {
@@ -89,6 +91,7 @@ const CACHE_KEYS = {
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
   approvalsOverviewPrefix: "approvalsOverview:v1",
+  lineBindings: "lineBindings:list:v1",
   birthdays: "birthdays:list:v3",
 };
 
@@ -278,6 +281,10 @@ function listNotificationReadsCached_() {
 
 function listBirthdaysCached_() {
   return getCachedJson_(CACHE_KEYS.birthdays, 300, listBirthdays_);
+}
+
+function listLineBindingsCached_() {
+  return getCachedJson_(CACHE_KEYS.lineBindings, 120, listLineBindings_);
 }
 
 function buildFundSummaryCached_() {
@@ -760,6 +767,383 @@ function handleActionPayload_(payload) {
       },
       error: null,
     };
+  }
+
+  if (payload.action === "bindLineUser") {
+    const data = payload.data || {};
+    const lineUserId = String(payload.lineUserId || data.lineUserId || "").trim();
+    const studentId = String(payload.studentId || data.studentId || "").trim();
+    if (!lineUserId || !studentId) {
+      return { ok: false, data: null, error: "Missing lineUserId or studentId" };
+    }
+
+    let authorized = false;
+    let boundByType = "system";
+    let boundByStudentId = "";
+
+    const googleAdminAuth = requireGoogleGroupAccess_(payload || {}, ["A", "E"]);
+    if (googleAdminAuth && googleAdminAuth.ok) {
+      authorized = true;
+      boundByType = "google";
+      boundByStudentId = String((googleAdminAuth.data && googleAdminAuth.data.studentId) || "").trim();
+    }
+
+    if (!authorized) {
+      const actorLineUserId = String(payload.actorLineUserId || data.actorLineUserId || "").trim();
+      if (actorLineUserId) {
+        const actorAuth = resolveLineActorPayload_({ lineUserId: actorLineUserId });
+        if (actorAuth.ok && lineActorHasGroupAccess_(actorAuth.data, ["A", "E"])) {
+          authorized = true;
+          boundByType = "line";
+          boundByStudentId = String((actorAuth.data && actorAuth.data.studentId) || "").trim();
+        }
+      }
+    }
+
+    if (!authorized) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+
+    const student = findStudentById_(studentId);
+    if (!student) {
+      return { ok: false, data: null, error: "Student not found" };
+    }
+    const directory = findDirectoryById_(studentId);
+    const binding = upsertLineBinding_({
+      lineUserId: lineUserId,
+      studentId: studentId,
+      status: String(payload.status || data.status || "active").trim(),
+      role: String(payload.role || data.role || "").trim(),
+      groupId: String(payload.groupId || data.groupId || "").trim(),
+      displayName: String(
+        payload.displayName ||
+          data.displayName ||
+          (directory && (directory.preferredName || directory.nameZh || directory.nameEn)) ||
+          student.name ||
+          ""
+      ).trim(),
+      pictureUrl: String(payload.pictureUrl || data.pictureUrl || "").trim(),
+      source: String(payload.source || data.source || "line").trim(),
+      note: String(payload.note || data.note || "").trim(),
+      boundByType: boundByType,
+      boundByStudentId: boundByStudentId,
+      metadata:
+        data.metadata !== undefined
+          ? data.metadata
+          : payload.metadata !== undefined
+          ? payload.metadata
+          : "",
+    });
+    invalidateCacheKeys_([CACHE_KEYS.lineBindings]);
+
+    const actor = buildLineActor_(binding);
+    appendAgentAudit_({
+      action: "bindLineUser",
+      channel: "line",
+      lineUserId: lineUserId,
+      studentId: studentId,
+      status: "ok",
+      payload: { lineUserId: lineUserId, studentId: studentId, boundByType: boundByType },
+      result: { bindingId: String(binding.id || "").trim() },
+    });
+
+    return {
+      ok: true,
+      data: {
+        binding: binding,
+        actor: actor,
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "resolveLineActor") {
+    const data = payload.data || {};
+    const lineUserId = String(
+      payload.lineUserId || payload.actorLineUserId || data.lineUserId || data.actorLineUserId || ""
+    ).trim();
+    const resolved = resolveLineActorPayload_({ lineUserId: lineUserId });
+    if (!resolved.ok) {
+      appendAgentAudit_({
+        action: "resolveLineActor",
+        channel: "line",
+        lineUserId: lineUserId,
+        status: "error",
+        error: resolved.error || "Unauthorized",
+      });
+      return resolved;
+    }
+    appendAgentAudit_({
+      action: "resolveLineActor",
+      channel: "line",
+      lineUserId: lineUserId,
+      studentId: String((resolved.data && resolved.data.studentId) || "").trim(),
+      status: "ok",
+    });
+    return { ok: true, data: { actor: resolved.data }, error: null };
+  }
+
+  if (payload.action === "lineRegisterEvent") {
+    const actorAuth = resolveLineActorPayload_(payload || {});
+    if (!actorAuth.ok) {
+      appendAgentAudit_({
+        action: "lineRegisterEvent",
+        channel: "line",
+        lineUserId: String(payload.lineUserId || payload.actorLineUserId || "").trim(),
+        status: "error",
+        error: actorAuth.error || "Unauthorized",
+      });
+      return actorAuth;
+    }
+
+    const actor = actorAuth.data;
+    const data = payload.data || {};
+    const eventId = String(payload.eventId || data.eventId || "").trim();
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing eventId" };
+    }
+    if (!actor.email) {
+      return { ok: false, data: null, error: "Actor email missing" };
+    }
+
+    const customFields = parseCustomFields_(data.customFields);
+    customFields._line = {
+      lineUserId: actor.lineUserId,
+      studentId: actor.studentId,
+      at: new Date().toISOString(),
+    };
+    if (!customFields.studentId) {
+      customFields.studentId = actor.studentId;
+    }
+
+    const registerPayload = {
+      action: "register",
+      data: Object.assign({}, data, {
+        eventId: eventId,
+        userEmail: actor.email,
+        userName: String(data.userName || actor.name || "").trim(),
+        userPhone: String(data.userPhone || actor.phone || "").trim(),
+        studentId: actor.studentId,
+        customFields: customFields,
+      }),
+    };
+
+    const registerResult = handleActionPayload_(registerPayload);
+    appendAgentAudit_({
+      action: "lineRegisterEvent",
+      channel: "line",
+      lineUserId: actor.lineUserId,
+      studentId: actor.studentId,
+      eventId: eventId,
+      status: registerResult.ok ? "ok" : "error",
+      error: registerResult.ok ? "" : registerResult.error || "Register failed",
+      payload: { eventId: eventId },
+      result: registerResult,
+    });
+    if (!registerResult.ok) {
+      return registerResult;
+    }
+
+    const registrationId = String((registerResult.data && registerResult.data.registrationId) || "").trim();
+    const registration = registrationId ? findRegistrationById_(registrationId) : null;
+    return {
+      ok: true,
+      data: {
+        registrationId: registrationId,
+        registration: registration,
+        actor: {
+          lineUserId: actor.lineUserId,
+          studentId: actor.studentId,
+          email: actor.email,
+          name: actor.name,
+        },
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "lineCheckinEvent") {
+    const actorAuth = resolveLineActorPayload_(payload || {});
+    if (!actorAuth.ok) {
+      appendAgentAudit_({
+        action: "lineCheckinEvent",
+        channel: "line",
+        lineUserId: String(payload.lineUserId || payload.actorLineUserId || "").trim(),
+        status: "error",
+        error: actorAuth.error || "Unauthorized",
+      });
+      return actorAuth;
+    }
+
+    const actor = actorAuth.data;
+    const data = payload.data || {};
+    const eventId = String(payload.eventId || data.eventId || "").trim();
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing eventId" };
+    }
+    if (!actor.email) {
+      return { ok: false, data: null, error: "Actor email missing" };
+    }
+
+    const checkinPayload = {
+      action: "checkin",
+      data: Object.assign({}, data, {
+        eventId: eventId,
+        userEmail: actor.email,
+      }),
+    };
+    const checkinResult = handleActionPayload_(checkinPayload);
+    appendAgentAudit_({
+      action: "lineCheckinEvent",
+      channel: "line",
+      lineUserId: actor.lineUserId,
+      studentId: actor.studentId,
+      eventId: eventId,
+      status: checkinResult.ok ? "ok" : "error",
+      error: checkinResult.ok ? "" : checkinResult.error || "Check-in failed",
+      payload: { eventId: eventId },
+      result: checkinResult,
+    });
+    if (!checkinResult.ok) {
+      return checkinResult;
+    }
+
+    return {
+      ok: true,
+      data: Object.assign({}, checkinResult.data || {}, {
+        actor: {
+          lineUserId: actor.lineUserId,
+          studentId: actor.studentId,
+          email: actor.email,
+          name: actor.name,
+        },
+      }),
+      error: null,
+    };
+  }
+
+  if (payload.action === "lineApprovalAction") {
+    const actorAuth = resolveLineActorPayload_(payload || {});
+    if (!actorAuth.ok) {
+      appendAgentAudit_({
+        action: "lineApprovalAction",
+        channel: "line",
+        lineUserId: String(payload.lineUserId || payload.actorLineUserId || "").trim(),
+        status: "error",
+        error: actorAuth.error || "Unauthorized",
+      });
+      return actorAuth;
+    }
+
+    const actor = actorAuth.data;
+    const data = payload.data || {};
+    const requestId = String(payload.requestId || data.requestId || payload.id || data.id || "").trim();
+    if (!requestId) {
+      return { ok: false, data: null, error: "Missing requestId" };
+    }
+
+    const existing = findFinanceRequestById_(requestId);
+    if (!existing) {
+      return { ok: false, data: null, error: "Finance request not found" };
+    }
+
+    const decision = normalizeLineApprovalAction_(
+      payload.decision || payload.requestAction || payload.flowAction || payload.actionType || data.decision || ""
+    );
+    if (!decision) {
+      return { ok: false, data: null, error: "Invalid approval action" };
+    }
+
+    const actorRole =
+      String(payload.actorRole || data.actorRole || "").trim().toLowerCase() ||
+      resolveFinanceActorRoleForStatus_(existing.status);
+    if (!actorRole) {
+      return { ok: false, data: null, error: "Cannot resolve actorRole" };
+    }
+
+    const updateResult = handleActionPayload_({
+      action: "updateFinanceRequest",
+      id: requestId,
+      requestAction: decision,
+      actorRole: actorRole,
+      actorName: String(actor.name || "").trim(),
+      actorNote: String(payload.note || payload.actorNote || data.note || data.actorNote || "").trim(),
+      actorId: actor.studentId,
+      actorEmail: actor.email,
+      data: data.patch || data.data || {},
+    });
+
+    appendAgentAudit_({
+      action: "lineApprovalAction",
+      channel: "line",
+      lineUserId: actor.lineUserId,
+      studentId: actor.studentId,
+      requestId: requestId,
+      status: updateResult.ok ? "ok" : "error",
+      error: updateResult.ok ? "" : updateResult.error || "Approval failed",
+      payload: { requestId: requestId, decision: decision, actorRole: actorRole },
+      result: updateResult,
+    });
+
+    if (!updateResult.ok) {
+      return updateResult;
+    }
+
+    return {
+      ok: true,
+      data: {
+        decision: decision,
+        actorRole: actorRole,
+        request: (updateResult.data && updateResult.data.request) || null,
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "lineListMyUpcoming") {
+    const actorAuth = resolveLineActorPayload_(payload || {});
+    if (!actorAuth.ok) {
+      appendAgentAudit_({
+        action: "lineListMyUpcoming",
+        channel: "line",
+        lineUserId: String(payload.lineUserId || payload.actorLineUserId || "").trim(),
+        status: "error",
+        error: actorAuth.error || "Unauthorized",
+      });
+      return actorAuth;
+    }
+
+    const actor = actorAuth.data;
+    const data = payload.data || {};
+    const days = normalizePositiveInt_(payload.days || data.days, 14, 1, 60);
+    const limit = normalizePositiveInt_(payload.limit || data.limit, 10, 1, 50);
+    const upcoming = buildLineUpcomingPayload_(actor, days, limit);
+
+    appendAgentAudit_({
+      action: "lineListMyUpcoming",
+      channel: "line",
+      lineUserId: actor.lineUserId,
+      studentId: actor.studentId,
+      status: "ok",
+      payload: { days: days, limit: limit },
+      result: {
+        events: {
+          registered: (upcoming.events && upcoming.events.registered
+            ? upcoming.events.registered.length
+            : 0),
+          openForRegistration: (upcoming.events && upcoming.events.openForRegistration
+            ? upcoming.events.openForRegistration.length
+            : 0),
+        },
+        approvals: {
+          pending: (upcoming.approvals && upcoming.approvals.pending
+            ? upcoming.approvals.pending.length
+            : 0),
+        },
+      },
+    });
+
+    return { ok: true, data: upcoming, error: null };
   }
 
   if (payload.action === "verifyGoogle") {
@@ -2000,6 +2384,68 @@ function getCheckinsIndex_() {
   });
 }
 
+function getLineBindingsIndex_() {
+  return getMemoValue_("index:lineBindings", function () {
+    const byLineUserId = {};
+    const byStudentId = {};
+    listLineBindingsCached_().forEach(function (item) {
+      const normalized = normalizeLineBindingRecord_(item || {});
+      const lineUserId = String(normalized.lineUserId || "").trim();
+      const studentId = String(normalized.studentId || "").trim();
+      const currentStatus = String(normalized.status || "").trim().toLowerCase();
+      const currentIsActive = currentStatus === "" || currentStatus === "active" || currentStatus === "bound";
+
+      if (lineUserId) {
+        const previous = byLineUserId[lineUserId];
+        if (!previous) {
+          byLineUserId[lineUserId] = normalized;
+        } else {
+          const previousStatus = String(previous.status || "").trim().toLowerCase();
+          const previousIsActive =
+            previousStatus === "" || previousStatus === "active" || previousStatus === "bound";
+          if (currentIsActive && !previousIsActive) {
+            byLineUserId[lineUserId] = normalized;
+          } else if (currentIsActive === previousIsActive) {
+            const prevUpdated = String(previous.updatedAt || previous.boundAt || previous.createdAt || "");
+            const nextUpdated = String(
+              normalized.updatedAt || normalized.boundAt || normalized.createdAt || ""
+            );
+            if (nextUpdated.localeCompare(prevUpdated) > 0) {
+              byLineUserId[lineUserId] = normalized;
+            }
+          }
+        }
+      }
+
+      if (studentId) {
+        if (!byStudentId[studentId]) {
+          byStudentId[studentId] = [];
+        }
+        byStudentId[studentId].push(normalized);
+      }
+    });
+    return { byLineUserId: byLineUserId, byStudentId: byStudentId };
+  });
+}
+
+function findLineBindingByLineUserId_(lineUserId) {
+  const id = String(lineUserId || "").trim();
+  if (!id) {
+    return null;
+  }
+  const index = getLineBindingsIndex_();
+  return index.byLineUserId[id] || null;
+}
+
+function findLineBindingByStudentId_(studentId) {
+  const id = String(studentId || "").trim();
+  if (!id) {
+    return [];
+  }
+  const index = getLineBindingsIndex_();
+  return index.byStudentId[id] ? index.byStudentId[id].slice() : [];
+}
+
 function findStudentById_(studentId) {
   const id = String(studentId || "").trim();
   if (!id) {
@@ -2548,6 +2994,15 @@ function listGroupMemberships_() {
     .sort(function (a, b) {
       return String(a.personName || "").localeCompare(String(b.personName || ""));
     });
+}
+
+function listLineBindings_() {
+  const sheet = getSheet_(SHEETS.lineBindings);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows.map(function (row) {
+    return normalizeLineBindingRecord_(mapRowToObject_(headerMap, row));
+  });
 }
 
 function listFinanceRoles_() {
@@ -5119,6 +5574,50 @@ function normalizeGroupMembershipRecord_(data) {
   };
 }
 
+function normalizeLineBindingRecord_(data) {
+  const metadata = data && Object.prototype.hasOwnProperty.call(data, "metadata") ? data.metadata : "";
+  return {
+    id: String((data && data.id) || "").trim(),
+    lineUserId: String((data && data.lineUserId) || "").trim(),
+    studentId: String((data && data.studentId) || "").trim(),
+    status: String((data && data.status) || "active").trim().toLowerCase(),
+    role: String((data && data.role) || "").trim(),
+    groupId: String((data && data.groupId) || "").trim(),
+    displayName: String((data && data.displayName) || "").trim(),
+    pictureUrl: String((data && data.pictureUrl) || "").trim(),
+    source: String((data && data.source) || "line").trim(),
+    boundAt: String((data && data.boundAt) || "").trim(),
+    createdAt: String((data && data.createdAt) || "").trim(),
+    updatedAt: String((data && data.updatedAt) || "").trim(),
+    boundByType: String((data && data.boundByType) || "").trim(),
+    boundByStudentId: String((data && data.boundByStudentId) || "").trim(),
+    note: String((data && data.note) || "").trim(),
+    metadata:
+      typeof metadata === "string"
+        ? metadata
+        : metadata === null || metadata === undefined
+        ? ""
+        : jsonStringifySafe_(metadata, 4000),
+  };
+}
+
+function normalizeAgentAuditRecord_(data) {
+  return {
+    id: String((data && data.id) || "").trim(),
+    action: String((data && data.action) || "").trim(),
+    channel: String((data && data.channel) || "").trim(),
+    lineUserId: String((data && data.lineUserId) || "").trim(),
+    studentId: String((data && data.studentId) || "").trim(),
+    requestId: String((data && data.requestId) || "").trim(),
+    eventId: String((data && data.eventId) || "").trim(),
+    status: String((data && data.status) || "").trim(),
+    error: String((data && data.error) || "").trim(),
+    payload: String((data && data.payload) || "").trim(),
+    result: String((data && data.result) || "").trim(),
+    createdAt: String((data && data.createdAt) || "").trim(),
+  };
+}
+
 function normalizeFinanceRoleRecord_(data) {
   return {
     id: String(data.id || "").trim(),
@@ -6020,6 +6519,484 @@ function findAdminByEmail_(email) {
     }
   }
   return null;
+}
+
+function jsonStringifySafe_(value, maxChars) {
+  var raw = "";
+  try {
+    raw = JSON.stringify(value === undefined ? null : value);
+  } catch (error) {
+    raw = String(value || "");
+  }
+  const max = normalizePositiveInt_(maxChars, 6000, 100, 40000);
+  if (raw.length <= max) {
+    return raw;
+  }
+  return raw.slice(0, max) + "…";
+}
+
+function normalizePositiveInt_(value, fallback, min, max) {
+  const parsed = parseInt(value, 10);
+  if (isNaN(parsed)) {
+    return fallback;
+  }
+  if (typeof min === "number" && parsed < min) {
+    return min;
+  }
+  if (typeof max === "number" && parsed > max) {
+    return max;
+  }
+  return parsed;
+}
+
+function parseDateMillis_(value) {
+  if (!value) {
+    return NaN;
+  }
+  const ms = new Date(value).getTime();
+  return isNaN(ms) ? NaN : ms;
+}
+
+function isLineBindingActive_(binding) {
+  const status = String((binding && binding.status) || "").trim().toLowerCase();
+  if (!status) {
+    return true;
+  }
+  return status === "active" || status === "bound" || status === "enabled";
+}
+
+function lineActorHasGroupAccess_(actor, groupIds) {
+  const target = (groupIds || []).reduce(function (acc, value) {
+    const id = normalizeGroupId_(value || "");
+    if (id) {
+      acc[id] = true;
+    }
+    return acc;
+  }, {});
+  const memberships = (actor && Array.isArray(actor.memberships) ? actor.memberships : []).slice();
+  for (var i = 0; i < memberships.length; i += 1) {
+    const item = memberships[i] || {};
+    const groupId = normalizeGroupId_(item.groupId || "");
+    if (groupId && target[groupId] === true) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildLineActor_(binding) {
+  const normalized = normalizeLineBindingRecord_(binding || {});
+  const studentId = String(normalized.studentId || "").trim();
+  const student = studentId ? findStudentById_(studentId) : null;
+  const directory = studentId ? findDirectoryById_(studentId) : null;
+  const memberships = studentId ? listMembershipsByStudentId_(studentId) : [];
+  const email = normalizeEmail_((directory && directory.email) || (student && student.googleEmail) || "");
+  const name = String(
+    (directory && (directory.preferredName || directory.nameZh || directory.nameEn)) ||
+      (student && student.name) ||
+      normalized.displayName ||
+      ""
+  ).trim();
+  return {
+    lineUserId: normalized.lineUserId,
+    studentId: studentId,
+    email: email,
+    name: name,
+    phone: normalizePhoneValue_(directory && directory.mobile),
+    memberships: memberships,
+    role: normalized.role,
+    groupId: normalized.groupId,
+    binding: normalized,
+    isActive: isLineBindingActive_(normalized),
+  };
+}
+
+function resolveLineActorPayload_(payload) {
+  const data = (payload && payload.data) || {};
+  const lineUserId = String(
+    (payload && (payload.lineUserId || payload.actorLineUserId || payload.userId || payload.fromUserId)) ||
+      data.lineUserId ||
+      data.actorLineUserId ||
+      ""
+  ).trim();
+  if (!lineUserId) {
+    return { ok: false, data: null, error: "Missing lineUserId" };
+  }
+  const binding = findLineBindingByLineUserId_(lineUserId);
+  if (!binding) {
+    return { ok: false, data: null, error: "LINE user is not bound" };
+  }
+  if (!isLineBindingActive_(binding)) {
+    return { ok: false, data: null, error: "LINE binding is inactive" };
+  }
+  const actor = buildLineActor_(binding);
+  if (!actor || !actor.studentId) {
+    return { ok: false, data: null, error: "Bound student not found" };
+  }
+  return { ok: true, data: actor, error: null };
+}
+
+function upsertLineBinding_(data) {
+  const lineUserId = String((data && data.lineUserId) || "").trim();
+  const studentId = String((data && data.studentId) || "").trim();
+  if (!lineUserId || !studentId) {
+    throw new Error("Missing lineUserId or studentId");
+  }
+  const sheet = getSheet_(SHEETS.lineBindings);
+  const headerMap = getHeaderMap_(sheet);
+  const lineUserIdIndex = headerMap.lineUserId;
+  if (lineUserIdIndex === undefined) {
+    throw new Error("LineBindings sheet missing lineUserId column");
+  }
+  const rows = getDataRows_(sheet);
+  const nowIso = new Date().toISOString();
+  const headers = getHeaders_(sheet);
+
+  var targetRow = -1;
+  var existing = null;
+  for (var i = 0; i < rows.length; i += 1) {
+    if (String(rows[i][lineUserIdIndex] || "").trim() === lineUserId) {
+      targetRow = i;
+      existing = mapRowToObject_(headerMap, rows[i]);
+      break;
+    }
+  }
+
+  const merged = Object.assign({}, existing || {}, data || {}, {
+    id: String(((existing && existing.id) || (data && data.id) || Utilities.getUuid()) || "").trim(),
+    lineUserId: lineUserId,
+    studentId: studentId,
+    status: String((data && data.status) || (existing && existing.status) || "active").trim(),
+    source: String((data && data.source) || (existing && existing.source) || "line").trim(),
+    boundAt: String((existing && existing.boundAt) || (data && data.boundAt) || nowIso).trim(),
+    createdAt: String((existing && existing.createdAt) || (data && data.createdAt) || nowIso).trim(),
+    updatedAt: nowIso,
+  });
+
+  const record = normalizeLineBindingRecord_(merged);
+  const values = new Array(headers.length).fill("");
+  headers.forEach(function (header, index) {
+    if (Object.prototype.hasOwnProperty.call(record, header)) {
+      values[index] = record[header];
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(merged, header)) {
+      values[index] = merged[header];
+    }
+  });
+
+  if (targetRow >= 0) {
+    sheet.getRange(targetRow + 2, 1, 1, headers.length).setValues([values]);
+  } else {
+    sheet.appendRow(values);
+  }
+  return record;
+}
+
+function appendAgentAudit_(data) {
+  try {
+    const sheet = getSheet_(SHEETS.agentAudit);
+    const headers = getHeaders_(sheet);
+    const payloadString =
+      typeof data.payload === "string" ? data.payload : jsonStringifySafe_(data.payload, 8000);
+    const resultString = typeof data.result === "string" ? data.result : jsonStringifySafe_(data.result, 8000);
+    const record = normalizeAgentAuditRecord_(
+      Object.assign({}, data || {}, {
+        id: String((data && data.id) || Utilities.getUuid() || "").trim(),
+        payload: payloadString,
+        result: resultString,
+        createdAt: String((data && data.createdAt) || new Date().toISOString()).trim(),
+      })
+    );
+    const values = new Array(headers.length).fill("");
+    headers.forEach(function (header, index) {
+      if (Object.prototype.hasOwnProperty.call(record, header)) {
+        values[index] = record[header];
+      }
+    });
+    sheet.appendRow(values);
+    return record;
+  } catch (error) {
+    return null;
+  }
+}
+
+function normalizeLineApprovalAction_(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) {
+    return "";
+  }
+  if (
+    raw === "approve" ||
+    raw === "approved" ||
+    raw === "ok" ||
+    raw === "pass" ||
+    raw === "同意" ||
+    raw === "核准"
+  ) {
+    return "approve";
+  }
+  if (
+    raw === "return" ||
+    raw === "reject" ||
+    raw === "rejected" ||
+    raw === "deny" ||
+    raw === "退回" ||
+    raw === "駁回"
+  ) {
+    return "return";
+  }
+  return "";
+}
+
+function resolveFinanceActorRoleForStatus_(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  if (normalized === "pending_lead") {
+    return "lead";
+  }
+  if (normalized === "pending_rep") {
+    return "rep";
+  }
+  if (normalized === "pending_committee") {
+    return "committee";
+  }
+  if (normalized === "pending_accounting") {
+    return "accounting";
+  }
+  if (normalized === "pending_cashier") {
+    return "cashier";
+  }
+  return "";
+}
+
+function buildLineUpcomingPayload_(actor, days, limit) {
+  const windowDays = normalizePositiveInt_(days, 14, 1, 60);
+  const itemLimit = normalizePositiveInt_(limit, 10, 1, 50);
+  const nowMs = Date.now();
+  const startMs = nowMs - 24 * 60 * 60 * 1000;
+  const endMs = nowMs + windowDays * 24 * 60 * 60 * 1000;
+  const email = normalizeEmail_((actor && actor.email) || "");
+  const studentId = String((actor && actor.studentId) || "").trim();
+
+  const registrationByEventId = {};
+  if (email) {
+    listRegistrationsCached_().forEach(function (item) {
+      const status = String(item.status || "").trim().toLowerCase();
+      if (status === "cancelled") {
+        return;
+      }
+      if (normalizeEmail_(item.userEmail) !== email) {
+        return;
+      }
+      const eventId = String(item.eventId || "").trim();
+      if (eventId && !registrationByEventId[eventId]) {
+        registrationByEventId[eventId] = item;
+      }
+    });
+  }
+
+  const upcomingEvents = listEventsCached_()
+    .map(function (event) {
+      const eventId = String(event.id || "").trim();
+      if (!eventId) {
+        return null;
+      }
+      const startAtRaw = String(event.startAt || event.registrationCloseAt || event.endAt || "").trim();
+      const eventMs = parseDateMillis_(startAtRaw);
+      if (!isNaN(eventMs) && (eventMs < startMs || eventMs > endMs)) {
+        return null;
+      }
+      const registration = registrationByEventId[eventId] || null;
+      const checkin = registration ? findCheckinByRegistration_(eventId, registration.id) : null;
+      const canRegister =
+        !registration &&
+        String(event.status || "").trim().toLowerCase() === "open" &&
+        isWithinWindow_(event.registrationOpenAt, event.registrationCloseAt);
+      return {
+        id: eventId,
+        title: String(event.title || "").trim(),
+        startAt: String(event.startAt || "").trim(),
+        endAt: String(event.endAt || "").trim(),
+        location: String(event.location || "").trim(),
+        status: String(event.status || "").trim(),
+        registrationStatus: registration
+          ? String(registration.status || "registered").trim().toLowerCase()
+          : "none",
+        checkinStatus: checkin ? "checked_in" : "not_checked_in",
+        canRegister: canRegister,
+      };
+    })
+    .filter(function (item) {
+      return item !== null;
+    })
+    .sort(function (a, b) {
+      return String(a.startAt || "").localeCompare(String(b.startAt || ""));
+    });
+
+  const financeList = listFinanceRequestsCached_();
+  const memberships = listGroupMembershipsCached_();
+  const financeRoles = listFinanceRolesCached_();
+  const pendingApprovals = financeList
+    .filter(function (item) {
+      const status = String(item.status || "").trim().toLowerCase();
+      if (!status || status.indexOf("pending_") !== 0) {
+        return false;
+      }
+      const actorRole = resolveFinanceActorRoleForStatus_(status);
+      if (!actorRole) {
+        return false;
+      }
+      return canFinanceActorApprove_(item, actorRole, studentId, email, memberships, financeRoles);
+    })
+    .sort(function (a, b) {
+      return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+    })
+    .slice(0, itemLimit)
+    .map(function (item) {
+      return {
+        id: String(item.id || "").trim(),
+        title: String(item.title || "").trim(),
+        type: String(item.type || "").trim(),
+        status: String(item.status || "").trim(),
+        amountEstimated: String(item.amountEstimated || "").trim(),
+        amountActual: String(item.amountActual || "").trim(),
+        applicantName: String(item.applicantName || "").trim(),
+        applicantDepartment: String(item.applicantDepartment || "").trim(),
+        updatedAt: String(item.updatedAt || item.createdAt || "").trim(),
+      };
+    });
+
+  const myFinance = email
+    ? listFinanceRequests_({ applicantEmail: email })
+        .slice(0, itemLimit)
+        .map(function (item) {
+          return {
+            id: String(item.id || "").trim(),
+            title: String(item.title || "").trim(),
+            type: String(item.type || "").trim(),
+            status: String(item.status || "").trim(),
+            amountEstimated: String(item.amountEstimated || "").trim(),
+            amountActual: String(item.amountActual || "").trim(),
+            updatedAt: String(item.updatedAt || item.createdAt || "").trim(),
+          };
+        })
+    : [];
+
+  const responseByOrderId = {};
+  if (studentId) {
+    listOrderResponsesByStudent_(studentId).forEach(function (item) {
+      const orderId = String(item.orderId || "").trim();
+      if (orderId && !responseByOrderId[orderId]) {
+        responseByOrderId[orderId] = item;
+      }
+    });
+  }
+
+  const pendingOrders = listOrderPlansCached_()
+    .filter(function (plan) {
+      const planId = String(plan.id || "").trim();
+      if (!planId || responseByOrderId[planId]) {
+        return false;
+      }
+      if (isOrderPlanClosed_(plan)) {
+        return false;
+      }
+      const cutoffMs = parseDateMillis_(plan.cutoffAt || plan.date || "");
+      if (isNaN(cutoffMs)) {
+        return true;
+      }
+      return cutoffMs >= startMs && cutoffMs <= endMs;
+    })
+    .sort(function (a, b) {
+      return String(a.cutoffAt || a.date || "").localeCompare(String(b.cutoffAt || b.date || ""));
+    })
+    .slice(0, itemLimit)
+    .map(function (plan) {
+      return {
+        id: String(plan.id || "").trim(),
+        title: String(plan.title || "").trim(),
+        date: String(plan.date || "").trim(),
+        cutoffAt: String(plan.cutoffAt || "").trim(),
+        status: String(plan.status || "").trim(),
+      };
+    });
+
+  const attendanceByPracticeId = {};
+  if (studentId) {
+    listSoftballAttendance_("", studentId).forEach(function (item) {
+      const practiceId = String(item.practiceId || "").trim();
+      if (practiceId && !attendanceByPracticeId[practiceId]) {
+        attendanceByPracticeId[practiceId] = item;
+      }
+    });
+  }
+
+  const upcomingPractices = listSoftballPracticesCached_()
+    .filter(function (practice) {
+      const practiceId = String(practice.id || "").trim();
+      if (!practiceId) {
+        return false;
+      }
+      const whenMs = parseDateMillis_(practice.startAt || practice.date || "");
+      if (isNaN(whenMs)) {
+        return false;
+      }
+      return whenMs >= startMs && whenMs <= endMs;
+    })
+    .sort(function (a, b) {
+      const aKey = String(a.startAt || a.date || "");
+      const bKey = String(b.startAt || b.date || "");
+      return aKey.localeCompare(bKey);
+    })
+    .slice(0, itemLimit)
+    .map(function (practice) {
+      const practiceId = String(practice.id || "").trim();
+      const attendance = attendanceByPracticeId[practiceId] || null;
+      return {
+        id: practiceId,
+        title: String(practice.title || "").trim(),
+        date: String(practice.date || "").trim(),
+        startAt: String(practice.startAt || "").trim(),
+        endAt: String(practice.endAt || "").trim(),
+        status: String(practice.status || "").trim(),
+        attendanceStatus: attendance ? String(attendance.status || "unknown").trim() : "unknown",
+      };
+    });
+
+  return {
+    actor: {
+      lineUserId: String((actor && actor.lineUserId) || "").trim(),
+      studentId: studentId,
+      email: email,
+      name: String((actor && actor.name) || "").trim(),
+    },
+    windowDays: windowDays,
+    generatedAt: new Date().toISOString(),
+    events: {
+      registered: upcomingEvents
+        .filter(function (item) {
+          return item.registrationStatus !== "none";
+        })
+        .slice(0, itemLimit),
+      openForRegistration: upcomingEvents
+        .filter(function (item) {
+          return item.canRegister;
+        })
+        .slice(0, itemLimit),
+    },
+    approvals: {
+      pending: pendingApprovals,
+    },
+    finance: {
+      mine: myFinance,
+    },
+    orders: {
+      pending: pendingOrders,
+    },
+    softball: {
+      upcoming: upcomingPractices,
+    },
+  };
 }
 
 function hashPassword_(password) {
