@@ -51,6 +51,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const formatBirthdayName_ = (item) => {
     const preferred = String((item && item.name) || "").trim();
     const zh = String((item && item.nameZh) || "").trim();
+    const hasCjkInPreferred = /[\u3400-\u9fff]/.test(preferred);
+    if (preferred && hasCjkInPreferred) {
+      return preferred;
+    }
     if (preferred && zh && preferred !== zh) {
       return `${preferred} (${zh})`;
     }

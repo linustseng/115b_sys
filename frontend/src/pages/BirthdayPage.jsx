@@ -109,6 +109,10 @@ function BirthdayPage({ shared }) {
   const formatBirthdayName_ = (item) => {
     const displayName = String((item && item.name) || "").trim();
     const chineseName = String((item && item.nameZh) || "").trim();
+    const hasCjkInDisplayName = /[\u3400-\u9fff]/.test(displayName);
+    if (displayName && hasCjkInDisplayName) {
+      return displayName;
+    }
     if (displayName && chineseName && displayName !== chineseName) {
       return `${displayName} (${chineseName})`;
     }
