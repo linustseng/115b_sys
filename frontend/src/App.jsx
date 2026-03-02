@@ -682,7 +682,10 @@ const normalizeCustomFieldsForSubmit_ = (fields, studentId) => {
 const STORAGE_KEYS = {
   googleStudent: "emba115b.googleStudent",
   googleIdToken: "emba115b.googleIdToken",
+  adminSession: "emba115b.adminSession",
 };
+
+const ADMIN_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
 const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
@@ -703,6 +706,8 @@ const API_POST_ACTIONS = new Set([
   "listSoftballBootstrap",
   "listStudents",
   "listGroupMemberships",
+  "listMyMemberships",
+  "createSession",
   "listHomeBootstrap",
   "listLandingBootstrap",
   "getCheckinBootstrap",
@@ -1010,6 +1015,62 @@ function storeGoogleStudent_(student) {
   }
 }
 
+function loadStoredAdminSession_() {
+  const empty = { token: "", studentId: "", memberships: [] };
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
+    if (!raw) {
+      return empty;
+    }
+    const parsed = JSON.parse(raw);
+    const savedAt = Number(parsed && parsed.savedAt ? parsed.savedAt : 0);
+    if (savedAt && Date.now() - savedAt > ADMIN_SESSION_MAX_AGE_MS) {
+      window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+      return empty;
+    }
+    const token = String((parsed && parsed.token) || "").trim();
+    const studentId = String((parsed && parsed.studentId) || "").trim();
+    const memberships = Array.isArray(parsed && parsed.memberships) ? parsed.memberships : [];
+    if (!token) {
+      return empty;
+    }
+    return {
+      token: token,
+      studentId: studentId,
+      memberships: memberships,
+    };
+  } catch (error) {
+    return empty;
+  }
+}
+
+function storeAdminSession_(session) {
+  try {
+    if (!session || !session.token) {
+      window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+      return;
+    }
+    const token = String(session.token || "").trim();
+    if (!token) {
+      window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+      return;
+    }
+    const studentId = String(session.studentId || "").trim();
+    const memberships = Array.isArray(session.memberships) ? session.memberships : [];
+    window.localStorage.setItem(
+      STORAGE_KEYS.adminSession,
+      JSON.stringify({
+        token: token,
+        studentId: studentId,
+        memberships: memberships,
+        savedAt: Date.now(),
+      })
+    );
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
 function getLineInAppInfo_() {
   if (typeof window === "undefined") {
     return { isLineInApp: false, openExternalUrl: "", currentUrl: "" };
@@ -1159,7 +1220,15 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               setEmailMatch(payload.emailMatch || null);
               if (payload.student) {
                 setStatus("linked");
-                onLinkedRef.current(payload.student, payload.profile || null, response.credential);
+                onLinkedRef.current(
+                  payload.student,
+                  payload.profile || null,
+                  response.credential,
+                  {
+                    sessionToken: String(payload.sessionToken || "").trim(),
+                    memberships: Array.isArray(payload.memberships) ? payload.memberships : [],
+                  }
+                );
                 storeGoogleStudent_(payload.student);
                 storeGoogleIdToken_(response.credential);
               } else {
@@ -1250,7 +1319,12 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       setLinkedStudent(student);
       setStatus("linked");
       if (student) {
-        onLinkedRef.current(student, profile, idToken);
+        onLinkedRef.current(student, profile, idToken, {
+          sessionToken: String((result.data && result.data.sessionToken) || "").trim(),
+          memberships: Array.isArray(result.data && result.data.memberships)
+            ? result.data.memberships
+            : [],
+        });
         storeGoogleStudent_(student);
         storeGoogleIdToken_(idToken);
       }
@@ -1437,9 +1511,32 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [googleIdToken, setGoogleIdToken] = useState(() => loadStoredGoogleIdToken_());
-  const [memberships, setMemberships] = useState([]);
+  const [adminSession, setAdminSession] = useState(() => loadStoredAdminSession_());
+  const [memberships, setMemberships] = useState(() => {
+    const stored = loadStoredAdminSession_();
+    return Array.isArray(stored.memberships) ? stored.memberships : [];
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const syncAdminSession_ = (sessionToken, studentId, nextMemberships) => {
+    const token = String(sessionToken || "").trim();
+    if (!token) {
+      const empty = { token: "", studentId: "", memberships: [] };
+      setAdminSession(empty);
+      setMemberships([]);
+      storeAdminSession_(null);
+      return;
+    }
+    const payload = {
+      token: token,
+      studentId: String(studentId || "").trim(),
+      memberships: Array.isArray(nextMemberships) ? nextMemberships : [],
+    };
+    setAdminSession(payload);
+    setMemberships(payload.memberships);
+    storeAdminSession_(payload);
+  };
 
   const ensureIdToken_ = async () => {
     if (googleIdToken) {
@@ -1465,31 +1562,96 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   };
 
   const authedApiRequest = async (payload) => {
-    const token = await ensureIdToken_();
-    const response = await apiRequest({ ...(payload || {}), idToken: token });
+    const requestPayload = { ...(payload || {}) };
+    const sessionToken = String((adminSession && adminSession.token) || "").trim();
+    if (sessionToken) {
+      requestPayload.sessionToken = sessionToken;
+    }
+    const existingToken = String(googleIdToken || loadStoredGoogleIdToken_() || "").trim();
+    if (existingToken) {
+      requestPayload.idToken = existingToken;
+    }
+
+    const response = await apiRequest(requestPayload);
     const result = response && response.result ? response.result : null;
     const unauthorized = !result || result.ok !== false ? false : String(result.error || "") === "Unauthorized";
     if (!unauthorized) {
+      const responseData = result && result.data ? result.data : null;
+      if (responseData && responseData.sessionToken) {
+        const linkedStudentId =
+          String((googleLinkedStudent && googleLinkedStudent.id) || "").trim() ||
+          String((adminSession && adminSession.studentId) || "").trim();
+        if (linkedStudentId) {
+          syncAdminSession_(
+            responseData.sessionToken,
+            linkedStudentId,
+            Array.isArray(responseData.memberships) ? responseData.memberships : adminSession.memberships
+          );
+        }
+      }
       return response;
     }
+
     setGoogleIdToken("");
     storeGoogleIdToken_("");
     const retryToken = await ensureIdToken_();
-    return apiRequest({ ...(payload || {}), idToken: retryToken });
+    const retryPayload = { ...(payload || {}), idToken: retryToken };
+    if (sessionToken) {
+      retryPayload.sessionToken = sessionToken;
+    }
+    const retryResponse = await apiRequest(retryPayload);
+    const retryResult = retryResponse && retryResponse.result ? retryResponse.result : null;
+    const retryUnauthorized =
+      !retryResult || retryResult.ok !== false ? false : String(retryResult.error || "") === "Unauthorized";
+    if (retryUnauthorized) {
+      syncAdminSession_("", "", []);
+    } else {
+      const retryData = retryResult && retryResult.data ? retryResult.data : null;
+      if (retryData && retryData.sessionToken) {
+        const linkedStudentId =
+          String((googleLinkedStudent && googleLinkedStudent.id) || "").trim() ||
+          String((adminSession && adminSession.studentId) || "").trim();
+        if (linkedStudentId) {
+          syncAdminSession_(
+            retryData.sessionToken,
+            linkedStudentId,
+            Array.isArray(retryData.memberships) ? retryData.memberships : adminSession.memberships
+          );
+        }
+      }
+    }
+    return retryResponse;
   };
 
   const loadMemberships = async () => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
     }
+    const linkedStudentId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    const sessionStudentId = String((adminSession && adminSession.studentId) || "").trim();
+    if (
+      linkedStudentId &&
+      sessionStudentId &&
+      linkedStudentId === sessionStudentId &&
+      Array.isArray(adminSession.memberships) &&
+      adminSession.memberships.length
+    ) {
+      setMemberships(adminSession.memberships);
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listGroupMemberships" });
+      const { result } = await authedApiRequest({ action: "listMyMemberships" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
-      setMemberships(result.data && result.data.memberships ? result.data.memberships : []);
+      const nextMemberships = result.data && result.data.memberships ? result.data.memberships : [];
+      setMemberships(nextMemberships);
+      if (result.data && result.data.sessionToken && linkedStudentId) {
+        syncAdminSession_(result.data.sessionToken, linkedStudentId, nextMemberships);
+      }
     } catch (err) {
       setError(err.message || "權限載入失敗");
       setMemberships([]);
@@ -1505,10 +1667,10 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
   const userMemberships = memberships.filter((item) => {
     const memberId = String(item.personId || "").trim();
-    if (normalizedId && memberId && normalizedId === memberId) {
+    if (!normalizedId) {
       return true;
     }
-    return false;
+    return Boolean(memberId && normalizedId === memberId);
   });
   const hasAccess = userMemberships.some((item) => {
     const groupId = String(item.groupId || "").trim();
@@ -1539,11 +1701,23 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
             <GoogleSigninPanel
               title="Google 登入"
               helperText="登入後會自動判斷可存取的後台權限。"
-              onLinkedStudent={(student, _profile, idToken) => {
+              onLinkedStudent={(student, _profile, idToken, authContext) => {
+                const linkedStudentId = String((student && student.id) || "").trim();
+                const token = String(idToken || "").trim();
+                const sessionToken = String((authContext && authContext.sessionToken) || "").trim();
+                const sessionMemberships =
+                  authContext && Array.isArray(authContext.memberships) ? authContext.memberships : [];
+
                 setGoogleLinkedStudent(student);
-                setGoogleIdToken(String(idToken || "").trim());
+                setGoogleIdToken(token);
                 storeGoogleStudent_(student || null);
-                storeGoogleIdToken_(idToken || "");
+                storeGoogleIdToken_(token);
+
+                if (sessionToken && linkedStudentId) {
+                  syncAdminSession_(sessionToken, linkedStudentId, sessionMemberships);
+                } else {
+                  syncAdminSession_("", "", []);
+                }
               }}
             />
           </section>

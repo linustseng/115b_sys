@@ -92,6 +92,9 @@ const CACHE_KEYS = {
   birthdays: "birthdays:list:v3",
 };
 
+const GOOGLE_SESSION_CACHE_PREFIX = "googleSession:v1:";
+const GOOGLE_SESSION_TTL_SECONDS = 60 * 60 * 12;
+
 let REQUEST_MEMO_ = {};
 
 function resetRequestMemo_() {
@@ -180,11 +183,11 @@ function invalidateCacheKeys_(keys) {
 }
 
 function listStudentsCached_() {
-  return getCachedJson_(CACHE_KEYS.students, 90, listStudents_);
+  return getCachedJson_(CACHE_KEYS.students, 300, listStudents_);
 }
 
 function listGroupMembershipsCached_() {
-  return getCachedJson_(CACHE_KEYS.groupMemberships, 90, listGroupMemberships_);
+  return getCachedJson_(CACHE_KEYS.groupMemberships, 300, listGroupMemberships_);
 }
 
 function listFinanceRolesCached_() {
@@ -200,15 +203,15 @@ function listFundEventsCached_() {
 }
 
 function listEventsCached_() {
-  return getCachedJson_(CACHE_KEYS.events, 90, listEvents_);
+  return getCachedJson_(CACHE_KEYS.events, 300, listEvents_);
 }
 
 function listRegistrationsCached_() {
-  return getCachedJson_(CACHE_KEYS.registrations, 90, listRegistrations_);
+  return getCachedJson_(CACHE_KEYS.registrations, 180, listRegistrations_);
 }
 
 function listCheckinsCached_() {
-  return getCachedJson_(CACHE_KEYS.checkins, 90, listCheckins_);
+  return getCachedJson_(CACHE_KEYS.checkins, 120, listCheckins_);
 }
 
 function listSoftballPlayersCached_() {
@@ -236,7 +239,7 @@ function listSoftballAttendanceCached_() {
 }
 
 function listDirectoryCached_() {
-  return getCachedJson_(CACHE_KEYS.directory, 90, listDirectory_);
+  return getCachedJson_(CACHE_KEYS.directory, 300, listDirectory_);
 }
 
 function listOrderPlansCached_() {
@@ -726,6 +729,39 @@ function handleActionPayload_(payload) {
     return { ok: true, data: buildFundSummaryCached_(), error: null };
   }
 
+  if (payload.action === "createSession") {
+    const auth = requireGoogleIdentity_(payload || {});
+    if (!auth.ok) {
+      return auth;
+    }
+    const studentId = String((auth.data && auth.data.studentId) || "").trim();
+    return {
+      ok: true,
+      data: {
+        sessionToken: String((auth.data && auth.data.sessionToken) || "").trim(),
+        studentId: studentId,
+        memberships: listMembershipsByStudentId_(studentId),
+      },
+      error: null,
+    };
+  }
+
+  if (payload.action === "listMyMemberships") {
+    const auth = requireGoogleIdentity_(payload || {});
+    if (!auth.ok) {
+      return auth;
+    }
+    const studentId = String((auth.data && auth.data.studentId) || "").trim();
+    return {
+      ok: true,
+      data: {
+        memberships: listMembershipsByStudentId_(studentId),
+        sessionToken: String((auth.data && auth.data.sessionToken) || "").trim(),
+      },
+      error: null,
+    };
+  }
+
   if (payload.action === "verifyGoogle") {
     const idToken = String(payload.idToken || "").trim();
     if (!idToken) {
@@ -750,9 +786,22 @@ function handleActionPayload_(payload) {
         }
       }
     }
+    let sessionToken = "";
+    let memberships = [];
+    if (linkedStudent && String(linkedStudent.id || "").trim()) {
+      const linkedStudentId = String(linkedStudent.id || "").trim();
+      sessionToken = writeGoogleSession_(normalizeGoogleSessionToken_(payload), profile, linkedStudentId);
+      memberships = listMembershipsByStudentId_(linkedStudentId);
+    }
     return {
       ok: true,
-      data: { profile: profile, student: linkedProfile, emailMatch: emailMatch },
+      data: {
+        profile: profile,
+        student: linkedProfile,
+        emailMatch: emailMatch,
+        sessionToken: sessionToken,
+        memberships: memberships,
+      },
       error: null,
     };
   }
@@ -785,7 +834,16 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Directory profile missing" };
     }
     const combined = buildStudentProfile_(updated || target, directory, profile.email);
-    return { ok: true, data: { student: combined }, error: null };
+    const sessionToken = writeGoogleSession_(normalizeGoogleSessionToken_(payload), profile, studentId);
+    return {
+      ok: true,
+      data: {
+        student: combined,
+        sessionToken: sessionToken,
+        memberships: listMembershipsByStudentId_(studentId),
+      },
+      error: null,
+    };
   }
 
   if (payload.action === "getDirectoryProfile") {
@@ -5998,7 +6056,97 @@ function requireAuth_(payload) {
   return { ok: true, data: { email: email }, error: null };
 }
 
-function requireGoogleGroupAccess_(payload, allowedGroupIds) {
+function normalizeGoogleSessionToken_(payload) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+  return String(payload.sessionToken || payload.googleSessionToken || "").trim();
+}
+
+function buildGoogleSessionCacheKey_(sessionToken) {
+  return GOOGLE_SESSION_CACHE_PREFIX + String(sessionToken || "").trim();
+}
+
+function writeGoogleSession_(sessionToken, profile, studentId) {
+  const normalizedStudentId = String(studentId || "").trim();
+  if (!normalizedStudentId) {
+    return "";
+  }
+  const token = String(sessionToken || "").trim() || Utilities.getUuid();
+  if (!token) {
+    return "";
+  }
+  const payload = {
+    studentId: normalizedStudentId,
+    sub: String((profile && profile.sub) || "").trim(),
+    email: normalizeEmail_((profile && profile.email) || ""),
+    name: String((profile && profile.name) || "").trim(),
+    issuedAt: Date.now(),
+  };
+  const cache = CacheService.getScriptCache();
+  cache.put(buildGoogleSessionCacheKey_(token), JSON.stringify(payload), GOOGLE_SESSION_TTL_SECONDS);
+  return token;
+}
+
+function readGoogleSession_(sessionToken) {
+  const normalizedToken = String(sessionToken || "").trim();
+  if (!normalizedToken) {
+    return null;
+  }
+  const cache = CacheService.getScriptCache();
+  const raw = cache.get(buildGoogleSessionCacheKey_(normalizedToken));
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !String(parsed.studentId || "").trim()) {
+      return null;
+    }
+    return {
+      studentId: String(parsed.studentId || "").trim(),
+      sub: String(parsed.sub || "").trim(),
+      email: normalizeEmail_(parsed.email || ""),
+      name: String(parsed.name || "").trim(),
+      issuedAt: Number(parsed.issuedAt || 0),
+    };
+  } catch (error) {
+    return null;
+  }
+}
+
+function listMembershipsByStudentId_(studentId) {
+  const targetId = String(studentId || "").trim();
+  if (!targetId) {
+    return [];
+  }
+  return listGroupMembershipsCached_().filter(function (item) {
+    return String(item.personId || "").trim() === targetId;
+  });
+}
+
+function requireGoogleIdentity_(payload) {
+  const providedSessionToken = normalizeGoogleSessionToken_(payload);
+  if (providedSessionToken) {
+    const session = readGoogleSession_(providedSessionToken);
+    if (session && session.studentId) {
+      return {
+        ok: true,
+        data: {
+          studentId: session.studentId,
+          sessionToken: providedSessionToken,
+          profile: {
+            sub: session.sub,
+            email: session.email,
+            name: session.name,
+            picture: "",
+          },
+        },
+        error: null,
+      };
+    }
+  }
+
   const idToken = String(payload.idToken || "").trim();
   if (!idToken) {
     return { ok: false, data: null, error: "Unauthorized" };
@@ -6010,49 +6158,58 @@ function requireGoogleGroupAccess_(payload, allowedGroupIds) {
       return { ok: false, data: null, error: "Unauthorized" };
     }
     const studentId = String(student.id || "").trim();
-    if (!hasGroupAccessForStudent_(studentId, allowedGroupIds)) {
-      return { ok: false, data: null, error: "Unauthorized" };
-    }
-    return { ok: true, data: { studentId: studentId }, error: null };
+    const sessionToken = writeGoogleSession_(providedSessionToken, profile, studentId);
+    return {
+      ok: true,
+      data: {
+        studentId: studentId,
+        sessionToken: sessionToken,
+        profile: profile,
+      },
+      error: null,
+    };
   } catch (error) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
+}
+
+function requireGoogleGroupAccess_(payload, allowedGroupIds) {
+  const auth = requireGoogleIdentity_(payload);
+  if (!auth.ok) {
+    return auth;
+  }
+  const studentId = String((auth.data && auth.data.studentId) || "").trim();
+  if (!studentId || !hasGroupAccessForStudent_(studentId, allowedGroupIds)) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+  return auth;
 }
 
 function getAdminActorInfo_(payload) {
-  const idToken = String(payload.idToken || "").trim();
-  if (!idToken) {
+  const auth = requireGoogleIdentity_(payload || {});
+  if (!auth.ok) {
     return { email: "", name: "", studentId: "" };
   }
-  try {
-    const profile = verifyGoogleIdTokenCached_(idToken);
-    const student = findStudentByGoogleSub_(profile.sub);
-    return {
-      email: normalizeEmail_(profile.email),
-      name: String((student && student.name) || profile.name || "").trim(),
-      studentId: String((student && student.id) || "").trim(),
-    };
-  } catch (error) {
-    return { email: "", name: "", studentId: "" };
-  }
+  const studentId = String((auth.data && auth.data.studentId) || "").trim();
+  const profile = (auth.data && auth.data.profile) || {};
+  const student = studentId ? findStudentById_(studentId) : null;
+  return {
+    email: normalizeEmail_((profile && profile.email) || ""),
+    name: String((student && student.name) || profile.name || "").trim(),
+    studentId: studentId,
+  };
 }
 
 function requireDirectoryLeadAccess_(payload) {
-  const idToken = String(payload.idToken || "").trim();
-  if (!idToken) {
+  const auth = requireGoogleIdentity_(payload || {});
+  if (!auth.ok) {
+    return auth;
+  }
+  const studentId = String((auth.data && auth.data.studentId) || "").trim();
+  if (!studentId || !hasDirectoryLeadAccess_(studentId)) {
     return { ok: false, data: null, error: "Unauthorized" };
   }
-  try {
-    const profile = verifyGoogleIdTokenCached_(idToken);
-    const linkedStudent = findStudentByGoogleSub_(profile.sub);
-    const studentId = String((linkedStudent && linkedStudent.id) || "").trim();
-    if (!studentId || !hasDirectoryLeadAccess_(studentId)) {
-      return { ok: false, data: null, error: "Unauthorized" };
-    }
-    return { ok: true, data: { studentId: studentId }, error: null };
-  } catch (error) {
-    return { ok: false, data: null, error: "Unauthorized" };
-  }
+  return auth;
 }
 
 function requireDirectoryOrAdminAccess_(payload) {
@@ -6455,7 +6612,7 @@ function verifyGoogleIdTokenCached_(idToken) {
       return value.length === 1 ? "0" + value : value;
     })
     .join("");
-  return getCachedJson_("googleToken:profile:" + tokenHash, 300, function () {
+  return getCachedJson_("googleToken:profile:" + tokenHash, 1800, function () {
     return verifyGoogleIdToken_(normalized);
   });
 }
