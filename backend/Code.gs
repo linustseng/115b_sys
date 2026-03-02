@@ -89,7 +89,7 @@ const CACHE_KEYS = {
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
   approvalsOverviewPrefix: "approvalsOverview:v1",
-  birthdays: "birthdays:list:v1",
+  birthdays: "birthdays:list:v2",
 };
 
 let REQUEST_MEMO_ = {};
@@ -2270,13 +2270,20 @@ function listBirthdays_() {
       continue;
     }
     const displayName = String(item.preferredName || item.nameZh || item.nameEn || item.id || "").trim();
-    if (!displayName) {
+    const nameZh = String(item.nameZh || "").trim();
+    if (!displayName && !nameZh) {
       continue;
     }
+    const hasCjkInDisplayName = /[\u3400-\u9fff]/.test(displayName);
+    const birthdayName = displayName && hasCjkInDisplayName
+      ? displayName
+      : displayName && nameZh && displayName !== nameZh
+      ? displayName + " (" + nameZh + ")"
+      : displayName || nameZh;
     months[String(monthValue)].push({
       id: String(item.id || "").trim(),
-      name: displayName,
-      nameZh: String(item.nameZh || "").trim(),
+      name: birthdayName,
+      nameZh: nameZh,
       month: monthValue,
       day: dayValue,
     });
