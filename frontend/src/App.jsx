@@ -683,15 +683,17 @@ const STORAGE_KEYS = {
   googleStudent: "emba115b.googleStudent",
   googleIdToken: "emba115b.googleIdToken",
   adminSession: "emba115b.adminSession",
+  apiEndpoint: "emba115b.apiEndpoint",
 };
 
 const ADMIN_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const API_ENDPOINT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
 const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
 const API_READ_CACHE_TTL_MS = Number(import.meta.env.VITE_API_READ_CACHE_TTL_MS || 2500);
 const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
-const API_ENABLE_POST = String(import.meta.env.VITE_API_ENABLE_POST || "").trim() === "1";
+const API_ENABLE_POST = String(import.meta.env.VITE_API_ENABLE_POST || "1").trim() !== "0";
 const IS_PWA_STANDALONE =
   typeof window !== "undefined" &&
   (window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true);
@@ -719,6 +721,75 @@ const API_POST_ACTIONS = new Set([
   "listFundPayments",
   "listBirthdays",
 ]);
+
+function isAllowedApiEndpointHost_(host) {
+  const normalized = String(host || "").trim().toLowerCase();
+  return normalized === "script.google.com" || normalized === "script.googleusercontent.com";
+}
+
+function normalizeApiEndpoint_(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) {
+    return "";
+  }
+  try {
+    const parsed = new URL(value);
+    if (!isAllowedApiEndpointHost_(parsed.hostname)) {
+      return "";
+    }
+    return parsed.toString();
+  } catch (error) {
+    return "";
+  }
+}
+
+function loadStoredApiEndpoint_() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEYS.apiEndpoint);
+    if (!raw) {
+      return "";
+    }
+    const parsed = JSON.parse(raw);
+    const savedAt = Number((parsed && parsed.savedAt) || 0);
+    if (!savedAt || Date.now() - savedAt > API_ENDPOINT_MAX_AGE_MS) {
+      window.sessionStorage.removeItem(STORAGE_KEYS.apiEndpoint);
+      return "";
+    }
+    return normalizeApiEndpoint_(parsed.endpoint || "");
+  } catch (error) {
+    return "";
+  }
+}
+
+let RUNTIME_API_ENDPOINT_ = loadStoredApiEndpoint_() || API_URL;
+
+function getRuntimeApiEndpoint_() {
+  const normalized = normalizeApiEndpoint_(RUNTIME_API_ENDPOINT_);
+  return normalized || API_URL;
+}
+
+function setRuntimeApiEndpoint_(rawUrl) {
+  const normalized = normalizeApiEndpoint_(rawUrl);
+  if (!normalized) {
+    return;
+  }
+  RUNTIME_API_ENDPOINT_ = normalized;
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.sessionStorage.setItem(
+      STORAGE_KEYS.apiEndpoint,
+      JSON.stringify({ endpoint: normalized, savedAt: Date.now() })
+    );
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
 const inflightReadRequests = new Map();
 const readResponseCache = new Map();
 const READ_CACHE_TTL_BY_ACTION_MS = {
@@ -819,14 +890,15 @@ function shouldTryPost_(payload) {
   return API_POST_ACTIONS.has(action);
 }
 
-function requestWithJsonp_(payload) {
+function requestWithJsonp_(payload, endpointOverride) {
   return new Promise((resolve, reject) => {
-    if (!API_URL || API_URL.includes("REPLACE_ME")) {
+    const endpoint = endpointOverride || getRuntimeApiEndpoint_();
+    if (!endpoint || endpoint.includes("REPLACE_ME")) {
       reject(new Error("API URL 未設定"));
       return;
     }
     const callbackName = `__emba_cb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const url = new URL(API_URL);
+    const url = new URL(endpoint);
     url.searchParams.set("callback", callbackName);
     url.searchParams.set("payload", JSON.stringify(payload));
 
@@ -846,6 +918,7 @@ function requestWithJsonp_(payload) {
 
     window[callbackName] = (result) => {
       cleanup();
+      setRuntimeApiEndpoint_(endpoint);
       resolve({ result, url: url.toString() });
     };
 
@@ -859,9 +932,10 @@ function requestWithJsonp_(payload) {
   });
 }
 
-function requestWithPost_(payload) {
+function requestWithPost_(payload, endpointOverride) {
   return new Promise((resolve, reject) => {
-    if (!API_URL || API_URL.includes("REPLACE_ME")) {
+    const endpoint = endpointOverride || getRuntimeApiEndpoint_();
+    if (!endpoint || endpoint.includes("REPLACE_ME")) {
       reject(new Error("API URL 未設定"));
       return;
     }
@@ -869,22 +943,26 @@ function requestWithPost_(payload) {
     const timeout = setTimeout(() => {
       controller.abort();
     }, API_TIMEOUT_MS);
-    fetch(API_URL, {
+    fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload || {}),
       signal: controller.signal,
     })
       .then(async (response) => {
+        setRuntimeApiEndpoint_(response && response.url ? response.url : endpoint);
         const text = await response.text();
         try {
-          return JSON.parse(text);
+          return {
+            result: JSON.parse(text),
+            finalUrl: response && response.url ? response.url : endpoint,
+          };
         } catch (error) {
           throw new Error("Invalid JSON response");
         }
       })
-      .then((result) => {
-        resolve({ result, url: API_URL });
+      .then(({ result, finalUrl }) => {
+        resolve({ result, url: finalUrl || endpoint });
       })
       .catch((error) => {
         if (error && error.name === "AbortError") {
@@ -900,14 +978,29 @@ function requestWithPost_(payload) {
 }
 
 async function requestWithTransportFallback_(payload) {
+  const runtimeEndpoint = getRuntimeApiEndpoint_();
   if (shouldTryPost_(payload)) {
     try {
-      return await requestWithPost_(payload);
+      return await requestWithPost_(payload, runtimeEndpoint);
     } catch (error) {
-      return requestWithJsonp_(payload);
+      try {
+        return await requestWithJsonp_(payload, runtimeEndpoint);
+      } catch (jsonpError) {
+        if (runtimeEndpoint !== API_URL) {
+          return requestWithJsonp_(payload, API_URL);
+        }
+        throw jsonpError;
+      }
     }
   }
-  return requestWithJsonp_(payload);
+  try {
+    return await requestWithJsonp_(payload, runtimeEndpoint);
+  } catch (error) {
+    if (runtimeEndpoint !== API_URL) {
+      return requestWithJsonp_(payload, API_URL);
+    }
+    throw error;
+  }
 }
 
 async function requestWithReadRetry_(payload) {
