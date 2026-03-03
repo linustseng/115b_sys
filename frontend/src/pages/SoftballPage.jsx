@@ -964,43 +964,104 @@ function SoftballPage({ shared }) {
     return raw;
   };
 
-  const handleExportJerseyInfo = () => {
+  const handleExportJerseyInfo = async () => {
     if (typeof window === "undefined") {
       return;
     }
-    const exportList = players.slice().sort((a, b) => {
-      const leftJersey = formatJerseyNumber_(a.jerseyNumber);
-      const rightJersey = formatJerseyNumber_(b.jerseyNumber);
-      if (leftJersey && rightJersey && leftJersey !== rightJersey) {
-        return leftJersey.localeCompare(rightJersey, "zh-Hant", { numeric: true });
+
+    let studentRoster = Array.isArray(students) ? students.slice() : [];
+    if (!studentRoster.length) {
+      try {
+        const { result } = await apiRequest({ action: "listStudents" });
+        if (result && result.ok && result.data && Array.isArray(result.data.students)) {
+          studentRoster = result.data.students.slice();
+          setStudents(studentRoster);
+          setStudentsLoaded(true);
+        }
+      } catch (error) {
+        // Keep export available even if student roster fails to load.
       }
-      if (leftJersey && !rightJersey) {
-        return -1;
+    }
+
+    const rosterById = {};
+    studentRoster.forEach((student) => {
+      const studentId = normalizeId_(student && student.id);
+      if (studentId) {
+        rosterById[studentId] = student;
       }
-      if (!leftJersey && rightJersey) {
-        return 1;
-      }
-      return String(a.nickname || a.name || "").localeCompare(
-        String(b.nickname || b.name || ""),
-        "zh-Hant",
-        { numeric: true }
-      );
     });
+
+    const registeredRows = players
+      .slice()
+      .sort((a, b) => {
+        const leftJersey = formatJerseyNumber_(a.jerseyNumber);
+        const rightJersey = formatJerseyNumber_(b.jerseyNumber);
+        if (leftJersey && rightJersey && leftJersey !== rightJersey) {
+          return leftJersey.localeCompare(rightJersey, "zh-Hant", { numeric: true });
+        }
+        if (leftJersey && !rightJersey) {
+          return -1;
+        }
+        if (!leftJersey && rightJersey) {
+          return 1;
+        }
+        return String(a.nickname || a.name || "").localeCompare(
+          String(b.nickname || b.name || ""),
+          "zh-Hant",
+          { numeric: true }
+        );
+      })
+      .map((player) => {
+        const playerId = normalizeId_(player.id);
+        const matchedStudent = playerId ? rosterById[playerId] : null;
+        return {
+          name: String(player.name || getStudentDisplayName_(matchedStudent) || "").trim(),
+          nickname: String(player.nickname || "").trim(),
+          jerseyNumber: formatJerseyNumber_(player.jerseyNumber),
+          jerseySize: String(player.jerseySize || "").trim(),
+        };
+      });
+
+    const registeredIdSet = new Set(
+      players.map((player) => normalizeId_(player.id)).filter((id) => id)
+    );
+    const unregisteredRows = studentRoster
+      .filter((student) => {
+        const studentId = normalizeId_(student && student.id);
+        return studentId && !registeredIdSet.has(studentId);
+      })
+      .sort((a, b) =>
+        String(getStudentDisplayName_(a) || "").localeCompare(
+          String(getStudentDisplayName_(b) || ""),
+          "zh-Hant",
+          { numeric: true }
+        )
+      )
+      .map((student) => ({
+        name: String(getStudentDisplayName_(student) || "").trim(),
+        nickname: "",
+        jerseyNumber: "",
+        jerseySize: "",
+      }));
+
+    const exportRows = registeredRows.concat(unregisteredRows);
 
     const rows = [];
     const pushRow_ = (values) => rows.push(values.map(formatCsvCell_).join(","));
-    pushRow_(["背號", "球衣尺寸", "球員暱稱"]);
+    pushRow_(["流水序號", "姓名", "球員暱稱", "背號", "球衣尺寸"]);
 
-    exportList.forEach((player) => {
+    exportRows.forEach((item, index) => {
       pushRow_([
-        formatJerseyNumber_(player.jerseyNumber),
-        String(player.jerseySize || "").trim(),
-        String(player.nickname || "").trim(),
+        index + 1,
+        item.name,
+        item.nickname,
+        item.jerseyNumber,
+        item.jerseySize,
       ]);
     });
 
-    if (!exportList.length) {
-      pushRow_(["(無資料)", "", ""]);
+    if (!exportRows.length) {
+      pushRow_(["", "(無資料)", "", "", ""]);
     }
 
     const csv = rows.join("\n");
@@ -1019,7 +1080,9 @@ function SoftballPage({ shared }) {
     link.remove();
     window.URL.revokeObjectURL(url);
 
-    setStatusMessage(`已匯出球衣資料 ${exportList.length} 筆`);
+    setStatusMessage(
+      `已匯出球衣資料 ${exportRows.length} 筆（已登錄 ${registeredRows.length}、未登錄 ${unregisteredRows.length}）`
+    );
   };
 
   const filteredPlayers = players.filter((player) => {
