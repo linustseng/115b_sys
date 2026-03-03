@@ -250,7 +250,7 @@ function listSoftballGearCached_() {
 }
 
 function listSoftballConfigCached_() {
-  return getCachedJson_(CACHE_KEYS.softballConfig, 90, listSoftballConfig_);
+  return getCachedJson_(CACHE_KEYS.softballConfig, 90, getSoftballConfig_);
 }
 
 function listSoftballAttendanceCached_() {
