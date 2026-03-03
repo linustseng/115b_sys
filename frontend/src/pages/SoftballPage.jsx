@@ -945,6 +945,163 @@ function SoftballPage({ shared }) {
     }
   };
 
+  const formatCsvCell_ = (value) => {
+    const raw = String(value == null ? "" : value);
+    if (raw.includes(",") || raw.includes("\"") || raw.includes("\n")) {
+      return `"${raw.replace(/"/g, '""')}"`;
+    }
+    return raw;
+  };
+
+  const formatJerseyNumber_ = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    if (/^\d+$/.test(raw)) {
+      return raw.padStart(2, "0");
+    }
+    return raw;
+  };
+
+  const getPlayerPrintName_ = (player) =>
+    String(player.nickname || player.preferredName || player.name || "").trim();
+
+  const getPlayerStatusLabel_ = (status) => {
+    const normalized = String(status || "").trim().toLowerCase();
+    if (normalized === "active") {
+      return "可出席";
+    }
+    if (normalized === "injured") {
+      return "傷兵";
+    }
+    if (normalized === "inactive") {
+      return "暫停";
+    }
+    return normalized || "-";
+  };
+
+  const getRequestStatusLabel_ = (status) => {
+    const normalized = String(status || "").trim().toLowerCase();
+    if (!normalized) {
+      return "-";
+    }
+    if (normalized === "pending") {
+      return "待審核";
+    }
+    if (normalized === "approved") {
+      return "已核准";
+    }
+    if (normalized === "rejected") {
+      return "已退回";
+    }
+    return normalized;
+  };
+
+  const handleExportJerseyInfo = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const exportList = players.slice().sort((a, b) => {
+      const leftJersey = formatJerseyNumber_(a.jerseyNumber);
+      const rightJersey = formatJerseyNumber_(b.jerseyNumber);
+      if (leftJersey && rightJersey && leftJersey !== rightJersey) {
+        return leftJersey.localeCompare(rightJersey, "zh-Hant", { numeric: true });
+      }
+      if (leftJersey && !rightJersey) {
+        return -1;
+      }
+      if (!leftJersey && rightJersey) {
+        return 1;
+      }
+      return String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant", {
+        numeric: true,
+      });
+    });
+
+    const rows = [];
+    const pushRow_ = (values) => rows.push(values.map(formatCsvCell_).join(","));
+    const exportedAt =
+      (typeof formatDisplayDate_ === "function" && formatDisplayDate_(new Date(), { withTime: true })) ||
+      new Date().toLocaleString();
+
+    pushRow_(["匯出時間", exportedAt]);
+    pushRow_(["用途", "壘球球衣製作名單"]);
+    pushRow_([]);
+    pushRow_([
+      "學號",
+      "姓名",
+      "球員暱稱",
+      "印製名稱",
+      "背號",
+      "球衣尺寸",
+      "資料完整",
+      "缺漏欄位",
+      "球員狀態",
+      "申請狀態",
+      "備註",
+    ]);
+
+    let completeCount = 0;
+    exportList.forEach((player) => {
+      const jerseyNumber = formatJerseyNumber_(player.jerseyNumber);
+      const jerseySize = String(player.jerseySize || "").trim();
+      const printName = getPlayerPrintName_(player);
+      const missing = [];
+      if (!jerseyNumber) {
+        missing.push("背號");
+      }
+      if (!jerseySize) {
+        missing.push("尺寸");
+      }
+      if (!printName) {
+        missing.push("印製名稱");
+      }
+      if (!missing.length) {
+        completeCount += 1;
+      }
+      pushRow_([
+        String(player.id || "").trim(),
+        String(player.name || "").trim(),
+        String(player.nickname || "").trim(),
+        printName,
+        jerseyNumber,
+        jerseySize,
+        missing.length ? "否" : "是",
+        missing.join("、"),
+        getPlayerStatusLabel_(player.status),
+        getRequestStatusLabel_(player.requestStatus),
+        String(player.notes || "").trim(),
+      ]);
+    });
+
+    if (!exportList.length) {
+      pushRow_(["(無資料)"]);
+    }
+
+    const csv = rows.join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d+Z$/, "")
+      .slice(0, 15);
+    link.href = url;
+    link.download = `softball-jersey-export-${timestamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+
+    setStatusMessage(
+      `已匯出球衣資料 ${exportList.length} 筆（完整 ${completeCount} 筆，缺漏 ${
+        exportList.length - completeCount
+      } 筆）`
+    );
+  };
+
   const filteredPlayers = players.filter((player) => {
     if (!playerQuery) {
       return true;
@@ -1416,12 +1573,21 @@ function SoftballPage({ shared }) {
           <section className="card p-7 sm:p-10">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h3 className="text-lg font-semibold text-slate-900">球員管理</h3>
-              <input
-                value={playerQuery}
-                onChange={(event) => setPlayerQuery(event.target.value)}
-                placeholder="搜尋姓名、學號、背號、尺寸、暱稱"
-                className="h-10 w-56 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-              />
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={playerQuery}
+                  onChange={(event) => setPlayerQuery(event.target.value)}
+                  placeholder="搜尋姓名、學號、背號、尺寸、暱稱"
+                  className="h-10 w-56 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                />
+                <button
+                  type="button"
+                  onClick={handleExportJerseyInfo}
+                  className="btn-chip"
+                >
+                  匯出球衣 CSV
+                </button>
+              </div>
             </div>
             <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-3">
