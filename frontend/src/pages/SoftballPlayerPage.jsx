@@ -37,7 +37,10 @@ function SoftballPlayerPage({ shared }) {
     toLocalInputValue_,
     toDateInputValue_,
     loadStoredGoogleStudent_,
+    loadStoredGoogleIdToken_,
+    storeGoogleIdToken_,
     storeGoogleStudent_,
+    getGoogleIdTokenSilently_,
     normalizePhoneInputValue_,
     GoogleSigninPanel,
     saveCachedEventInfo_,
@@ -70,6 +73,10 @@ function SoftballPlayerPage({ shared }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [saving, setSaving] = useState(false);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const [googleIdToken, setGoogleIdToken] = useState(() =>
+    typeof loadStoredGoogleIdToken_ === "function" ? loadStoredGoogleIdToken_() : ""
+  );
+  const [googleSessionToken, setGoogleSessionToken] = useState("");
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [practicesUpdatedAt, setPracticesUpdatedAt] = useState(null);
@@ -84,6 +91,7 @@ function SoftballPlayerPage({ shared }) {
     bats: "",
     throws: "",
     positions: "",
+    jerseySize: "",
     jerseyChoices: "",
     jerseyRequest: "",
     positionRequest: "",
@@ -92,6 +100,7 @@ function SoftballPlayerPage({ shared }) {
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
 
   const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
+  const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
 
   const normalizeId_ = (value) => String(value || "").trim();
 
@@ -103,6 +112,70 @@ function SoftballPlayerPage({ shared }) {
   };
 
   const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
+
+  const authedApiRequest = async (payload, options = {}) => {
+    const requireAuth = options && options.requireAuth === true;
+    const requestPayload = { ...(payload || {}) };
+    const sessionToken = String(googleSessionToken || "").trim();
+    const idToken = String(googleIdToken || "").trim();
+    if (sessionToken) {
+      requestPayload.sessionToken = sessionToken;
+    }
+    if (idToken) {
+      requestPayload.idToken = idToken;
+    }
+
+    let response = await apiRequest(requestPayload);
+    let result = response && response.result ? response.result : null;
+    if (result && result.ok && result.data && result.data.sessionToken) {
+      setGoogleSessionToken(String(result.data.sessionToken || "").trim());
+      return response;
+    }
+    const unauthorized =
+      result && result.ok === false && String(result.error || "") === "Unauthorized";
+    if (!unauthorized) {
+      return response;
+    }
+
+    if (typeof getGoogleIdTokenSilently_ !== "function") {
+      if (requireAuth) {
+        throw new Error("請先登入 Google");
+      }
+      return response;
+    }
+
+    try {
+      const refreshedToken = await getGoogleIdTokenSilently_();
+      if (!refreshedToken) {
+        if (requireAuth) {
+          throw new Error("請先登入 Google");
+        }
+        return response;
+      }
+      setGoogleIdToken(refreshedToken);
+      if (typeof storeGoogleIdToken_ === "function") {
+        storeGoogleIdToken_(refreshedToken);
+      }
+      const retryPayload = {
+        ...(payload || {}),
+        idToken: refreshedToken,
+      };
+      if (sessionToken) {
+        retryPayload.sessionToken = sessionToken;
+      }
+      response = await apiRequest(retryPayload);
+      result = response && response.result ? response.result : null;
+      if (result && result.ok && result.data && result.data.sessionToken) {
+        setGoogleSessionToken(String(result.data.sessionToken || "").trim());
+      }
+      return response;
+    } catch (error) {
+      if (requireAuth) {
+        throw new Error("請先登入 Google");
+      }
+      return response;
+    }
+  };
 
   const loadPlayers = async () => {
     const { result } = await apiRequest({ action: "listSoftballPlayers" });
@@ -270,6 +343,7 @@ function SoftballPlayerPage({ shared }) {
         bats: match.bats || "",
         throws: match.throws || "",
         positions: match.positions || "",
+        jerseySize: match.jerseySize || "",
         jerseyChoices: match.jerseyChoices || "",
         jerseyRequest: match.jerseyRequest || normalizedJersey || "",
         positionRequest: match.positionRequest || match.positions || "",
@@ -284,6 +358,7 @@ function SoftballPlayerPage({ shared }) {
         email: googleLinkedStudent.email || "",
         phone: normalizePhoneInputValue_(googleLinkedStudent.phone),
         nickname: "",
+        jerseySize: "",
       }));
     }
   }, [players, googleLinkedStudent]);
@@ -301,20 +376,20 @@ function SoftballPlayerPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const exists = players.some(
-        (item) => normalizeId_(item.id) === normalizeId_(googleLinkedStudent.id)
-      );
-      const action = exists ? "updateSoftballPlayer" : "createSoftballPlayer";
       const payload = {
         ...profileForm,
         id: googleLinkedStudent.id,
         phone: normalizePhoneInputValue_(profileForm.phone),
         jerseyChoices: profileForm.jerseyChoices,
+        jerseySize: profileForm.jerseySize,
         requestStatus: profileForm.jerseyRequest || profileForm.positionRequest ? "pending" : "",
       };
-      const { result } = await apiRequest({ action: action, data: payload });
-      if (!result.ok) {
-        throw new Error(result.error || "送出失敗");
+      const { result } = await authedApiRequest(
+        { action: "upsertMySoftballPlayerProfile", data: payload },
+        { requireAuth: true }
+      );
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "送出失敗");
       }
       await loadPlayers();
       setStatusMessage("已送出資料");
@@ -654,7 +729,7 @@ function SoftballPlayerPage({ shared }) {
           <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
             壘球隊管理 · 同學版
           </h1>
-          <p className="mt-3 text-sm text-slate-500">背號申請、位置偏好、練習出席回覆。</p>
+          <p className="mt-3 text-sm text-slate-500">球衣尺寸、背號申請、位置偏好與練習回覆。</p>
         </div>
       </header>
       <div className="mx-auto mt-4 max-w-6xl px-6 sm:px-12">
@@ -720,8 +795,23 @@ function SoftballPlayerPage({ shared }) {
               <div className="mt-4">
                 <GoogleSigninPanel
                   title="Google 登入"
-                  helperText="登入後可申請背號與更新資料。"
-                  onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                  helperText="登入後可更新球衣尺寸、申請背號與維護資料。"
+                  onLinkedStudent={(student, _profile, idToken, authContext) => {
+                    setGoogleLinkedStudent(student);
+                    const token = String(idToken || "").trim();
+                    if (token) {
+                      setGoogleIdToken(token);
+                      if (typeof storeGoogleIdToken_ === "function") {
+                        storeGoogleIdToken_(token);
+                      }
+                    }
+                    const sessionToken = String(
+                      (authContext && authContext.sessionToken) || ""
+                    ).trim();
+                    if (sessionToken) {
+                      setGoogleSessionToken(sessionToken);
+                    }
+                  }}
                 />
               </div>
             ) : null}
@@ -785,6 +875,21 @@ function SoftballPlayerPage({ shared }) {
                   <p className="text-xs text-slate-400">
                     可選 00-99，截止日為 {softballConfig.jerseyDeadline || "待公告"}
                   </p>
+              </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium text-slate-700">球衣尺寸</label>
+                <select
+                  value={profileForm.jerseySize}
+                  onChange={(event) => handleProfileChange("jerseySize", event.target.value)}
+                  className="input-sm"
+                >
+                  <option value="">未設定</option>
+                  {JERSEY_SIZE_OPTIONS.map((size) => (
+                    <option key={`jersey-size-${size}`} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-2">
                 <label className="text-sm font-medium text-slate-700">球員暱稱</label>

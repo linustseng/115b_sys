@@ -74,6 +74,7 @@ function SoftballPage({ shared }) {
     email: "",
     phone: "",
     jerseyNumber: "",
+    jerseySize: "",
     nickname: "",
     positions: "",
     bats: "",
@@ -127,6 +128,7 @@ function SoftballPage({ shared }) {
 
   const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
   const ROLE_OPTIONS = ["隊長", "副隊長", "器材", "出勤", "後勤", "教練"];
+  const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
 
   const normalizeId_ = (value) => String(value || "").trim();
 
@@ -588,6 +590,7 @@ function SoftballPage({ shared }) {
       email: "",
       phone: "",
       jerseyNumber: "",
+      jerseySize: "",
       nickname: "",
       jerseyChoices: "",
       positions: "",
@@ -955,6 +958,7 @@ function SoftballPage({ shared }) {
       player.nickname,
       player.email,
       player.jerseyNumber,
+      player.jerseySize,
       player.positions,
     ]
       .map((value) => String(value || "").toLowerCase())
@@ -1364,6 +1368,7 @@ function SoftballPage({ shared }) {
                           {player.name || player.id || "-"}
                           {player.nickname ? ` · ${player.nickname}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                          {player.jerseySize ? ` · ${player.jerseySize}` : ""}
                         </p>
                         <p className="text-xs text-slate-500">
                           {player.positions || "-"} · {player.role || "球員"}
@@ -1414,7 +1419,7 @@ function SoftballPage({ shared }) {
               <input
                 value={playerQuery}
                 onChange={(event) => setPlayerQuery(event.target.value)}
-                placeholder="搜尋姓名、學號、背號、暱稱"
+                placeholder="搜尋姓名、學號、背號、尺寸、暱稱"
                 className="h-10 w-56 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
               />
             </div>
@@ -1433,6 +1438,7 @@ function SoftballPage({ shared }) {
                             {player.name || player.id || "-"}
                             {player.nickname ? ` · ${player.nickname}` : ""}
                             {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                            {player.jerseySize ? ` · ${player.jerseySize}` : ""}
                           </span>
                           <span className="text-amber-700">
                             背號：{player.jerseyRequest || "-"} · 位置：
@@ -1495,6 +1501,7 @@ function SoftballPage({ shared }) {
                           setPlayerForm({
                             ...player,
                             jerseyChoices: player.jerseyChoices || "",
+                            jerseySize: player.jerseySize || "",
                             requestStatus: player.requestStatus || "",
                             jerseyRequest: player.jerseyRequest || "",
                             positionRequest: player.positionRequest || "",
@@ -1507,6 +1514,7 @@ function SoftballPage({ shared }) {
                           {player.name || player.id || "-"}
                           {player.nickname ? ` · ${player.nickname}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                          {player.jerseySize ? ` · ${player.jerseySize}` : ""}
                         </p>
                         <p className="text-xs text-slate-500">
                           {player.positions || "-"} · {player.role || "球員"}
@@ -1543,24 +1551,39 @@ function SoftballPage({ shared }) {
                     />
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">聯絡電話</label>
-              <input
-                value={playerForm.phone}
-                onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
-                className="input-sm"
-              />
-            </div>
-            <div className="grid gap-2">
-              <label className="text-sm font-medium text-slate-700">背號</label>
-              <input
-                value={playerForm.jerseyNumber}
-                onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
-                className="input-sm"
-              />
-            </div>
-          </div>
+                    <input
+                      value={playerForm.phone}
+                      onChange={(event) => handlePlayerFormChange("phone", event.target.value)}
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">背號</label>
+                    <input
+                      value={playerForm.jerseyNumber}
+                      onChange={(event) => handlePlayerFormChange("jerseyNumber", event.target.value)}
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">球衣尺寸</label>
+                    <select
+                      value={playerForm.jerseySize}
+                      onChange={(event) => handlePlayerFormChange("jerseySize", event.target.value)}
+                      className="input-sm"
+                    >
+                      <option value="">未設定</option>
+                      {JERSEY_SIZE_OPTIONS.map((size) => (
+                        <option key={`admin-jersey-size-${size}`} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">守備位置</label>
                   <div className="flex flex-wrap gap-2">

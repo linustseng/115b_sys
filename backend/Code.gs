@@ -47,7 +47,23 @@ const ACTION_GROUP_POLICIES = {
   deleteGroupMembership: ["E"],
   upsertAnnouncement: ["E"],
   deleteAnnouncement: ["E"],
+  listSoftballBootstrap: ["E", "H"],
+  updateSoftballConfig: ["E", "H"],
+  createSoftballPlayer: ["E", "H"],
+  updateSoftballPlayer: ["E", "H"],
+  deleteSoftballPlayer: ["E", "H"],
+  createSoftballPractice: ["E", "H"],
+  updateSoftballPractice: ["E", "H"],
+  deleteSoftballPractice: ["E", "H"],
+  createSoftballField: ["E", "H"],
+  updateSoftballField: ["E", "H"],
+  deleteSoftballField: ["E", "H"],
+  createSoftballGear: ["E", "H"],
+  updateSoftballGear: ["E", "H"],
+  deleteSoftballGear: ["E", "H"],
 };
+
+const SOFTBALL_JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
 
 const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_UPLOAD_EXTENSIONS = {
@@ -1458,6 +1474,38 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { config: updated }, error: null };
   }
 
+  if (payload.action === "upsertMySoftballPlayerProfile") {
+    const auth = requireGoogleIdentity_(payload || {});
+    if (!auth.ok) {
+      return auth;
+    }
+    const studentId = String((auth.data && auth.data.studentId) || "").trim();
+    if (!studentId) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    const data = payload.data || {};
+    const inputId = String(data.id || data.studentId || "").trim();
+    if (inputId && inputId !== studentId) {
+      return { ok: false, data: null, error: "Unauthorized" };
+    }
+    const existing = findSoftballPlayerById_(studentId);
+    const profilePayload = buildSoftballSelfProfilePayload_(data, studentId, existing || {});
+    const saved = upsertSoftballPlayer_(profilePayload, false);
+    if (!saved.ok) {
+      return { ok: false, data: null, error: saved.error };
+    }
+    invalidateCacheKeys_([CACHE_KEYS.softballPlayers]);
+    return {
+      ok: true,
+      data: {
+        player: saved.player,
+        sessionToken: String((auth.data && auth.data.sessionToken) || "").trim(),
+        memberships: listMembershipsByStudentId_(studentId),
+      },
+      error: null,
+    };
+  }
+
   if (payload.action === "createSoftballPlayer") {
     const data = payload.data || {};
     const created = upsertSoftballPlayer_(data, false);
@@ -2245,6 +2293,77 @@ function getDataRows_(sheet) {
   return sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
 }
 
+function ensureSoftballPlayersSchema_(sheet) {
+  const targetSheet = sheet || getSheet_(SHEETS.softballPlayers);
+  const headers = getHeaders_(targetSheet);
+  if (headers.indexOf("jerseySize") === -1) {
+    targetSheet.getRange(1, headers.length + 1).setValue("jerseySize");
+  }
+  return targetSheet;
+}
+
+function normalizeSoftballJerseySize_(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return "";
+  }
+  const aliasMap = {
+    XXL: "2L",
+    "2XL": "2L",
+    XXXL: "3L",
+    "3XL": "3L",
+    XXXXXL: "5L",
+    "5XL": "5L",
+    XXXXXXL: "6L",
+    "6XL": "6L",
+  };
+  const normalized = aliasMap[raw] || raw;
+  return SOFTBALL_JERSEY_SIZE_OPTIONS.indexOf(normalized) >= 0 ? normalized : "";
+}
+
+function buildSoftballSelfProfilePayload_(data, studentId, existingRecord) {
+  const source = data || {};
+  const existing = existingRecord || {};
+  const jerseyRequest = String(
+    source.jerseyRequest === undefined ? existing.jerseyRequest || "" : source.jerseyRequest || ""
+  ).trim();
+  const positionRequest = String(
+    source.positionRequest === undefined ? existing.positionRequest || "" : source.positionRequest || ""
+  ).trim();
+  const previousStatusRaw = String(existing.requestStatus || "").trim();
+  const previousStatus = previousStatusRaw.toLowerCase();
+  let requestStatus = previousStatusRaw;
+  if (jerseyRequest || positionRequest) {
+    requestStatus = "pending";
+  } else if (previousStatus === "pending") {
+    requestStatus = "";
+  }
+
+  return {
+    id: String(studentId || "").trim(),
+    name: String(source.name === undefined ? existing.name || "" : source.name || "").trim(),
+    preferredName: String(
+      source.preferredName === undefined ? existing.preferredName || "" : source.preferredName || ""
+    ).trim(),
+    email: normalizeEmail_(source.email === undefined ? existing.email || "" : source.email || ""),
+    phone: String(source.phone === undefined ? existing.phone || "" : source.phone || "").trim(),
+    nickname: String(source.nickname === undefined ? existing.nickname || "" : source.nickname || "").trim(),
+    bats: String(source.bats === undefined ? existing.bats || "" : source.bats || "").trim(),
+    throws: String(source.throws === undefined ? existing.throws || "" : source.throws || "").trim(),
+    positions: String(source.positions === undefined ? existing.positions || "" : source.positions || "").trim(),
+    jerseyChoices: String(
+      source.jerseyChoices === undefined ? existing.jerseyChoices || "" : source.jerseyChoices || ""
+    ).trim(),
+    jerseySize: normalizeSoftballJerseySize_(
+      source.jerseySize === undefined ? existing.jerseySize || "" : source.jerseySize || ""
+    ),
+    jerseyRequest: jerseyRequest,
+    positionRequest: positionRequest,
+    requestStatus: requestStatus,
+    notes: String(source.notes === undefined ? existing.notes || "" : source.notes || "").trim(),
+  };
+}
+
 function getMemoValue_(key, loader) {
   if (Object.prototype.hasOwnProperty.call(REQUEST_MEMO_, key)) {
     return REQUEST_MEMO_[key];
@@ -2506,7 +2625,7 @@ function findOrderPlanById_(orderId) {
 }
 
 function findSoftballPlayerById_(playerId) {
-  const sheet = getSheet_(SHEETS.softballPlayers);
+  const sheet = ensureSoftballPlayersSchema_(getSheet_(SHEETS.softballPlayers));
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
@@ -2592,7 +2711,7 @@ function listOrderPlans_() {
 }
 
 function listSoftballPlayers_() {
-  const sheet = getSheet_(SHEETS.softballPlayers);
+  const sheet = ensureSoftballPlayersSchema_(getSheet_(SHEETS.softballPlayers));
   const headerMap = getHeaderMap_(sheet);
   const rows = getDataRows_(sheet);
   return rows.map(function (row) {
@@ -4331,7 +4450,7 @@ function updateEvent_(eventId, data) {
 }
 
 function upsertSoftballPlayer_(data, mustExist) {
-  const sheet = getSheet_(SHEETS.softballPlayers);
+  const sheet = ensureSoftballPlayersSchema_(getSheet_(SHEETS.softballPlayers));
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
@@ -4386,7 +4505,7 @@ function upsertSoftballPlayer_(data, mustExist) {
 }
 
 function deleteSoftballPlayer_(playerId) {
-  const sheet = getSheet_(SHEETS.softballPlayers);
+  const sheet = ensureSoftballPlayersSchema_(getSheet_(SHEETS.softballPlayers));
   const headerMap = getHeaderMap_(sheet);
   const idIndex = headerMap.id;
   if (idIndex === undefined) {
@@ -5722,6 +5841,7 @@ function normalizeSoftballPlayerRecord_(data) {
     email: normalizeEmail_(data.email),
     phone: String(data.phone || "").trim(),
     jerseyNumber: String(data.jerseyNumber || "").trim(),
+    jerseySize: normalizeSoftballJerseySize_(data.jerseySize || ""),
     jerseyChoices: String(data.jerseyChoices || "").trim(),
     positions: String(data.positions || "").trim(),
     bats: String(data.bats || "").trim(),
