@@ -507,6 +507,7 @@ function RegistrationPage({ shared }) {
       setSubmitSuccessType("update");
       await loadExistingRegistration(String(email || "").trim().toLowerCase());
     } catch (err) {
+      setUpdatePromptOpen(false);
       setSubmitError(mapRegistrationError(err.message || "更新失敗"));
     } finally {
       setUpdateSubmitting(false);
