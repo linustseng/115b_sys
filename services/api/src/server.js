@@ -891,6 +891,18 @@ app.post("/v1/update-registration", async (req, res) => {
       return res.json({ ok: false, data: null, error: "Unauthorized" });
     }
 
+    const event = await findEventById(existing.event_id);
+    if (!event) {
+      return res.json({ ok: false, data: null, error: "Event not found" });
+    }
+    const eventStatus = String(event.status || "").trim().toLowerCase();
+    if (eventStatus && eventStatus !== "open") {
+      return res.json({ ok: false, data: null, error: "Event is not open" });
+    }
+    if (!isWithinWindow(event.registration_open_at, event.registration_close_at)) {
+      return res.json({ ok: false, data: null, error: "Registration window closed" });
+    }
+
     const nextCustomFields = parseCustomFields(
       Object.prototype.hasOwnProperty.call(data, "customFields") ? data.customFields : existing.custom_fields
     );

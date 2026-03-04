@@ -77,6 +77,7 @@ function RegistrationPage({ shared }) {
   const [submitError, setSubmitError] = useState("");
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitSuccessType, setSubmitSuccessType] = useState("");
   const bootstrapCacheRef = useRef({});
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
@@ -407,6 +408,7 @@ function RegistrationPage({ shared }) {
   const handleRegister = async () => {
     setSubmitError("");
     setSubmitSuccess(false);
+    setSubmitSuccessType("");
     if (!String(email || "").trim()) {
       setSubmitError("請先輸入 Email 以帶入同學資料。");
       return;
@@ -452,6 +454,7 @@ function RegistrationPage({ shared }) {
         throw new Error(result.error || "報名失敗");
       }
       setSubmitSuccess(true);
+      setSubmitSuccessType("register");
     } catch (err) {
       const errorMessage = err.message || "報名失敗";
       if (String(errorMessage).toLowerCase().includes("duplicate")) {
@@ -472,6 +475,8 @@ function RegistrationPage({ shared }) {
     }
     setUpdateSubmitting(true);
     setSubmitError("");
+    setSubmitSuccess(false);
+    setSubmitSuccessType("");
     try {
       const linkedStudentId =
         googleLinkedStudent && googleLinkedStudent.id
@@ -499,9 +504,10 @@ function RegistrationPage({ shared }) {
       }
       setUpdatePromptOpen(false);
       setSubmitSuccess(true);
+      setSubmitSuccessType("update");
       await loadExistingRegistration(String(email || "").trim().toLowerCase());
     } catch (err) {
-      setSubmitError(err.message || "更新失敗");
+      setSubmitError(mapRegistrationError(err.message || "更新失敗"));
     } finally {
       setUpdateSubmitting(false);
     }
@@ -947,8 +953,14 @@ function RegistrationPage({ shared }) {
 
           {submitSuccess ? (
             <div className="mt-8 alert alert-success">
-              <p className="font-semibold">報名成功</p>
-              <p className="mt-1 text-emerald-600">已完成報名，期待與你相見。</p>
+              <p className="font-semibold">
+                {submitSuccessType === "update" ? "報名資料已更新" : "報名成功"}
+              </p>
+              <p className="mt-1 text-emerald-600">
+                {submitSuccessType === "update"
+                  ? "你的報名資料已完成更新。"
+                  : "已完成報名，期待與你相見。"}
+              </p>
             </div>
           ) : null}
 

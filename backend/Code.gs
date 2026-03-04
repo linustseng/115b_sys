@@ -1829,6 +1829,17 @@ function handleActionPayload_(payload) {
       if (!normalizedInputEmail || normalizeEmail_(existing.userEmail) !== normalizedInputEmail) {
         return { ok: false, data: null, error: "Unauthorized" };
       }
+      const event = findEventById_(String(existing.eventId || "").trim());
+      if (!event) {
+        return { ok: false, data: null, error: "Event not found" };
+      }
+      const eventStatus = String(event.status || "").trim().toLowerCase();
+      if (eventStatus && eventStatus !== "open") {
+        return { ok: false, data: null, error: "Event is not open" };
+      }
+      if (!isWithinWindow_(event.registrationOpenAt, event.registrationCloseAt)) {
+        return { ok: false, data: null, error: "Registration window closed" };
+      }
     }
     const safeData = adminAuth.ok
       ? data

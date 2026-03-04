@@ -53,7 +53,7 @@ export function mapRegistrationError(error) {
   if (normalized.includes("full")) {
     return "活動名額已滿，請聯繫承辦確認候補。";
   }
-  if (normalized.includes("window") || normalized.includes("closed")) {
+  if (normalized.includes("window") || normalized.includes("closed") || normalized.includes("not open")) {
     return "報名時間已截止或尚未開始。";
   }
   if (normalized.includes("event not found")) {
