@@ -1,6 +1,7 @@
+import crypto from "node:crypto";
 import express from "express";
 import { getConfig } from "./config.js";
-import { query } from "./db.js";
+import { query, withTransaction } from "./db.js";
 import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
 import { createSessionToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
@@ -31,6 +32,232 @@ SELECT
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function parseCustomFields(value) {
+  if (!value) {
+    return {};
+  }
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function toIsoString(value) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toISOString();
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function isWithinWindow(openAt, closeAt) {
+  if (!openAt && !closeAt) {
+    return true;
+  }
+  const now = Date.now();
+  const openMs = openAt ? Date.parse(String(openAt)) : NaN;
+  const closeMs = closeAt ? Date.parse(String(closeAt)) : NaN;
+  if (!Number.isNaN(openMs) && now < openMs) {
+    return false;
+  }
+  if (!Number.isNaN(closeMs) && now > closeMs) {
+    return false;
+  }
+  return true;
+}
+
+function firstText(value, fallback = "") {
+  const text = String(value == null ? "" : value).trim();
+  return text || String(fallback || "").trim();
+}
+
+function buildCheckinStatusForRegistration(registration, checkin) {
+  if (!registration) {
+    return { status: "not_registered" };
+  }
+  const fields = parseCustomFields(registration.custom_fields);
+  const attendance = String(fields.attendance || "").trim();
+  if (!attendance) {
+    return { status: "attendance_unknown", attendance: "" };
+  }
+  if (attendance !== "出席") {
+    return { status: "not_attending", attendance };
+  }
+  if (checkin) {
+    return {
+      status: "checked_in",
+      attendance,
+      checkinId: String(checkin.id || ""),
+      checkinAt: String(checkin.checkin_at || ""),
+    };
+  }
+  return { status: "not_checked_in", attendance };
+}
+
+function buildNodeRegistrationPayload(inputData, normalizedEmail, eventId) {
+  const data = inputData || {};
+  const customFields = parseCustomFields(data.customFields);
+  const studentId = firstText(data.studentId, customFields.studentId || "");
+  if (studentId && !customFields.studentId) {
+    customFields.studentId = studentId;
+  }
+  const createdAt = nowIso();
+  const id = firstText(data.id, crypto.randomUUID());
+  return {
+    id,
+    eventId,
+    studentId,
+    userName: firstText(data.userName, data.name || ""),
+    userEmail: normalizedEmail,
+    userPhone: firstText(data.userPhone, data.phone || ""),
+    classYear: firstText(data.classYear),
+    customFields,
+    status: "registered",
+    createdAt,
+    updatedAt: createdAt,
+    manualCreatedBy: "",
+    manualCreatedByName: "",
+    manualCreatedAt: "",
+  };
+}
+
+function buildNodeCheckinPayload(inputData, eventId, registrationId) {
+  const data = inputData || {};
+  return {
+    id: firstText(data.checkinId, data.id || crypto.randomUUID()),
+    eventId,
+    registrationId,
+    checkinAt: toIsoString(data.checkinAt) || nowIso(),
+    checkinMethod: firstText(data.checkinMethod, "link"),
+  };
+}
+
+function normalizeEventPayloadForMirror(data) {
+  const input = data || {};
+  const output = { ...input };
+  if (Object.prototype.hasOwnProperty.call(output, "slug")) {
+    delete output.slug;
+  }
+  return output;
+}
+
+async function findEventById(eventId, client) {
+  const executor = client || { query };
+  const result = await executor.query(`SELECT * FROM events WHERE id = $1 LIMIT 1`, [String(eventId || "").trim()]);
+  return result.rows.length ? result.rows[0] : null;
+}
+
+async function findRegistrationByEmail(eventId, email, client) {
+  const executor = client || { query };
+  const result = await executor.query(
+    `SELECT *
+     FROM registrations
+     WHERE event_id = $1
+       AND lower(coalesce(user_email, '')) = $2
+       AND lower(coalesce(status, '')) <> 'cancelled'
+     ORDER BY coalesce(created_at, ''), id
+     LIMIT 1`,
+    [String(eventId || "").trim(), normalizeEmail(email)]
+  );
+  return result.rows.length ? result.rows[0] : null;
+}
+
+async function findRegistrationById(registrationId, client) {
+  const executor = client || { query };
+  const result = await executor.query(
+    `SELECT * FROM registrations WHERE id = $1 LIMIT 1`,
+    [String(registrationId || "").trim()]
+  );
+  return result.rows.length ? result.rows[0] : null;
+}
+
+async function countRegistrations(eventId, client) {
+  const executor = client || { query };
+  const result = await executor.query(
+    `SELECT count(*)::int AS count
+     FROM registrations
+     WHERE event_id = $1
+       AND lower(coalesce(status, '')) <> 'cancelled'`,
+    [String(eventId || "").trim()]
+  );
+  return Number(result.rows[0] && result.rows[0].count ? result.rows[0].count : 0);
+}
+
+async function findCheckinByEventRegistration(eventId, registrationId, client) {
+  const executor = client || { query };
+  const result = await executor.query(
+    `SELECT *
+     FROM checkins
+     WHERE event_id = $1
+       AND registration_id = $2
+     ORDER BY coalesce(checkin_at, ''), id
+     LIMIT 1`,
+    [String(eventId || "").trim(), String(registrationId || "").trim()]
+  );
+  return result.rows.length ? result.rows[0] : null;
+}
+
+async function listStatusesByEmail(email, eventIds, client) {
+  const normalizedEmail = normalizeEmail(email);
+  const ids = (Array.isArray(eventIds) ? eventIds : [])
+    .map((item) => String(item || "").trim())
+    .filter((item) => item);
+  ids.sort();
+  const deduped = ids.filter((item, index) => index === 0 || ids[index - 1] !== item);
+  if (!normalizedEmail || !deduped.length) {
+    return {};
+  }
+  const executor = client || { query };
+  const result = await executor.query(
+    `SELECT r.*, c.id AS checkin_id, c.checkin_at
+     FROM registrations r
+     LEFT JOIN checkins c
+       ON c.event_id = r.event_id
+      AND c.registration_id = r.id
+     WHERE r.event_id = ANY($1::text[])
+       AND lower(coalesce(r.user_email, '')) = $2
+       AND lower(coalesce(r.status, '')) <> 'cancelled'
+     ORDER BY r.event_id, coalesce(c.checkin_at, '') DESC, coalesce(c.id, '') DESC`,
+    [deduped, normalizedEmail]
+  );
+
+  const byEvent = {};
+  result.rows.forEach((row) => {
+    const eventId = String(row.event_id || "").trim();
+    if (!eventId || byEvent[eventId]) {
+      return;
+    }
+    byEvent[eventId] = row;
+  });
+
+  const statuses = {};
+  deduped.forEach((eventId) => {
+    const row = byEvent[eventId];
+    if (!row) {
+      statuses[eventId] = { status: "not_registered" };
+      return;
+    }
+    const checkin = row.checkin_id
+      ? { id: row.checkin_id, checkin_at: row.checkin_at }
+      : null;
+    statuses[eventId] = buildCheckinStatusForRegistration(row, checkin);
+  });
+
+  return statuses;
 }
 
 function getBearerToken(req) {
@@ -401,7 +628,7 @@ app.get("/v1/bootstrap/home", async (req, res) => {
   }
 
   try {
-    const [eventsResult, registrationsResult, checkinsResult] = await Promise.all([
+    const [eventsResult, registrationsResult] = await Promise.all([
       query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`),
       query(
         `SELECT *
@@ -411,39 +638,13 @@ app.get("/v1/bootstrap/home", async (req, res) => {
          ORDER BY coalesce(created_at, ''), id`,
         [email]
       ),
-      query(
-        `SELECT c.*
-         FROM checkins c
-         JOIN registrations r ON r.id = c.registration_id
-         WHERE lower(coalesce(r.user_email, '')) = $1`,
-        [email]
-      ),
     ]);
 
     const registrations = registrationsResult.rows.map(toRegistrationPayload);
-
-    const checkinStatuses = {};
-    registrations.forEach((item) => {
-      if (!item.eventId) {
-        return;
-      }
-      checkinStatuses[item.eventId] = {
-        status: "registered",
-        checkinAt: "",
-        checkinMethod: "",
-      };
-    });
-    checkinsResult.rows.forEach((item) => {
-      const eventId = String(item.event_id || "").trim();
-      if (!eventId) {
-        return;
-      }
-      checkinStatuses[eventId] = {
-        status: "checked_in",
-        checkinAt: String(item.checkin_at || ""),
-        checkinMethod: String(item.checkin_method || ""),
-      };
-    });
+    const eventIds = registrations
+      .map((item) => String(item.eventId || "").trim())
+      .filter((item) => item);
+    const checkinStatuses = eventIds.length ? await listStatusesByEmail(email, eventIds) : {};
 
     return res.json({
       ok: true,
@@ -459,15 +660,211 @@ app.get("/v1/bootstrap/home", async (req, res) => {
   }
 });
 
+app.get("/v1/bootstrap/registration", async (req, res) => {
+  const eventId = String(req.query.eventId || "").trim();
+  const email = normalizeEmail(req.query.email || "");
+  if (!eventId) {
+    return res.json({ ok: false, data: null, error: "Missing eventId" });
+  }
+
+  try {
+    const event = await findEventById(eventId);
+    if (!event) {
+      return res.json({ ok: false, data: null, error: "Event not found" });
+    }
+    const registration = email ? await findRegistrationByEmail(eventId, email) : null;
+    const student = email ? await findStudentProfileByEmail(email) : null;
+    return res.json({
+      ok: true,
+      data: {
+        event: toEventPayload(event),
+        registration: registration ? toRegistrationPayload(registration) : null,
+        student: student || null,
+      },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.get("/v1/bootstrap/checkin", async (req, res) => {
+  const eventId = String(req.query.eventId || "").trim();
+  const email = normalizeEmail(req.query.email || "");
+  if (!eventId) {
+    return res.json({ ok: false, data: null, error: "Missing eventId" });
+  }
+
+  try {
+    const event = await findEventById(eventId);
+    if (!event) {
+      return res.json({ ok: false, data: null, error: "Event not found" });
+    }
+    const statuses = email ? await listStatusesByEmail(email, [eventId]) : {};
+    const statusEntry = statuses[eventId] || null;
+    return res.json({
+      ok: true,
+      data: {
+        event: toEventPayload(event),
+        checkinStatus: statusEntry ? String(statusEntry.status || "") : null,
+        attendance: statusEntry ? String(statusEntry.attendance || "") : "",
+      },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+async function handleListCheckinStatus(req, res) {
+  const payload = req.body && typeof req.body === "object" ? req.body : {};
+  const email = normalizeEmail(payload.email || req.query.email || "");
+  const eventIds = Array.isArray(payload.eventIds)
+    ? payload.eventIds
+    : String(req.query.eventIds || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item);
+
+  if (!email) {
+    return res.json({ ok: false, data: null, error: "Missing email" });
+  }
+
+  try {
+    const statuses = await listStatusesByEmail(email, eventIds);
+    return res.json({ ok: true, data: { statuses }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+}
+
+app.get("/v1/checkin-status", handleListCheckinStatus);
+app.post("/v1/checkin-status", handleListCheckinStatus);
+
 app.post("/v1/register", async (req, res) => {
   const data = (req.body && req.body.data) || req.body || {};
+  const eventId = String(data.eventId || "").trim();
+  const email = normalizeEmail(data.userEmail || data.email);
+  if (!eventId || !email) {
+    return res.json({ ok: false, data: null, error: "Missing eventId or email" });
+  }
+
   try {
-    const proxied = await callAppsScriptAction_("register", { data: data });
-    if (proxied.ok) {
-      triggerBackgroundSync_();
+    const event = await findEventById(eventId);
+    if (!event) {
+      return res.json({ ok: false, data: null, error: "Event not found" });
     }
-    return res.json(proxied);
+
+    const status = String(event.status || "").trim().toLowerCase();
+    if (status && status !== "open") {
+      return res.json({ ok: false, data: null, error: "Event is not open" });
+    }
+
+    if (!isWithinWindow(event.registration_open_at, event.registration_close_at)) {
+      return res.json({ ok: false, data: null, error: "Registration window closed" });
+    }
+
+    const existing = await findRegistrationByEmail(eventId, email);
+    if (existing) {
+      return res.json({ ok: false, data: null, error: "Duplicate registration" });
+    }
+
+    const capacity = Number.isFinite(Number(event.capacity)) ? Math.trunc(Number(event.capacity)) : 0;
+    const registrationPayload = buildNodeRegistrationPayload(data, email, eventId);
+
+    await withTransaction(async (client) => {
+      const duplicateInTx = await findRegistrationByEmail(eventId, email, client);
+      if (duplicateInTx) {
+        const error = new Error("Duplicate registration");
+        error.code = "BUSINESS";
+        throw error;
+      }
+      if (capacity > 0) {
+        const currentCount = await countRegistrations(eventId, client);
+        if (currentCount >= capacity) {
+          const error = new Error("Event is full");
+          error.code = "BUSINESS";
+          throw error;
+        }
+      }
+
+      const rawPayload = {
+        id: registrationPayload.id,
+        eventId: registrationPayload.eventId,
+        studentId: registrationPayload.studentId,
+        userName: registrationPayload.userName,
+        userEmail: registrationPayload.userEmail,
+        userPhone: registrationPayload.userPhone,
+        classYear: registrationPayload.classYear,
+        customFields: registrationPayload.customFields,
+        status: registrationPayload.status,
+        createdAt: registrationPayload.createdAt,
+        updatedAt: registrationPayload.updatedAt,
+        manualCreatedBy: registrationPayload.manualCreatedBy,
+        manualCreatedByName: registrationPayload.manualCreatedByName,
+        manualCreatedAt: registrationPayload.manualCreatedAt,
+      };
+
+      await client.query(
+        `INSERT INTO registrations (
+          id, event_id, student_id, user_name, user_email, user_phone, class_year,
+          custom_fields, status, created_at, updated_at,
+          manual_created_by, manual_created_by_name, manual_created_at,
+          raw, synced_at
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8::jsonb, $9, $10, $11,
+          $12, $13, $14,
+          $15::jsonb, now()
+        )`,
+        [
+          registrationPayload.id,
+          registrationPayload.eventId,
+          registrationPayload.studentId || null,
+          registrationPayload.userName,
+          registrationPayload.userEmail,
+          registrationPayload.userPhone,
+          registrationPayload.classYear,
+          JSON.stringify(registrationPayload.customFields || {}),
+          registrationPayload.status,
+          registrationPayload.createdAt,
+          registrationPayload.updatedAt,
+          registrationPayload.manualCreatedBy,
+          registrationPayload.manualCreatedByName,
+          registrationPayload.manualCreatedAt,
+          JSON.stringify(rawPayload),
+        ]
+      );
+
+      const mirrorData = normalizeEventPayloadForMirror({
+        ...data,
+        id: registrationPayload.id,
+        eventId: registrationPayload.eventId,
+        studentId: registrationPayload.studentId,
+        userEmail: registrationPayload.userEmail,
+        userName: registrationPayload.userName,
+        userPhone: registrationPayload.userPhone,
+        classYear: registrationPayload.classYear,
+        customFields: registrationPayload.customFields,
+        createdAt: registrationPayload.createdAt,
+        updatedAt: registrationPayload.updatedAt,
+      });
+
+      const mirrored = await callAppsScriptAction_("register", { data: mirrorData });
+      if (!mirrored || mirrored.ok !== true) {
+        const error = new Error((mirrored && mirrored.error) || "Register failed");
+        error.code = "BUSINESS";
+        throw error;
+      }
+    });
+
+    triggerBackgroundSync_();
+    return res.json({ ok: true, data: { registrationId: registrationPayload.id }, error: null });
   } catch (error) {
+    const isBusiness = String(error && error.code || "") === "BUSINESS";
+    if (isBusiness) {
+      return res.json({ ok: false, data: null, error: error.message || "Register failed" });
+    }
     return res.status(500).json({
       ok: false,
       data: null,
@@ -476,15 +873,214 @@ app.post("/v1/register", async (req, res) => {
   }
 });
 
+app.post("/v1/update-registration", async (req, res) => {
+  const data = (req.body && req.body.data) || req.body || {};
+  const registrationId = String(data.id || "").trim();
+  if (!registrationId) {
+    return res.json({ ok: false, data: null, error: "Missing registration id" });
+  }
+
+  try {
+    const existing = await findRegistrationById(registrationId);
+    if (!existing) {
+      return res.json({ ok: false, data: null, error: "Registration not found" });
+    }
+
+    const normalizedInputEmail = normalizeEmail(data.userEmail || req.body.email || "");
+    if (!normalizedInputEmail || normalizeEmail(existing.user_email) !== normalizedInputEmail) {
+      return res.json({ ok: false, data: null, error: "Unauthorized" });
+    }
+
+    const nextCustomFields = parseCustomFields(
+      Object.prototype.hasOwnProperty.call(data, "customFields") ? data.customFields : existing.custom_fields
+    );
+    const nextPayload = {
+      id: existing.id,
+      eventId: existing.event_id,
+      studentId: firstText(data.studentId, existing.student_id || ""),
+      userName: firstText(data.userName, existing.user_name || ""),
+      userEmail: normalizeEmail(existing.user_email),
+      userPhone: firstText(data.userPhone, existing.user_phone || ""),
+      classYear: firstText(existing.class_year || ""),
+      customFields: nextCustomFields,
+      status: firstText(existing.status, "registered"),
+      createdAt: String(existing.created_at || ""),
+      updatedAt: nowIso(),
+      manualCreatedBy: String(existing.manual_created_by || ""),
+      manualCreatedByName: String(existing.manual_created_by_name || ""),
+      manualCreatedAt: String(existing.manual_created_at || ""),
+    };
+
+    await withTransaction(async (client) => {
+      const current = await findRegistrationById(registrationId, client);
+      if (!current) {
+        const error = new Error("Registration not found");
+        error.code = "BUSINESS";
+        throw error;
+      }
+
+      await client.query(
+        `UPDATE registrations
+         SET student_id = $2,
+             user_name = $3,
+             user_phone = $4,
+             custom_fields = $5::jsonb,
+             updated_at = $6,
+             raw = $7::jsonb,
+             synced_at = now()
+         WHERE id = $1`,
+        [
+          registrationId,
+          nextPayload.studentId || null,
+          nextPayload.userName,
+          nextPayload.userPhone,
+          JSON.stringify(nextPayload.customFields || {}),
+          nextPayload.updatedAt,
+          JSON.stringify(nextPayload),
+        ]
+      );
+
+      const mirrored = await callAppsScriptAction_("updateRegistration", {
+        data: {
+          id: nextPayload.id,
+          eventId: nextPayload.eventId,
+          studentId: nextPayload.studentId,
+          userName: nextPayload.userName,
+          userEmail: nextPayload.userEmail,
+          userPhone: nextPayload.userPhone,
+          classYear: nextPayload.classYear,
+          customFields: JSON.stringify(nextPayload.customFields || {}),
+          status: nextPayload.status,
+        },
+        email: nextPayload.userEmail,
+      });
+      if (!mirrored || mirrored.ok !== true) {
+        const error = new Error((mirrored && mirrored.error) || "更新失敗");
+        error.code = "BUSINESS";
+        throw error;
+      }
+    });
+
+    const updated = await findRegistrationById(registrationId);
+    triggerBackgroundSync_();
+    return res.json({
+      ok: true,
+      data: { registration: updated ? toRegistrationPayload(updated) : null },
+      error: null,
+    });
+  } catch (error) {
+    const isBusiness = String(error && error.code || "") === "BUSINESS";
+    if (isBusiness) {
+      return res.json({ ok: false, data: null, error: error.message || "更新失敗" });
+    }
+    return res.status(500).json({ ok: false, data: null, error: error.message || "更新失敗" });
+  }
+});
+
 app.post("/v1/checkin", async (req, res) => {
   const data = (req.body && req.body.data) || req.body || {};
+  const eventId = String(data.eventId || "").trim();
+  const email = normalizeEmail(data.userEmail || data.email);
+  if (!eventId || !email) {
+    return res.json({ ok: false, data: null, error: "Missing eventId or email" });
+  }
+
   try {
-    const proxied = await callAppsScriptAction_("checkin", { data: data });
-    if (proxied.ok) {
-      triggerBackgroundSync_();
+    const event = await findEventById(eventId);
+    if (!event) {
+      return res.json({ ok: false, data: null, error: "Event not found" });
     }
-    return res.json(proxied);
+    if (!String(event.checkin_url || "").trim()) {
+      return res.json({ ok: false, data: null, error: "Check-in link not configured" });
+    }
+    if (!isWithinWindow(event.checkin_open_at, event.checkin_close_at)) {
+      return res.json({ ok: false, data: null, error: "Check-in window closed" });
+    }
+
+    const registration = await findRegistrationByEmail(eventId, email);
+    if (!registration) {
+      return res.json({ ok: false, data: null, error: "Registration not found" });
+    }
+
+    const existingCheckin = await findCheckinByEventRegistration(eventId, registration.id);
+    const statusInfo = buildCheckinStatusForRegistration(registration, existingCheckin);
+    if (statusInfo.status === "attendance_unknown") {
+      return res.json({ ok: false, data: null, error: "Attendance not confirmed" });
+    }
+    if (statusInfo.status === "not_attending") {
+      return res.json({ ok: false, data: null, error: "Not attending" });
+    }
+    if (statusInfo.status === "checked_in") {
+      return res.json({ ok: false, data: null, error: "Already checked in" });
+    }
+
+    const checkinPayload = buildNodeCheckinPayload(data, eventId, registration.id);
+
+    await withTransaction(async (client) => {
+      const registrationInTx = await findRegistrationByEmail(eventId, email, client);
+      if (!registrationInTx) {
+        const error = new Error("Registration not found");
+        error.code = "BUSINESS";
+        throw error;
+      }
+      const duplicate = await findCheckinByEventRegistration(eventId, registrationInTx.id, client);
+      if (duplicate) {
+        const error = new Error("Already checked in");
+        error.code = "BUSINESS";
+        throw error;
+      }
+
+      await client.query(
+        `INSERT INTO checkins (id, event_id, registration_id, checkin_at, checkin_method, raw, synced_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())`,
+        [
+          checkinPayload.id,
+          checkinPayload.eventId,
+          checkinPayload.registrationId,
+          checkinPayload.checkinAt,
+          checkinPayload.checkinMethod,
+          JSON.stringify({
+            id: checkinPayload.id,
+            eventId: checkinPayload.eventId,
+            registrationId: checkinPayload.registrationId,
+            checkinAt: checkinPayload.checkinAt,
+            checkinMethod: checkinPayload.checkinMethod,
+          }),
+        ]
+      );
+
+      const mirrored = await callAppsScriptAction_("checkin", {
+        data: normalizeEventPayloadForMirror({
+          ...data,
+          eventId: eventId,
+          userEmail: email,
+          checkinId: checkinPayload.id,
+          checkinAt: checkinPayload.checkinAt,
+          checkinMethod: checkinPayload.checkinMethod,
+        }),
+      });
+      if (!mirrored || mirrored.ok !== true) {
+        const error = new Error((mirrored && mirrored.error) || "Checkin failed");
+        error.code = "BUSINESS";
+        throw error;
+      }
+    });
+
+    triggerBackgroundSync_();
+    return res.json({
+      ok: true,
+      data: {
+        userName: String(registration.user_name || ""),
+        checkinId: checkinPayload.id,
+        checkinAt: checkinPayload.checkinAt,
+      },
+      error: null,
+    });
   } catch (error) {
+    const isBusiness = String(error && error.code || "") === "BUSINESS";
+    if (isBusiness) {
+      return res.json({ ok: false, data: null, error: error.message || "Checkin failed" });
+    }
     return res.status(500).json({
       ok: false,
       data: null,

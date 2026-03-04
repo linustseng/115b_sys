@@ -14,9 +14,13 @@ Node.js read-path API for 115b_sys, backed by Postgres.
   - `GET /v1/group-memberships`
   - `GET /v1/lookup-student?email=...`
   - `GET /v1/bootstrap/home?email=...`
-- Write-through proxy endpoints (Apps Script source-of-truth + background sync):
+  - `GET /v1/bootstrap/registration?eventId=...&email=...`
+  - `GET /v1/bootstrap/checkin?eventId=...&email=...`
+  - `GET/POST /v1/checkin-status`
+- Write endpoints (Node DB write + mirror to Apps Script):
   - `POST /v1/register`
   - `POST /v1/checkin`
+  - `POST /v1/update-registration`
 - Auth/session endpoints:
   - `POST /v1/auth/verify-google` (input: `idToken`)
   - `POST /v1/auth/create-session` (input: `sessionToken` or `idToken`)

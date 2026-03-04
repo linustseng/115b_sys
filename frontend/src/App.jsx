@@ -734,9 +734,12 @@ const API_V2_READ_ACTIONS = new Set([
   "listGroupMemberships",
   "lookupStudent",
   "listMyMemberships",
+  "getRegistrationBootstrap",
+  "getCheckinBootstrap",
+  "listCheckinStatus",
 ]);
 
-const API_V2_WRITE_ACTIONS = new Set(["register", "checkin"]);
+const API_V2_WRITE_ACTIONS = new Set(["register", "checkin", "updateRegistration"]);
 
 function isAllowedApiEndpointHost_(host) {
   const normalized = String(host || "").trim().toLowerCase();
@@ -1003,6 +1006,60 @@ function buildApiV2Request_(payload) {
     };
   }
 
+  if (action === "getRegistrationBootstrap") {
+    const eventId = String((payload && payload.eventId) || "").trim();
+    if (!eventId) {
+      throw new Error("Missing eventId");
+    }
+    const url = new URL(`${base}/v1/bootstrap/registration`);
+    url.searchParams.set("eventId", eventId);
+    const email = String((payload && payload.email) || "").trim();
+    if (email) {
+      url.searchParams.set("email", email);
+    }
+    return {
+      method: "GET",
+      url: url.toString(),
+      headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "getCheckinBootstrap") {
+    const eventId = String((payload && payload.eventId) || "").trim();
+    if (!eventId) {
+      throw new Error("Missing eventId");
+    }
+    const url = new URL(`${base}/v1/bootstrap/checkin`);
+    url.searchParams.set("eventId", eventId);
+    const email = String((payload && payload.email) || "").trim();
+    if (email) {
+      url.searchParams.set("email", email);
+    }
+    return {
+      method: "GET",
+      url: url.toString(),
+      headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "listCheckinStatus") {
+    const requestBody = {
+      email: String((payload && payload.email) || "").trim(),
+      eventIds: Array.isArray(payload && payload.eventIds) ? payload.eventIds : [],
+    };
+    return {
+      method: "POST",
+      url: `${base}/v1/checkin-status`,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    };
+  }
+
   throw new Error(`Unsupported API v2 action: ${action}`);
 }
 
@@ -1090,6 +1147,22 @@ function buildApiV2WriteRequest_(payload) {
       url: `${base}/v1/checkin`,
       headers,
       body: JSON.stringify({ data: (payload && payload.data) || {} }),
+    };
+  }
+
+  if (action === "updateRegistration") {
+    const authToken = String((payload && payload.authToken) || "").trim();
+    if (authToken) {
+      throw new Error("Use legacy transport for admin updateRegistration");
+    }
+    return {
+      method: "POST",
+      url: `${base}/v1/update-registration`,
+      headers,
+      body: JSON.stringify({
+        data: (payload && payload.data) || {},
+        email: String((payload && payload.email) || "").trim(),
+      }),
     };
   }
 

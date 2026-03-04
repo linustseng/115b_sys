@@ -2101,7 +2101,7 @@ function handleActionPayload_(payload) {
       return { ok: false, data: null, error: "Already checked in" };
     }
 
-    const checkin = appendCheckin_(eventId, registration.id);
+    const checkin = appendCheckin_(eventId, registration.id, data);
     invalidateCacheKeys_(["checkins:list:v1"]);
     return {
       ok: true,
@@ -7493,9 +7493,14 @@ function appendRegistration_(eventId, data, email, options) {
   if (studentId && !customFields.studentId) {
     customFields.studentId = studentId;
   }
+  const preferredId = String(data.id || "").trim();
+  const preferredCreatedAt = String(data.createdAt || "").trim();
+  const preferredUpdatedAt = String(data.updatedAt || preferredCreatedAt || "").trim();
+  const createdAtValue = preferredCreatedAt ? new Date(preferredCreatedAt) : now;
+  const updatedAtValue = preferredUpdatedAt ? new Date(preferredUpdatedAt) : now;
   const values = new Array(headers.length).fill("");
   const record = {
-    id: Utilities.getUuid(),
+    id: preferredId || Utilities.getUuid(),
     eventId: eventId,
     studentId: studentId,
     userName: data.userName || data.name || "",
@@ -7504,8 +7509,8 @@ function appendRegistration_(eventId, data, email, options) {
     classYear: data.classYear || "",
     customFields: JSON.stringify(customFields),
     status: "registered",
-    createdAt: now,
-    updatedAt: now,
+    createdAt: createdAtValue,
+    updatedAt: updatedAtValue,
     manualCreatedBy: manualMeta ? manualMeta.actorEmail : "",
     manualCreatedByName: manualMeta ? manualMeta.actorName : "",
     manualCreatedAt: manualMeta ? now : "",
@@ -7521,16 +7526,20 @@ function appendRegistration_(eventId, data, email, options) {
   return record.id;
 }
 
-function appendCheckin_(eventId, registrationId) {
+function appendCheckin_(eventId, registrationId, data) {
+  const input = data || {};
   const sheet = getSheet_(SHEETS.checkins);
   const headers = getHeaders_(sheet);
   const now = new Date();
+  const preferredId = String(input.checkinId || input.id || "").trim();
+  const preferredCheckinAt = String(input.checkinAt || "").trim();
+  const checkinAtValue = preferredCheckinAt ? new Date(preferredCheckinAt) : now;
   const record = {
-    id: Utilities.getUuid(),
+    id: preferredId || Utilities.getUuid(),
     eventId: eventId,
     registrationId: registrationId,
-    checkinAt: now,
-    checkinMethod: "link",
+    checkinAt: checkinAtValue,
+    checkinMethod: String(input.checkinMethod || "link").trim() || "link",
   };
   const values = new Array(headers.length).fill("");
   headers.forEach(function (header, index) {
