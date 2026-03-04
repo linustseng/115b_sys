@@ -93,6 +93,7 @@ ShortLinks 目前用於報名連結。報名/簽到也可直接從 `Events.regis
 - markAllNotificationsRead
 - upsertAnnouncement
 - deleteAnnouncement
+- syncPullSnapshot (internal; requires Script Property `SYNC_PULL_TOKEN`)
 
 ## Password Hash
 `AdminUsers.passwordHash` uses SHA-256 hex. You can compute it in Apps Script with `hashPassword_` or any SHA-256 tool.

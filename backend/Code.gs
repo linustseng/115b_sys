@@ -321,6 +321,26 @@ function handleActionPayload_(payload) {
     }
   }
 
+  if (payload.action === "syncPullSnapshot") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return {
+      ok: true,
+      data: {
+        pulledAt: new Date().toISOString(),
+        events: listEventsCached_(),
+        students: listStudentsCached_(),
+        registrations: listRegistrationsCached_(),
+        checkins: listCheckinsCached_(),
+        directory: listDirectoryCached_(),
+        groupMemberships: listGroupMembershipsCached_(),
+      },
+      error: null,
+    };
+  }
+
   if (payload.action === "lookupStudent") {
     const email = normalizeEmail_(payload.email);
     if (!email) {
@@ -7220,6 +7240,22 @@ function listMembershipsByStudentId_(studentId) {
   return listGroupMembershipsCached_().filter(function (item) {
     return String(item.personId || "").trim() === targetId;
   });
+}
+
+function requireSyncPullAccess_(payload) {
+  const providedToken = String(
+    payload.syncToken || payload.syncPullToken || payload.internalToken || ""
+  ).trim();
+  if (!providedToken) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+  const expectedToken = String(
+    PropertiesService.getScriptProperties().getProperty("SYNC_PULL_TOKEN") || ""
+  ).trim();
+  if (!expectedToken || providedToken !== expectedToken) {
+    return { ok: false, data: null, error: "Unauthorized" };
+  }
+  return { ok: true, data: null, error: null };
 }
 
 function requireGoogleIdentity_(payload) {
