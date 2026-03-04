@@ -66,6 +66,67 @@ function isAuthorizedSyncRequest(req) {
   return Boolean(bodyToken && bodyToken === config.syncPullToken);
 }
 
+async function parseJsonResponse_(response, actionLabel) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Invalid JSON response for ${actionLabel}`);
+  }
+}
+
+async function callAppsScriptAction_(action, payload = {}) {
+  const requestPayload = {
+    action,
+    ...payload,
+  };
+  const requestJson = JSON.stringify(requestPayload);
+  const baseUrl = String(config.appsScriptUrl || "").trim();
+  if (!baseUrl) {
+    throw new Error("Missing APPS_SCRIPT_URL");
+  }
+
+  const canUseGet = requestJson.length < 7000;
+
+  if (canUseGet) {
+    try {
+      const getUrl = new URL(baseUrl);
+      getUrl.searchParams.set("payload", requestJson);
+      const response = await fetch(getUrl.toString(), {
+        method: "GET",
+        redirect: "follow",
+      });
+      const json = await parseJsonResponse_(response, action);
+      if (json && typeof json.ok === "boolean") {
+        return json;
+      }
+      throw new Error(`Unexpected response for ${action}`);
+    } catch (error) {
+      // Try POST fallback below.
+    }
+  }
+
+  const response = await fetch(baseUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: requestJson,
+    redirect: "follow",
+  });
+  const json = await parseJsonResponse_(response, action);
+  if (json && typeof json.ok === "boolean") {
+    return json;
+  }
+  throw new Error(`Unexpected response for ${action}`);
+}
+
+function triggerBackgroundSync_() {
+  syncFromAppsScript().catch((error) => {
+    console.error("[syncFromAppsScript] background sync failed:", error && error.message ? error.message : error);
+  });
+}
+
 function toEventPayload(row) {
   return {
     id: row.id,
@@ -395,6 +456,40 @@ app.get("/v1/bootstrap/home", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.post("/v1/register", async (req, res) => {
+  const data = (req.body && req.body.data) || req.body || {};
+  try {
+    const proxied = await callAppsScriptAction_("register", { data: data });
+    if (proxied.ok) {
+      triggerBackgroundSync_();
+    }
+    return res.json(proxied);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      data: null,
+      error: error && error.message ? error.message : "Register failed",
+    });
+  }
+});
+
+app.post("/v1/checkin", async (req, res) => {
+  const data = (req.body && req.body.data) || req.body || {};
+  try {
+    const proxied = await callAppsScriptAction_("checkin", { data: data });
+    if (proxied.ok) {
+      triggerBackgroundSync_();
+    }
+    return res.json(proxied);
+  } catch (error) {
+    return res.status(500).json({
+      ok: false,
+      data: null,
+      error: error && error.message ? error.message : "Checkin failed",
+    });
   }
 });
 

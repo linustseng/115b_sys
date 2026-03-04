@@ -197,6 +197,7 @@ const meetingFields = [
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const API_V2_URL = import.meta.env.VITE_API_V2_URL || "";
 const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "0").trim() === "1";
+const API_V2_WRITE_ENABLED = String(import.meta.env.VITE_API_V2_WRITE_ENABLED || "0").trim() === "1";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
 const UPLOAD_FOLDER_ID = import.meta.env.VITE_UPLOAD_FOLDER_ID || "";
@@ -735,6 +736,8 @@ const API_V2_READ_ACTIONS = new Set([
   "listMyMemberships",
 ]);
 
+const API_V2_WRITE_ACTIONS = new Set(["register", "checkin"]);
+
 function isAllowedApiEndpointHost_(host) {
   const normalized = String(host || "").trim().toLowerCase();
   return normalized === "script.google.com" || normalized === "script.googleusercontent.com";
@@ -1053,6 +1056,96 @@ function requestWithApiV2Read_(payload) {
   });
 }
 
+function shouldUseApiV2Write_(payload) {
+  if (!API_V2_WRITE_ENABLED || !API_V2_URL) {
+    return false;
+  }
+  const action = String((payload && payload.action) || "").trim();
+  return API_V2_WRITE_ACTIONS.has(action);
+}
+
+function buildApiV2WriteRequest_(payload) {
+  const action = String((payload && payload.action) || "").trim();
+  if (!action) {
+    throw new Error("Missing action");
+  }
+  const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+  const headers = {
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
+
+  if (action === "register") {
+    return {
+      method: "POST",
+      url: `${base}/v1/register`,
+      headers,
+      body: JSON.stringify({ data: (payload && payload.data) || {} }),
+    };
+  }
+
+  if (action === "checkin") {
+    return {
+      method: "POST",
+      url: `${base}/v1/checkin`,
+      headers,
+      body: JSON.stringify({ data: (payload && payload.data) || {} }),
+    };
+  }
+
+  throw new Error(`Unsupported API v2 write action: ${action}`);
+}
+
+function requestWithApiV2Write_(payload) {
+  return new Promise((resolve, reject) => {
+    let requestSpec = null;
+    try {
+      requestSpec = buildApiV2WriteRequest_(payload);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, API_V2_TIMEOUT_MS);
+
+    fetch(requestSpec.url, {
+      method: requestSpec.method,
+      headers: requestSpec.headers,
+      body: requestSpec.body,
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const text = await response.text();
+        let result;
+        try {
+          result = JSON.parse(text);
+        } catch (error) {
+          throw new Error("Invalid JSON response");
+        }
+        if (!response.ok && (!result || result.ok !== false)) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return { result: result, url: response && response.url ? response.url : requestSpec.url };
+      })
+      .then((response) => {
+        resolve(response);
+      })
+      .catch((error) => {
+        if (error && error.name === "AbortError") {
+          reject(new Error("Request timeout"));
+          return;
+        }
+        reject(error || new Error("Network error"));
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
+  });
+}
+
 function requestWithJsonp_(payload, endpointOverride) {
   return new Promise((resolve, reject) => {
     const endpoint = endpointOverride || getRuntimeApiEndpoint_();
@@ -1199,6 +1292,11 @@ function apiRequest(payload) {
   const requestPayload = payload || {};
   if (!isReadAction_(requestPayload)) {
     clearReadResponseCache_();
+    if (shouldUseApiV2Write_(requestPayload)) {
+      return requestWithApiV2Write_(requestPayload).catch(() =>
+        requestWithTransportFallback_(requestPayload)
+      );
+    }
     return requestWithTransportFallback_(requestPayload);
   }
   const cacheKey = buildReadRequestKey_(requestPayload);
