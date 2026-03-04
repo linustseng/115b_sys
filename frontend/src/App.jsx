@@ -726,7 +726,14 @@ const API_POST_ACTIONS = new Set([
   "listBirthdays",
 ]);
 
-const API_V2_READ_ACTIONS = new Set(["listEvents", "listHomeBootstrap"]);
+const API_V2_READ_ACTIONS = new Set([
+  "listEvents",
+  "listHomeBootstrap",
+  "listStudents",
+  "listGroupMemberships",
+  "lookupStudent",
+  "listMyMemberships",
+]);
 
 function isAllowedApiEndpointHost_(host) {
   const normalized = String(host || "").trim().toLowerCase();
@@ -904,15 +911,22 @@ function shouldUseApiV2Read_(payload) {
   return API_V2_READ_ACTIONS.has(action);
 }
 
-function buildApiV2RequestUrl_(payload) {
+function buildApiV2Request_(payload) {
   const action = String((payload && payload.action) || "").trim();
   if (!action) {
     throw new Error("Missing action");
   }
   const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+
   if (action === "listEvents") {
-    return `${base}/v1/events`;
+    return {
+      method: "GET",
+      url: `${base}/v1/events`,
+      headers: { Accept: "application/json" },
+      body: null,
+    };
   }
+
   if (action === "listHomeBootstrap") {
     const email = String((payload && payload.email) || "").trim();
     if (!email) {
@@ -920,16 +934,80 @@ function buildApiV2RequestUrl_(payload) {
     }
     const url = new URL(`${base}/v1/bootstrap/home`);
     url.searchParams.set("email", email);
-    return url.toString();
+    return {
+      method: "GET",
+      url: url.toString(),
+      headers: { Accept: "application/json" },
+      body: null,
+    };
   }
+
+  if (action === "listStudents") {
+    return {
+      method: "GET",
+      url: `${base}/v1/students`,
+      headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "listGroupMemberships") {
+    return {
+      method: "GET",
+      url: `${base}/v1/group-memberships`,
+      headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "lookupStudent") {
+    const email = String((payload && payload.email) || "").trim();
+    if (!email) {
+      throw new Error("Missing email");
+    }
+    const url = new URL(`${base}/v1/lookup-student`);
+    url.searchParams.set("email", email);
+    return {
+      method: "GET",
+      url: url.toString(),
+      headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "listMyMemberships") {
+    const requestBody = {};
+    const sessionToken = String((payload && payload.sessionToken) || "").trim();
+    const idToken = String((payload && payload.idToken) || "").trim();
+    if (sessionToken) {
+      requestBody.sessionToken = sessionToken;
+    }
+    if (idToken) {
+      requestBody.idToken = idToken;
+    }
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    if (sessionToken) {
+      headers.Authorization = `Bearer ${sessionToken}`;
+    }
+    return {
+      method: "POST",
+      url: `${base}/v1/memberships/my`,
+      headers: headers,
+      body: JSON.stringify(requestBody),
+    };
+  }
+
   throw new Error(`Unsupported API v2 action: ${action}`);
 }
 
 function requestWithApiV2Read_(payload) {
   return new Promise((resolve, reject) => {
-    let requestUrl = "";
+    let requestSpec = null;
     try {
-      requestUrl = buildApiV2RequestUrl_(payload);
+      requestSpec = buildApiV2Request_(payload);
     } catch (error) {
       reject(error);
       return;
@@ -940,11 +1018,10 @@ function requestWithApiV2Read_(payload) {
       controller.abort();
     }, API_V2_TIMEOUT_MS);
 
-    fetch(requestUrl, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-      },
+    fetch(requestSpec.url, {
+      method: requestSpec.method,
+      headers: requestSpec.headers,
+      body: requestSpec.body,
       signal: controller.signal,
     })
       .then(async (response) => {
@@ -958,7 +1035,7 @@ function requestWithApiV2Read_(payload) {
         if (!response.ok && (!result || result.ok !== false)) {
           throw new Error(`HTTP ${response.status}`);
         }
-        return { result: result, url: response && response.url ? response.url : requestUrl };
+        return { result: result, url: response && response.url ? response.url : requestSpec.url };
       })
       .then((response) => {
         resolve(response);
@@ -1092,7 +1169,11 @@ async function requestWithTransportFallback_(payload) {
 async function requestWithReadRetry_(payload) {
   if (shouldUseApiV2Read_(payload)) {
     try {
-      return await requestWithApiV2Read_(payload);
+      const response = await requestWithApiV2Read_(payload);
+      if (response && response.result && response.result.ok) {
+        return response;
+      }
+      // If API v2 returns non-ok payload, fallback to legacy Apps Script for safety.
     } catch (error) {
       // Fall through to Apps Script transport as safe fallback.
     }

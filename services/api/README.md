@@ -2,7 +2,7 @@
 
 Node.js read-path API for 115b_sys, backed by Postgres.
 
-## What this includes (Day 1 scaffold)
+## What this includes (Day 3)
 
 - Express API service
 - Postgres schema migration (`migrations/001_init.sql`)
@@ -10,6 +10,9 @@ Node.js read-path API for 115b_sys, backed by Postgres.
 - Read endpoints:
   - `GET /health`
   - `GET /v1/events`
+  - `GET /v1/students`
+  - `GET /v1/group-memberships`
+  - `GET /v1/lookup-student?email=...`
   - `GET /v1/bootstrap/home?email=...`
 - Auth/session endpoints:
   - `POST /v1/auth/verify-google` (input: `idToken`)
@@ -44,6 +47,20 @@ npm run sync:pull
 
 ```bash
 npm run dev
+```
+
+## Optional ops scripts
+
+- Reconcile Apps Script snapshot counts vs Postgres:
+
+```bash
+npm run reconcile:snapshot
+```
+
+- Quick latency benchmark (Node vs Apps Script read path):
+
+```bash
+BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=10 npm run bench:reads
 ```
 
 ## Required Apps Script change

@@ -107,6 +107,15 @@ function toRegistrationPayload(row) {
   };
 }
 
+function toStudentPayload(row) {
+  return {
+    id: row.id || "",
+    name: row.name || "",
+    googleSub: row.google_sub || "",
+    googleEmail: row.google_email || "",
+  };
+}
+
 function toMembershipPayload(row) {
   return {
     id: row.id || "",
@@ -263,6 +272,64 @@ app.get("/v1/events", async (_req, res) => {
     });
   } catch (error) {
     res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.get("/v1/students", async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT id, name, google_sub, google_email
+       FROM students
+       ORDER BY coalesce(id, '')`
+    );
+    return res.json({
+      ok: true,
+      data: { students: result.rows.map(toStudentPayload) },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.get("/v1/group-memberships", async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT *
+       FROM group_memberships
+       ORDER BY coalesce(group_id, ''), coalesce(person_id, ''), id`
+    );
+    return res.json({
+      ok: true,
+      data: { memberships: result.rows.map(toMembershipPayload) },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.get("/v1/lookup-student", async (req, res) => {
+  const email = normalizeEmail(req.query.email || "");
+  if (!email) {
+    return res.status(400).json({ ok: false, data: null, error: "Missing email" });
+  }
+
+  try {
+    const result = await query(
+      `${STUDENT_PROFILE_SELECT}
+       FROM directories d
+       JOIN students s ON s.id = d.id
+       WHERE lower(coalesce(d.email, '')) = $1
+       LIMIT 1`,
+      [email]
+    );
+    if (!result.rows.length) {
+      return res.status(404).json({ ok: false, data: null, error: "Student not found" });
+    }
+    return res.json({ ok: true, data: { student: toStudentProfile(result.rows[0], email) }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
   }
 });
 

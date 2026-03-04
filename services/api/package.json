@@ -7,7 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
-    "sync:pull": "node scripts/syncPull.js"
+    "sync:pull": "node scripts/syncPull.js",
+    "reconcile:snapshot": "node scripts/reconcileSnapshot.js",
+    "bench:reads": "node scripts/benchReadPaths.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
