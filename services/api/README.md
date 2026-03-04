@@ -11,6 +11,10 @@ Node.js read-path API for 115b_sys, backed by Postgres.
   - `GET /health`
   - `GET /v1/events`
   - `GET /v1/bootstrap/home?email=...`
+- Auth/session endpoints:
+  - `POST /v1/auth/verify-google` (input: `idToken`)
+  - `POST /v1/auth/create-session` (input: `sessionToken` or `idToken`)
+  - `GET/POST /v1/memberships/my` (input: Bearer `sessionToken` or `idToken`)
 - Internal endpoints:
   - `POST /internal/sync/pull` (Bearer token)
   - `GET /internal/sync/runs?limit=20` (Bearer token)

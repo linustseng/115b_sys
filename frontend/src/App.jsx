@@ -195,6 +195,8 @@ const meetingFields = [
 ];
 
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
+const API_V2_URL = import.meta.env.VITE_API_V2_URL || "";
+const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "0").trim() === "1";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
 const UPLOAD_FOLDER_ID = import.meta.env.VITE_UPLOAD_FOLDER_ID || "";
@@ -690,6 +692,7 @@ const ADMIN_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 const API_ENDPOINT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
+const API_V2_TIMEOUT_MS = Number(import.meta.env.VITE_API_V2_TIMEOUT_MS || API_TIMEOUT_MS);
 const API_READ_RETRY_LIMIT = Number(import.meta.env.VITE_API_READ_RETRY_LIMIT || 1);
 const API_READ_CACHE_TTL_MS = Number(import.meta.env.VITE_API_READ_CACHE_TTL_MS || 2500);
 const API_READ_ACTION_PREFIXES = ["list", "get", "lookup", "search", "verify"];
@@ -722,6 +725,8 @@ const API_POST_ACTIONS = new Set([
   "listFundPayments",
   "listBirthdays",
 ]);
+
+const API_V2_READ_ACTIONS = new Set(["listEvents", "listHomeBootstrap"]);
 
 function isAllowedApiEndpointHost_(host) {
   const normalized = String(host || "").trim().toLowerCase();
@@ -891,6 +896,86 @@ function shouldTryPost_(payload) {
   return API_POST_ACTIONS.has(action);
 }
 
+function shouldUseApiV2Read_(payload) {
+  if (!API_V2_READ_ENABLED || !API_V2_URL) {
+    return false;
+  }
+  const action = String((payload && payload.action) || "").trim();
+  return API_V2_READ_ACTIONS.has(action);
+}
+
+function buildApiV2RequestUrl_(payload) {
+  const action = String((payload && payload.action) || "").trim();
+  if (!action) {
+    throw new Error("Missing action");
+  }
+  const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+  if (action === "listEvents") {
+    return `${base}/v1/events`;
+  }
+  if (action === "listHomeBootstrap") {
+    const email = String((payload && payload.email) || "").trim();
+    if (!email) {
+      throw new Error("Missing email");
+    }
+    const url = new URL(`${base}/v1/bootstrap/home`);
+    url.searchParams.set("email", email);
+    return url.toString();
+  }
+  throw new Error(`Unsupported API v2 action: ${action}`);
+}
+
+function requestWithApiV2Read_(payload) {
+  return new Promise((resolve, reject) => {
+    let requestUrl = "";
+    try {
+      requestUrl = buildApiV2RequestUrl_(payload);
+    } catch (error) {
+      reject(error);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, API_V2_TIMEOUT_MS);
+
+    fetch(requestUrl, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const text = await response.text();
+        let result;
+        try {
+          result = JSON.parse(text);
+        } catch (error) {
+          throw new Error("Invalid JSON response");
+        }
+        if (!response.ok && (!result || result.ok !== false)) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return { result: result, url: response && response.url ? response.url : requestUrl };
+      })
+      .then((response) => {
+        resolve(response);
+      })
+      .catch((error) => {
+        if (error && error.name === "AbortError") {
+          reject(new Error("Request timeout"));
+          return;
+        }
+        reject(error || new Error("Network error"));
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+      });
+  });
+}
+
 function requestWithJsonp_(payload, endpointOverride) {
   return new Promise((resolve, reject) => {
     const endpoint = endpointOverride || getRuntimeApiEndpoint_();
@@ -1005,6 +1090,14 @@ async function requestWithTransportFallback_(payload) {
 }
 
 async function requestWithReadRetry_(payload) {
+  if (shouldUseApiV2Read_(payload)) {
+    try {
+      return await requestWithApiV2Read_(payload);
+    } catch (error) {
+      // Fall through to Apps Script transport as safe fallback.
+    }
+  }
+
   let attempt = 0;
   while (attempt <= API_READ_RETRY_LIMIT) {
     try {

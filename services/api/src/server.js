@@ -2,19 +2,65 @@ import express from "express";
 import { getConfig } from "./config.js";
 import { query } from "./db.js";
 import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
+import { createSessionToken, verifySessionToken } from "./auth/session.js";
+import { verifyGoogleIdToken } from "./auth/google.js";
 
 const config = getConfig();
 const app = express();
 
 app.use(express.json({ limit: "2mb" }));
 
-function isAuthorizedSyncRequest(req) {
+const STUDENT_PROFILE_SELECT = `
+SELECT
+  s.id AS student_id,
+  s.name AS student_name,
+  s.google_sub,
+  s.google_email,
+  d.id AS directory_id,
+  d.email AS directory_email,
+  d.name_zh,
+  d.name_en,
+  d.preferred_name,
+  d.company,
+  d.title,
+  d.mobile,
+  d.photo_url,
+  d.dietary_restrictions,
+  d.group_id
+`;
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getBearerToken(req) {
   const header = String(req.headers.authorization || "").trim();
-  if (header.toLowerCase().startsWith("bearer ")) {
-    const token = header.slice(7).trim();
-    if (token && token === config.syncPullToken) {
-      return true;
-    }
+  if (!header.toLowerCase().startsWith("bearer ")) {
+    return "";
+  }
+  return String(header.slice(7) || "").trim();
+}
+
+function getSessionTokenFromRequest(req) {
+  const headerToken = getBearerToken(req);
+  if (headerToken) {
+    return headerToken;
+  }
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const queryParams = req.query && typeof req.query === "object" ? req.query : {};
+  return String(body.sessionToken || body.token || queryParams.sessionToken || "").trim();
+}
+
+function getIdTokenFromRequest(req) {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const queryParams = req.query && typeof req.query === "object" ? req.query : {};
+  return String(body.idToken || queryParams.idToken || "").trim();
+}
+
+function isAuthorizedSyncRequest(req) {
+  const bearerToken = getBearerToken(req);
+  if (bearerToken && bearerToken === config.syncPullToken) {
+    return true;
   }
   const bodyToken = String((req.body && (req.body.syncToken || req.body.token)) || "").trim();
   return Boolean(bodyToken && bodyToken === config.syncPullToken);
@@ -61,15 +107,155 @@ function toRegistrationPayload(row) {
   };
 }
 
+function toMembershipPayload(row) {
+  return {
+    id: row.id || "",
+    personId: row.person_id || "",
+    personName: row.person_name || "",
+    groupId: row.group_id || "",
+    roleInGroup: row.role_in_group || "",
+    notes: row.notes || "",
+    createdAt: row.created_at || "",
+    updatedAt: row.updated_at || "",
+  };
+}
+
+function toStudentProfile(row, fallbackEmail = "") {
+  if (!row) {
+    return null;
+  }
+  const id = String(row.student_id || row.directory_id || "").trim();
+  if (!id) {
+    return null;
+  }
+  const preferredName = String(row.preferred_name || "").trim();
+  const nameZh = String(row.name_zh || "").trim();
+  const nameEn = String(row.name_en || "").trim();
+  const name = String(row.student_name || preferredName || nameZh || nameEn || "").trim();
+  return {
+    id,
+    name,
+    email: normalizeEmail(row.directory_email || fallbackEmail || row.google_email || ""),
+    nameZh,
+    nameEn,
+    preferredName,
+    company: String(row.company || "").trim(),
+    title: String(row.title || "").trim(),
+    phone: String(row.mobile || "").trim(),
+    photoUrl: String(row.photo_url || "").trim(),
+    dietaryPreference: String(row.dietary_restrictions || "").trim(),
+    group: String(row.group_id || "").trim(),
+  };
+}
+
+async function listMembershipsByStudentId(studentId) {
+  const targetId = String(studentId || "").trim();
+  if (!targetId) {
+    return [];
+  }
+  const result = await query(
+    `SELECT *
+     FROM group_memberships
+     WHERE person_id = $1
+     ORDER BY coalesce(group_id, ''), coalesce(role_in_group, ''), id`,
+    [targetId]
+  );
+  return result.rows.map(toMembershipPayload);
+}
+
+async function findStudentProfileById(studentId) {
+  const targetId = String(studentId || "").trim();
+  if (!targetId) {
+    return null;
+  }
+  const result = await query(
+    `${STUDENT_PROFILE_SELECT}
+     FROM students s
+     LEFT JOIN directories d ON d.id = s.id
+     WHERE s.id = $1
+     LIMIT 1`,
+    [targetId]
+  );
+  return result.rows.length ? toStudentProfile(result.rows[0]) : null;
+}
+
+async function findStudentProfileByGoogleSub(sub) {
+  const targetSub = String(sub || "").trim();
+  if (!targetSub) {
+    return null;
+  }
+  const result = await query(
+    `${STUDENT_PROFILE_SELECT}
+     FROM students s
+     LEFT JOIN directories d ON d.id = s.id
+     WHERE s.google_sub = $1
+     LIMIT 1`,
+    [targetSub]
+  );
+  return result.rows.length ? toStudentProfile(result.rows[0]) : null;
+}
+
+async function findStudentProfileByEmail(email) {
+  const targetEmail = normalizeEmail(email);
+  if (!targetEmail) {
+    return null;
+  }
+  const result = await query(
+    `${STUDENT_PROFILE_SELECT}
+     FROM directories d
+     LEFT JOIN students s ON s.id = d.id
+     WHERE lower(coalesce(d.email, '')) = $1
+     LIMIT 1`,
+    [targetEmail]
+  );
+  return result.rows.length ? toStudentProfile(result.rows[0], targetEmail) : null;
+}
+
+async function resolveAuthContext(req) {
+  const providedSessionToken = getSessionTokenFromRequest(req);
+  if (providedSessionToken) {
+    const payload = verifySessionToken(providedSessionToken);
+    if (payload && payload.studentId) {
+      return {
+        sessionToken: providedSessionToken,
+        studentId: payload.studentId,
+        profile: payload,
+      };
+    }
+  }
+
+  const idToken = getIdTokenFromRequest(req);
+  if (!idToken) {
+    return null;
+  }
+
+  const googleProfile = await verifyGoogleIdToken(idToken);
+  const linkedStudent = await findStudentProfileByGoogleSub(googleProfile.sub);
+  if (!linkedStudent || !linkedStudent.id) {
+    return null;
+  }
+
+  const sessionToken = createSessionToken({
+    studentId: linkedStudent.id,
+    email: googleProfile.email,
+    sub: googleProfile.sub,
+    name: googleProfile.name,
+  });
+
+  return {
+    sessionToken,
+    studentId: linkedStudent.id,
+    profile: googleProfile,
+  };
+}
+
 app.get("/health", async (_req, res) => {
   res.json({ ok: true, service: "115b-sys-api", now: new Date().toISOString() });
 });
 
 app.get("/v1/events", async (_req, res) => {
   try {
-    const result = await query(
-      `SELECT * FROM events ORDER BY coalesce(start_at, ''), id`
-    );
+    const result = await query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`);
     res.json({
       ok: true,
       data: { events: result.rows.map(toEventPayload) },
@@ -81,7 +267,7 @@ app.get("/v1/events", async (_req, res) => {
 });
 
 app.get("/v1/bootstrap/home", async (req, res) => {
-  const email = String(req.query.email || "").trim().toLowerCase();
+  const email = normalizeEmail(req.query.email || "");
   if (!email) {
     return res.status(400).json({ ok: false, data: null, error: "Missing email" });
   }
@@ -144,6 +330,100 @@ app.get("/v1/bootstrap/home", async (req, res) => {
     return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
   }
 });
+
+app.post("/v1/auth/verify-google", async (req, res) => {
+  const idToken = String((req.body && req.body.idToken) || "").trim();
+  if (!idToken) {
+    return res.status(400).json({ ok: false, data: null, error: "Missing idToken" });
+  }
+
+  try {
+    const profile = await verifyGoogleIdToken(idToken);
+    const linkedStudent = await findStudentProfileByGoogleSub(profile.sub);
+
+    let emailMatch = null;
+    let sessionToken = "";
+    let memberships = [];
+
+    if (linkedStudent && linkedStudent.id) {
+      sessionToken = createSessionToken({
+        studentId: linkedStudent.id,
+        email: profile.email,
+        sub: profile.sub,
+        name: profile.name,
+      });
+      memberships = await listMembershipsByStudentId(linkedStudent.id);
+    } else if (profile.email) {
+      emailMatch = await findStudentProfileByEmail(profile.email);
+    }
+
+    return res.json({
+      ok: true,
+      data: {
+        profile,
+        student: linkedStudent,
+        emailMatch,
+        sessionToken,
+        memberships,
+      },
+      error: null,
+    });
+  } catch (error) {
+    const unauthorized = String(error && error.message ? error.message : "") === "Unauthorized";
+    return res.status(unauthorized ? 401 : 500).json({
+      ok: false,
+      data: null,
+      error: unauthorized ? "Unauthorized" : error.message || "Internal error",
+    });
+  }
+});
+
+app.post("/v1/auth/create-session", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const student = await findStudentProfileById(auth.studentId);
+    const memberships = await listMembershipsByStudentId(auth.studentId);
+    return res.json({
+      ok: true,
+      data: {
+        sessionToken: auth.sessionToken,
+        studentId: auth.studentId,
+        student,
+        memberships,
+      },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+async function handleListMyMemberships(req, res) {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const memberships = await listMembershipsByStudentId(auth.studentId);
+    return res.json({
+      ok: true,
+      data: {
+        sessionToken: auth.sessionToken,
+        studentId: auth.studentId,
+        memberships,
+      },
+      error: null,
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+}
+
+app.get("/v1/memberships/my", handleListMyMemberships);
+app.post("/v1/memberships/my", handleListMyMemberships);
 
 app.post("/internal/sync/pull", async (req, res) => {
   if (!isAuthorizedSyncRequest(req)) {
