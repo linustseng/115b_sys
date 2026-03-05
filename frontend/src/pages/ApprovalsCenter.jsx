@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab = "pending" }) {
   const {
@@ -55,6 +55,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   const [actions, setActions] = useState([]);
   const [actionsByActor, setActionsByActor] = useState([]);
   const [actionsSummary, setActionsSummary] = useState({});
+  const actionsSummaryKeyRef = useRef("");
   const [groupMemberships, setGroupMemberships] = useState(
     initialApprovalsCache ? initialApprovalsCache.groupMemberships : []
   );
@@ -295,12 +296,11 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     }
     setLoading(!cached);
     setError("");
-    Promise.all([loadBootstrap({ includeRequests: true }), loadActionsByActor()])
-      .then((results) => {
+    loadBootstrap({ includeRequests: true })
+      .then((bootstrapData) => {
         if (ignore) {
           return;
         }
-        const bootstrapData = results && results[0] ? results[0] : {};
         saveApprovalsCache_(email, {
           requests: bootstrapData.requests || [],
           students: bootstrapData.students || [],
@@ -316,6 +316,11 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       .finally(() => {
         if (!ignore) {
           setLoading(false);
+          setTimeout(() => {
+            if (!ignore) {
+              loadActionsByActor().catch(() => {});
+            }
+          }, 0);
         }
       });
     return () => {
@@ -600,9 +605,14 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
 
   useEffect(() => {
-    const ids = inProgressItems.map((item) => item.request.id);
+    const ids = inProgressItems.map((item) => String(item.request.id || "").trim()).filter(Boolean);
+    const key = ids.join(",");
+    if (actionsSummaryKeyRef.current === key) {
+      return;
+    }
+    actionsSummaryKeyRef.current = key;
     loadActionsSummary(ids).catch(() => {});
-  }, [requests, googleLinkedStudent]);
+  }, [inProgressItems]);
 
   const actionByRequestId = actionsByActor.reduce((acc, item) => {
     const id = String(item.requestId || "").trim();
