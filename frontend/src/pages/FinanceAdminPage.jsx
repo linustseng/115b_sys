@@ -284,23 +284,19 @@ function FinanceAdminPage({ shared }) {
 
   useEffect(() => {
     setInitialLoading(true);
-    loadFinanceAdminBootstrap({ includeRequests: true })
-      .then((ok) => {
-        if (!ok) {
-          return Promise.allSettled([
-            loadRequests(),
-            loadGroupMemberships(),
-            loadFinanceRoles(),
-            loadFinanceCategories(),
-            loadStudents(),
-            loadFundEvents(),
-            loadFundSummary(),
-          ]);
-        }
-        return null;
-      })
+    Promise.allSettled([
+      loadRequests(),
+      loadGroupMemberships(),
+      loadFinanceRoles(),
+    ])
       .finally(() => {
         setInitialLoading(false);
+        setTimeout(() => {
+          loadFinanceCategories();
+          loadStudents();
+          loadFundEvents();
+          loadFundSummary();
+        }, 0);
       });
   }, []);
 
@@ -336,22 +332,35 @@ function FinanceAdminPage({ shared }) {
 
   useEffect(() => {
     if (adminTab === "funds") {
-      if (!fundEvents.length || !students.length || !groupMemberships.length || !financeRoles.length) {
-        loadFinanceAdminBootstrap();
+      if (!fundEvents.length) {
+        loadFundEvents();
       }
       if (!fundSummary) {
         loadFundSummary();
       }
+      if (!students.length) {
+        loadStudents();
+      }
+      if (!groupMemberships.length) {
+        loadGroupMemberships();
+      }
+      if (!financeRoles.length) {
+        loadFinanceRoles();
+      }
     }
     if (adminTab === "roles") {
-      if (!groupMemberships.length || !financeRoles.length || !students.length) {
-        loadFinanceAdminBootstrap();
+      if (!groupMemberships.length) {
+        loadGroupMemberships();
+      }
+      if (!financeRoles.length) {
+        loadFinanceRoles();
+      }
+      if (!students.length) {
+        loadStudents();
       }
     }
-    if (adminTab === "categories") {
-      if (!financeCategories.length) {
-        loadFinanceAdminBootstrap();
-      }
+    if (adminTab === "categories" && !financeCategories.length) {
+      loadFinanceCategories();
     }
   }, [adminTab]);
 
