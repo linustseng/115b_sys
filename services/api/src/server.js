@@ -852,9 +852,11 @@ app.post("/v1/register", async (req, res) => {
 
       const mirrored = await callAppsScriptAction_("register", { data: mirrorData });
       if (!mirrored || mirrored.ok !== true) {
-        const error = new Error((mirrored && mirrored.error) || "Register failed");
-        error.code = "BUSINESS";
-        throw error;
+        console.warn("[mirror:register] failed", {
+          registrationId: registrationPayload.id,
+          eventId: registrationPayload.eventId,
+          error: (mirrored && mirrored.error) || "Register failed",
+        });
       }
     });
 
@@ -967,9 +969,11 @@ app.post("/v1/update-registration", async (req, res) => {
         email: nextPayload.userEmail,
       });
       if (!mirrored || mirrored.ok !== true) {
-        const error = new Error((mirrored && mirrored.error) || "更新失敗");
-        error.code = "BUSINESS";
-        throw error;
+        console.warn("[mirror:updateRegistration] failed", {
+          registrationId: nextPayload.id,
+          eventId: nextPayload.eventId,
+          error: (mirrored && mirrored.error) || "更新失敗",
+        });
       }
     });
 
@@ -1072,9 +1076,12 @@ app.post("/v1/checkin", async (req, res) => {
         }),
       });
       if (!mirrored || mirrored.ok !== true) {
-        const error = new Error((mirrored && mirrored.error) || "Checkin failed");
-        error.code = "BUSINESS";
-        throw error;
+        console.warn("[mirror:checkin] failed", {
+          checkinId: checkinPayload.id,
+          eventId,
+          email,
+          error: (mirrored && mirrored.error) || "Checkin failed",
+        });
       }
     });
 
