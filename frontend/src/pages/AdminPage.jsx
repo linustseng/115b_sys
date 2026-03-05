@@ -489,11 +489,7 @@ export default function AdminPage({
 
   useEffect(() => {
     if (hasEventDataTabs) {
-      loadAdminBootstrap().then((ok) => {
-        if (!ok) {
-          loadEvents();
-        }
-      });
+      loadEvents();
     }
   }, [hasEventDataTabs]);
 
@@ -554,15 +550,18 @@ export default function AdminPage({
     }
     if (activeTab === "students") {
       if (!students.length) {
-        loadAdminBootstrap();
+        loadStudents();
       }
       if (shouldLoadDirectory()) {
         loadDirectoryAdmin();
       }
     }
     if (activeTab === "roles") {
-      if (!groupMemberships.length || !students.length) {
-        loadAdminBootstrap();
+      if (!groupMemberships.length) {
+        loadGroupMemberships();
+      }
+      if (!students.length) {
+        loadStudents();
       }
     }
     if (activeTab === "ordering") {
