@@ -1168,6 +1168,27 @@ function FinanceAdminPage({ shared }) {
                   {item.label}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  loadRequests();
+                  if (adminTab === "funds") {
+                    loadFundEvents();
+                    loadFundSummary();
+                  }
+                  if (adminTab === "roles") {
+                    loadGroupMemberships();
+                    loadFinanceRoles();
+                    loadStudents();
+                  }
+                  if (adminTab === "categories") {
+                    loadFinanceCategories();
+                  }
+                }}
+                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+              >
+                重新同步
+              </button>
             </div>
           </div>
         </section>
