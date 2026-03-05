@@ -405,8 +405,37 @@ function SoftballPlayerPage({ shared }) {
       setStatusMessage("請先登入 Google");
       return;
     }
+    const normalizedPracticeId = normalizeId_(practiceId);
+    const normalizedStudentId = normalizeId_(googleLinkedStudent.id);
+    const note = String(attendanceNoteMap[practiceId] || "").trim();
+    const previousAttendance = attendance;
+
     setSaving(true);
     setStatusMessage("");
+
+    setAttendance((prev) => {
+      const list = Array.isArray(prev) ? prev.slice() : [];
+      const index = list.findIndex(
+        (item) =>
+          normalizeId_(item && item.practiceId) === normalizedPracticeId &&
+          normalizeId_(item && item.studentId) === normalizedStudentId
+      );
+      const nextRecord = {
+        ...(index >= 0 ? list[index] : {}),
+        practiceId: normalizedPracticeId,
+        studentId: normalizedStudentId,
+        status: status,
+        note: note,
+        updatedAt: new Date().toISOString(),
+      };
+      if (index >= 0) {
+        list[index] = nextRecord;
+      } else {
+        list.push(nextRecord);
+      }
+      return list;
+    });
+
     try {
       const { result } = await apiRequest({
         action: "submitSoftballAttendance",
@@ -414,14 +443,18 @@ function SoftballPlayerPage({ shared }) {
           practiceId: practiceId,
           studentId: googleLinkedStudent.id,
           status: status,
-          note: String(attendanceNoteMap[practiceId] || "").trim(),
+          note: note,
         },
       });
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
-      await loadAttendance(googleLinkedStudent.id);
+      setStatusMessage("已更新回覆");
+      setTimeout(() => {
+        loadAttendance(googleLinkedStudent.id).catch(() => {});
+      }, 0);
     } catch (err) {
+      setAttendance(previousAttendance);
       setStatusMessage(err.message || "更新失敗");
     } finally {
       setSaving(false);
