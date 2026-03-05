@@ -1168,16 +1168,6 @@ function FinanceAdminPage({ shared }) {
                   {item.label}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  loadRequests();
-                  loadFinanceAdminBootstrap();
-                }}
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-              >
-                重新整理
-              </button>
             </div>
           </div>
         </section>
