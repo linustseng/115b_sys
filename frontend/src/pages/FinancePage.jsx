@@ -786,6 +786,51 @@ function FinancePage({ shared }) {
   const isPurchase = form.type === "purchase";
   const isPayment = form.type === "payment";
   const isPettyCash = form.type === "pettycash";
+
+  const CASE_STEPS = [
+    { id: "pending_lead", label: "組長" },
+    { id: "pending_committee", label: "班代" },
+    { id: "pending_accounting", label: "會計" },
+    { id: "pending_cashier", label: "出納" },
+    { id: "closed", label: "完成" },
+  ];
+
+  const getCaseStepState_ = (status, stepId) => {
+    const current = String(status || "").trim();
+    if (!current) {
+      return "todo";
+    }
+    if (current === "returned") {
+      return stepId === "pending_lead" ? "active" : "todo";
+    }
+    if (current === "withdrawn") {
+      return "todo";
+    }
+    const order = CASE_STEPS.map((item) => item.id);
+    const currentIndex = order.indexOf(current);
+    const stepIndex = order.indexOf(stepId);
+    if (current === "closed") {
+      return "done";
+    }
+    if (currentIndex === -1 || stepIndex === -1) {
+      return "todo";
+    }
+    if (stepIndex < currentIndex) {
+      return "done";
+    }
+    if (stepIndex === currentIndex) {
+      return "active";
+    }
+    return "todo";
+  };
+
+  const requestScenarioCounts = {
+    draft: requests.filter((item) => String(item.status || "").trim() === "draft").length,
+    pending: requests.filter((item) => String(item.status || "").trim().startsWith("pending")).length,
+    returned: requests.filter((item) => String(item.status || "").trim() === "returned").length,
+    closed: requests.filter((item) => String(item.status || "").trim() === "closed").length,
+  };
+
   const myFundPayments = fundPaymentForm.eventId
     ? fundPayments.filter((item) => {
         const payerId = String(item.payerId || "").trim();
@@ -1083,6 +1128,28 @@ function FinancePage({ shared }) {
         ) : null}
 
         {financeTab === "requests" ? (
+          <>
+          <section className="mt-6 card p-5 sm:p-6">
+            <h2 className="text-base font-semibold text-slate-900">情境導向入口</h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-xs text-slate-500">我要送件（草稿）</p>
+                <p className="mt-1 text-xl font-semibold text-slate-900">{requestScenarioCounts.draft}</p>
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs text-amber-700">我在流程中</p>
+                <p className="mt-1 text-xl font-semibold text-amber-900">{requestScenarioCounts.pending}</p>
+              </div>
+              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                <p className="text-xs text-rose-700">退回補件</p>
+                <p className="mt-1 text-xl font-semibold text-rose-900">{requestScenarioCounts.returned}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs text-emerald-700">已結案</p>
+                <p className="mt-1 text-xl font-semibold text-emerald-900">{requestScenarioCounts.closed}</p>
+              </div>
+            </div>
+          </section>
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <form
               onSubmit={handleSubmit}
@@ -1467,6 +1534,26 @@ function FinancePage({ shared }) {
                           ) : null}
                         </div>
                       </div>
+                      <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                        <p className="text-[11px] font-semibold text-slate-500">Case 時間線</p>
+                        <div className="mt-2 grid grid-cols-5 gap-2">
+                          {CASE_STEPS.map((step) => {
+                            const stepState = getCaseStepState_(item.status, step.id);
+                            const badgeClass =
+                              stepState === "done"
+                                ? "bg-emerald-500"
+                                : stepState === "active"
+                                ? "bg-amber-500"
+                                : "bg-slate-300";
+                            return (
+                              <div key={`${item.id}-${step.id}`} className="text-center">
+                                <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
+                                <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   );
                 })
@@ -1476,6 +1563,7 @@ function FinancePage({ shared }) {
             </div>
           </section>
           </section>
+          </>
         ) : null}
 
         <a
