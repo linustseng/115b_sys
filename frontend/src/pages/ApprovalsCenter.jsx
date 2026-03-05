@@ -908,42 +908,24 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
                 </div>
                 <div>說明：{selectedRequest.description || "-"}</div>
                 {selectedRequest.type === "payment" ? (
-                  <>
-                    <div>請款方式：{FINANCE_PAYMENT_METHODS.find((item) => item.value === selectedRequest.paymentMethod)?.label || selectedRequest.paymentMethod || "-"}</div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>廠商/收款人：{selectedRequest.payeeName || "-"}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyText_(selectedRequest.payeeName, "廠商/收款人")}
-                        className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
-                        title="複製廠商/收款人"
-                      >
-                        📋
-                      </button>
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-slate-700">
+                    <p className="text-[11px] font-semibold tracking-wide text-amber-800">匯款重點資訊</p>
+                    <div className="mt-2 grid gap-2 text-xs">
+                      <div>請款方式：{FINANCE_PAYMENT_METHODS.find((item) => item.value === selectedRequest.paymentMethod)?.label || selectedRequest.paymentMethod || "-"}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">廠商/收款人：{selectedRequest.payeeName || "-"}</span>
+                        <button type="button" onClick={() => copyText_(selectedRequest.payeeName, "廠商/收款人")} className="rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100" title="複製廠商/收款人">📋</button>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">銀行：{selectedRequest.payeeBank || "-"}</span>
+                        <button type="button" onClick={() => copyText_(selectedRequest.payeeBank, "銀行")} className="rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100" title="複製銀行">📋</button>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium">帳號：{selectedRequest.payeeAccount || "-"}</span>
+                        <button type="button" onClick={() => copyText_(selectedRequest.payeeAccount, "帳號")} className="rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100" title="複製帳號">📋</button>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>銀行：{selectedRequest.payeeBank || "-"}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyText_(selectedRequest.payeeBank, "銀行")}
-                        className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
-                        title="複製銀行"
-                      >
-                        📋
-                      </button>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span>帳號：{selectedRequest.payeeAccount || "-"}</span>
-                      <button
-                        type="button"
-                        onClick={() => copyText_(selectedRequest.payeeAccount, "帳號")}
-                        className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
-                        title="複製帳號"
-                      >
-                        📋
-                      </button>
-                    </div>
-                  </>
+                  </div>
                 ) : null}
                 {selectedRequest.type === "purchase" ? (
                   <div>廠商/採購來源：{selectedRequest.vendorName || "-"}</div>
