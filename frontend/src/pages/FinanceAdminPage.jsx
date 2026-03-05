@@ -70,6 +70,7 @@ function FinanceAdminPage({ shared }) {
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
   const [copyStatus, setCopyStatus] = useState("");
+  const [initialLoading, setInitialLoading] = useState(true);
   const adminDisplayName =
     (googleLinkedStudent &&
       (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -282,17 +283,25 @@ function FinanceAdminPage({ shared }) {
   };
 
   useEffect(() => {
-    loadFinanceAdminBootstrap({ includeRequests: true }).then((ok) => {
-      if (!ok) {
-        loadRequests();
-        loadGroupMemberships();
-        loadFinanceRoles();
-        loadFinanceCategories();
-        loadStudents();
-        loadFundEvents();
-        loadFundSummary();
-      }
-    });
+    setInitialLoading(true);
+    loadFinanceAdminBootstrap({ includeRequests: true })
+      .then((ok) => {
+        if (!ok) {
+          return Promise.allSettled([
+            loadRequests(),
+            loadGroupMemberships(),
+            loadFinanceRoles(),
+            loadFinanceCategories(),
+            loadStudents(),
+            loadFundEvents(),
+            loadFundSummary(),
+          ]);
+        }
+        return null;
+      })
+      .finally(() => {
+        setInitialLoading(false);
+      });
   }, []);
 
   useEffect(() => {
@@ -1093,12 +1102,21 @@ function FinanceAdminPage({ shared }) {
       </header>
 
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-10 sm:px-12">
-        {!hasFinanceAccess ? (
+        {initialLoading ? (
+          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-sky-500" />
+              <span className="font-medium">後台資料載入中…</span>
+            </div>
+            <p className="mt-1 text-xs text-sky-700">正在整理請款、簽核與角色資料，通常只要幾秒鐘。</p>
+          </div>
+        ) : null}
+        {!initialLoading && !hasFinanceAccess ? (
           <div className="alert alert-warning">
             目前帳號沒有財務後台權限，請確認是否屬於財會組、資管組或班代/副班代。
           </div>
         ) : null}
-        {hasFinanceAccess ? (
+        {!initialLoading && hasFinanceAccess ? (
         <>
         <section className="card p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
