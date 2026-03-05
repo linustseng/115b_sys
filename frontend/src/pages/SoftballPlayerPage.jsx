@@ -57,10 +57,13 @@ function SoftballPlayerPage({ shared }) {
 
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === "undefined") {
-      return "profile";
+      return "attendance";
     }
     const queryTab = new URLSearchParams(window.location.search).get("tab");
-    return queryTab === "attendance" ? "attendance" : "profile";
+    if (queryTab === "profile") {
+      return "profile";
+    }
+    return "attendance";
   });
   const [players, setPlayers] = useState([]);
   const [practices, setPractices] = useState([]);
@@ -778,8 +781,8 @@ function SoftballPlayerPage({ shared }) {
         <section className="mb-6 card p-4 sm:p-6">
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
-              { id: "profile", label: "我的資料" },
               { id: "attendance", label: "練習回覆" },
+              { id: "profile", label: "我的資料" },
             ].map((item) => (
               <button
                 key={item.id}
