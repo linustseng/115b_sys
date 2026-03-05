@@ -77,6 +77,14 @@ function FinanceAdminPage({ shared }) {
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
 
+  const normalizeAmountForCopy_ = (value) => {
+    const parsed = Number(parseFinanceAmount_(value));
+    if (!Number.isFinite(parsed)) {
+      return "";
+    }
+    return Number.isInteger(parsed) ? String(parsed) : String(parsed);
+  };
+
   const copyText_ = async (text, label) => {
     const value = String(text == null ? "" : text).trim();
     if (!value || value === "-") {
@@ -1347,7 +1355,7 @@ function FinanceAdminPage({ shared }) {
                       type="button"
                       onClick={() =>
                         copyText_(
-                          formatFinanceAmount_(
+                          normalizeAmountForCopy_(
                             selectedRequest.type === "purchase"
                               ? selectedRequest.amountEstimated
                               : selectedRequest.amountActual
