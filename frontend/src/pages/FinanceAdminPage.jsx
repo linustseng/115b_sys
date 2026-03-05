@@ -69,12 +69,41 @@ function FinanceAdminPage({ shared }) {
   const [students, setStudents] = useState([]);
   const [fundPayerQuery, setFundPayerQuery] = useState("");
   const [fundPayerView, setFundPayerView] = useState("all");
+  const [copyStatus, setCopyStatus] = useState("");
   const adminDisplayName =
     (googleLinkedStudent &&
       (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
     (googleLinkedStudent && googleLinkedStudent.name) ||
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
+
+  const copyText_ = async (text, label) => {
+    const value = String(text == null ? "" : text).trim();
+    if (!value || value === "-") {
+      setCopyStatus(`無可複製的${label}`);
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.setAttribute("readonly", "readonly");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopyStatus(`已複製${label}`);
+    } catch (error) {
+      setCopyStatus(`複製${label}失敗`);
+    }
+    setTimeout(() => setCopyStatus(""), 1800);
+  };
+
   const fundPaymentErrorFlags = {
     eventId: !!error && error.includes("班費事件"),
     payerName: !!error && error.includes("繳費人"),
@@ -1305,13 +1334,32 @@ function FinanceAdminPage({ shared }) {
                       類型：
                       {FINANCE_TYPES.find((type) => type.value === selectedRequest.type)?.label || "-"}
                     </div>
-                  <div>
-                    金額：
-                    {formatFinanceAmount_(
-                      selectedRequest.type === "purchase"
-                        ? selectedRequest.amountEstimated
-                        : selectedRequest.amountActual
-                    )}
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      金額：
+                      {formatFinanceAmount_(
+                        selectedRequest.type === "purchase"
+                          ? selectedRequest.amountEstimated
+                          : selectedRequest.amountActual
+                      )}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        copyText_(
+                          formatFinanceAmount_(
+                            selectedRequest.type === "purchase"
+                              ? selectedRequest.amountEstimated
+                              : selectedRequest.amountActual
+                          ),
+                          "金額"
+                        )
+                      }
+                      className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
+                      title="複製金額"
+                    >
+                      📋
+                    </button>
                   </div>
                   <div>說明：{selectedRequest.description || "-"}</div>
                   <div>
@@ -1322,15 +1370,46 @@ function FinanceAdminPage({ shared }) {
                   {selectedRequest.type === "payment" ? (
                     <>
                       <div>請款方式：{FINANCE_PAYMENT_METHODS.find((item) => item.value === selectedRequest.paymentMethod)?.label || selectedRequest.paymentMethod || "-"}</div>
-                      <div>廠商/收款人：{selectedRequest.payeeName || "-"}</div>
-                      <div>銀行：{selectedRequest.payeeBank || "-"}</div>
-                      <div>帳號：{selectedRequest.payeeAccount || "-"}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>廠商/收款人：{selectedRequest.payeeName || "-"}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyText_(selectedRequest.payeeName, "廠商/收款人")}
+                          className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
+                          title="複製廠商/收款人"
+                        >
+                          📋
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>銀行：{selectedRequest.payeeBank || "-"}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyText_(selectedRequest.payeeBank, "銀行")}
+                          className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
+                          title="複製銀行"
+                        >
+                          📋
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>帳號：{selectedRequest.payeeAccount || "-"}</span>
+                        <button
+                          type="button"
+                          onClick={() => copyText_(selectedRequest.payeeAccount, "帳號")}
+                          className="rounded border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500 hover:text-slate-700"
+                          title="複製帳號"
+                        >
+                          📋
+                        </button>
+                      </div>
                     </>
                   ) : null}
                   {selectedRequest.type === "purchase" ? (
                     <div>廠商/採購來源：{selectedRequest.vendorName || "-"}</div>
                   ) : null}
                 </div>
+                {copyStatus ? <p className="text-[11px] text-emerald-600">{copyStatus}</p> : null}
                 {selectedRequest.attachments ? (
                   <div>
                     <p className="text-xs font-semibold text-slate-600">附件</p>
