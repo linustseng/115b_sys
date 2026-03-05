@@ -53,7 +53,7 @@ function SoftballPage({ shared }) {
   } = shared;
 
   const [activeTab, setActiveTab] = useState("overview");
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
   const [players, setPlayers] = useState([]);
   const [practices, setPractices] = useState([]);
@@ -419,35 +419,6 @@ function SoftballPage({ shared }) {
     }
   };
 
-  const loadSoftballBootstrap = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const { result } = await apiRequest({ action: "listSoftballBootstrap" });
-      if (!result.ok) {
-        throw new Error(result.error || "載入失敗");
-      }
-      const data = result.data || {};
-      setPlayers(data.players || []);
-      const practiceList = data.practices || [];
-      const sorted = practiceList
-        .slice()
-        .sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
-      setPractices(sorted);
-      setFields(data.fields || []);
-      setGear(data.gear || []);
-      const config = data.config || {};
-      setSoftballConfig(config);
-      setJerseyDeadline(config.jerseyDeadline || "");
-      return true;
-    } catch (err) {
-      setError(err.message || "載入失敗");
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const loadStudents = async () => {
     if (studentsLoading) {
       return;
@@ -471,24 +442,21 @@ function SoftballPage({ shared }) {
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
-      const bootstrapOk = await loadSoftballBootstrap();
-      if (!bootstrapOk) {
-        setLoading(true);
-        setError("");
-        try {
-          await Promise.all([
-            loadPlayers(),
-            loadPractices(),
-            loadFields(),
-            loadGear(),
-            loadSoftballConfig(),
-          ]);
-        } finally {
-          if (!ignore) {
-            setLoading(false);
-          }
+      setInitialLoading(true);
+      setError("");
+      try {
+        await Promise.all([loadPractices(), loadSoftballConfig()]);
+      } finally {
+        if (!ignore) {
+          setInitialLoading(false);
         }
       }
+      setTimeout(() => {
+        if (ignore) {
+          return;
+        }
+        Promise.allSettled([loadPlayers(), loadFields(), loadGear()]);
+      }, 0);
     };
     loadAll();
     return () => {
@@ -1225,6 +1193,16 @@ function SoftballPage({ shared }) {
             ))}
           </div>
         </section>
+
+        {initialLoading ? (
+          <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+            <div className="flex items-center gap-2">
+              <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-sky-500" />
+              <span className="font-medium">壘球後台資料載入中…</span>
+            </div>
+            <p className="mt-1 text-xs text-sky-700">先顯示排程與提醒，其他資料會在背景補齊。</p>
+          </div>
+        ) : null}
 
         {statusMessage ? (
           <div className="mb-6 alert alert-warning">
