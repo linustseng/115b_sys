@@ -17,6 +17,7 @@ function FinanceAdminPage({ shared }) {
     isFinanceRequestRelevantToRole_,
     normalizeGroupId_,
     FINANCE_TYPES,
+    FINANCE_PAYMENT_METHODS,
     FINANCE_STATUS_LABELS,
     FINANCE_ROLE_LABELS,
     FINANCE_ROLE_OPTIONS,
@@ -1318,6 +1319,17 @@ function FinanceAdminPage({ shared }) {
                     {financeCategories.find((item) => item.id === selectedRequest.categoryType)
                       ?.label || "-"}
                   </div>
+                  {selectedRequest.type === "payment" ? (
+                    <>
+                      <div>請款方式：{FINANCE_PAYMENT_METHODS.find((item) => item.value === selectedRequest.paymentMethod)?.label || selectedRequest.paymentMethod || "-"}</div>
+                      <div>廠商/收款人：{selectedRequest.payeeName || "-"}</div>
+                      <div>銀行：{selectedRequest.payeeBank || "-"}</div>
+                      <div>帳號：{selectedRequest.payeeAccount || "-"}</div>
+                    </>
+                  ) : null}
+                  {selectedRequest.type === "purchase" ? (
+                    <div>廠商/採購來源：{selectedRequest.vendorName || "-"}</div>
+                  ) : null}
                 </div>
                 {selectedRequest.attachments ? (
                   <div>

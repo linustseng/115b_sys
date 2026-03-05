@@ -659,6 +659,14 @@ function FinancePage({ shared }) {
       setError("請填寫對應請購或未經請購原因");
       return;
     }
+    if (isPayment && !String(form.payeeName || "").trim()) {
+      setError("請填寫廠商/收款人");
+      return;
+    }
+    if (isPayment && !String(form.payeeAccount || "").trim()) {
+      setError("請填寫匯款帳號");
+      return;
+    }
     const payload = {
       ...form,
       attachments: JSON.stringify(form.attachments || []),
@@ -1273,7 +1281,9 @@ function FinancePage({ shared }) {
               {isPayment ? (
                 <>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">廠商/收款人</label>
+                    <label className="text-sm font-medium text-slate-700">
+                      廠商/收款人 <span className="required-mark">*</span>
+                    </label>
                     <input
                       value={form.payeeName}
                       onChange={(event) => handleFormChange("payeeName", event.target.value)}
@@ -1281,7 +1291,18 @@ function FinancePage({ shared }) {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">銀行/帳號</label>
+                    <label className="text-sm font-medium text-slate-700">銀行</label>
+                    <input
+                      value={form.payeeBank}
+                      onChange={(event) => handleFormChange("payeeBank", event.target.value)}
+                      placeholder="銀行名稱（可選）"
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      帳號 <span className="required-mark">*</span>
+                    </label>
                     <input
                       value={form.payeeAccount}
                       onChange={(event) => handleFormChange("payeeAccount", event.target.value)}
