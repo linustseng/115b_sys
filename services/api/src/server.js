@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
 import multer from "multer";
+import cors from "cors";
 import { google } from "googleapis";
 import { getConfig } from "./config.js";
 import { query, withTransaction } from "./db.js";
@@ -10,6 +11,15 @@ import { verifyGoogleIdToken } from "./auth/google.js";
 
 const config = getConfig();
 const app = express();
+
+app.use(
+  cors({
+    origin: true,
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-id-token", "x-goog-id-token"],
+  })
+);
+app.options("*", cors());
 
 app.use(express.json({ limit: "2mb" }));
 
