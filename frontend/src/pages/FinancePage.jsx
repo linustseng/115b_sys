@@ -831,6 +831,56 @@ function FinancePage({ shared }) {
     closed: requests.filter((item) => String(item.status || "").trim() === "closed").length,
   };
 
+  const parseRequestCreatedAtMs_ = (item) => {
+    if (!item) {
+      return 0;
+    }
+    const raw =
+      item.createdAt ||
+      item.created_at ||
+      item.created ||
+      item.submittedAt ||
+      item.submitted_at ||
+      item.updatedAt ||
+      item.updated_at ||
+      "";
+    if (!raw) {
+      return 0;
+    }
+    if (typeof raw === "number") {
+      // Accept both seconds and ms.
+      return raw < 10_000_000_000 ? raw * 1000 : raw;
+    }
+    const parsed = Date.parse(String(raw));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const myLatestRequest = useMemo(() => {
+    if (!requests.length) {
+      return null;
+    }
+    const isActiveStatus_ = (status) => {
+      const normalized = String(status || "").trim();
+      if (!normalized) {
+        return false;
+      }
+      if (normalized === "closed") {
+        return false;
+      }
+      if (normalized === "withdrawn") {
+        return false;
+      }
+      return true;
+    };
+
+    const active = requests.filter((item) => isActiveStatus_(item.status));
+    const pool = active.length ? active : requests;
+    const sorted = pool
+      .slice()
+      .sort((a, b) => parseRequestCreatedAtMs_(b) - parseRequestCreatedAtMs_(a));
+    return sorted[0] || null;
+  }, [requests]);
+
   const myFundPayments = fundPaymentForm.eventId
     ? fundPayments.filter((item) => {
         const payerId = String(item.payerId || "").trim();
@@ -1216,8 +1266,105 @@ function FinancePage({ shared }) {
               <div className="rounded-2xl border border-slate-200/70 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-slate-900">我的案件</h3>
-                  <span className="text-xs font-semibold text-slate-500">狀態快照</span>
+                  <span className="text-xs font-semibold text-slate-500">最新一筆</span>
                 </div>
+
+                {myLatestRequest ? (
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {myLatestRequest.title || "未命名"}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {FINANCE_TYPES.find((type) => type.value === myLatestRequest.type)?.label ||
+                            "申請"}
+                          {" · "}
+                          {formatFinanceAmount_(
+                            myLatestRequest.type === "purchase"
+                              ? myLatestRequest.amountEstimated
+                              : myLatestRequest.amountActual
+                          )}
+                          {" · "}
+                          {FINANCE_STATUS_LABELS[myLatestRequest.status] || myLatestRequest.status || "-"}
+                        </p>
+                      </div>
+                      <span
+                        className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                          String(myLatestRequest.status || "") === "returned"
+                            ? "border-rose-200 bg-rose-50 text-rose-700"
+                            : String(myLatestRequest.status || "").startsWith("pending")
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : String(myLatestRequest.status || "") === "draft"
+                            ? "border-slate-200 bg-white text-slate-600"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        }`}
+                      >
+                        {FINANCE_STATUS_LABELS[myLatestRequest.status] || myLatestRequest.status || "-"}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
+                      <p className="text-[11px] font-semibold text-slate-500">Case 時間線</p>
+                      <div className="mt-2 grid grid-cols-5 gap-2">
+                        {CASE_STEPS.map((step) => {
+                          const stepState = getCaseStepState_(myLatestRequest.status, step.id);
+                          const badgeClass =
+                            stepState === "done"
+                              ? "bg-emerald-500"
+                              : stepState === "active"
+                              ? "bg-amber-500"
+                              : "bg-slate-300";
+                          return (
+                            <div key={`latest-${step.id}`} className="text-center">
+                              <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
+                              <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {String(myLatestRequest.status || "") === "draft" ||
+                      String(myLatestRequest.status || "") === "returned" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleEditRequest(myLatestRequest);
+                            const el = document.getElementById("finance-request-form");
+                            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="btn-primary"
+                        >
+                          {String(myLatestRequest.status || "") === "returned"
+                            ? "補件並重送"
+                            : "繼續填寫並送出"}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const el = document.getElementById("finance-my-requests");
+                            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                        >
+                          查看進度
+                        </button>
+                      )}
+                      {String(myLatestRequest.status || "").startsWith("pending") ? (
+                        <span className="text-xs font-semibold text-slate-500">
+                          需要撤回請到下方「我的申請」。
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                    你目前還沒有案件。可以從左側情境入口開始建立。
+                  </div>
+                )}
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
                   <div className="rounded-xl border border-slate-200 bg-white p-3">
