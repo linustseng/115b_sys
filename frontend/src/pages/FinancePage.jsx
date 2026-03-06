@@ -39,6 +39,8 @@ function FinancePage({ shared }) {
     toDateInputValue_,
     loadStoredGoogleStudent_,
     loadStoredGoogleIdToken_,
+    storeGoogleIdToken_,
+    getGoogleIdTokenSilently_,
     storeGoogleStudent_,
     normalizePhoneInputValue_,
     GoogleSigninPanel,
@@ -491,9 +493,19 @@ function FinancePage({ shared }) {
       setUploadAttachmentError("目前尚未設定 API v2，上傳功能未啟用");
       return;
     }
-    const idToken = loadStoredGoogleIdToken_();
+    let idToken = loadStoredGoogleIdToken_();
     if (!idToken) {
-      setUploadAttachmentError("請先完成 Google 登入，再上傳附件");
+      try {
+        idToken = await getGoogleIdTokenSilently_();
+        if (idToken) {
+          storeGoogleIdToken_(idToken);
+        }
+      } catch (error) {
+        // Silent refresh may not be available.
+      }
+    }
+    if (!idToken) {
+      setUploadAttachmentError("請先完成 Google 登入（或重新整理後再試一次）");
       return;
     }
 
