@@ -72,6 +72,9 @@ function FinancePage({ shared }) {
     : "requests";
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
+  const financeUploadEnabled = String(import.meta.env.VITE_FINANCE_UPLOAD_ENABLED || "0")
+    .trim()
+    .toLowerCase() === "1";
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [requests, setRequests] = useState([]);
   const [students, setStudents] = useState([]);
@@ -1710,32 +1713,34 @@ function FinancePage({ shared }) {
                 </a>
               </div>
               <div className="flex flex-wrap items-center gap-3">
-                <label
-                  className={`inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border px-4 text-sm font-semibold shadow-sm transition ${
-                    uploadingAttachment
-                      ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                  }`}
-                >
-                  <input
-                    type="file"
-                    className="hidden"
-                    disabled={uploadingAttachment}
-                    accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                    onChange={(event) => {
-                      const f = event.target.files && event.target.files[0];
-                      event.target.value = "";
-                      handleUploadAttachment(f);
-                    }}
-                  />
-                  {uploadingAttachment ? "上傳中..." : "上傳附件"}
-                </label>
+                {financeUploadEnabled ? (
+                  <label
+                    className={`inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border px-4 text-sm font-semibold shadow-sm transition ${
+                      uploadingAttachment
+                        ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={uploadingAttachment}
+                      accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      onChange={(event) => {
+                        const f = event.target.files && event.target.files[0];
+                        event.target.value = "";
+                        handleUploadAttachment(f);
+                      }}
+                    />
+                    {uploadingAttachment ? "上傳中..." : "上傳附件"}
+                  </label>
+                ) : null}
 
                 <div className="flex flex-1 flex-wrap gap-3">
                   <input
                     value={attachmentUrl}
                     onChange={(event) => setAttachmentUrl(event.target.value)}
-                    placeholder="（備援）貼上 Drive 連結"
+                    placeholder="貼上 Drive 連結"
                     className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
                   <button
@@ -1748,14 +1753,12 @@ function FinancePage({ shared }) {
                 </div>
               </div>
 
-              {uploadAttachmentError ? (
-                <div className="alert alert-error text-xs">
-                  {uploadAttachmentError}
-                </div>
+              {financeUploadEnabled && uploadAttachmentError ? (
+                <div className="alert alert-error text-xs">{uploadAttachmentError}</div>
               ) : null}
 
               <p className="text-xs text-slate-400">
-                支援 pdf/jpg/png/heic/xlsx/docx/pptx；單檔上限 25MB。上傳後會自動產生 Drive 連結並加入附件。
+                目前附件請使用 Google Drive 分享連結貼上即可。
               </p>
               {form.attachments && form.attachments.length ? (
                 <div className="space-y-2">
