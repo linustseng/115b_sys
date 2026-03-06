@@ -1131,27 +1131,122 @@ function FinancePage({ shared }) {
           <>
           <section className="mt-6 card p-5 sm:p-6">
             <h2 className="text-base font-semibold text-slate-900">情境導向入口</h2>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-xl border border-slate-200 bg-white p-3">
-                <p className="text-xs text-slate-500">我要送件（草稿）</p>
-                <p className="mt-1 text-xl font-semibold text-slate-900">{requestScenarioCounts.draft}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              挑一個最符合你現在情境的入口，我會把表單先切到正確的類型。
+            </p>
+
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId("");
+                    setForm((prev) => ({ ...buildFinanceDraft_(), applicantName: prev.applicantName || applicantName, type: "purchase" }));
+                    const el = document.getElementById("finance-request-form");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="group rounded-2xl border border-slate-200 bg-white p-4 text-left hover:border-slate-300"
+                >
+                  <p className="text-xs font-semibold text-slate-500">我還沒花錢，先申請核准</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">建立請購案</p>
+                  <p className="mt-2 text-xs text-slate-500">先卡控預算與用途，核准後再支出最順。</p>
+                  <p className="mt-3 text-xs font-semibold text-slate-700">
+                    開始請購 <span className="ml-1 transition group-hover:translate-x-1 inline-block">→</span>
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId("");
+                    setForm((prev) => ({ ...buildFinanceDraft_(), applicantName: prev.applicantName || applicantName, type: "payment" }));
+                    const el = document.getElementById("finance-request-form");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="group rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left hover:border-amber-300"
+                >
+                  <p className="text-xs font-semibold text-amber-700">我已經花錢，要報帳</p>
+                  <p className="mt-1 text-base font-semibold text-amber-900">建立請款案</p>
+                  <p className="mt-2 text-xs text-amber-800/90">上傳發票/收據，填寫收款資訊與金額。</p>
+                  <p className="mt-3 text-xs font-semibold text-amber-800">
+                    開始請款 <span className="ml-1 transition group-hover:translate-x-1 inline-block">→</span>
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId("");
+                    setForm((prev) => ({
+                      ...buildFinanceDraft_(),
+                      applicantName: prev.applicantName || applicantName,
+                      type: "pettycash",
+                      paymentMethod: "pettycash",
+                    }));
+                    const el = document.getElementById("finance-request-form");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="group rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left hover:border-emerald-300"
+                >
+                  <p className="text-xs font-semibold text-emerald-700">我要先領預支款</p>
+                  <p className="mt-1 text-base font-semibold text-emerald-900">零用金申請</p>
+                  <p className="mt-2 text-xs text-emerald-800/90">先支領、後核銷；適合臨時支出情境。</p>
+                  <p className="mt-3 text-xs font-semibold text-emerald-800">
+                    申請零用金 <span className="ml-1 transition group-hover:translate-x-1 inline-block">→</span>
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById("finance-my-requests");
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="group rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-left hover:border-slate-300"
+                >
+                  <p className="text-xs font-semibold text-slate-600">我有舊案件要補件/續辦</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">進入我的案件</p>
+                  <p className="mt-2 text-xs text-slate-500">查看目前流程狀態，必要時補件或撤回。</p>
+                  <p className="mt-3 text-xs font-semibold text-slate-700">
+                    看我的案件 <span className="ml-1 transition group-hover:translate-x-1 inline-block">→</span>
+                  </p>
+                </button>
               </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <p className="text-xs text-amber-700">我在流程中</p>
-                <p className="mt-1 text-xl font-semibold text-amber-900">{requestScenarioCounts.pending}</p>
-              </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
-                <p className="text-xs text-rose-700">退回補件</p>
-                <p className="mt-1 text-xl font-semibold text-rose-900">{requestScenarioCounts.returned}</p>
-              </div>
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-                <p className="text-xs text-emerald-700">已結案</p>
-                <p className="mt-1 text-xl font-semibold text-emerald-900">{requestScenarioCounts.closed}</p>
+
+              <div className="rounded-2xl border border-slate-200/70 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-slate-900">我的案件</h3>
+                  <span className="text-xs font-semibold text-slate-500">狀態快照</span>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white p-3">
+                    <p className="text-xs text-slate-500">草稿待送件</p>
+                    <p className="mt-1 text-xl font-semibold text-slate-900">{requestScenarioCounts.draft}</p>
+                  </div>
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs text-amber-700">流程中</p>
+                    <p className="mt-1 text-xl font-semibold text-amber-900">{requestScenarioCounts.pending}</p>
+                  </div>
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 p-3">
+                    <p className="text-xs text-rose-700">退回補件</p>
+                    <p className="mt-1 text-xl font-semibold text-rose-900">{requestScenarioCounts.returned}</p>
+                  </div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <p className="text-xs text-emerald-700">已結案</p>
+                    <p className="mt-1 text-xl font-semibold text-emerald-900">{requestScenarioCounts.closed}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3 text-xs text-slate-600">
+                  小提醒：如果你要「補件」或「修改草稿」，請到下方「我的申請」點選該案件。
+                </div>
               </div>
             </div>
           </section>
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
             <form
+              id="finance-request-form"
               onSubmit={handleSubmit}
               className="card p-6 sm:p-8"
             >
@@ -1477,7 +1572,7 @@ function FinancePage({ shared }) {
             </div>
           </form>
 
-            <section className="card p-6 sm:p-8">
+            <section id="finance-my-requests" className="card p-6 sm:p-8">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-slate-900">我的申請</h2>
               {loading ? (

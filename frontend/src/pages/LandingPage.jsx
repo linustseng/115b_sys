@@ -873,7 +873,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">財務管理</h3>
               <p className="mt-3 text-sm text-sky-900/80">
-                班費請購、請款與零用金申請。
+                請購 / 請款 / 零用金申請。
               </p>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
