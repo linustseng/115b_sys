@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { Readable } from "node:stream";
 import express from "express";
 import multer from "multer";
 import cors from "cors";
@@ -1296,7 +1297,7 @@ app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, re
       },
       media: {
         mimeType: mimetype,
-        body: Buffer.from(file.buffer),
+        body: Readable.from(file.buffer),
       },
       fields: "id,name,webViewLink",
       supportsAllDrives: true,
