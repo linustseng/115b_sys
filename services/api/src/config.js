@@ -36,6 +36,11 @@ export function getConfig() {
   const sessionSecret = requireEnv("SESSION_SECRET");
   const googleClientId = requireEnv("GOOGLE_CLIENT_ID");
 
+  const driveFinanceFolderId = String(process.env.DRIVE_FINANCE_FOLDER_ID || "").trim();
+  const driveServiceAccountJsonBase64 = String(
+    process.env.DRIVE_SERVICE_ACCOUNT_JSON_BASE64 || ""
+  ).trim();
+
   cachedConfig = {
     nodeEnv: String(process.env.NODE_ENV || "development").trim(),
     port: parseNumber(process.env.PORT, 8080),
@@ -46,6 +51,8 @@ export function getConfig() {
     syncPullToken,
     sessionSecret,
     googleClientId,
+    driveFinanceFolderId,
+    driveServiceAccountJsonBase64,
   };
 
   return cachedConfig;

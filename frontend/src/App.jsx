@@ -2277,6 +2277,7 @@ function AppShell() {
   const shared = {
     apiRequest,
     API_URL,
+    API_V2_URL,
     PUBLIC_SITE_URL,
     GOOGLE_CLIENT_ID,
     EVENT_ID,

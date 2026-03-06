@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import express from "express";
+import multer from "multer";
+import { google } from "googleapis";
 import { getConfig } from "./config.js";
 import { query, withTransaction } from "./db.js";
 import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
@@ -10,6 +12,72 @@ const config = getConfig();
 const app = express();
 
 app.use(express.json({ limit: "2mb" }));
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+  },
+});
+
+function decodeDriveServiceAccountJson_(base64) {
+  const raw = String(base64 || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const jsonText = Buffer.from(raw, "base64").toString("utf-8");
+  const parsed = JSON.parse(jsonText);
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Invalid service account JSON");
+  }
+  return parsed;
+}
+
+async function getDriveClient_() {
+  if (!config.driveServiceAccountJsonBase64) {
+    throw new Error("Drive upload not configured");
+  }
+  const credentials = decodeDriveServiceAccountJson_(config.driveServiceAccountJsonBase64);
+  if (!credentials) {
+    throw new Error("Drive upload not configured");
+  }
+  const auth = new google.auth.GoogleAuth({
+    credentials,
+    scopes: ["https://www.googleapis.com/auth/drive"],
+  });
+  const authClient = await auth.getClient();
+  return google.drive({ version: "v3", auth: authClient });
+}
+
+function isAllowedUploadMime_(mime) {
+  const normalized = String(mime || "").trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  return new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/heic",
+    "image/heif",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // xlsx
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // docx
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation", // pptx
+  ]).has(normalized);
+}
+
+function safeFilename_(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "attachment";
+  }
+  // remove path separators and control chars
+  return raw
+    .replace(/[\u0000-\u001f\u007f]/g, "")
+    .replace(/[\\/]+/g, "_")
+    .slice(0, 160) || "attachment";
+}
 
 const STUDENT_PROFILE_SELECT = `
 SELECT
@@ -279,6 +347,10 @@ function getSessionTokenFromRequest(req) {
 }
 
 function getIdTokenFromRequest(req) {
+  const headerToken = String(req.headers["x-id-token"] || req.headers["x-goog-id-token"] || "").trim();
+  if (headerToken) {
+    return headerToken;
+  }
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const queryParams = req.query && typeof req.query === "object" ? req.query : {};
   return String(body.idToken || queryParams.idToken || "").trim();
@@ -1175,6 +1247,83 @@ app.post("/v1/auth/create-session", async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+
+    const folderId = String(config.driveFinanceFolderId || "").trim();
+    if (!folderId) {
+      return res.status(500).json({ ok: false, data: null, error: "Drive folder not configured" });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({ ok: false, data: null, error: "Missing file" });
+    }
+
+    const mimetype = String(file.mimetype || "").trim();
+    if (!isAllowedUploadMime_(mimetype)) {
+      return res.status(400).json({
+        ok: false,
+        data: null,
+        error: "不支援的檔案格式（僅支援 pdf/jpg/png/heic/xlsx/docx/pptx）",
+      });
+    }
+
+    const drive = await getDriveClient_();
+    const name = safeFilename_(file.originalname);
+
+    const createResponse = await drive.files.create({
+      requestBody: {
+        name,
+        parents: [folderId],
+      },
+      media: {
+        mimeType: mimetype,
+        body: Buffer.from(file.buffer),
+      },
+      fields: "id,name,webViewLink",
+      supportsAllDrives: true,
+    });
+
+    const fileId = String((createResponse && createResponse.data && createResponse.data.id) || "").trim();
+    if (!fileId) {
+      throw new Error("Drive upload failed");
+    }
+
+    await drive.permissions.create({
+      fileId,
+      requestBody: {
+        role: "reader",
+        type: "anyone",
+      },
+      supportsAllDrives: true,
+    });
+
+    const url = `https://drive.google.com/file/d/${fileId}/view`;
+    return res.json({
+      ok: true,
+      data: {
+        fileId,
+        name,
+        url,
+        size: Number(file.size || 0),
+        mimeType: mimetype,
+      },
+      error: null,
+    });
+  } catch (error) {
+    const message = String((error && error.message) || "Upload failed");
+    if (message === "Drive upload not configured") {
+      return res.status(500).json({ ok: false, data: null, error: "Drive 上傳尚未設定" });
+    }
+    return res.status(500).json({ ok: false, data: null, error: message || "Upload failed" });
   }
 });
 

@@ -5,6 +5,7 @@ function FinancePage({ shared }) {
   const {
     apiRequest,
     API_URL,
+    API_V2_URL,
     PUBLIC_SITE_URL,
     GOOGLE_CLIENT_ID,
     EVENT_ID,
@@ -37,6 +38,7 @@ function FinancePage({ shared }) {
     toLocalInputValue_,
     toDateInputValue_,
     loadStoredGoogleStudent_,
+    loadStoredGoogleIdToken_,
     storeGoogleStudent_,
     normalizePhoneInputValue_,
     GoogleSigninPanel,
@@ -78,6 +80,8 @@ function FinancePage({ shared }) {
   const [form, setForm] = useState(buildFinanceDraft_());
   const [editingId, setEditingId] = useState("");
   const [attachmentUrl, setAttachmentUrl] = useState("");
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [uploadAttachmentError, setUploadAttachmentError] = useState("");
   const [memberGroups, setMemberGroups] = useState([]);
   const [fundEvents, setFundEvents] = useState([]);
   const [fundEventsLoading, setFundEventsLoading] = useState(false);
@@ -477,6 +481,54 @@ function FinancePage({ shared }) {
       attachments: (prev.attachments || []).concat([{ name: trimmed, url: trimmed }]),
     }));
     setAttachmentUrl("");
+  };
+
+  const handleUploadAttachment = async (file) => {
+    if (!file) {
+      return;
+    }
+    if (!API_V2_URL) {
+      setUploadAttachmentError("目前尚未設定 API v2，上傳功能未啟用");
+      return;
+    }
+    const idToken = loadStoredGoogleIdToken_();
+    if (!idToken) {
+      setUploadAttachmentError("請先完成 Google 登入，再上傳附件");
+      return;
+    }
+
+    setUploadingAttachment(true);
+    setUploadAttachmentError("");
+    try {
+      const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await fetch(`${base}/v1/finance/attachments/upload`, {
+        method: "POST",
+        headers: {
+          "x-id-token": idToken,
+        },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
+      }
+      const data = payload.data || {};
+      const url = String(data.url || "").trim();
+      const name = String(data.name || file.name || url).trim();
+      if (!url) {
+        throw new Error("上傳成功但缺少連結");
+      }
+      setForm((prev) => ({
+        ...prev,
+        attachments: (prev.attachments || []).concat([{ name, url }]),
+      }));
+    } catch (error) {
+      setUploadAttachmentError(String(error && error.message ? error.message : "上傳失敗"));
+    } finally {
+      setUploadingAttachment(false);
+    }
   };
 
   const handleRemoveAttachment = (index) => {
@@ -1645,23 +1697,53 @@ function FinancePage({ shared }) {
                   上傳到 Google Drive
                 </a>
               </div>
-              <div className="flex flex-wrap gap-3">
-                <input
-                  value={attachmentUrl}
-                  onChange={(event) => setAttachmentUrl(event.target.value)}
-                  placeholder="貼上發票/報價單連結"
-                  className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
-                />
-                <button
-                  type="button"
-                  onClick={handleAddAttachment}
-                  className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600"
+              <div className="flex flex-wrap items-center gap-3">
+                <label
+                  className={`inline-flex h-11 cursor-pointer items-center justify-center rounded-2xl border px-4 text-sm font-semibold shadow-sm transition ${
+                    uploadingAttachment
+                      ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                      : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                  }`}
                 >
-                  加入
-                </button>
+                  <input
+                    type="file"
+                    className="hidden"
+                    disabled={uploadingAttachment}
+                    accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                    onChange={(event) => {
+                      const f = event.target.files && event.target.files[0];
+                      event.target.value = "";
+                      handleUploadAttachment(f);
+                    }}
+                  />
+                  {uploadingAttachment ? "上傳中..." : "上傳附件"}
+                </label>
+
+                <div className="flex flex-1 flex-wrap gap-3">
+                  <input
+                    value={attachmentUrl}
+                    onChange={(event) => setAttachmentUrl(event.target.value)}
+                    placeholder="（備援）貼上 Drive 連結"
+                    className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddAttachment}
+                    className="h-11 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600"
+                  >
+                    加入
+                  </button>
+                </div>
               </div>
+
+              {uploadAttachmentError ? (
+                <div className="alert alert-error text-xs">
+                  {uploadAttachmentError}
+                </div>
+              ) : null}
+
               <p className="text-xs text-slate-400">
-                建議上傳到雲端硬碟後分享連結（任何知道連結的人可檢視），再貼回此處。
+                支援 pdf/jpg/png/heic/xlsx/docx/pptx；單檔上限 25MB。上傳後會自動產生 Drive 連結並加入附件。
               </p>
               {form.attachments && form.attachments.length ? (
                 <div className="space-y-2">
