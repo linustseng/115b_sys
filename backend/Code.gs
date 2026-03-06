@@ -152,7 +152,16 @@ function doGet(e) {
 
 function getCachedJson_(key, ttlSeconds, loader) {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get(key);
+  var cacheKey = String(key || "").trim();
+
+  // CacheService key length limit is strict (<= 250 chars). Some callers may
+  // accidentally pass long keys (e.g. derived from request payload). When that
+  // happens Apps Script throws: 「以下引數過大：key」.
+  if (cacheKey.length > 200) {
+    cacheKey = buildDynamicCacheKey_("cache", cacheKey);
+  }
+
+  const cached = cache.get(cacheKey);
   if (cached) {
     try {
       return JSON.parse(cached);
@@ -161,7 +170,7 @@ function getCachedJson_(key, ttlSeconds, loader) {
     }
   }
   const data = loader();
-  cache.put(key, JSON.stringify(data || null), ttlSeconds);
+  cache.put(cacheKey, JSON.stringify(data || null), ttlSeconds);
   return data;
 }
 
