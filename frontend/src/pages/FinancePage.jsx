@@ -1737,6 +1737,17 @@ function FinancePage({ shared }) {
                   const canEdit = item.status === "draft" || item.status === "returned";
                   const canWithdraw = String(item.status || "").startsWith("pending");
                   const isEditing = editingId && editingId === item.id;
+                  const status = String(item.status || "").trim();
+                  const statusTone = status === "returned"
+                    ? { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-800" }
+                    : status.startsWith("pending")
+                    ? { border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-900" }
+                    : status === "draft"
+                    ? { border: "border-slate-200", bg: "bg-white", text: "text-slate-700" }
+                    : status === "closed"
+                    ? { border: "border-emerald-200", bg: "bg-emerald-50/40", text: "text-emerald-900" }
+                    : { border: "border-slate-200/70", bg: "bg-slate-50/60", text: "text-slate-700" };
+
                   return (
                     <div
                       key={item.id}
@@ -1750,7 +1761,7 @@ function FinancePage({ shared }) {
                       } ${
                         isEditing
                           ? "border-slate-900 bg-white text-slate-700"
-                          : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                          : `${statusTone.border} ${statusTone.bg} ${statusTone.text}`
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
