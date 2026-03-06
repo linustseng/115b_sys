@@ -680,6 +680,72 @@ app.get("/v1/group-memberships", async (_req, res) => {
   }
 });
 
+function toDirectoryEntry(row) {
+  if (!row) {
+    return null;
+  }
+  const id = String(row.id || "").trim();
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    email: normalizeEmail(row.email || ""),
+    nameZh: String(row.name_zh || "").trim(),
+    nameEn: String(row.name_en || "").trim(),
+    preferredName: String(row.preferred_name || "").trim(),
+    company: String(row.company || "").trim(),
+    title: String(row.title || "").trim(),
+    mobile: String(row.mobile || "").trim(),
+    backupPhone: String(row.backup_phone || "").trim(),
+    emergencyContact: String(row.emergency_contact || "").trim(),
+    emergencyPhone: String(row.emergency_phone || "").trim(),
+    dietaryRestrictions: String(row.dietary_restrictions || "").trim(),
+    birthdayMonth: String(row.birthday_month || "").trim(),
+    birthdayDay: String(row.birthday_day || "").trim(),
+    group: String(row.group_id || "").trim(),
+    photoUrl: String(row.photo_url || "").trim(),
+  };
+}
+
+function canViewDirectory_(memberships) {
+  const list = Array.isArray(memberships) ? memberships : [];
+  return list.some((item) => {
+    const groupId = String(item.groupId || item.group_id || "").trim();
+    const role = String(item.roleInGroup || item.role_in_group || "").trim();
+    if (groupId === "E") {
+      return true;
+    }
+    if (groupId === "A" && (role === "lead" || role === "deputy")) {
+      return true;
+    }
+    return false;
+  });
+}
+
+app.get("/v1/directory", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const memberships = await listMembershipsByStudentId(auth.studentId);
+    if (!canViewDirectory_(memberships)) {
+      return res.status(403).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+
+    const result = await query(
+      `SELECT *
+       FROM directories
+       ORDER BY coalesce(group_id, ''), coalesce(name_zh, ''), coalesce(preferred_name, ''), id`
+    );
+    const directory = result.rows.map(toDirectoryEntry).filter(Boolean);
+    return res.json({ ok: true, data: { directory }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
 app.get("/v1/lookup-student", async (req, res) => {
   const email = normalizeEmail(req.query.email || "");
   if (!email) {

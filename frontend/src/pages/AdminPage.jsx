@@ -15,6 +15,7 @@ export default function AdminPage({
   apiRequest,
   API_URL,
   UPLOAD_FOLDER_ID,
+  getGoogleIdTokenSilently_ = null,
   buildGoogleMapsUrl_,
   formatDisplayDate_,
   getGroupLabel_,
@@ -770,7 +771,13 @@ export default function AdminPage({
     try {
       const payload = activeToken
         ? { action: "listDirectory", authToken: activeToken }
-        : { action: "listDirectory" };
+        : {
+            action: "listDirectory",
+            idToken: getGoogleIdTokenSilently_ ? await getGoogleIdTokenSilently_() : "",
+          };
+      if (!payload.authToken && !payload.idToken) {
+        throw new Error("請先完成 Google 登入");
+      }
       const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");

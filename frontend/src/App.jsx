@@ -737,6 +737,7 @@ const API_V2_READ_ACTIONS = new Set([
   "getRegistrationBootstrap",
   "getCheckinBootstrap",
   "listCheckinStatus",
+  "listDirectory",
 ]);
 
 const API_V2_WRITE_ACTIONS = new Set(["register", "checkin", "updateRegistration"]);
@@ -962,6 +963,19 @@ function buildApiV2Request_(payload) {
       method: "GET",
       url: `${base}/v1/group-memberships`,
       headers: { Accept: "application/json" },
+      body: null,
+    };
+  }
+
+  if (action === "listDirectory") {
+    const idToken = String((payload && payload.idToken) || "").trim();
+    if (!idToken) {
+      throw new Error("Missing idToken");
+    }
+    return {
+      method: "GET",
+      url: `${base}/v1/directory`,
+      headers: { Accept: "application/json", "x-id-token": idToken },
       body: null,
     };
   }
@@ -2420,6 +2434,7 @@ function AppShell() {
           apiRequest={apiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
@@ -2445,6 +2460,7 @@ function AppShell() {
           apiRequest={apiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
@@ -2488,6 +2504,7 @@ function AppShell() {
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
+          getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           initialTab="roles"
           allowedTabs={["students", "roles"]}
         />
@@ -2515,6 +2532,7 @@ function AppShell() {
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
+          getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           initialTab="students"
           allowedTabs={["students"]}
         />
