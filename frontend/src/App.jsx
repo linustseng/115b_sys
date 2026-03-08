@@ -922,31 +922,20 @@ function shouldUseApiV2Read_(payload) {
 function applyApiV2AuthHeaders_(headers, payload) {
   const next = Object.assign({}, headers || {});
   let sessionToken = String((payload && payload.sessionToken) || "").trim();
-  let idToken = String((payload && payload.idToken) || "").trim();
+  const idToken = String((payload && payload.idToken) || "").trim();
 
-  // fallback to stored auth for pages that call apiRequest directly
-  if (typeof window !== "undefined") {
-    if (!sessionToken) {
-      try {
-        const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          sessionToken = String((parsed && parsed.token) || "").trim();
-        }
-      } catch (error) {
-        // ignore storage errors
+  // Fallback to stored session token for pages that call apiRequest directly.
+  // IMPORTANT: do NOT implicitly attach Google idToken to every request.
+  // Session-first auth expects idToken only during (re)authentication.
+  if (typeof window !== "undefined" && !sessionToken) {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        sessionToken = String((parsed && parsed.token) || "").trim();
       }
-    }
-    if (!idToken) {
-      try {
-        const raw = window.sessionStorage.getItem(STORAGE_KEYS.googleIdToken);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          idToken = String((parsed && parsed.token) || "").trim();
-        }
-      } catch (error) {
-        // ignore storage errors
-      }
+    } catch (error) {
+      // ignore storage errors
     }
   }
 
@@ -2097,9 +2086,6 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
       requestPayload.sessionToken = sessionToken;
     }
     const existingToken = String(googleIdToken || loadStoredGoogleIdToken_() || "").trim();
-    if (existingToken) {
-      requestPayload.idToken = existingToken;
-    }
 
     const response = await apiRequest(requestPayload);
     const result = response && response.result ? response.result : null;
@@ -2147,9 +2133,6 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
           }
 
           const rotatedPayload = { ...(payload || {}), sessionToken: refreshResult.data.sessionToken };
-          if (existingToken) {
-            rotatedPayload.idToken = existingToken;
-          }
           const rotatedResponse = await apiRequest(rotatedPayload);
           const rotatedResult = rotatedResponse && rotatedResponse.result ? rotatedResponse.result : null;
           const rotatedUnauthorized =
