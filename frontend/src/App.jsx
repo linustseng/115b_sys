@@ -196,8 +196,9 @@ const meetingFields = [
 
 const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const API_V2_URL = import.meta.env.VITE_API_V2_URL || "";
-const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "0").trim() === "1";
-const API_V2_WRITE_ENABLED = String(import.meta.env.VITE_API_V2_WRITE_ENABLED || "0").trim() === "1";
+// Default to enabled when API_V2_URL is configured.
+const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "1").trim() === "1";
+const API_V2_WRITE_ENABLED = String(import.meta.env.VITE_API_V2_WRITE_ENABLED || "1").trim() === "1";
 const API_V2_STRICT = String(import.meta.env.VITE_API_V2_STRICT || "1").trim() === "1";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
