@@ -1514,6 +1514,7 @@ export async function dispatchNativeAction({
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const isAdmin = canAccessByGroups(memberships, ["E", "H"]);
       const practiceId = firstText(body.practiceId);
+      const requestedStudentId = firstText(body.studentId);
       const studentId = firstText(body.studentId, auth.studentId);
       let result;
       if (practiceId) {
@@ -1532,7 +1533,8 @@ export async function dispatchNativeAction({
            order by practice_key, player_key, coalesce(updated_at,'') desc, id desc`,
           isAdmin ? [practiceId] : [practiceId, studentId]
         );
-      } else if (isAdmin) {
+      } else if (isAdmin && !requestedStudentId) {
+        // Admin without an explicit student filter: list recent rows for all players.
         result = await query(
           `with att as (
              select *,
@@ -1546,6 +1548,7 @@ export async function dispatchNativeAction({
            limit 2000`
         );
       } else {
+        // Even for admins, when studentId is provided, only return that student's attendance.
         result = await query(
           `with att as (
              select *,
