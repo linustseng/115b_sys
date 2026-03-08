@@ -1358,7 +1358,7 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballConfig": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
       const result = await query(`select * from softball_config where id = 'singleton' limit 1`);
       const row = rowOrNull(result);
       return { ok: true, data: { config: row ? row.raw || {} : {} }, error: null };
@@ -1399,7 +1399,7 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballPlayers": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
       const result = await query(`select * from softball_players order by coalesce(name,''), id`);
       const players = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { players }, error: null };
@@ -1462,7 +1462,7 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballPractices": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
       const result = await query(`select * from softball_practices order by coalesce(date,'') desc, id desc`);
       const practices = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { practices }, error: null };
@@ -1502,26 +1502,46 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballAttendance": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]);
       const practiceId = firstText(body.practiceId);
-      const result = practiceId
-        ? await query(`select * from softball_attendance where practice_id = $1 order by coalesce(updated_at,''), id`, [practiceId])
-        : await query(`select * from softball_attendance order by coalesce(updated_at,'') desc, id desc limit 2000`);
+      const studentId = firstText(body.studentId, auth.studentId);
+      let result;
+      if (practiceId) {
+        result = await query(
+          `select * from softball_attendance where practice_id = $1 ${isAdmin ? "" : "and player_id = $2"} order by coalesce(updated_at,''), id`,
+          isAdmin ? [practiceId] : [practiceId, studentId]
+        );
+      } else if (isAdmin) {
+        result = await query(`select * from softball_attendance order by coalesce(updated_at,'') desc, id desc limit 2000`);
+      } else {
+        result = await query(
+          `select * from softball_attendance where player_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`,
+          [studentId]
+        );
+      }
       const attendance = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { attendance }, error: null };
     }
 
     case "submitSoftballAttendance": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]);
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);
-      const playerId = firstText(data.playerId || body.playerId);
+      const playerId = firstText(data.playerId || data.studentId || body.playerId || body.studentId, auth.studentId);
       if (!practiceId || !playerId) {
         return { ok: false, data: null, error: "Missing practiceId/playerId" };
+      }
+      if (!isAdmin && String(playerId) !== String(auth.studentId)) {
+        return { ok: false, data: null, error: "Unauthorized" };
       }
       const id = firstText(data.id, `${practiceId}:${playerId}`);
       const createdAt = firstText(data.createdAt, nowIso());
       const updatedAt = nowIso();
+      const notes = firstText(data.notes || data.note || body.note || body.notes);
       await query(
         `insert into softball_attendance (id, practice_id, player_id, status, notes, raw, created_at, updated_at)
          values ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -1531,13 +1551,13 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, practiceId, playerId, firstText(data.status), firstText(data.notes), data, createdAt, updatedAt]
+        [id, practiceId, playerId, firstText(data.status), notes, { ...data, playerId, notes }, createdAt, updatedAt]
       );
       return { ok: true, data: { id }, error: null };
     }
 
     case "listSoftballFields": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
       const result = await query(`select * from softball_fields order by coalesce(name,''), id`);
       const fields = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { fields }, error: null };
@@ -1576,7 +1596,7 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballGear": {
-      await requireGroupAccess(["E", "H"]);
+      requireAuth();
       const result = await query(`select * from softball_gear order by coalesce(name,''), id`);
       const gear = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { gear }, error: null };
@@ -1615,9 +1635,13 @@ export async function dispatchNativeAction({
 
     case "listSoftballPlayerBootstrap": {
       requireAuth();
-      const [configResult, playerResult] = await Promise.all([
+      const [configResult, playerResult, playersResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
         query(`select * from softball_config where id = 'singleton' limit 1`),
         query(`select * from softball_players where id = $1 limit 1`, [auth.studentId]),
+        query(`select * from softball_players order by coalesce(name,''), id`),
+        query(`select * from softball_practices order by coalesce(date,'') desc, id desc`),
+        query(`select * from softball_fields order by coalesce(name,''), id`),
+        query(`select * from softball_attendance where player_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`, [auth.studentId]),
       ]);
       const configRow = rowOrNull(configResult);
       const playerRow = rowOrNull(playerResult);
@@ -1626,6 +1650,10 @@ export async function dispatchNativeAction({
         data: {
           config: configRow ? configRow.raw || {} : {},
           player: playerRow ? playerRow.raw || { id: playerRow.id } : null,
+          players: playersResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
         },
         error: null,
       };
