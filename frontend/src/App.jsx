@@ -2515,8 +2515,24 @@ function AppShell() {
         if (!idToken) {
           return;
         }
-        const verifyResponse = await apiRequest({ action: "verifyGoogle", idToken });
-        const verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+        let verifyResponse = await apiRequest({ action: "verifyGoogle", idToken });
+        let verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+
+        if (
+          verifyResult &&
+          verifyResult.ok === false &&
+          String(verifyResult.error || "") === "Unauthorized" &&
+          typeof getGoogleIdTokenSilently_ === "function"
+        ) {
+          // Refresh idToken silently and retry once.
+          const refreshed = await getGoogleIdTokenSilently_();
+          if (refreshed) {
+            storeGoogleIdToken_(refreshed);
+            verifyResponse = await apiRequest({ action: "verifyGoogle", idToken: refreshed });
+            verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+          }
+        }
+
         if (verifyResult && verifyResult.ok && verifyResult.data && verifyResult.data.sessionToken) {
           const studentId = String((verifyResult.data.student && verifyResult.data.student.id) || "").trim();
           storeAdminSession_({
