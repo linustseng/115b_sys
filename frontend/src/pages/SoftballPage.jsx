@@ -4,6 +4,7 @@ function SoftballPage({ shared }) {
 
   const {
     apiRequest,
+    authedApiRequest,
     API_URL,
     PUBLIC_SITE_URL,
     GOOGLE_CLIENT_ID,
@@ -332,7 +333,7 @@ function SoftballPage({ shared }) {
 
   const loadPlayers = async () => {
     try {
-      const { result } = await apiRequest({ action: "listSoftballPlayers" });
+      const { result } = await authedApiRequest({ action: "listSoftballPlayers" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -344,7 +345,7 @@ function SoftballPage({ shared }) {
 
   const loadPractices = async () => {
     try {
-      const { result } = await apiRequest({ action: "listSoftballPractices" });
+      const { result } = await authedApiRequest({ action: "listSoftballPractices" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -358,7 +359,7 @@ function SoftballPage({ shared }) {
 
   const loadFields = async () => {
     try {
-      const { result } = await apiRequest({ action: "listSoftballFields" });
+      const { result } = await authedApiRequest({ action: "listSoftballFields" });
       if (!result.ok) {
         setError(`球場資料載入失敗：${result.error || "載入失敗"}`);
         setFields([]);
@@ -373,7 +374,7 @@ function SoftballPage({ shared }) {
 
   const loadGear = async () => {
     try {
-      const { result } = await apiRequest({ action: "listSoftballGear" });
+      const { result } = await authedApiRequest({ action: "listSoftballGear" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -389,7 +390,7 @@ function SoftballPage({ shared }) {
       return;
     }
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "listSoftballAttendance",
         practiceId: practiceId,
       });
@@ -407,7 +408,7 @@ function SoftballPage({ shared }) {
 
   const loadSoftballConfig = async () => {
     try {
-      const { result } = await apiRequest({ action: "listSoftballConfig" });
+      const { result } = await authedApiRequest({ action: "listSoftballConfig" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -425,7 +426,7 @@ function SoftballPage({ shared }) {
     }
     setStudentsLoading(true);
     try {
-      const { result } = await apiRequest({ action: "listStudents" });
+      const { result } = await authedApiRequest({ action: "listStudents" });
       if (result.ok) {
         setStudents(result.data && result.data.students ? result.data.students : []);
       } else {
@@ -578,7 +579,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "updateSoftballConfig",
         data: {
           jerseyDeadline: jerseyDeadline,
@@ -661,7 +662,7 @@ function SoftballPage({ shared }) {
         payload.jerseyRequest = player.jerseyRequest || "";
         payload.positionRequest = player.positionRequest || "";
       }
-      const { result } = await apiRequest({ action: "updateSoftballPlayer", data: payload });
+      const { result } = await authedApiRequest({ action: "updateSoftballPlayer", data: payload });
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
@@ -686,7 +687,7 @@ function SoftballPage({ shared }) {
       const action = players.find((item) => normalizeId_(item.id) === normalizeId_(playerForm.id))
         ? "updateSoftballPlayer"
         : "createSoftballPlayer";
-      const { result } = await apiRequest({ action: action, data: playerForm });
+      const { result } = await authedApiRequest({ action: action, data: playerForm });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -713,7 +714,7 @@ function SoftballPage({ shared }) {
       const payload = practiceForm.id
         ? { action: action, id: practiceForm.id, data: practiceForm }
         : { action: action, data: practiceForm };
-      const { result } = await apiRequest(payload);
+      const { result } = await authedApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -742,7 +743,7 @@ function SoftballPage({ shared }) {
       const payload = fieldForm.id
         ? { action: action, id: fieldForm.id, data: fieldForm }
         : { action: action, data: fieldForm };
-      const { result } = await apiRequest(payload);
+      const { result } = await authedApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -769,7 +770,7 @@ function SoftballPage({ shared }) {
       const payload = gearForm.id
         ? { action: action, id: gearForm.id, data: gearForm }
         : { action: action, data: gearForm };
-      const { result } = await apiRequest(payload);
+      const { result } = await authedApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -795,7 +796,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({ action: "deleteSoftballPlayer", id: id });
+      const { result } = await authedApiRequest({ action: "deleteSoftballPlayer", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -820,7 +821,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({ action: "deleteSoftballPractice", id: id });
+      const { result } = await authedApiRequest({ action: "deleteSoftballPractice", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -848,7 +849,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({ action: "deleteSoftballField", id: id });
+      const { result } = await authedApiRequest({ action: "deleteSoftballField", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -873,7 +874,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({ action: "deleteSoftballGear", id: id });
+      const { result } = await authedApiRequest({ action: "deleteSoftballGear", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -893,7 +894,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "submitSoftballAttendance",
         data: {
           practiceId: activePracticeId,
@@ -940,7 +941,7 @@ function SoftballPage({ shared }) {
     let studentRoster = Array.isArray(students) ? students.slice() : [];
     if (!studentRoster.length) {
       try {
-        const { result } = await apiRequest({ action: "listStudents" });
+        const { result } = await authedApiRequest({ action: "listStudents" });
         if (result && result.ok && result.data && Array.isArray(result.data.students)) {
           studentRoster = result.data.students.slice();
           setStudents(studentRoster);
