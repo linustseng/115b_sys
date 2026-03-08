@@ -440,6 +440,28 @@ function SoftballPlayerPage({ shared }) {
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
+
+      // Optimistic UI update: reflect the selected status immediately.
+      setAttendance((prev) => {
+        const practiceKey = normalizeId_(practiceId);
+        const studentKey = normalizeId_(googleLinkedStudent.id);
+        const next = Array.isArray(prev) ? prev.slice() : [];
+        const filtered = next.filter((item) => {
+          const itemPractice = normalizeId_(item.practiceId);
+          const itemStudent = normalizeId_(item.studentId || item.playerId);
+          return !(itemPractice === practiceKey && itemStudent === studentKey);
+        });
+        filtered.unshift({
+          id: `${practiceKey}:${studentKey}`,
+          practiceId: practiceKey,
+          studentId: studentKey,
+          status: status,
+          note: note,
+          updatedAt: new Date().toISOString(),
+        });
+        return filtered;
+      });
+
       await loadAttendance(googleLinkedStudent.id);
       setStatusMessage("已更新回覆");
     } catch (err) {
