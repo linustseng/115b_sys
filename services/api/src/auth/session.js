@@ -2,7 +2,10 @@ import crypto from "node:crypto";
 import { getConfig } from "../config.js";
 
 const config = getConfig();
-const SESSION_TTL_SECONDS = 60 * 60 * 12;
+// Access token TTL (seconds). Session-first design: access is short-lived.
+const SESSION_TTL_SECONDS = 60 * 60 * 24;
+// Refresh token TTL (seconds). Used only to mint new access tokens.
+const REFRESH_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function encodeBase64Url(value) {
   const buffer = Buffer.isBuffer(value) ? value : Buffer.from(String(value || ""), "utf8");
@@ -40,7 +43,7 @@ export function createSessionToken(payload) {
   const nowSeconds = Math.floor(Date.now() / 1000);
   const header = {
     alg: "HS256",
-    typ: "JWT",
+    typ: "ACCESS",
   };
   const body = {
     sid: crypto.randomBytes(8).toString("hex"),
@@ -63,7 +66,7 @@ export function createSessionToken(payload) {
   return `${content}.${signature}`;
 }
 
-export function verifySessionToken(token) {
+function verifyToken_(token, expectedType) {
   const raw = String(token || "").trim();
   if (!raw) {
     return null;
@@ -84,6 +87,15 @@ export function verifySessionToken(token) {
   }
 
   try {
+    const headerRaw = decodeBase64Url(headerEncoded).toString("utf8");
+    const header = JSON.parse(headerRaw);
+    if (!header || typeof header !== "object") {
+      return null;
+    }
+    if (expectedType && String(header.typ || "").trim() !== expectedType) {
+      return null;
+    }
+
     const bodyRaw = decodeBase64Url(bodyEncoded).toString("utf8");
     const payload = JSON.parse(bodyRaw);
     const nowSeconds = Math.floor(Date.now() / 1000);
@@ -94,7 +106,7 @@ export function verifySessionToken(token) {
       return null;
     }
     return {
-      sid: String(payload.sid || "").trim(),
+      sid: String(payload.sid || payload.rid || "").trim(),
       studentId: String(payload.studentId || "").trim(),
       email: String(payload.email || "").trim().toLowerCase(),
       sub: String(payload.sub || "").trim(),
@@ -105,4 +117,51 @@ export function verifySessionToken(token) {
   } catch (error) {
     return null;
   }
+}
+
+export function verifySessionToken(token) {
+  return verifyToken_(token, "ACCESS");
+}
+
+export function createRefreshToken(payload) {
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  const header = {
+    alg: "HS256",
+    typ: "REFRESH",
+  };
+  const body = {
+    rid: crypto.randomBytes(8).toString("hex"),
+    iat: nowSeconds,
+    exp: nowSeconds + REFRESH_TTL_SECONDS,
+    studentId: String(payload && payload.studentId ? payload.studentId : "").trim(),
+    email: String(payload && payload.email ? payload.email : "").trim().toLowerCase(),
+    sub: String(payload && payload.sub ? payload.sub : "").trim(),
+    name: String(payload && payload.name ? payload.name : "").trim(),
+  };
+
+  if (!body.studentId) {
+    throw new Error("Missing studentId for refresh token");
+  }
+
+  const headerEncoded = encodeBase64Url(JSON.stringify(header));
+  const bodyEncoded = encodeBase64Url(JSON.stringify(body));
+  const content = `${headerEncoded}.${bodyEncoded}`;
+  const signature = encodeBase64Url(sign(content));
+  return `${content}.${signature}`;
+}
+
+export function verifyRefreshToken(token) {
+  const verified = verifyToken_(token, "REFRESH");
+  if (!verified) {
+    return null;
+  }
+  return {
+    rid: verified.sid,
+    studentId: verified.studentId,
+    email: verified.email,
+    sub: verified.sub,
+    name: verified.name,
+    iat: verified.iat,
+    exp: verified.exp,
+  };
 }

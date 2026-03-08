@@ -234,6 +234,8 @@ export async function dispatchNativeAction({
   withTransaction,
   verifyGoogleIdToken,
   createSessionToken,
+  createRefreshToken,
+  verifyRefreshToken,
   listMembershipsByStudentId,
   findStudentProfileById,
 }) {
@@ -1729,6 +1731,14 @@ export async function dispatchNativeAction({
             name: googleProfile.name,
           })
         : "";
+      const refreshToken = studentId
+        ? createRefreshToken({
+            studentId,
+            email: googleProfile.email,
+            sub: googleProfile.sub,
+            name: googleProfile.name,
+          })
+        : "";
       const memberships = studentId ? await listMembershipsByStudentId(studentId) : [];
       return {
         ok: true,
@@ -1737,13 +1747,52 @@ export async function dispatchNativeAction({
           student,
           emailMatch,
           sessionToken,
+          refreshToken,
           memberships,
         },
         error: null,
       };
     }
 
-    case "linkGoogleStudent": {
+    case "refreshSession": {
+      const refreshToken = firstText(body.refreshToken);
+      if (!refreshToken) {
+        return { ok: false, data: null, error: "Missing refreshToken" };
+      }
+      const verified = verifyRefreshToken(refreshToken);
+      if (!verified || !verified.studentId) {
+        return { ok: false, data: null, error: "Unauthorized" };
+      }
+      const studentId = String(verified.studentId || "").trim();
+      const memberships = await listMembershipsByStudentId(studentId);
+      const sessionToken = createSessionToken({
+        studentId,
+        email: verified.email,
+        sub: verified.sub,
+        name: verified.name,
+      });
+
+      // For now we re-issue a fresh refresh token on each refresh. This keeps the client simple.
+      // Hard caps / rotation / revocation can be added later.
+      const nextRefreshToken = createRefreshToken({
+        studentId,
+        email: verified.email,
+        sub: verified.sub,
+        name: verified.name,
+      });
+
+      return {
+        ok: true,
+        data: {
+          sessionToken,
+          refreshToken: nextRefreshToken,
+          memberships,
+        },
+        error: null,
+      };
+    }
+
+    case "linkGoogleStudent": {"}
       const idToken = firstText(body.idToken);
       const studentId = firstText(body.studentId);
       if (!idToken) {
@@ -1769,7 +1818,13 @@ export async function dispatchNativeAction({
         sub: googleProfile.sub,
         name: googleProfile.name,
       });
-      return { ok: true, data: { student, memberships, sessionToken }, error: null };
+      const refreshToken = createRefreshToken({
+        studentId,
+        email: googleProfile.email,
+        sub: googleProfile.sub,
+        name: googleProfile.name,
+      });
+      return { ok: true, data: { student, memberships, sessionToken, refreshToken }, error: null };
     }
 
     default: {

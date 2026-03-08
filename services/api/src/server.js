@@ -7,7 +7,7 @@ import { google } from "googleapis";
 import { getConfig } from "./config.js";
 import { query, withTransaction } from "./db.js";
 import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
-import { createSessionToken, verifySessionToken } from "./auth/session.js";
+import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
 import { dispatchNativeAction } from "./nativeActions.js";
 
@@ -645,6 +645,8 @@ async function handleNativeActionRequest_(req, res, actionName, payload) {
       withTransaction,
       verifyGoogleIdToken,
       createSessionToken,
+      createRefreshToken,
+      verifyRefreshToken,
       listMembershipsByStudentId,
       findStudentProfileById,
     });
@@ -678,6 +680,8 @@ app.post("/v1/action", async (req, res) => {
       withTransaction,
       verifyGoogleIdToken,
       createSessionToken,
+      createRefreshToken,
+      verifyRefreshToken,
       listMembershipsByStudentId,
       findStudentProfileById,
     });
