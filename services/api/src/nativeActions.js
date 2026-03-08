@@ -1844,7 +1844,7 @@ export async function dispatchNativeAction({
       };
     }
 
-    case "linkGoogleStudent": {"}
+    case "linkGoogleStudent": {
       const idToken = firstText(body.idToken);
       const studentId = firstText(body.studentId);
       if (!idToken) {
