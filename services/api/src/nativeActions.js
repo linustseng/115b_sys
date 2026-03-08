@@ -1518,14 +1518,26 @@ export async function dispatchNativeAction({
       let result;
       if (practiceId) {
         result = await query(
-          `select * from softball_attendance where practice_id = $1 ${isAdmin ? "" : "and player_id = $2"} order by coalesce(updated_at,''), id`,
+          `select distinct on (practice_id, player_id) *
+           from softball_attendance
+           where practice_id = $1 ${isAdmin ? "" : "and player_id = $2"}
+           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc`,
           isAdmin ? [practiceId] : [practiceId, studentId]
         );
       } else if (isAdmin) {
-        result = await query(`select * from softball_attendance order by coalesce(updated_at,'') desc, id desc limit 2000`);
+        result = await query(
+          `select distinct on (practice_id, player_id) *
+           from softball_attendance
+           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc
+           limit 2000`
+        );
       } else {
         result = await query(
-          `select * from softball_attendance where player_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`,
+          `select distinct on (practice_id, player_id) *
+           from softball_attendance
+           where player_id = $1
+           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc
+           limit 500`,
           [studentId]
         );
       }
@@ -1546,7 +1558,9 @@ export async function dispatchNativeAction({
       if (!isAdmin && String(playerId) !== String(auth.studentId)) {
         return { ok: false, data: null, error: "Unauthorized" };
       }
-      const id = firstText(data.id, `${practiceId}:${playerId}`);
+      const canonicalId = `${practiceId}:${playerId}`;
+      const legacyId = `${practiceId}-${playerId}`;
+      const id = firstText(data.id, canonicalId);
       const createdAt = firstText(data.createdAt, nowIso());
       const updatedAt = nowIso();
       const notes = firstText(data.notes || data.note || body.note || body.notes);
@@ -1561,6 +1575,11 @@ export async function dispatchNativeAction({
            synced_at=now()`,
         [id, practiceId, playerId, firstText(data.status), notes, { ...data, playerId, notes }, createdAt, updatedAt]
       );
+
+      // Cleanup legacy id format to prevent duplicate rows for the same practice/player.
+      if (legacyId !== id) {
+        await query(`delete from softball_attendance where id = $1`, [legacyId]);
+      }
 
       const stored = await query(`select * from softball_attendance where id = $1 limit 1`, [id]);
       const row = stored.rows && stored.rows.length ? stored.rows[0] : null;
