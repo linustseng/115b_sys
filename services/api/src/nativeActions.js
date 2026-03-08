@@ -1561,7 +1561,14 @@ export async function dispatchNativeAction({
            synced_at=now()`,
         [id, practiceId, playerId, firstText(data.status), notes, { ...data, playerId, notes }, createdAt, updatedAt]
       );
-      return { ok: true, data: { id }, error: null };
+
+      const stored = await query(`select * from softball_attendance where id = $1 limit 1`, [id]);
+      const row = stored.rows && stored.rows.length ? stored.rows[0] : null;
+      const attendance = row
+        ? { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }
+        : null;
+
+      return { ok: true, data: { id, attendance }, error: null };
     }
 
     case "listSoftballFields": {

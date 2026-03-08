@@ -445,7 +445,8 @@ function SoftballPlayerPage({ shared }) {
         throw new Error(result.error || "更新失敗");
       }
 
-      // Optimistic UI update: reflect the selected status immediately.
+      // Update UI from server response when available; fallback to optimistic state.
+      const serverAttendance = result && result.data ? result.data.attendance : null;
       setAttendance((prev) => {
         const practiceKey = normalizeId_(practiceId);
         const studentKey = normalizeId_(googleLinkedStudent.id);
@@ -455,17 +456,22 @@ function SoftballPlayerPage({ shared }) {
           const itemStudent = normalizeId_(item.studentId || item.playerId);
           return !(itemPractice === practiceKey && itemStudent === studentKey);
         });
-        filtered.unshift({
-          id: `${practiceKey}:${studentKey}`,
-          practiceId: practiceKey,
-          studentId: studentKey,
-          status: status,
-          note: note,
-          updatedAt: new Date().toISOString(),
-        });
+        filtered.unshift(
+          serverAttendance && typeof serverAttendance === "object"
+            ? serverAttendance
+            : {
+                id: `${practiceKey}:${studentKey}`,
+                practiceId: practiceKey,
+                studentId: studentKey,
+                status: status,
+                note: note,
+                updatedAt: new Date().toISOString(),
+              }
+        );
         return filtered;
       });
 
+      // Best-effort reload to ensure the list is consistent, but don't rely on it for UI.
       await loadAttendance(googleLinkedStudent.id);
       setStatusMessage("已更新回覆");
       setPendingAttendanceStatusMap((prev) => {
