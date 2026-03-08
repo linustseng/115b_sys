@@ -1191,11 +1191,14 @@ export async function dispatchNativeAction({
 
     case "listApprovalsOverview": {
       requireAuth();
-      const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
-      const result = isAdmin
-        ? await query(`select status, count(*)::int as count from finance_requests where coalesce(status,'') <> 'draft' group by status`)
-        : await query(`select status, count(*)::int as count from finance_requests where applicant_id = $1 group by status`, [auth.studentId]);
+      // Overview is user-centric: always summarize the caller's own requests.
+      const result = await query(
+        `select status, count(*)::int as count
+         from finance_requests
+         where applicant_id = $1
+         group by status`,
+        [auth.studentId]
+      );
       let pending = 0;
       let returned = 0;
       let completed = 0;
