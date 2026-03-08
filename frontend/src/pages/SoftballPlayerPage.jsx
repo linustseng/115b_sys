@@ -414,15 +414,18 @@ function SoftballPlayerPage({ shared }) {
     setStatusMessage("更新中...");
 
     try {
-      const { result } = await apiRequest({
-        action: "submitSoftballAttendance",
-        data: {
-          practiceId: practiceId,
-          studentId: googleLinkedStudent.id,
-          status: status,
-          note: note,
+      const { result } = await authedApiRequest(
+        {
+          action: "submitSoftballAttendance",
+          data: {
+            practiceId: practiceId,
+            studentId: googleLinkedStudent.id,
+            status: status,
+            note: note,
+          },
         },
-      });
+        { requireAuth: true }
+      );
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
@@ -1123,12 +1126,14 @@ function SoftballPlayerPage({ shared }) {
                       return (
                         <button
                           key={`${nextPractice.id}-${item.value}`}
+                          type="button"
+                          disabled={saving}
                           onClick={() => handleAttendanceStatus(nextPractice.id, item.value)}
                           className={`rounded-full border px-4 py-2 text-xs font-semibold ${
                             currentStatus === item.value
                               ? "border-emerald-900 bg-emerald-900 text-white"
                               : "border-emerald-200 bg-white text-emerald-800 hover:border-emerald-300"
-                          }`}
+                          } ${saving ? "opacity-60" : ""}`}
                         >
                           {item.label}
                         </button>
@@ -1206,12 +1211,14 @@ function SoftballPlayerPage({ shared }) {
                           ].map((item) => (
                             <button
                               key={`${practice.id}-${item.value}`}
+                              type="button"
+                              disabled={saving}
                               onClick={() => handleAttendanceStatus(practice.id, item.value)}
                               className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                                 currentStatus === item.value
                                   ? "border-slate-900 bg-slate-900 text-white"
                                   : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                              }`}
+                              } ${saving ? "opacity-60" : ""}`}
                             >
                               {item.label}
                             </button>
@@ -1299,12 +1306,14 @@ function SoftballPlayerPage({ shared }) {
                             ].map((item) => (
                               <button
                                 key={`${practice.id}-${item.value}`}
+                                type="button"
+                                disabled={saving}
                                 onClick={() => handleAttendanceStatus(practice.id, item.value)}
                                 className={`rounded-full border px-3 py-1 text-xs font-semibold ${
                                   currentStatus === item.value
                                     ? "border-slate-700 bg-slate-700 text-white"
                                     : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
-                                }`}
+                                } ${saving ? "opacity-60" : ""}`}
                               >
                                 {item.label}
                               </button>
