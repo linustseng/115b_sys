@@ -209,10 +209,18 @@ function SoftballPlayerPage({ shared }) {
 
   const loadBootstrap = async (studentId) => {
     try {
-      const { result } = await apiRequest({
-        action: "listSoftballPlayerBootstrap",
-        studentId: studentId,
-      });
+      const { result } = await (studentId
+        ? authedApiRequest(
+            {
+              action: "listSoftballPlayerBootstrap",
+              studentId: studentId,
+            },
+            { requireAuth: true }
+          )
+        : apiRequest({
+            action: "listSoftballPlayerBootstrap",
+            studentId: studentId,
+          }));
       if (result && result.ok) {
         const data = result.data || {};
         setPlayers(data.players || []);
@@ -252,10 +260,13 @@ function SoftballPlayerPage({ shared }) {
       return;
     }
     try {
-      const { result } = await apiRequest({
-        action: "listSoftballAttendance",
-        studentId: studentId,
-      });
+      const { result } = await authedApiRequest(
+        {
+          action: "listSoftballAttendance",
+          studentId: studentId,
+        },
+        { requireAuth: true }
+      );
       if (!result.ok) {
         setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
         setAttendance([]);
