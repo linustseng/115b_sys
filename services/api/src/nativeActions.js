@@ -1,0 +1,1746 @@
+import crypto from "node:crypto";
+
+function normalizeEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function firstText(value, fallback = "") {
+  const text = String(value == null ? "" : value).trim();
+  return text || String(fallback || "").trim();
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function safeJsonObject(value) {
+  if (!value) {
+    return {};
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function safeJsonArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function mapDirectoryProfile(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: String(row.id || "").trim(),
+    email: normalizeEmail(row.email || ""),
+    nameZh: String(row.name_zh || "").trim(),
+    nameEn: String(row.name_en || "").trim(),
+    preferredName: String(row.preferred_name || "").trim(),
+    company: String(row.company || "").trim(),
+    title: String(row.title || "").trim(),
+    mobile: String(row.mobile || "").trim(),
+    backupPhone: String(row.backup_phone || "").trim(),
+    emergencyContact: String(row.emergency_contact || "").trim(),
+    emergencyPhone: String(row.emergency_phone || "").trim(),
+    dietaryRestrictions: String(row.dietary_restrictions || "").trim(),
+    birthdayMonth: String(row.birthday_month || "").trim(),
+    birthdayDay: String(row.birthday_day || "").trim(),
+    group: String(row.group_id || "").trim(),
+    photoUrl: String(row.photo_url || "").trim(),
+  };
+}
+
+function canAccessByGroups(memberships, allowedGroupIds = []) {
+  const list = asArray(memberships);
+  return list.some((item) => {
+    const groupId = String(item.groupId || item.group_id || "").trim();
+    const role = String(item.roleInGroup || item.role_in_group || "").trim();
+    if (allowedGroupIds.includes(groupId)) {
+      return true;
+    }
+    // A(班代) lead/deputy counts as admin for most backoffice.
+    if (groupId === "A" && (role === "lead" || role === "deputy")) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function toFinanceRequestRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    type: firstText(raw.type),
+    title: firstText(raw.title),
+    description: firstText(raw.description),
+    categoryType: firstText(raw.categoryType),
+    amountEstimated: raw.amountEstimated == null || raw.amountEstimated === "" ? null : Number(String(raw.amountEstimated).replace(/,/g, "")),
+    amountActual: raw.amountActual == null || raw.amountActual === "" ? null : Number(String(raw.amountActual).replace(/,/g, "")),
+    currency: firstText(raw.currency, "TWD"),
+    paymentMethod: firstText(raw.paymentMethod),
+    vendorName: firstText(raw.vendorName),
+    payeeName: firstText(raw.payeeName),
+    payeeBank: firstText(raw.payeeBank),
+    payeeAccount: firstText(raw.payeeAccount),
+    relatedPurchaseId: firstText(raw.relatedPurchaseId),
+    noPurchaseReason: firstText(raw.noPurchaseReason),
+    expectedClearDate: firstText(raw.expectedClearDate),
+    attachments: raw.attachments && Array.isArray(raw.attachments) ? raw.attachments : safeJsonArray(raw.attachments),
+    status: firstText(raw.status, "draft"),
+    applicantId: firstText(raw.applicantId),
+    applicantName: firstText(raw.applicantName),
+    applicantDepartment: firstText(raw.applicantDepartment),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toOrderPlanRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    date: firstText(raw.date),
+    title: firstText(raw.title),
+    description: firstText(raw.description),
+    closeAt: firstText(raw.closeAt),
+    vendor: firstText(raw.vendor),
+    items: raw.items && Array.isArray(raw.items) ? raw.items : safeJsonArray(raw.items),
+    status: firstText(raw.status),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toFundEventRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    title: firstText(raw.title),
+    description: firstText(raw.description),
+    dueDate: firstText(raw.dueDate),
+    amountGeneral: raw.amountGeneral == null || raw.amountGeneral === "" ? null : Number(String(raw.amountGeneral).replace(/,/g, "")),
+    amountSponsor: raw.amountSponsor == null || raw.amountSponsor === "" ? null : Number(String(raw.amountSponsor).replace(/,/g, "")),
+    expectedGeneralCount: raw.expectedGeneralCount == null || raw.expectedGeneralCount === "" ? null : Number(raw.expectedGeneralCount),
+    expectedSponsorCount: raw.expectedSponsorCount == null || raw.expectedSponsorCount === "" ? null : Number(raw.expectedSponsorCount),
+    status: firstText(raw.status),
+    notes: firstText(raw.notes),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toFundPaymentRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    eventId: firstText(raw.eventId),
+    payerId: firstText(raw.payerId),
+    payerName: firstText(raw.payerName),
+    payerEmail: normalizeEmail(raw.payerEmail),
+    payerType: firstText(raw.payerType),
+    amount: raw.amount == null || raw.amount === "" ? null : Number(String(raw.amount).replace(/,/g, "")),
+    method: firstText(raw.method),
+    transferLast5: firstText(raw.transferLast5),
+    receivedAt: firstText(raw.receivedAt),
+    accountedAt: firstText(raw.accountedAt),
+    confirmedAt: firstText(raw.confirmedAt),
+    notes: firstText(raw.notes),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toSoftballPlayerRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    name: firstText(raw.name),
+    email: normalizeEmail(raw.email),
+    phone: firstText(raw.phone),
+    jerseyNo: firstText(raw.jerseyNo),
+    jerseySize: firstText(raw.jerseySize),
+    positions: raw.positions && Array.isArray(raw.positions) ? raw.positions : safeJsonArray(raw.positions),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toSoftballPracticeRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    date: firstText(raw.date),
+    title: firstText(raw.title),
+    location: firstText(raw.location),
+    startAt: firstText(raw.startAt),
+    endAt: firstText(raw.endAt),
+    notes: firstText(raw.notes),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function rowOrNull(result) {
+  return result && result.rows && result.rows.length ? result.rows[0] : null;
+}
+
+export async function dispatchNativeAction({
+  action,
+  payload,
+  auth,
+  query,
+  withTransaction,
+  verifyGoogleIdToken,
+  createSessionToken,
+  listMembershipsByStudentId,
+  findStudentProfileById,
+}) {
+  const name = String(action || "").trim();
+  const body = payload && typeof payload === "object" ? payload : {};
+
+  // Helpers
+  const requireAuth = () => {
+    if (!auth || !auth.studentId) {
+      const error = new Error("Unauthorized");
+      error.statusCode = 401;
+      throw error;
+    }
+  };
+
+  const requireGroupAccess = async (allowedGroupIds) => {
+    requireAuth();
+    const memberships = await listMembershipsByStudentId(auth.studentId);
+    if (!canAccessByGroups(memberships, allowedGroupIds)) {
+      const error = new Error("Unauthorized");
+      error.statusCode = 403;
+      throw error;
+    }
+    return memberships;
+  };
+
+  switch (name) {
+    case "listRegistrations": {
+      await requireGroupAccess(["C", "E"]);
+      const result = await query(
+        `select * from registrations order by coalesce(created_at, ''), id`
+      );
+      return { ok: true, data: { registrations: result.rows.map((row) => ({
+        id: row.id,
+        eventId: row.event_id || "",
+        studentId: row.student_id || "",
+        userName: row.user_name || "",
+        userEmail: row.user_email || "",
+        userPhone: row.user_phone || "",
+        classYear: row.class_year || "",
+        customFields: row.custom_fields || {},
+        status: row.status || "",
+        createdAt: row.created_at || "",
+        updatedAt: row.updated_at || "",
+        manualCreatedBy: row.manual_created_by || "",
+        manualCreatedByName: row.manual_created_by_name || "",
+        manualCreatedAt: row.manual_created_at || "",
+      })) }, error: null };
+    }
+
+    case "listCheckins": {
+      await requireGroupAccess(["C", "E"]);
+      const result = await query(`select * from checkins order by coalesce(checkin_at, ''), id`);
+      return { ok: true, data: { checkins: result.rows.map((row) => ({
+        id: row.id,
+        eventId: row.event_id || "",
+        registrationId: row.registration_id || "",
+        checkinAt: row.checkin_at || "",
+        checkinMethod: row.checkin_method || "",
+      })) }, error: null };
+    }
+
+    case "deleteCheckin": {
+      await requireGroupAccess(["C", "E"]);
+      const checkinId = firstText(body.checkinId || body.id);
+      if (!checkinId) {
+        return { ok: false, data: null, error: "Missing checkinId" };
+      }
+      await query(`delete from checkins where id = $1`, [checkinId]);
+      return { ok: true, data: { id: checkinId }, error: null };
+    }
+
+    case "deleteEvent": {
+      await requireGroupAccess(["C", "E"]);
+      const eventId = firstText(body.eventId || body.id);
+      if (!eventId) {
+        return { ok: false, data: null, error: "Missing eventId" };
+      }
+      await query(`delete from events where id = $1`, [eventId]);
+      await query(`delete from registrations where event_id = $1`, [eventId]);
+      await query(`delete from checkins where event_id = $1`, [eventId]);
+      return { ok: true, data: { id: eventId }, error: null };
+    }
+
+    case "createEvent":
+    case "updateEvent": {
+      await requireGroupAccess(["C", "E"]);
+      const data = safeJsonObject(body.data || body.event || body);
+      const id = firstText(data.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const normalized = {
+        ...data,
+        id,
+      };
+      await query(
+        `insert into events (
+          id, title, description, start_at, end_at, location, address,
+          registration_open_at, registration_close_at, checkin_open_at, checkin_close_at,
+          register_url, checkin_url, capacity, status, category, form_schema, raw
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        on conflict (id) do update set
+          title=excluded.title,
+          description=excluded.description,
+          start_at=excluded.start_at,
+          end_at=excluded.end_at,
+          location=excluded.location,
+          address=excluded.address,
+          registration_open_at=excluded.registration_open_at,
+          registration_close_at=excluded.registration_close_at,
+          checkin_open_at=excluded.checkin_open_at,
+          checkin_close_at=excluded.checkin_close_at,
+          register_url=excluded.register_url,
+          checkin_url=excluded.checkin_url,
+          capacity=excluded.capacity,
+          status=excluded.status,
+          category=excluded.category,
+          form_schema=excluded.form_schema,
+          raw=excluded.raw,
+          synced_at=now()`,
+        [
+          id,
+          firstText(normalized.title),
+          firstText(normalized.description),
+          firstText(normalized.startAt || normalized.start_at),
+          firstText(normalized.endAt || normalized.end_at),
+          firstText(normalized.location),
+          firstText(normalized.address),
+          firstText(normalized.registrationOpenAt || normalized.registration_open_at),
+          firstText(normalized.registrationCloseAt || normalized.registration_close_at),
+          firstText(normalized.checkinOpenAt || normalized.checkin_open_at),
+          firstText(normalized.checkinCloseAt || normalized.checkin_close_at),
+          firstText(normalized.registerUrl || normalized.register_url),
+          firstText(normalized.checkinUrl || normalized.checkin_url),
+          normalized.capacity == null || normalized.capacity === "" ? null : Number(normalized.capacity),
+          firstText(normalized.status),
+          firstText(normalized.category),
+          safeJsonObject(normalized.formSchema || normalized.form_schema),
+          normalized,
+        ]
+      );
+      const result = await query(`select * from events where id = $1 limit 1`, [id]);
+      const row = rowOrNull(result);
+      const event = row
+        ? {
+            id: row.id,
+            title: row.title || "",
+            description: row.description || "",
+            startAt: row.start_at || "",
+            endAt: row.end_at || "",
+            location: row.location || "",
+            address: row.address || "",
+            registrationOpenAt: row.registration_open_at || "",
+            registrationCloseAt: row.registration_close_at || "",
+            checkinOpenAt: row.checkin_open_at || "",
+            checkinCloseAt: row.checkin_close_at || "",
+            registerUrl: row.register_url || "",
+            checkinUrl: row.checkin_url || "",
+            capacity: row.capacity == null ? "" : String(row.capacity),
+            status: row.status || "",
+            category: row.category || "",
+            formSchema: row.form_schema || {},
+          }
+        : null;
+      return { ok: true, data: { event }, error: null };
+    }
+
+    case "deleteRegistration": {
+      await requireGroupAccess(["C", "E"]);
+      const registrationId = firstText(body.registrationId || body.id);
+      if (!registrationId) {
+        return { ok: false, data: null, error: "Missing registrationId" };
+      }
+      await query(`delete from registrations where id = $1`, [registrationId]);
+      await query(`delete from checkins where registration_id = $1`, [registrationId]);
+      return { ok: true, data: { id: registrationId }, error: null };
+    }
+
+    case "adminCreateRegistration": {
+      const memberships = await requireGroupAccess(["C", "E"]);
+      const normalizedEmail = normalizeEmail(body.email || body.userEmail || (body.data && body.data.userEmail));
+      const data = safeJsonObject(body.data);
+      const eventId = firstText(data.eventId || body.eventId);
+      if (!eventId) {
+        return { ok: false, data: null, error: "Missing eventId" };
+      }
+      if (!normalizedEmail) {
+        return { ok: false, data: null, error: "Missing email" };
+      }
+      const id = firstText(data.id, crypto.randomUUID());
+      const createdAt = nowIso();
+      const studentId = firstText(data.studentId);
+      const userName = firstText(data.userName, data.name || "");
+      const userPhone = firstText(data.userPhone, data.phone || "");
+      const classYear = firstText(data.classYear);
+      const customFields = safeJsonObject(data.customFields);
+
+      await query(
+        `insert into registrations (
+          id, event_id, student_id, user_name, user_email, user_phone, class_year, custom_fields,
+          status, created_at, updated_at, manual_created_by, manual_created_by_name, manual_created_at, raw
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,'registered',$9,$9,$10,$11,$9,$12)
+        on conflict (id) do update set
+          event_id = excluded.event_id,
+          student_id = excluded.student_id,
+          user_name = excluded.user_name,
+          user_email = excluded.user_email,
+          user_phone = excluded.user_phone,
+          class_year = excluded.class_year,
+          custom_fields = excluded.custom_fields,
+          status = excluded.status,
+          updated_at = excluded.updated_at,
+          manual_created_by = excluded.manual_created_by,
+          manual_created_by_name = excluded.manual_created_by_name,
+          manual_created_at = excluded.manual_created_at,
+          raw = excluded.raw,
+          synced_at = now()`,
+        [
+          id,
+          eventId,
+          studentId,
+          userName,
+          normalizedEmail,
+          userPhone,
+          classYear,
+          customFields,
+          createdAt,
+          auth.studentId,
+          (() => {
+            const me = memberships.find((m) => String(m.personId || "").trim() === String(auth.studentId || "").trim());
+            return me ? String(me.personName || "").trim() : "";
+          })(),
+          data,
+        ]
+      );
+      const row = await query(`select * from registrations where id = $1 limit 1`, [id]);
+      const r = rowOrNull(row);
+      return {
+        ok: true,
+        data: {
+          registration: r
+            ? {
+                id: r.id,
+                eventId: r.event_id || "",
+                studentId: r.student_id || "",
+                userName: r.user_name || "",
+                userEmail: r.user_email || "",
+                userPhone: r.user_phone || "",
+                classYear: r.class_year || "",
+                customFields: r.custom_fields || {},
+                status: r.status || "",
+                createdAt: r.created_at || "",
+                updatedAt: r.updated_at || "",
+                manualCreatedBy: r.manual_created_by || "",
+                manualCreatedByName: r.manual_created_by_name || "",
+                manualCreatedAt: r.manual_created_at || "",
+              }
+            : null,
+        },
+        error: null,
+      };
+    }
+
+    case "batchUpdateGroupMemberships": {
+      await requireGroupAccess(["E"]);
+      const memberships = asArray(body.memberships || (body.data && body.data.memberships) || body.items);
+      await withTransaction(async (client) => {
+        await client.query(`delete from group_memberships`);
+        for (const item of memberships) {
+          const raw = safeJsonObject(item);
+          const id = firstText(raw.id, crypto.randomUUID());
+          await client.query(
+            `insert into group_memberships (
+              id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at, raw
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            [
+              id,
+              firstText(raw.personId),
+              firstText(raw.personName),
+              firstText(raw.groupId),
+              firstText(raw.roleInGroup),
+              firstText(raw.notes),
+              firstText(raw.createdAt, nowIso()),
+              firstText(raw.updatedAt, nowIso()),
+              raw,
+            ]
+          );
+        }
+      });
+      return { ok: true, data: { updated: memberships.length }, error: null };
+    }
+
+    case "getDirectoryProfile": {
+      requireAuth();
+      const studentId = firstText(body.studentId, auth.studentId);
+      if (!studentId) {
+        return { ok: false, data: null, error: "Missing studentId" };
+      }
+      const result = await query(`select * from directories where id = $1 limit 1`, [studentId]);
+      const profile = mapDirectoryProfile(rowOrNull(result));
+      return { ok: true, data: { profile }, error: null };
+    }
+
+    case "updateDirectoryProfile": {
+      requireAuth();
+      const data = safeJsonObject(body.data);
+      const studentId = firstText(data.id, auth.studentId);
+      if (!studentId) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const email = normalizeEmail(firstText(data.email));
+      await query(
+        `insert into directories (
+          id, group_id, email, name_zh, name_en, preferred_name, company, title, mobile,
+          backup_phone, emergency_contact, emergency_phone, dietary_restrictions, photo_url,
+          birthday_month, birthday_day, raw
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        on conflict (id) do update set
+          group_id = excluded.group_id,
+          email = excluded.email,
+          name_zh = excluded.name_zh,
+          name_en = excluded.name_en,
+          preferred_name = excluded.preferred_name,
+          company = excluded.company,
+          title = excluded.title,
+          mobile = excluded.mobile,
+          backup_phone = excluded.backup_phone,
+          emergency_contact = excluded.emergency_contact,
+          emergency_phone = excluded.emergency_phone,
+          dietary_restrictions = excluded.dietary_restrictions,
+          photo_url = excluded.photo_url,
+          birthday_month = excluded.birthday_month,
+          birthday_day = excluded.birthday_day,
+          raw = excluded.raw,
+          synced_at = now()`,
+        [
+          studentId,
+          firstText(data.group),
+          email,
+          firstText(data.nameZh),
+          firstText(data.nameEn),
+          firstText(data.preferredName),
+          firstText(data.company),
+          firstText(data.title),
+          firstText(data.mobile),
+          firstText(data.backupPhone),
+          firstText(data.emergencyContact),
+          firstText(data.emergencyPhone),
+          firstText(data.dietaryRestrictions),
+          firstText(data.photoUrl),
+          firstText(data.birthdayMonth),
+          firstText(data.birthdayDay),
+          data,
+        ]
+      );
+      const result = await query(`select * from directories where id = $1 limit 1`, [studentId]);
+      return { ok: true, data: { profile: mapDirectoryProfile(rowOrNull(result)) }, error: null };
+    }
+
+    case "listBirthdays": {
+      const result = await query(
+        `select id, email, name_zh, name_en, preferred_name, company, title, mobile, birthday_month, birthday_day, group_id
+         from directories
+         where coalesce(birthday_month, '') <> '' and coalesce(birthday_day, '') <> ''
+         order by coalesce(birthday_month, ''), coalesce(birthday_day, ''), id`
+      );
+      const months = {};
+      for (const row of result.rows) {
+        const month = String(row.birthday_month || "").trim();
+        if (!month) {
+          continue;
+        }
+        if (!months[month]) {
+          months[month] = [];
+        }
+        months[month].push({
+          id: String(row.id || "").trim(),
+          email: normalizeEmail(row.email || ""),
+          name: firstText(row.preferred_name, firstText(row.name_zh, row.name_en || "")),
+          company: firstText(row.company),
+          group: firstText(row.group_id),
+          birthdayMonth: String(row.birthday_month || "").trim(),
+          birthdayDay: String(row.birthday_day || "").trim(),
+        });
+      }
+      const currentMonth = new Date().getMonth() + 1;
+      const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+      return { ok: true, data: { months, currentMonth, nextMonth }, error: null };
+    }
+
+    case "listLandingBootstrap": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const groupIds = memberships.map((m) => String(m.groupId || "").trim()).filter(Boolean);
+      const notificationsResult = await query(
+        `select n.*, r.read_at
+         from notifications n
+         left join notification_reads r
+           on r.notification_id = n.id
+          and r.student_id = $1
+         where (coalesce(n.target_student_id, '') = '' or n.target_student_id = $1)
+           and (coalesce(n.target_group_id, '') = '' or n.target_group_id = any($2::text[]))
+         order by coalesce(n.created_at, '') desc, n.id desc
+         limit 50`,
+        [auth.studentId, groupIds.length ? groupIds : ["__none__"]]
+      );
+      const notifications = notificationsResult.rows.map((row) => {
+        const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+        return {
+          id: String(row.id || "").trim(),
+          title: firstText(raw.title, row.title || ""),
+          message: firstText(raw.message, row.body || ""),
+          url: firstText(raw.url, row.url || ""),
+          createdAt: firstText(raw.createdAt, row.created_at || ""),
+          isRead: Boolean(row.read_at),
+        };
+      });
+      const unreadCount = notifications.filter((n) => !n.isRead).length;
+      return { ok: true, data: { memberships, notifications, unreadCount }, error: null };
+    }
+
+    case "markNotificationRead": {
+      requireAuth();
+      const notificationId = firstText(body.notificationId || body.id);
+      if (!notificationId) {
+        return { ok: false, data: null, error: "Missing notificationId" };
+      }
+      await query(
+        `insert into notification_reads (notification_id, student_id) values ($1,$2)
+         on conflict (notification_id, student_id) do nothing`,
+        [notificationId, auth.studentId]
+      );
+      return { ok: true, data: { id: notificationId }, error: null };
+    }
+
+    case "markAllNotificationsRead": {
+      requireAuth();
+      const ids = asArray(body.notificationIds).map((id) => String(id || "").trim()).filter(Boolean);
+      if (!ids.length) {
+        return { ok: true, data: { updated: 0 }, error: null };
+      }
+      await withTransaction(async (client) => {
+        for (const id of ids) {
+          await client.query(
+            `insert into notification_reads (notification_id, student_id) values ($1,$2)
+             on conflict (notification_id, student_id) do nothing`,
+            [id, auth.studentId]
+          );
+        }
+      });
+      return { ok: true, data: { updated: ids.length }, error: null };
+    }
+
+    case "listAdminBootstrap": {
+      await requireGroupAccess(["C", "E"]);
+      const includeRegistrations = body.includeRegistrations === true;
+      const includeCheckins = body.includeCheckins === true;
+      const [events, students, memberships] = await Promise.all([
+        query(`select * from events order by coalesce(start_at, ''), id`),
+        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
+      ]);
+      const data = {
+        events: events.rows.map((row) => ({
+          id: row.id,
+          title: row.title || "",
+          description: row.description || "",
+          startAt: row.start_at || "",
+          endAt: row.end_at || "",
+          location: row.location || "",
+          address: row.address || "",
+          registrationOpenAt: row.registration_open_at || "",
+          registrationCloseAt: row.registration_close_at || "",
+          checkinOpenAt: row.checkin_open_at || "",
+          checkinCloseAt: row.checkin_close_at || "",
+          registerUrl: row.register_url || "",
+          checkinUrl: row.checkin_url || "",
+          capacity: row.capacity == null ? "" : String(row.capacity),
+          status: row.status || "",
+          category: row.category || "",
+          formSchema: row.form_schema || {},
+        })),
+        students: students.rows.map((row) => ({
+          id: row.id || "",
+          name: row.name || "",
+          googleSub: row.google_sub || "",
+          googleEmail: row.google_email || "",
+        })),
+        groupMemberships: memberships.rows.map((row) => ({
+          id: row.id || "",
+          personId: row.person_id || "",
+          personName: row.person_name || "",
+          groupId: row.group_id || "",
+          roleInGroup: row.role_in_group || "",
+          notes: row.notes || "",
+          createdAt: row.created_at || "",
+          updatedAt: row.updated_at || "",
+        })),
+      };
+      if (includeRegistrations) {
+        const registrations = await query(`select * from registrations order by coalesce(created_at,''), id`);
+        data.registrations = registrations.rows.map((row) => ({
+          id: row.id,
+          eventId: row.event_id || "",
+          studentId: row.student_id || "",
+          userName: row.user_name || "",
+          userEmail: row.user_email || "",
+          userPhone: row.user_phone || "",
+          classYear: row.class_year || "",
+          customFields: row.custom_fields || {},
+          status: row.status || "",
+          createdAt: row.created_at || "",
+          updatedAt: row.updated_at || "",
+          manualCreatedBy: row.manual_created_by || "",
+          manualCreatedByName: row.manual_created_by_name || "",
+          manualCreatedAt: row.manual_created_at || "",
+        }));
+      }
+      if (includeCheckins) {
+        const checkins = await query(`select * from checkins order by coalesce(checkin_at,''), id`);
+        data.checkins = checkins.rows.map((row) => ({
+          id: row.id,
+          eventId: row.event_id || "",
+          registrationId: row.registration_id || "",
+          checkinAt: row.checkin_at || "",
+          checkinMethod: row.checkin_method || "",
+        }));
+      }
+      return { ok: true, data, error: null };
+    }
+
+    case "listOrderPlans": {
+      // User-facing page uses this without admin auth.
+      const result = await query(`select * from order_plans order by coalesce(date, '') desc, id desc`);
+      const plans = result.rows.map((row) => ({
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        date: row.date || "",
+        title: row.title || "",
+        description: row.description || "",
+        closeAt: row.close_at || "",
+        vendor: row.vendor || "",
+        items: row.items || [],
+        status: row.status || "",
+        createdAt: row.created_at || "",
+        updatedAt: row.updated_at || "",
+      }));
+      return { ok: true, data: { plans }, error: null };
+    }
+
+    case "createOrderPlan": {
+      await requireGroupAccess(["I", "E"]);
+      const row = toOrderPlanRow(body.data || body.plan || body);
+      await query(
+        `insert into order_plans (id, date, title, description, close_at, vendor, items, status, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         on conflict (id) do update set
+           date = excluded.date,
+           title = excluded.title,
+           description = excluded.description,
+           close_at = excluded.close_at,
+           vendor = excluded.vendor,
+           items = excluded.items,
+           status = excluded.status,
+           raw = excluded.raw,
+           updated_at = excluded.updated_at,
+           synced_at = now()`,
+        [
+          row.id,
+          row.date,
+          row.title,
+          row.description,
+          row.closeAt,
+          row.vendor,
+          row.items,
+          row.status,
+          row.raw,
+          row.createdAt,
+          row.updatedAt,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "updateOrderPlan": {
+      await requireGroupAccess(["I", "E"]);
+      const row = toOrderPlanRow(body.data || body.plan || body);
+      await query(
+        `update order_plans set
+           date=$2,title=$3,description=$4,close_at=$5,vendor=$6,items=$7,status=$8,raw=$9,updated_at=$10,synced_at=now()
+         where id=$1`,
+        [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, row.items, row.status, row.raw, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "submitOrderResponse": {
+      requireAuth();
+      const data = safeJsonObject(body.data || body.response || body);
+      const orderId = firstText(data.orderId || body.orderId);
+      if (!orderId) {
+        return { ok: false, data: null, error: "Missing orderId" };
+      }
+      const student = await findStudentProfileById(auth.studentId);
+      const id = firstText(data.id, `${orderId}:${auth.studentId}`);
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      await query(
+        `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         on conflict (id) do update set
+           response = excluded.response,
+           total_amount = excluded.total_amount,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [
+          id,
+          orderId,
+          auth.studentId,
+          firstText(data.studentName, student && student.name ? student.name : ""),
+          normalizeEmail(firstText(data.studentEmail, student && student.email ? student.email : "")),
+          data,
+          data.totalAmount == null || data.totalAmount === "" ? null : Number(String(data.totalAmount).replace(/,/g, "")),
+          createdAt,
+          updatedAt,
+          data,
+        ]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listOrderResponses": {
+      await requireGroupAccess(["I", "E"]);
+      const orderId = firstText(body.orderId);
+      if (!orderId) {
+        return { ok: true, data: { responses: [] }, error: null };
+      }
+      const result = await query(
+        `select * from order_responses where order_id = $1 order by coalesce(created_at,''), id`,
+        [orderId]
+      );
+      const responses = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { responses }, error: null };
+    }
+
+    case "listOrderResponsesByStudent": {
+      requireAuth();
+      const result = await query(
+        `select * from order_responses where student_id = $1 order by coalesce(created_at,'') desc, id desc`,
+        [auth.studentId]
+      );
+      const responses = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { responses }, error: null };
+    }
+
+    case "listFinanceCategoryTypes": {
+      requireAuth();
+      const result = await query(`select * from finance_category_types order by coalesce(label,''), id`);
+      const items = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" }));
+      return { ok: true, data: { categoryTypes: items }, error: null };
+    }
+
+    case "upsertFinanceCategoryType": {
+      await requireGroupAccess(["D", "E"]);
+      const data = safeJsonObject(body.data || body.categoryType || body);
+      const id = firstText(data.id, crypto.randomUUID());
+      await query(
+        `insert into finance_category_types (id, label, notes, raw)
+         values ($1,$2,$3,$4)
+         on conflict (id) do update set label=excluded.label, notes=excluded.notes, raw=excluded.raw, synced_at=now()`,
+        [id, firstText(data.label), firstText(data.notes), data]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteFinanceCategoryType": {
+      await requireGroupAccess(["D", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from finance_category_types where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listFinanceRoles": {
+      await requireGroupAccess(["D", "E"]);
+      const result = await query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`);
+      const roles = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { roles }, error: null };
+    }
+
+    case "upsertFinanceRole": {
+      await requireGroupAccess(["D", "E"]);
+      const data = safeJsonObject(body.data || body.role || body);
+      const id = firstText(data.id, crypto.randomUUID());
+      await query(
+        `insert into finance_roles (id, role, student_id, student_name, group_ids, raw)
+         values ($1,$2,$3,$4,$5,$6)
+         on conflict (id) do update set
+          role=excluded.role,
+          student_id=excluded.student_id,
+          student_name=excluded.student_name,
+          group_ids=excluded.group_ids,
+          raw=excluded.raw,
+          synced_at=now()`,
+        [id, firstText(data.role), firstText(data.studentId), firstText(data.studentName), safeJsonArray(data.groupIds), data]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteFinanceRole": {
+      await requireGroupAccess(["D", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from finance_roles where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "createFinanceRequest": {
+      requireAuth();
+      const row = toFinanceRequestRow(body.data || body.request || body);
+      // lock applicant to current user when not provided
+      if (!row.applicantId) {
+        row.applicantId = auth.studentId;
+      }
+      const student = await findStudentProfileById(row.applicantId);
+      if (!row.applicantName && student && student.name) {
+        row.applicantName = student.name;
+      }
+      await query(
+        `insert into finance_requests (
+          id, type, title, description, category_type,
+          amount_estimated, amount_actual, currency, payment_method,
+          vendor_name, payee_name, payee_bank, payee_account,
+          related_purchase_id, no_purchase_reason, expected_clear_date,
+          attachments, status,
+          applicant_id, applicant_name, applicant_department,
+          created_at, updated_at, raw
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        on conflict (id) do update set
+          type=excluded.type,
+          title=excluded.title,
+          description=excluded.description,
+          category_type=excluded.category_type,
+          amount_estimated=excluded.amount_estimated,
+          amount_actual=excluded.amount_actual,
+          currency=excluded.currency,
+          payment_method=excluded.payment_method,
+          vendor_name=excluded.vendor_name,
+          payee_name=excluded.payee_name,
+          payee_bank=excluded.payee_bank,
+          payee_account=excluded.payee_account,
+          related_purchase_id=excluded.related_purchase_id,
+          no_purchase_reason=excluded.no_purchase_reason,
+          expected_clear_date=excluded.expected_clear_date,
+          attachments=excluded.attachments,
+          status=excluded.status,
+          applicant_id=excluded.applicant_id,
+          applicant_name=excluded.applicant_name,
+          applicant_department=excluded.applicant_department,
+          updated_at=excluded.updated_at,
+          raw=excluded.raw,
+          synced_at=now()`,
+        [
+          row.id,
+          row.type,
+          row.title,
+          row.description,
+          row.categoryType,
+          row.amountEstimated,
+          row.amountActual,
+          row.currency,
+          row.paymentMethod,
+          row.vendorName,
+          row.payeeName,
+          row.payeeBank,
+          row.payeeAccount,
+          row.relatedPurchaseId,
+          row.noPurchaseReason,
+          row.expectedClearDate,
+          row.attachments,
+          row.status,
+          row.applicantId,
+          row.applicantName,
+          row.applicantDepartment,
+          row.createdAt,
+          row.updatedAt,
+          row.raw,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "updateFinanceRequest": {
+      requireAuth();
+      const row = toFinanceRequestRow(body.data || body.request || body);
+      if (!row.id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      // allow applicant update or finance admin
+      const existing = await query(`select applicant_id from finance_requests where id = $1 limit 1`, [row.id]);
+      const existingRow = rowOrNull(existing);
+      const isOwner = existingRow && String(existingRow.applicant_id || "").trim() === String(auth.studentId || "").trim();
+      let isAdmin = false;
+      if (!isOwner) {
+        const memberships = await listMembershipsByStudentId(auth.studentId);
+        isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+      }
+      if (!isOwner && !isAdmin) {
+        const error = new Error("Unauthorized");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      await query(
+        `update finance_requests set
+          type=$2,title=$3,description=$4,category_type=$5,
+          amount_estimated=$6,amount_actual=$7,currency=$8,payment_method=$9,
+          vendor_name=$10,payee_name=$11,payee_bank=$12,payee_account=$13,
+          related_purchase_id=$14,no_purchase_reason=$15,expected_clear_date=$16,
+          attachments=$17,status=$18,
+          applicant_id=$19,applicant_name=$20,applicant_department=$21,
+          updated_at=$22,raw=$23,synced_at=now()
+        where id=$1`,
+        [
+          row.id,
+          row.type,
+          row.title,
+          row.description,
+          row.categoryType,
+          row.amountEstimated,
+          row.amountActual,
+          row.currency,
+          row.paymentMethod,
+          row.vendorName,
+          row.payeeName,
+          row.payeeBank,
+          row.payeeAccount,
+          row.relatedPurchaseId,
+          row.noPurchaseReason,
+          row.expectedClearDate,
+          row.attachments,
+          row.status,
+          row.applicantId,
+          row.applicantName,
+          row.applicantDepartment,
+          row.updatedAt,
+          row.raw,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "listFinanceRequests": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+      const result = isAdmin
+        ? await query(`select * from finance_requests order by coalesce(updated_at,'' ) desc, id desc`)
+        : await query(
+            `select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`,
+            [auth.studentId]
+          );
+      const requests = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { requests }, error: null };
+    }
+
+    case "listFinanceActions": {
+      await requireGroupAccess(["D", "E"]);
+      const requestId = firstText(body.requestId);
+      const result = requestId
+        ? await query(`select * from finance_actions where request_id = $1 order by coalesce(created_at,''), id`, [requestId])
+        : await query(`select * from finance_actions order by coalesce(created_at,'') desc, id desc limit 500`);
+      const actions = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { actions }, error: null };
+    }
+
+    case "listFinanceActionsByActor": {
+      await requireGroupAccess(["D", "E"]);
+      const actorId = firstText(body.actorId);
+      if (!actorId) {
+        return { ok: true, data: { actions: [] }, error: null };
+      }
+      const result = await query(
+        `select * from finance_actions where actor_id = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
+        [actorId]
+      );
+      const actions = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { actions }, error: null };
+    }
+
+    case "listFinanceActionsSummary": {
+      await requireGroupAccess(["D", "E"]);
+      const result = await query(
+        `select coalesce(action_type,'') as action_type, count(*)::int as count
+         from finance_actions
+         group by coalesce(action_type,'')
+         order by count desc, action_type asc`
+      );
+      return { ok: true, data: { summary: result.rows }, error: null };
+    }
+
+    case "listFinanceBootstrap":
+    case "listFinanceApplicantBootstrap": {
+      requireAuth();
+      const [categoryTypes, requests] = await Promise.all([
+        query(`select * from finance_category_types order by coalesce(label,''), id`),
+        query(`select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`, [auth.studentId]),
+      ]);
+      return {
+        ok: true,
+        data: {
+          categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
+          requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+        },
+        error: null,
+      };
+    }
+
+    case "listFinanceAdminBootstrap": {
+      await requireGroupAccess(["D", "E"]);
+      const [categoryTypes, roles, requests] = await Promise.all([
+        query(`select * from finance_category_types order by coalesce(label,''), id`),
+        query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
+        query(`select * from finance_requests order by coalesce(updated_at,'') desc, id desc`),
+      ]);
+      return {
+        ok: true,
+        data: {
+          categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
+          roles: roles.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+        },
+        error: null,
+      };
+    }
+
+    case "listApprovalsOverview": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+      const result = isAdmin
+        ? await query(`select status, count(*)::int as count from finance_requests where coalesce(status,'') <> 'draft' group by status`)
+        : await query(`select status, count(*)::int as count from finance_requests where applicant_id = $1 group by status`, [auth.studentId]);
+      let pending = 0;
+      let returned = 0;
+      let completed = 0;
+      let inProgress = 0;
+      let total = 0;
+      for (const row of result.rows) {
+        const status = String(row.status || "").trim();
+        const count = Number(row.count || 0);
+        total += count;
+        if (status === "returned") {
+          returned += count;
+        } else if (status === "closed" || status === "withdrawn") {
+          completed += count;
+        } else if (status.startsWith("pending_")) {
+          pending += count;
+        } else if (status && status !== "draft") {
+          inProgress += count;
+        }
+      }
+      return { ok: true, data: { pending, inProgress, completed, returned, total }, error: null };
+    }
+
+    case "listFundEvents": {
+      await requireGroupAccess(["D", "E"]);
+      const result = await query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`);
+      const events = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { events }, error: null };
+    }
+
+    case "upsertFundEvent": {
+      await requireGroupAccess(["D", "E"]);
+      const row = toFundEventRow(body.data || body.event || body);
+      await query(
+        `insert into fund_events (id, title, description, due_date, amount_general, amount_sponsor, expected_general_count, expected_sponsor_count, status, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         on conflict (id) do update set
+           title=excluded.title,
+           description=excluded.description,
+           due_date=excluded.due_date,
+           amount_general=excluded.amount_general,
+           amount_sponsor=excluded.amount_sponsor,
+           expected_general_count=excluded.expected_general_count,
+           expected_sponsor_count=excluded.expected_sponsor_count,
+           status=excluded.status,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [
+          row.id,
+          row.title,
+          row.description,
+          row.dueDate,
+          row.amountGeneral,
+          row.amountSponsor,
+          row.expectedGeneralCount,
+          row.expectedSponsorCount,
+          row.status,
+          row.notes,
+          row.raw,
+          row.createdAt,
+          row.updatedAt,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "deleteFundEvent": {
+      await requireGroupAccess(["D", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from fund_events where id = $1`, [id]);
+      await query(`delete from fund_payments where event_id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listFundPayments": {
+      await requireGroupAccess(["D", "E"]);
+      const eventId = firstText(body.eventId);
+      const result = eventId
+        ? await query(`select * from fund_payments where event_id = $1 order by coalesce(received_at,'') desc, id desc`, [eventId])
+        : await query(`select * from fund_payments order by coalesce(received_at,'') desc, id desc limit 1000`);
+      const payments = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { payments }, error: null };
+    }
+
+    case "upsertFundPayment": {
+      await requireGroupAccess(["D", "E"]);
+      const row = toFundPaymentRow(body.data || body.payment || body);
+      await query(
+        `insert into fund_payments (id, event_id, payer_id, payer_name, payer_email, payer_type, amount, method, transfer_last5, received_at, accounted_at, confirmed_at, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         on conflict (id) do update set
+           event_id=excluded.event_id,
+           payer_id=excluded.payer_id,
+           payer_name=excluded.payer_name,
+           payer_email=excluded.payer_email,
+           payer_type=excluded.payer_type,
+           amount=excluded.amount,
+           method=excluded.method,
+           transfer_last5=excluded.transfer_last5,
+           received_at=excluded.received_at,
+           accounted_at=excluded.accounted_at,
+           confirmed_at=excluded.confirmed_at,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [
+          row.id,
+          row.eventId,
+          row.payerId,
+          row.payerName,
+          row.payerEmail,
+          row.payerType,
+          row.amount,
+          row.method,
+          row.transferLast5,
+          row.receivedAt,
+          row.accountedAt,
+          row.confirmedAt,
+          row.notes,
+          row.raw,
+          row.createdAt,
+          row.updatedAt,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "deleteFundPayment": {
+      await requireGroupAccess(["D", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from fund_payments where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "getFundSummary": {
+      await requireGroupAccess(["D", "E"]);
+      const events = await query(`select id, title, due_date, amount_general, amount_sponsor, status, raw from fund_events order by coalesce(due_date,'') desc, id desc`);
+      const payments = await query(`select event_id, payer_type, sum(coalesce(amount,0))::numeric as total_amount, count(*)::int as count
+                                   from fund_payments
+                                   group by event_id, payer_type`);
+      const paymentMap = new Map();
+      for (const row of payments.rows) {
+        paymentMap.set(`${row.event_id}:${row.payer_type}`, { totalAmount: row.total_amount, count: row.count });
+      }
+      const summary = events.rows.map((event) => {
+        const general = paymentMap.get(`${event.id}:general`) || { totalAmount: 0, count: 0 };
+        const sponsor = paymentMap.get(`${event.id}:sponsor`) || { totalAmount: 0, count: 0 };
+        return {
+          id: event.id,
+          title: event.title || (event.raw && event.raw.title) || "",
+          dueDate: event.due_date || (event.raw && event.raw.dueDate) || "",
+          status: event.status || (event.raw && event.raw.status) || "",
+          receivedGeneralAmount: Number(general.totalAmount || 0),
+          receivedGeneralCount: Number(general.count || 0),
+          receivedSponsorAmount: Number(sponsor.totalAmount || 0),
+          receivedSponsorCount: Number(sponsor.count || 0),
+        };
+      });
+      return { ok: true, data: { summary }, error: null };
+    }
+
+    case "listSoftballConfig": {
+      await requireGroupAccess(["E", "H"]);
+      const result = await query(`select * from softball_config where id = 'singleton' limit 1`);
+      const row = rowOrNull(result);
+      return { ok: true, data: { config: row ? row.raw || {} : {} }, error: null };
+    }
+
+    case "listSoftballBootstrap": {
+      await requireGroupAccess(["E", "H"]);
+      const [configResult, playersResult, practicesResult, fieldsResult, gearResult] = await Promise.all([
+        query(`select * from softball_config where id = 'singleton' limit 1`),
+        query(`select * from softball_players order by coalesce(name,''), id`),
+        query(`select * from softball_practices order by coalesce(date,'') desc, id desc`),
+        query(`select * from softball_fields order by coalesce(name,''), id`),
+        query(`select * from softball_gear order by coalesce(name,''), id`),
+      ]);
+      const configRow = rowOrNull(configResult);
+      return {
+        ok: true,
+        data: {
+          config: configRow ? configRow.raw || {} : {},
+          players: playersResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          gear: gearResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+        },
+        error: null,
+      };
+    }
+
+    case "updateSoftballConfig": {
+      await requireGroupAccess(["E", "H"]);
+      const data = safeJsonObject(body.data || body.config || body);
+      await query(
+        `insert into softball_config (id, raw, updated_at) values ('singleton',$1,$2)
+         on conflict (id) do update set raw=excluded.raw, updated_at=excluded.updated_at, synced_at=now()`,
+        [data, nowIso()]
+      );
+      return { ok: true, data: { ok: true }, error: null };
+    }
+
+    case "listSoftballPlayers": {
+      await requireGroupAccess(["E", "H"]);
+      const result = await query(`select * from softball_players order by coalesce(name,''), id`);
+      const players = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { players }, error: null };
+    }
+
+    case "createSoftballPlayer":
+    case "updateSoftballPlayer": {
+      await requireGroupAccess(["E", "H"]);
+      const row = toSoftballPlayerRow(body.data || body.player || body);
+      await query(
+        `insert into softball_players (id, name, email, phone, jersey_no, jersey_size, positions, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         on conflict (id) do update set
+           name=excluded.name,
+           email=excluded.email,
+           phone=excluded.phone,
+           jersey_no=excluded.jersey_no,
+           jersey_size=excluded.jersey_size,
+           positions=excluded.positions,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, row.positions, row.raw, row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "upsertMySoftballPlayerProfile": {
+      requireAuth();
+      const data = safeJsonObject(body.data || body.player || body);
+      data.id = firstText(data.id, auth.studentId);
+      data.email = firstText(data.email, auth.profile && auth.profile.email ? auth.profile.email : "");
+      const row = toSoftballPlayerRow(data);
+      await query(
+        `insert into softball_players (id, name, email, phone, jersey_no, jersey_size, positions, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         on conflict (id) do update set
+           name=excluded.name,
+           email=excluded.email,
+           phone=excluded.phone,
+           jersey_no=excluded.jersey_no,
+           jersey_size=excluded.jersey_size,
+           positions=excluded.positions,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, row.positions, row.raw, row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "deleteSoftballPlayer": {
+      await requireGroupAccess(["E", "H"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_players where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballPractices": {
+      await requireGroupAccess(["E", "H"]);
+      const result = await query(`select * from softball_practices order by coalesce(date,'') desc, id desc`);
+      const practices = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { practices }, error: null };
+    }
+
+    case "createSoftballPractice":
+    case "updateSoftballPractice": {
+      await requireGroupAccess(["E", "H"]);
+      const row = toSoftballPracticeRow(body.data || body.practice || body);
+      await query(
+        `insert into softball_practices (id, date, title, location, start_at, end_at, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         on conflict (id) do update set
+           date=excluded.date,
+           title=excluded.title,
+           location=excluded.location,
+           start_at=excluded.start_at,
+           end_at=excluded.end_at,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [row.id, row.date, row.title, row.location, row.startAt, row.endAt, row.notes, row.raw, row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "deleteSoftballPractice": {
+      await requireGroupAccess(["E", "H"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_practices where id = $1`, [id]);
+      await query(`delete from softball_attendance where practice_id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballAttendance": {
+      await requireGroupAccess(["E", "H"]);
+      const practiceId = firstText(body.practiceId);
+      const result = practiceId
+        ? await query(`select * from softball_attendance where practice_id = $1 order by coalesce(updated_at,''), id`, [practiceId])
+        : await query(`select * from softball_attendance order by coalesce(updated_at,'') desc, id desc limit 2000`);
+      const attendance = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { attendance }, error: null };
+    }
+
+    case "submitSoftballAttendance": {
+      await requireGroupAccess(["E", "H"]);
+      const data = safeJsonObject(body.data || body.attendance || body);
+      const practiceId = firstText(data.practiceId || body.practiceId);
+      const playerId = firstText(data.playerId || body.playerId);
+      if (!practiceId || !playerId) {
+        return { ok: false, data: null, error: "Missing practiceId/playerId" };
+      }
+      const id = firstText(data.id, `${practiceId}:${playerId}`);
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      await query(
+        `insert into softball_attendance (id, practice_id, player_id, status, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         on conflict (id) do update set
+           status=excluded.status,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, practiceId, playerId, firstText(data.status), firstText(data.notes), data, createdAt, updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballFields": {
+      await requireGroupAccess(["E", "H"]);
+      const result = await query(`select * from softball_fields order by coalesce(name,''), id`);
+      const fields = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { fields }, error: null };
+    }
+
+    case "createSoftballField":
+    case "updateSoftballField": {
+      await requireGroupAccess(["E", "H"]);
+      const data = safeJsonObject(body.data || body.field || body);
+      const id = firstText(data.id, crypto.randomUUID());
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      await query(
+        `insert into softball_fields (id, name, address, map_url, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7)
+         on conflict (id) do update set
+           name=excluded.name,
+           address=excluded.address,
+           map_url=excluded.map_url,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, firstText(data.name), firstText(data.address), firstText(data.mapUrl || data.map_url), data, createdAt, updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteSoftballField": {
+      await requireGroupAccess(["E", "H"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_fields where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballGear": {
+      await requireGroupAccess(["E", "H"]);
+      const result = await query(`select * from softball_gear order by coalesce(name,''), id`);
+      const gear = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { gear }, error: null };
+    }
+
+    case "createSoftballGear":
+    case "updateSoftballGear": {
+      await requireGroupAccess(["E", "H"]);
+      const data = safeJsonObject(body.data || body.gear || body);
+      const id = firstText(data.id, crypto.randomUUID());
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      await query(
+        `insert into softball_gear (id, name, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6)
+         on conflict (id) do update set
+           name=excluded.name,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, firstText(data.name), firstText(data.notes), data, createdAt, updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteSoftballGear": {
+      await requireGroupAccess(["E", "H"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_gear where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballPlayerBootstrap": {
+      requireAuth();
+      const [configResult, playerResult] = await Promise.all([
+        query(`select * from softball_config where id = 'singleton' limit 1`),
+        query(`select * from softball_players where id = $1 limit 1`, [auth.studentId]),
+      ]);
+      const configRow = rowOrNull(configResult);
+      const playerRow = rowOrNull(playerResult);
+      return {
+        ok: true,
+        data: {
+          config: configRow ? configRow.raw || {} : {},
+          player: playerRow ? playerRow.raw || { id: playerRow.id } : null,
+        },
+        error: null,
+      };
+    }
+
+
+    case "listStudents": {
+      const result = await query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`);
+      const students = result.rows.map((row) => ({
+        id: row.id || "",
+        name: row.name || "",
+        googleSub: row.google_sub || "",
+        googleEmail: row.google_email || "",
+      }));
+      return { ok: true, data: { students }, error: null };
+    }
+
+    case "searchStudents": {
+      const q = String(body.query || "").trim().toLowerCase();
+      if (!q || q.length < 2) {
+        return { ok: true, data: { students: [] }, error: null };
+      }
+      const like = `%${q}%`;
+      const result = await query(
+        `select id, email, name_zh, name_en, preferred_name, company, title, group_id
+         from directories
+         where lower(coalesce(id,'')) like $1
+            or lower(coalesce(email,'')) like $1
+            or lower(coalesce(name_zh,'')) like $1
+            or lower(coalesce(name_en,'')) like $1
+            or lower(coalesce(preferred_name,'')) like $1
+            or lower(coalesce(company,'')) like $1
+         order by coalesce(group_id,''), coalesce(name_zh,''), id
+         limit 30`,
+        [like]
+      );
+      const students = result.rows.map((row) => ({
+        id: String(row.id || "").trim(),
+        email: normalizeEmail(row.email || ""),
+        name: firstText(row.preferred_name, firstText(row.name_zh, row.name_en || "")),
+        company: firstText(row.company),
+        title: firstText(row.title),
+        group: firstText(row.group_id),
+      }));
+      return { ok: true, data: { students }, error: null };
+    }
+
+    case "verifyGoogle": {
+      const idToken = firstText(body.idToken);
+      if (!idToken) {
+        return { ok: false, data: null, error: "Missing idToken" };
+      }
+      const googleProfile = await verifyGoogleIdToken(idToken);
+      const googleSub = String(googleProfile.sub || "").trim();
+      if (!googleSub) {
+        return { ok: false, data: null, error: "Invalid Google token" };
+      }
+      const linked = await query(
+        `select s.id
+         from students s
+         where s.google_sub = $1
+         limit 1`,
+        [googleSub]
+      );
+      const studentId = linked.rows.length ? String(linked.rows[0].id || "").trim() : "";
+      const student = studentId ? await findStudentProfileById(studentId) : null;
+      const emailMatch = student && student.email ? normalizeEmail(student.email) === normalizeEmail(googleProfile.email) : false;
+      const sessionToken = studentId
+        ? createSessionToken({
+            studentId,
+            email: googleProfile.email,
+            sub: googleProfile.sub,
+            name: googleProfile.name,
+          })
+        : "";
+      const memberships = studentId ? await listMembershipsByStudentId(studentId) : [];
+      return {
+        ok: true,
+        data: {
+          profile: googleProfile,
+          student,
+          emailMatch,
+          sessionToken,
+          memberships,
+        },
+        error: null,
+      };
+    }
+
+    case "linkGoogleStudent": {
+      const idToken = firstText(body.idToken);
+      const studentId = firstText(body.studentId);
+      if (!idToken) {
+        return { ok: false, data: null, error: "Missing idToken" };
+      }
+      if (!studentId) {
+        return { ok: false, data: null, error: "Missing studentId" };
+      }
+      const googleProfile = await verifyGoogleIdToken(idToken);
+      if (!googleProfile || !googleProfile.sub) {
+        return { ok: false, data: null, error: "Invalid Google token" };
+      }
+      await query(
+        `update students set google_sub = $2, google_email = $3, synced_at = now(), raw = coalesce(raw, '{}'::jsonb)
+         where id = $1`,
+        [studentId, String(googleProfile.sub || ""), normalizeEmail(googleProfile.email || "")]
+      );
+      const student = await findStudentProfileById(studentId);
+      const memberships = await listMembershipsByStudentId(studentId);
+      const sessionToken = createSessionToken({
+        studentId,
+        email: googleProfile.email,
+        sub: googleProfile.sub,
+        name: googleProfile.name,
+      });
+      return { ok: true, data: { student, memberships, sessionToken }, error: null };
+    }
+
+    default: {
+      return { ok: false, data: null, error: `Unsupported action: ${name}` };
+    }
+  }
+}

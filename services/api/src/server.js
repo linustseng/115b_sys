@@ -9,6 +9,7 @@ import { query, withTransaction } from "./db.js";
 import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
 import { createSessionToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
+import { dispatchNativeAction } from "./nativeActions.js";
 
 const config = getConfig();
 const app = express();
@@ -633,17 +634,75 @@ app.get("/health", async (_req, res) => {
   res.json({ ok: true, service: "115b-sys-api", now: new Date().toISOString() });
 });
 
-app.post("/v1/action", async (req, res) => {
+async function handleNativeActionRequest_(req, res, actionName, payload) {
   try {
-    const payload = req.body && typeof req.body === "object" ? req.body : {};
-    const action = String(payload.action || "").trim();
-    if (!action) {
-      return res.status(400).json({ ok: false, data: null, error: "Missing action" });
+    const auth = await resolveAuthContext(req);
+    const result = await dispatchNativeAction({
+      action: actionName,
+      payload,
+      auth,
+      query,
+      withTransaction,
+      verifyGoogleIdToken,
+      createSessionToken,
+      listMembershipsByStudentId,
+      findStudentProfileById,
+    });
+    return res.status(result && result.ok ? 200 : 400).json(result);
+  } catch (error) {
+    const statusCode = Number(error && error.statusCode) || (String(error && error.message) === "Unauthorized" ? 401 : 500);
+    return res.status(statusCode).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+}
+
+// Legacy endpoint: in strict mode, only native actions are allowed.
+// In non-strict mode, unsupported actions may fall back to Apps Script.
+app.post("/v1/action", async (req, res) => {
+  const payload = req.body && typeof req.body === "object" ? req.body : {};
+  const action = String(payload.action || "").trim();
+  if (!action) {
+    return res.status(400).json({ ok: false, data: null, error: "Missing action" });
+  }
+
+  const forwarded = Object.assign({}, payload);
+  delete forwarded.action;
+
+  // Always try native first.
+  const auth = await resolveAuthContext(req);
+  try {
+    const nativeResult = await dispatchNativeAction({
+      action,
+      payload: forwarded,
+      auth,
+      query,
+      withTransaction,
+      verifyGoogleIdToken,
+      createSessionToken,
+      listMembershipsByStudentId,
+      findStudentProfileById,
+    });
+
+    if (nativeResult && nativeResult.ok) {
+      return res.status(200).json(nativeResult);
     }
 
-    const forwarded = Object.assign({}, payload);
-    delete forwarded.action;
+    const isUnsupported = nativeResult && nativeResult.ok === false && String(nativeResult.error || "").startsWith("Unsupported action");
+    if (!isUnsupported) {
+      return res.status(400).json(nativeResult || { ok: false, data: null, error: "Action failed" });
+    }
 
+    if (config.strictNodeOnly) {
+      return res.status(400).json(nativeResult);
+    }
+  } catch (error) {
+    if (config.strictNodeOnly) {
+      const statusCode = Number(error && error.statusCode) || (String(error && error.message) === "Unauthorized" ? 401 : 500);
+      return res.status(statusCode).json({ ok: false, data: null, error: error.message || "Internal error" });
+    }
+    // Non-strict: fallback below.
+  }
+
+  try {
     const result = await callAppsScriptAction_(action, forwarded);
     if (!result || typeof result.ok !== "boolean") {
       return res.status(502).json({ ok: false, data: null, error: "Invalid upstream response" });
@@ -658,6 +717,16 @@ app.post("/v1/action", async (req, res) => {
   } catch (error) {
     return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
   }
+});
+
+// New native-only endpoint (preferred).
+app.post("/v1/actions/:action", async (req, res) => {
+  const actionName = String(req.params.action || "").trim();
+  if (!actionName) {
+    return res.status(400).json({ ok: false, data: null, error: "Missing action" });
+  }
+  const payload = req.body && typeof req.body === "object" ? req.body : {};
+  return handleNativeActionRequest_(req, res, actionName, payload);
 });
 
 app.get("/v1/events", async (_req, res) => {
