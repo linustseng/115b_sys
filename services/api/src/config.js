@@ -31,8 +31,6 @@ export function getConfig() {
   }
 
   const databaseUrl = requireEnv("DATABASE_URL");
-  const appsScriptUrl = requireEnv("APPS_SCRIPT_URL");
-  const syncPullToken = requireEnv("SYNC_PULL_TOKEN");
   const sessionSecret = requireEnv("SESSION_SECRET");
   const googleClientId = requireEnv("GOOGLE_CLIENT_ID");
 
@@ -41,9 +39,24 @@ export function getConfig() {
     process.env.DRIVE_SERVICE_ACCOUNT_JSON_BASE64 || ""
   ).trim();
 
+  const nodeEnv = String(process.env.NODE_ENV || "development").trim();
+  const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
+
+  const appsScriptUrl = String(process.env.APPS_SCRIPT_URL || "").trim();
+  const syncPullToken = String(process.env.SYNC_PULL_TOKEN || "").trim();
+  if (!strictNodeOnly) {
+    if (!appsScriptUrl) {
+      throw new Error("Missing required env: APPS_SCRIPT_URL");
+    }
+    if (!syncPullToken) {
+      throw new Error("Missing required env: SYNC_PULL_TOKEN");
+    }
+  }
+
   cachedConfig = {
-    nodeEnv: String(process.env.NODE_ENV || "development").trim(),
+    nodeEnv,
     port: parseNumber(process.env.PORT, 8080),
+    strictNodeOnly,
     databaseUrl,
     databaseSsl: parseBoolean(process.env.DATABASE_SSL, true),
     appsScriptUrl,
