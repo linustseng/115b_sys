@@ -769,15 +769,22 @@ export default function AdminPage({
     setLoading(true);
     setError("");
     try {
+      let safeIdToken = "";
+      if (!activeToken && typeof getGoogleIdTokenSilently_ === "function") {
+        try {
+          safeIdToken = (await getGoogleIdTokenSilently_()) || "";
+        } catch (error) {
+          // 不要因 silent login 失敗直接中斷，改由 apiRequest 既有 auth/session header 嘗試
+          safeIdToken = "";
+        }
+      }
+
       const payload = activeToken
         ? { action: "listDirectory", authToken: activeToken }
         : {
             action: "listDirectory",
-            idToken: getGoogleIdTokenSilently_ ? await getGoogleIdTokenSilently_() : "",
+            idToken: safeIdToken,
           };
-      if (!payload.authToken && !payload.idToken) {
-        throw new Error("請先完成 Google 登入");
-      }
       const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
