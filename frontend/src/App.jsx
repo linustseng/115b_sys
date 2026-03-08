@@ -1075,14 +1075,17 @@ function buildApiV2Request_(payload) {
     };
   }
 
+  const bodyPayload = { ...(payload || {}) };
+  delete bodyPayload.action;
+
   return {
     method: "POST",
-    url: `${base}/v1/action`,
+    url: `${base}/v1/actions/${encodeURIComponent(action)}`,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload || {}),
+    body: JSON.stringify(bodyPayload),
   };
 }
 
@@ -1188,11 +1191,14 @@ function buildApiV2WriteRequest_(payload) {
     }
   }
 
+  const bodyPayload = { ...(payload || {}) };
+  delete bodyPayload.action;
+
   return {
     method: "POST",
-    url: `${base}/v1/action`,
+    url: `${base}/v1/actions/${encodeURIComponent(action)}`,
     headers,
-    body: JSON.stringify(payload || {}),
+    body: JSON.stringify(bodyPayload),
   };
 }
 
