@@ -919,6 +919,19 @@ function shouldUseApiV2Read_(payload) {
   return Boolean(action);
 }
 
+function applyApiV2AuthHeaders_(headers, payload) {
+  const next = Object.assign({}, headers || {});
+  const sessionToken = String((payload && payload.sessionToken) || "").trim();
+  const idToken = String((payload && payload.idToken) || "").trim();
+  if (sessionToken) {
+    next.Authorization = `Bearer ${sessionToken}`;
+  }
+  if (idToken) {
+    next["x-id-token"] = idToken;
+  }
+  return next;
+}
+
 function buildApiV2Request_(payload) {
   const action = String((payload && payload.action) || "").trim();
   if (!action) {
@@ -1006,13 +1019,11 @@ function buildApiV2Request_(payload) {
     if (idToken) {
       requestBody.idToken = idToken;
     }
-    const headers = {
+    let headers = {
       Accept: "application/json",
       "Content-Type": "application/json",
     };
-    if (sessionToken) {
-      headers.Authorization = `Bearer ${sessionToken}`;
-    }
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "POST",
       url: `${base}/v1/memberships/my`,
@@ -1081,10 +1092,13 @@ function buildApiV2Request_(payload) {
   return {
     method: "POST",
     url: `${base}/v1/actions/${encodeURIComponent(action)}`,
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
+    headers: applyApiV2AuthHeaders_(
+      {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      payload
+    ),
     body: JSON.stringify(bodyPayload),
   };
 }
@@ -1153,10 +1167,13 @@ function buildApiV2WriteRequest_(payload) {
     throw new Error("Missing action");
   }
   const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
-  const headers = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
+  const headers = applyApiV2AuthHeaders_(
+    {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    payload
+  );
 
   if (action === "register") {
     return {
