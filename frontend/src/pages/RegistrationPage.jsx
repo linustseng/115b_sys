@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 function RegistrationPage({ shared }) {
   const {
     apiRequest,
-    authedApiRequest,
     EVENT_ID,
     DEFAULT_EVENT,
     DRINK_FIELD_IDS,
@@ -210,7 +209,7 @@ function RegistrationPage({ shared }) {
       return applyBootstrapRegistrationData_(cached.data || {});
     }
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "getRegistrationBootstrap",
         eventId: eventId,
         email: normalized,
@@ -242,7 +241,7 @@ function RegistrationPage({ shared }) {
     let ignore = false;
     const fetchDirectory = async () => {
       try {
-        const { result } = await authedApiRequest({
+        const { result } = await apiRequest({
           action: "lookupStudent",
           email: String(googleLinkedStudent.email || "").trim().toLowerCase(),
         });
@@ -302,7 +301,7 @@ function RegistrationPage({ shared }) {
         if (normalizedEmail) {
           payload.email = normalizedEmail;
         }
-        const { result } = await authedApiRequest(payload);
+        const { result } = await apiRequest(payload);
         if (!result.ok || !result.data || !result.data.event) {
           throw new Error(result.error || "Event not found");
         }
@@ -436,7 +435,7 @@ function RegistrationPage({ shared }) {
         customFields,
         linkedStudentId
       );
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "register",
         data: {
           eventId: eventId,
@@ -487,7 +486,7 @@ function RegistrationPage({ shared }) {
         ...normalizeCustomFieldsForSubmit_(customFields, linkedStudentId),
         notes: String(notes || "").trim(),
       };
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "updateRegistration",
         data: {
           id: existingRegistration.id,

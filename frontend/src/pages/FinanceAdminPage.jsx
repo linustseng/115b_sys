@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 function FinanceAdminPage({ shared }) {
   const {
     apiRequest,
-    authedApiRequest,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
     formatDisplayDate_,
@@ -131,7 +130,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await authedApiRequest({ action: "listFinanceRequests" });
+      const { result } = await apiRequest({ action: "listFinanceRequests" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -145,7 +144,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadStudents = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listStudents" });
+      const { result } = await apiRequest({ action: "listStudents" });
       if (result.ok) {
         setStudents(result.data && result.data.students ? result.data.students : []);
       }
@@ -156,7 +155,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadFundSummary = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "getFundSummary" });
+      const { result } = await apiRequest({ action: "getFundSummary" });
       if (result.ok) {
         setFundSummary(result.data || null);
       }
@@ -167,7 +166,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadFundEvents = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listFundEvents" });
+      const { result } = await apiRequest({ action: "listFundEvents" });
       if (result.ok) {
         setFundEvents(result.data && result.data.events ? result.data.events : []);
       }
@@ -182,7 +181,7 @@ function FinanceAdminPage({ shared }) {
       return;
     }
     try {
-      const { result } = await authedApiRequest({ action: "listFundPayments", eventId: eventId });
+      const { result } = await apiRequest({ action: "listFundPayments", eventId: eventId });
       if (result.ok) {
         setFundPayments(result.data && result.data.payments ? result.data.payments : []);
       }
@@ -209,7 +208,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadGroupMemberships = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listGroupMemberships" });
+      const { result } = await apiRequest({ action: "listGroupMemberships" });
       if (result.ok) {
         setGroupMemberships(
           result.data && result.data.memberships ? result.data.memberships : []
@@ -222,7 +221,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadFinanceRoles = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listFinanceRoles" });
+      const { result } = await apiRequest({ action: "listFinanceRoles" });
       if (result.ok) {
         setFinanceRoles(result.data && result.data.roles ? result.data.roles : []);
       }
@@ -233,7 +232,7 @@ function FinanceAdminPage({ shared }) {
 
   const loadFinanceCategories = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listFinanceCategoryTypes" });
+      const { result } = await apiRequest({ action: "listFinanceCategoryTypes" });
       if (result.ok) {
         setFinanceCategories(result.data && result.data.categories ? result.data.categories : []);
       }
@@ -245,7 +244,7 @@ function FinanceAdminPage({ shared }) {
   const loadFinanceAdminBootstrap = async (options = {}) => {
     const includeRequests = options.includeRequests === true;
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "listFinanceAdminBootstrap",
         includeRequests: includeRequests,
       });
@@ -274,7 +273,7 @@ function FinanceAdminPage({ shared }) {
       return;
     }
     try {
-      const { result } = await authedApiRequest({ action: "listFinanceActions", requestId: requestId });
+      const { result } = await apiRequest({ action: "listFinanceActions", requestId: requestId });
       if (result.ok) {
         setActions(result.data && result.data.actions ? result.data.actions : []);
       }
@@ -635,7 +634,7 @@ function FinanceAdminPage({ shared }) {
     setError("");
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "updateFinanceRequest",
         id: selectedRequest.id,
         requestAction: actionType,
@@ -742,7 +741,7 @@ function FinanceAdminPage({ shared }) {
     }
     setLoading(true);
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "upsertFinanceRole",
         data: {
           id: financeRoleForm.id,
@@ -793,7 +792,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteFinanceRole", id: roleId });
+      const { result } = await apiRequest({ action: "deleteFinanceRole", id: roleId });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -818,7 +817,7 @@ function FinanceAdminPage({ shared }) {
     }
     setLoading(true);
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "upsertFinanceCategoryType",
         data: {
           id: financeCategoryForm.id,
@@ -865,7 +864,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteFinanceCategoryType", id: categoryId });
+      const { result } = await apiRequest({ action: "deleteFinanceCategoryType", id: categoryId });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -921,7 +920,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     try {
       const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "upsertFundEvent",
         data: { ...fundEventForm, actorId },
       });
@@ -971,7 +970,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteFundEvent", id: eventId });
+      const { result } = await apiRequest({ action: "deleteFundEvent", id: eventId });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -1014,7 +1013,7 @@ function FinanceAdminPage({ shared }) {
           ? null
           : matchDirectoryByName_(fundPaymentForm.payerEmail || fundPaymentForm.payerName);
       const resolvedPayerId = fundPaymentForm.payerId || (resolvedMatch && resolvedMatch.id) || "";
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "upsertFundPayment",
         data: { ...fundPaymentForm, payerId: resolvedPayerId, actorId },
       });
@@ -1069,7 +1068,7 @@ function FinanceAdminPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteFundPayment", id: paymentId });
+      const { result } = await apiRequest({ action: "deleteFundPayment", id: paymentId });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }

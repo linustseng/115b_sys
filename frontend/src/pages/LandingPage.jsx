@@ -202,7 +202,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       // Memberships drive admin-entry visibility. If we don't have fresh cache yet,
       // fetch them in parallel so entry links appear before notifications finish.
       if (!hasValidCachedMemberships) {
-        authedApiRequest({ action: "listGroupMemberships" })
+        apiRequest({ action: "listGroupMemberships" })
           .then(({ result }) => {
             if (ignore || !result || !result.ok) {
               return;
@@ -224,7 +224,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           });
       }
       try {
-        const { result } = await authedApiRequest({
+        const { result } = await apiRequest({
           action: "listLandingBootstrap",
           studentId: studentId,
           email: email,
@@ -301,7 +301,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
     const loadBirthdays = async () => {
       try {
-        const { result } = await authedApiRequest({ action: "listBirthdays" });
+        const { result } = await apiRequest({ action: "listBirthdays" });
         if (!result || !result.ok) {
           throw new Error((result && result.error) || "壽星資料載入失敗");
         }
@@ -387,7 +387,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
     const loadOverview = async () => {
       try {
-        const { result } = await authedApiRequest({
+        const { result } = await apiRequest({
           action: "listApprovalsOverview",
           studentId: studentId,
           email: email,
@@ -432,7 +432,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       return;
     }
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "markNotificationRead",
         notificationId: notificationId,
         studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
@@ -462,7 +462,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       return;
     }
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "markAllNotificationsRead",
         notificationIds: unreadIds,
         studentId: googleLinkedStudent && googleLinkedStudent.id ? googleLinkedStudent.id : "",
