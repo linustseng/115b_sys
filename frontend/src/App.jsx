@@ -2510,10 +2510,6 @@ function AppShell() {
           }
         }
 
-        if (storedSession && storedSession.token) {
-          return;
-        }
-
         // 2) Fallback: exchange Google idToken for a session.
         const idToken = loadStoredGoogleIdToken_();
         if (!idToken) {
