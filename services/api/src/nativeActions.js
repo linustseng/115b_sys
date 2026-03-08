@@ -1189,6 +1189,12 @@ export async function dispatchNativeAction({
       };
     }
 
+    case "listMyMemberships": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      return { ok: true, data: { memberships }, error: null };
+    }
+
     case "listApprovalsOverview": {
       requireAuth();
       // Overview is user-centric: always summarize the caller's own requests.
