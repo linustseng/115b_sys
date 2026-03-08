@@ -270,7 +270,7 @@ function SoftballPlayerPage({ shared }) {
       );
       if (!result.ok) {
         setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
-        setAttendance([]);
+        // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
         setAttendanceLoaded(true);
         return;
       }
@@ -279,7 +279,7 @@ function SoftballPlayerPage({ shared }) {
       setAttendanceLoaded(true);
     } catch (err) {
       setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
-      setAttendance([]);
+      // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
       setAttendanceLoaded(true);
     }
   };
