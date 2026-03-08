@@ -2612,7 +2612,7 @@ function AppShell() {
   } else if (isEventsPage) {
     content = (
       <HomePage
-        apiRequest={authedApiRequest}
+        apiRequest={apiRequest}
         buildGoogleMapsUrl_={buildGoogleMapsUrl_}
         formatDisplayDate_={formatDisplayDate_}
         formatEventSchedule_={formatEventSchedule_}
