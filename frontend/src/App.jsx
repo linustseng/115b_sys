@@ -2500,7 +2500,7 @@ function AppShell() {
       >
         <AdminPage
           pageTitle="活動管理 · 後台"
-          apiRequest={apiRequest}
+          apiRequest={authedApiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
@@ -2526,7 +2526,7 @@ function AppShell() {
       >
         <AdminPage
           pageTitle="訂餐管理 · 後台"
-          apiRequest={apiRequest}
+          apiRequest={authedApiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
@@ -2562,7 +2562,7 @@ function AppShell() {
       >
         <AdminPage
           pageTitle="系統管理 · 後台"
-          apiRequest={apiRequest}
+          apiRequest={authedApiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
@@ -2590,7 +2590,7 @@ function AppShell() {
       >
         <AdminPage
           pageTitle="系統管理 · 後台"
-          apiRequest={apiRequest}
+          apiRequest={authedApiRequest}
           API_URL={API_URL}
           UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
