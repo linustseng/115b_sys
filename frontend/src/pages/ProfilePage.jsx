@@ -24,6 +24,7 @@ const buildNumberOptions_ = (max) => {
 export default function ProfilePage({ shared }) {
   const {
     apiRequest,
+    authedApiRequest,
     GoogleSigninPanel,
     getGoogleIdTokenSilently_,
     loadStoredGoogleStudent_,
@@ -61,7 +62,7 @@ export default function ProfilePage({ shared }) {
     setError("");
     setSuccess("");
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "getDirectoryProfile",
         idToken: token,
       });
@@ -151,7 +152,7 @@ export default function ProfilePage({ shared }) {
     }
     setSaving(true);
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "updateDirectoryProfile",
         idToken: idToken,
         data: {

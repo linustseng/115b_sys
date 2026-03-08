@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 function CheckinPage({ shared }) {
   const {
     apiRequest,
+    authedApiRequest,
     buildGoogleMapsUrl_,
     formatDisplayDate_,
     loadStoredGoogleStudent_,
@@ -53,7 +54,7 @@ function CheckinPage({ shared }) {
     let ignore = false;
     const fetchBootstrap = async () => {
       try {
-        const { result } = await apiRequest({
+        const { result } = await authedApiRequest({
           action: "getCheckinBootstrap",
           eventId: eventId,
           email: String(email || "").trim().toLowerCase(),
@@ -103,7 +104,7 @@ function CheckinPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "checkin",
         data: {
           eventId: eventId,

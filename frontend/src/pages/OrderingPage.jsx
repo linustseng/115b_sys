@@ -4,6 +4,7 @@ function OrderingPage({ shared }) {
 
   const {
     apiRequest,
+    authedApiRequest,
     API_URL,
     PUBLIC_SITE_URL,
     GOOGLE_CLIENT_ID,
@@ -109,7 +110,7 @@ function OrderingPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listOrderPlans" });
+      const { result } = await authedApiRequest({ action: "listOrderPlans" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -127,7 +128,7 @@ function OrderingPage({ shared }) {
       return;
     }
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "listOrderResponsesByStudent",
         studentId: studentId,
       });
@@ -215,7 +216,7 @@ function OrderingPage({ shared }) {
     setSaving((prev) => ({ ...prev, [planId]: true }));
     setSubmitMessage((prev) => ({ ...prev, [planId]: "" }));
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "submitOrderResponse",
         data: {
           orderId: planId,

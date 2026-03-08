@@ -5,6 +5,7 @@ function ApprovalsPage({ shared }) {
 
   const {
     apiRequest,
+    authedApiRequest,
     API_URL,
     PUBLIC_SITE_URL,
     GOOGLE_CLIENT_ID,

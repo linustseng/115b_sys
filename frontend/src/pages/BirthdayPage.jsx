@@ -53,7 +53,7 @@ function BirthdayPage({ shared }) {
 
     const loadBirthdays = async () => {
       try {
-        const { result } = await apiRequest({ action: "listBirthdays" });
+        const { result } = await authedApiRequest({ action: "listBirthdays" });
         if (!result || !result.ok) {
           throw new Error((result && result.error) || "載入壽星資料失敗");
         }

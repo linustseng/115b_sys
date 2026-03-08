@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 export default function DirectoryPage({ shared }) {
   const {
     apiRequest,
+    authedApiRequest,
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
@@ -108,7 +109,7 @@ export default function DirectoryPage({ shared }) {
     setError("");
     try {
       const idToken = await getIdToken_();
-      const { result } = await apiRequest({ action: "listDirectory", idToken: idToken });
+      const { result } = await authedApiRequest({ action: "listDirectory", idToken: idToken });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "載入失敗");
       }

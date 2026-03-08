@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab = "pending" }) {
   const {
     apiRequest,
+    authedApiRequest,
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
@@ -180,7 +181,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     let ignore = false;
     const enrichStudent = async () => {
       try {
-        const { result } = await apiRequest({
+        const { result } = await authedApiRequest({
           action: "lookupStudent",
           email: String(googleLinkedStudent.email || "").trim().toLowerCase(),
         });
@@ -204,7 +205,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
 
   const loadBootstrap = async (options = {}) => {
     const includeRequests = options.includeRequests === true;
-    const { result } = await apiRequest({
+    const { result } = await authedApiRequest({
       action: "listFinanceAdminBootstrap",
       includeRequests: includeRequests,
     });
@@ -222,7 +223,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   };
 
   const loadRequests = async () => {
-    const { result } = await apiRequest({ action: "listFinanceRequests" });
+    const { result } = await authedApiRequest({ action: "listFinanceRequests" });
     if (!result.ok) {
       throw new Error(result.error || "載入失敗");
     }
@@ -235,7 +236,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       return;
     }
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "listFinanceActionsByActor",
         actorNames: [displayName],
       });
@@ -256,7 +257,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       return;
     }
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "listFinanceActionsSummary",
         requestIds: ids,
       });
@@ -274,7 +275,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       setActions([]);
       return;
     }
-    const { result } = await apiRequest({ action: "listFinanceActions", requestId: targetId });
+    const { result } = await authedApiRequest({ action: "listFinanceActions", requestId: targetId });
     if (!result.ok) {
       throw new Error(result.error || "載入失敗");
     }
@@ -647,7 +648,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     setActing(true);
     setError("");
     try {
-      const { result } = await apiRequest({
+      const { result } = await authedApiRequest({
         action: "updateFinanceRequest",
         id: selectedRequest.id,
         requestAction: actionType,
