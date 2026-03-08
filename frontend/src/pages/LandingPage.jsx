@@ -3,7 +3,7 @@ import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
-  const { apiRequest } = shared;
+  const { apiRequest, authedApiRequest } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
