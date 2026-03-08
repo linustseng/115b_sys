@@ -154,7 +154,7 @@ function HomePage({
     setCheckinSubmitting(true);
     setCheckinError("");
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "checkin",
         data: {
           eventId: checkinTarget.id,
@@ -194,7 +194,7 @@ function HomePage({
     setCancelSubmitting(true);
     setCancelError("");
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await apiRequest({
         action: "deleteCheckin",
         id: cancelTarget.checkinId,
         userEmail: String(
@@ -323,7 +323,7 @@ function HomePage({
       if (normalizedEmail) {
         payload.email = normalizedEmail;
       }
-      const { result } = await authedApiRequest(payload);
+      const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
