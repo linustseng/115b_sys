@@ -1518,25 +1518,45 @@ export async function dispatchNativeAction({
       let result;
       if (practiceId) {
         result = await query(
-          `select distinct on (practice_id, player_id) *
-           from softball_attendance
-           where practice_id = $1 ${isAdmin ? "" : "and player_id = $2"}
-           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc`,
+          `with att as (
+             select *,
+               coalesce(practice_id, raw->>'practiceId', raw->>'practice_id') as practice_key,
+               coalesce(player_id, raw->>'playerId', raw->>'studentId', raw->>'player_id') as player_key
+             from softball_attendance
+             where coalesce(practice_id, raw->>'practiceId', raw->>'practice_id') = $1 ${
+               isAdmin ? "" : "and coalesce(player_id, raw->>'playerId', raw->>'studentId', raw->>'player_id') = $2"
+             }
+           )
+           select distinct on (practice_key, player_key) *
+           from att
+           order by practice_key, player_key, coalesce(updated_at,'') desc, id desc`,
           isAdmin ? [practiceId] : [practiceId, studentId]
         );
       } else if (isAdmin) {
         result = await query(
-          `select distinct on (practice_id, player_id) *
-           from softball_attendance
-           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc
+          `with att as (
+             select *,
+               coalesce(practice_id, raw->>'practiceId', raw->>'practice_id') as practice_key,
+               coalesce(player_id, raw->>'playerId', raw->>'studentId', raw->>'player_id') as player_key
+             from softball_attendance
+           )
+           select distinct on (practice_key, player_key) *
+           from att
+           order by practice_key, player_key, coalesce(updated_at,'') desc, id desc
            limit 2000`
         );
       } else {
         result = await query(
-          `select distinct on (practice_id, player_id) *
-           from softball_attendance
-           where player_id = $1
-           order by practice_id, player_id, coalesce(updated_at,'') desc, id desc
+          `with att as (
+             select *,
+               coalesce(practice_id, raw->>'practiceId', raw->>'practice_id') as practice_key,
+               coalesce(player_id, raw->>'playerId', raw->>'studentId', raw->>'player_id') as player_key
+             from softball_attendance
+             where coalesce(player_id, raw->>'playerId', raw->>'studentId', raw->>'player_id') = $1
+           )
+           select distinct on (practice_key, player_key) *
+           from att
+           order by practice_key, player_key, coalesce(updated_at,'') desc, id desc
            limit 500`,
           [studentId]
         );
