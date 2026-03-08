@@ -921,8 +921,35 @@ function shouldUseApiV2Read_(payload) {
 
 function applyApiV2AuthHeaders_(headers, payload) {
   const next = Object.assign({}, headers || {});
-  const sessionToken = String((payload && payload.sessionToken) || "").trim();
-  const idToken = String((payload && payload.idToken) || "").trim();
+  let sessionToken = String((payload && payload.sessionToken) || "").trim();
+  let idToken = String((payload && payload.idToken) || "").trim();
+
+  // fallback to stored auth for pages that call apiRequest directly
+  if (typeof window !== "undefined") {
+    if (!sessionToken) {
+      try {
+        const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          sessionToken = String((parsed && parsed.token) || "").trim();
+        }
+      } catch (error) {
+        // ignore storage errors
+      }
+    }
+    if (!idToken) {
+      try {
+        const raw = window.sessionStorage.getItem(STORAGE_KEYS.googleIdToken);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          idToken = String((parsed && parsed.token) || "").trim();
+        }
+      } catch (error) {
+        // ignore storage errors
+      }
+    }
+  }
+
   if (sessionToken) {
     next.Authorization = `Bearer ${sessionToken}`;
   }
