@@ -198,6 +198,7 @@ const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macro
 const API_V2_URL = import.meta.env.VITE_API_V2_URL || "";
 const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "0").trim() === "1";
 const API_V2_WRITE_ENABLED = String(import.meta.env.VITE_API_V2_WRITE_ENABLED || "0").trim() === "1";
+const API_V2_STRICT = String(import.meta.env.VITE_API_V2_STRICT || "1").trim() === "1";
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
 const PUBLIC_SITE_URL = import.meta.env.VITE_PUBLIC_SITE_URL || "";
 const UPLOAD_FOLDER_ID = import.meta.env.VITE_UPLOAD_FOLDER_ID || "";
@@ -915,7 +916,7 @@ function shouldUseApiV2Read_(payload) {
     return false;
   }
   const action = String((payload && payload.action) || "").trim();
-  return API_V2_READ_ACTIONS.has(action);
+  return Boolean(action);
 }
 
 function buildApiV2Request_(payload) {
@@ -1074,7 +1075,15 @@ function buildApiV2Request_(payload) {
     };
   }
 
-  throw new Error(`Unsupported API v2 action: ${action}`);
+  return {
+    method: "POST",
+    url: `${base}/v1/action`,
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload || {}),
+  };
 }
 
 function requestWithApiV2Read_(payload) {
@@ -1132,7 +1141,7 @@ function shouldUseApiV2Write_(payload) {
     return false;
   }
   const action = String((payload && payload.action) || "").trim();
-  return API_V2_WRITE_ACTIONS.has(action);
+  return Boolean(action);
 }
 
 function buildApiV2WriteRequest_(payload) {
@@ -1166,21 +1175,25 @@ function buildApiV2WriteRequest_(payload) {
 
   if (action === "updateRegistration") {
     const authToken = String((payload && payload.authToken) || "").trim();
-    if (authToken) {
-      throw new Error("Use legacy transport for admin updateRegistration");
+    if (!authToken) {
+      return {
+        method: "POST",
+        url: `${base}/v1/update-registration`,
+        headers,
+        body: JSON.stringify({
+          data: (payload && payload.data) || {},
+          email: String((payload && payload.email) || "").trim(),
+        }),
+      };
     }
-    return {
-      method: "POST",
-      url: `${base}/v1/update-registration`,
-      headers,
-      body: JSON.stringify({
-        data: (payload && payload.data) || {},
-        email: String((payload && payload.email) || "").trim(),
-      }),
-    };
   }
 
-  throw new Error(`Unsupported API v2 write action: ${action}`);
+  return {
+    method: "POST",
+    url: `${base}/v1/action`,
+    headers,
+    body: JSON.stringify(payload || {}),
+  };
 }
 
 function requestWithApiV2Write_(payload) {
@@ -1348,6 +1361,9 @@ async function requestWithTransportFallback_(payload) {
 
 async function requestWithReadRetry_(payload) {
   if (shouldUseApiV2Read_(payload)) {
+    if (API_V2_STRICT) {
+      return requestWithApiV2Read_(payload);
+    }
     try {
       const response = await requestWithApiV2Read_(payload);
       if (response && response.result && response.result.ok) {
@@ -1380,6 +1396,9 @@ function apiRequest(payload) {
   if (!isReadAction_(requestPayload)) {
     clearReadResponseCache_();
     if (shouldUseApiV2Write_(requestPayload)) {
+      if (API_V2_STRICT) {
+        return requestWithApiV2Write_(requestPayload);
+      }
       return requestWithApiV2Write_(requestPayload).catch(() =>
         requestWithTransportFallback_(requestPayload)
       );

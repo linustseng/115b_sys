@@ -633,6 +633,33 @@ app.get("/health", async (_req, res) => {
   res.json({ ok: true, service: "115b-sys-api", now: new Date().toISOString() });
 });
 
+app.post("/v1/action", async (req, res) => {
+  try {
+    const payload = req.body && typeof req.body === "object" ? req.body : {};
+    const action = String(payload.action || "").trim();
+    if (!action) {
+      return res.status(400).json({ ok: false, data: null, error: "Missing action" });
+    }
+
+    const forwarded = Object.assign({}, payload);
+    delete forwarded.action;
+
+    const result = await callAppsScriptAction_(action, forwarded);
+    if (!result || typeof result.ok !== "boolean") {
+      return res.status(502).json({ ok: false, data: null, error: "Invalid upstream response" });
+    }
+
+    const shouldTriggerSync = !/^list|^get|^lookup|^search|^verify/i.test(action);
+    if (shouldTriggerSync) {
+      triggerBackgroundSync_();
+    }
+
+    return res.status(result.ok ? 200 : 400).json(result);
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
 app.get("/v1/events", async (_req, res) => {
   try {
     const result = await query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`);
