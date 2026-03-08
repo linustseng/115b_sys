@@ -275,7 +275,30 @@ function SoftballPlayerPage({ shared }) {
         return;
       }
       const list = result.data && result.data.attendance ? result.data.attendance : [];
-      setAttendance(list);
+      // De-dupe by (practiceId, studentId) to protect against legacy id formats.
+      const map = new Map();
+      const scoreItem = (item) => {
+        const id = String(item && item.id ? item.id : "");
+        const hasColon = id.includes(":") ? 1 : 0;
+        const ts = Date.parse(
+          String(
+            (item && (item.updatedAt || item.updated_at || item.createdAt || item.created_at)) || ""
+          )
+        );
+        const timeScore = Number.isFinite(ts) ? ts : 0;
+        return hasColon * 10_000_000_000_000 + timeScore;
+      };
+      for (const item of list) {
+        const key = `${normalizeId_(item.practiceId)}:${normalizeId_(item.studentId || item.playerId)}`;
+        if (!key || key === ":") {
+          continue;
+        }
+        const existing = map.get(key);
+        if (!existing || scoreItem(item) >= scoreItem(existing)) {
+          map.set(key, item);
+        }
+      }
+      setAttendance(Array.from(map.values()));
       setAttendanceLoaded(true);
     } catch (err) {
       setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
