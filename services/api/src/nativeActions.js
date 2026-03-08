@@ -610,14 +610,19 @@ export async function dispatchNativeAction({
         if (!months[month]) {
           months[month] = [];
         }
+        const birthdayMonth = String(row.birthday_month || "").trim();
+        const birthdayDay = String(row.birthday_day || "").trim();
         months[month].push({
           id: String(row.id || "").trim(),
           email: normalizeEmail(row.email || ""),
           name: firstText(row.preferred_name, firstText(row.name_zh, row.name_en || "")),
           company: firstText(row.company),
           group: firstText(row.group_id),
-          birthdayMonth: String(row.birthday_month || "").trim(),
-          birthdayDay: String(row.birthday_day || "").trim(),
+          // 新舊前端欄位相容
+          month: birthdayMonth,
+          day: birthdayDay,
+          birthdayMonth,
+          birthdayDay,
         });
       }
       const currentMonth = new Date().getMonth() + 1;
