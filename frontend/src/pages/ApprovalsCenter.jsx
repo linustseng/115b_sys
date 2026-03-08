@@ -594,14 +594,12 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   const returnedItems = requests
     .filter((item) => String(item.status || "").trim() === "returned")
     .filter((item) => {
-      const requestId = String(item.id || "").trim();
       const applicantId = String(item.applicantId || "").trim();
       const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
-      const isMine =
+      return (
         (personId && applicantId && applicantId === personId) ||
-        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail);
-      const signedByMe = requestId && signedByMeIdSet.has(requestId);
-      return isMine || signedByMe;
+        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail)
+      );
     })
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));
