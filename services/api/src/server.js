@@ -690,36 +690,25 @@ app.post("/v1/action", async (req, res) => {
       return res.status(200).json(nativeResult);
     }
 
-    const isUnsupported = nativeResult && nativeResult.ok === false && String(nativeResult.error || "").startsWith("Unsupported action");
+    const isUnsupported =
+      nativeResult &&
+      nativeResult.ok === false &&
+      String(nativeResult.error || "").startsWith("Unsupported action");
     if (!isUnsupported) {
-      return res.status(400).json(nativeResult || { ok: false, data: null, error: "Action failed" });
+      return res
+        .status(400)
+        .json(nativeResult || { ok: false, data: null, error: "Action failed" });
     }
 
-    if (config.strictNodeOnly) {
-      return res.status(400).json(nativeResult);
-    }
+    // Legacy Apps Script fallback removed: native-only.
+    return res.status(400).json(nativeResult);
   } catch (error) {
-    if (config.strictNodeOnly) {
-      const statusCode = Number(error && error.statusCode) || (String(error && error.message) === "Unauthorized" ? 401 : 500);
-      return res.status(statusCode).json({ ok: false, data: null, error: error.message || "Internal error" });
-    }
-    // Non-strict: fallback below.
-  }
-
-  try {
-    const result = await callAppsScriptAction_(action, forwarded);
-    if (!result || typeof result.ok !== "boolean") {
-      return res.status(502).json({ ok: false, data: null, error: "Invalid upstream response" });
-    }
-
-    const shouldTriggerSync = !/^list|^get|^lookup|^search|^verify/i.test(action);
-    if (shouldTriggerSync) {
-      triggerBackgroundSync_();
-    }
-
-    return res.status(result.ok ? 200 : 400).json(result);
-  } catch (error) {
-    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+    const statusCode =
+      Number(error && error.statusCode) ||
+      (String(error && error.message) === "Unauthorized" ? 401 : 500);
+    return res
+      .status(statusCode)
+      .json({ ok: false, data: null, error: error.message || "Internal error" });
   }
 });
 
@@ -733,8 +722,12 @@ app.post("/v1/actions/:action", async (req, res) => {
   return handleNativeActionRequest_(req, res, actionName, payload);
 });
 
-app.get("/v1/events", async (_req, res) => {
+app.get("/v1/events", async (req, res) => {
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
     const result = await query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`);
     res.json({
       ok: true,
@@ -746,8 +739,12 @@ app.get("/v1/events", async (_req, res) => {
   }
 });
 
-app.get("/v1/students", async (_req, res) => {
+app.get("/v1/students", async (req, res) => {
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
     const result = await query(
       `SELECT id, name, google_sub, google_email
        FROM students

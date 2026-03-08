@@ -242,6 +242,8 @@ export async function dispatchNativeAction({
   const name = String(action || "").trim();
   const body = payload && typeof payload === "object" ? payload : {};
 
+  const PUBLIC_ACTIONS = new Set(["verifyGoogle", "linkGoogleStudent", "refreshSession"]);
+
   // Helpers
   const requireAuth = () => {
     if (!auth || !auth.studentId) {
@@ -261,6 +263,10 @@ export async function dispatchNativeAction({
     }
     return memberships;
   };
+
+  if (!PUBLIC_ACTIONS.has(name)) {
+    requireAuth();
+  }
 
   switch (name) {
     case "listRegistrations": {

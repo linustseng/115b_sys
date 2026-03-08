@@ -42,16 +42,9 @@ export function getConfig() {
   const nodeEnv = String(process.env.NODE_ENV || "development").trim();
   const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
 
+  // Legacy Apps Script fallback is removed (native-only). Keep these optional for any remaining tooling.
   const appsScriptUrl = String(process.env.APPS_SCRIPT_URL || "").trim();
   const syncPullToken = String(process.env.SYNC_PULL_TOKEN || "").trim();
-  if (!strictNodeOnly) {
-    if (!appsScriptUrl) {
-      throw new Error("Missing required env: APPS_SCRIPT_URL");
-    }
-    if (!syncPullToken) {
-      throw new Error("Missing required env: SYNC_PULL_TOKEN");
-    }
-  }
 
   cachedConfig = {
     nodeEnv,
