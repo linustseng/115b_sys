@@ -35,14 +35,17 @@ async function recordMigration(id) {
 async function run() {
   const migrationsDir = path.resolve(__dirname, "../migrations");
 
-  // Apply 001 first even if table doesn't exist yet.
-  const initPath = path.join(migrationsDir, "001_init.sql");
-  const initSql = await fs.readFile(initPath, "utf8");
-  await pool.query(initSql);
-  console.log("Migration applied: 001_init.sql");
-
   await ensureMigrationTable();
-  await recordMigration("001_init.sql");
+
+  // Apply 001 only once (idempotent), but do not re-run it on every deploy.
+  const initAlready = await hasMigration("001_init.sql");
+  if (!initAlready) {
+    const initPath = path.join(migrationsDir, "001_init.sql");
+    const initSql = await fs.readFile(initPath, "utf8");
+    await pool.query(initSql);
+    await recordMigration("001_init.sql");
+    console.log("Migration applied: 001_init.sql");
+  }
 
   const files = await listMigrationFiles(migrationsDir);
   for (const file of files) {
