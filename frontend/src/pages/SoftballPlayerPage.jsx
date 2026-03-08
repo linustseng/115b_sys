@@ -101,6 +101,7 @@ function SoftballPlayerPage({ shared }) {
     notes: "",
   });
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+  const [pendingAttendanceStatusMap, setPendingAttendanceStatusMap] = useState({});
 
   const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
   const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
@@ -421,6 +422,9 @@ function SoftballPlayerPage({ shared }) {
     }
     const note = String(attendanceNoteMap[practiceId] || "").trim();
 
+    // Immediate UI feedback (even if the subsequent reload is slow).
+    setPendingAttendanceStatusMap((prev) => ({ ...prev, [practiceId]: status }));
+
     setSaving(true);
     setStatusMessage("更新中...");
 
@@ -464,8 +468,18 @@ function SoftballPlayerPage({ shared }) {
 
       await loadAttendance(googleLinkedStudent.id);
       setStatusMessage("已更新回覆");
+      setPendingAttendanceStatusMap((prev) => {
+        const next = { ...(prev || {}) };
+        delete next[practiceId];
+        return next;
+      });
     } catch (err) {
       setStatusMessage(err.message || "更新失敗");
+      setPendingAttendanceStatusMap((prev) => {
+        const next = { ...(prev || {}) };
+        delete next[practiceId];
+        return next;
+      });
     } finally {
       setSaving(false);
     }
@@ -1155,7 +1169,8 @@ function SoftballPlayerPage({ shared }) {
                       { value: "unknown", label: "未定" },
                     ].map((item) => {
                       const record = attendanceByPractice[normalizeId_(nextPractice.id)] || {};
-                      const currentStatus = String(record.status || "unknown").toLowerCase();
+                      const pending = pendingAttendanceStatusMap[nextPractice.id];
+                      const currentStatus = String(pending || record.status || "unknown").toLowerCase();
                       return (
                         <button
                           key={`${nextPractice.id}-${item.value}`}
@@ -1195,7 +1210,8 @@ function SoftballPlayerPage({ shared }) {
                 <div className="mt-4 space-y-3">
                   {remainingUpcomingPractices.map((practice) => {
                     const record = attendanceByPractice[normalizeId_(practice.id)] || {};
-                    const currentStatus = String(record.status || "unknown").toLowerCase();
+                    const pending = pendingAttendanceStatusMap[practice.id];
+                    const currentStatus = String(pending || record.status || "unknown").toLowerCase();
                     return (
                       <div
                         key={practice.id}
@@ -1290,7 +1306,8 @@ function SoftballPlayerPage({ shared }) {
                   <div className="mt-4 space-y-3">
                     {historyPractices.map((practice) => {
                       const record = attendanceByPractice[normalizeId_(practice.id)] || {};
-                      const currentStatus = String(record.status || "unknown").toLowerCase();
+                      const pending = pendingAttendanceStatusMap[practice.id];
+                      const currentStatus = String(pending || record.status || "unknown").toLowerCase();
                       return (
                         <div
                           key={practice.id}
