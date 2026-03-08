@@ -2393,6 +2393,7 @@ function AppShell() {
     }
   });
   const [copyStatus, setCopyStatus] = useState("");
+  const [authVersion, setAuthVersion] = useState(0);
   const showLineBanner = lineInfo.isLineInApp && !hideLineBanner;
   const shared = {
     apiRequest,
@@ -2480,6 +2481,67 @@ function AppShell() {
       // Ignore storage errors.
     }
   };
+
+  // Session bootstrap (session-first): ensure we have an access session token for protected reads on the landing page.
+  useEffect(() => {
+    let ignore = false;
+    const bootstrap = async () => {
+      try {
+        const storedSession = loadStoredAdminSession_();
+        if (storedSession && storedSession.token) {
+          return;
+        }
+
+        // 1) Prefer refresh-token rotation.
+        if (storedSession && storedSession.refreshToken) {
+          const refreshResponse = await apiRequest({
+            action: "refreshSession",
+            refreshToken: storedSession.refreshToken,
+          });
+          const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
+          if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
+            storeAdminSession_({
+              token: refreshResult.data.sessionToken,
+              refreshToken: refreshResult.data.refreshToken || storedSession.refreshToken,
+              studentId: storedSession.studentId || "",
+              memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
+            });
+            if (!ignore) {
+              setAuthVersion((v) => v + 1);
+            }
+            return;
+          }
+        }
+
+        // 2) Fallback: exchange Google idToken for a session.
+        const idToken = loadStoredGoogleIdToken_();
+        if (!idToken) {
+          return;
+        }
+        const verifyResponse = await apiRequest({ action: "verifyGoogle", idToken });
+        const verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+        if (verifyResult && verifyResult.ok && verifyResult.data && verifyResult.data.sessionToken) {
+          const studentId = String((verifyResult.data.student && verifyResult.data.student.id) || "").trim();
+          storeAdminSession_({
+            token: verifyResult.data.sessionToken,
+            refreshToken: verifyResult.data.refreshToken || "",
+            studentId,
+            memberships: Array.isArray(verifyResult.data.memberships) ? verifyResult.data.memberships : [],
+          });
+          if (!ignore) {
+            setAuthVersion((v) => v + 1);
+          }
+        }
+      } catch (error) {
+        // Best-effort only.
+      }
+    };
+
+    bootstrap();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const lineBanner = showLineBanner ? (
     <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 backdrop-blur">
@@ -2681,6 +2743,7 @@ function AppShell() {
   } else {
     content = (
       <LandingPage
+        key={`landing-${authVersion}`}
         shared={shared}
         GoogleSigninPanel={GoogleSigninPanel}
         loadStoredGoogleStudent_={loadStoredGoogleStudent_}
