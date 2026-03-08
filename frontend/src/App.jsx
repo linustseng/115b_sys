@@ -2488,11 +2488,8 @@ function AppShell() {
     const bootstrap = async () => {
       try {
         const storedSession = loadStoredAdminSession_();
-        if (storedSession && storedSession.token) {
-          return;
-        }
 
-        // 1) Prefer refresh-token rotation.
+        // 1) Prefer refresh-token rotation (even if an access token is present).
         if (storedSession && storedSession.refreshToken) {
           const refreshResponse = await apiRequest({
             action: "refreshSession",
@@ -2511,6 +2508,10 @@ function AppShell() {
             }
             return;
           }
+        }
+
+        if (storedSession && storedSession.token) {
+          return;
         }
 
         // 2) Fallback: exchange Google idToken for a session.
