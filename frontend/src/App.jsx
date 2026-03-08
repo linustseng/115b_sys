@@ -1538,7 +1538,7 @@ function storeGoogleStudent_(student) {
 }
 
 function loadStoredAdminSession_() {
-  const empty = { token: "", studentId: "", memberships: [] };
+  const empty = { token: "", refreshToken: "", studentId: "", memberships: [] };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
     if (!raw) {
@@ -1551,6 +1551,7 @@ function loadStoredAdminSession_() {
       return empty;
     }
     const token = String((parsed && parsed.token) || "").trim();
+    const refreshToken = String((parsed && parsed.refreshToken) || "").trim();
     const studentId = String((parsed && parsed.studentId) || "").trim();
     const memberships = Array.isArray(parsed && parsed.memberships) ? parsed.memberships : [];
     if (!token) {
@@ -1558,6 +1559,7 @@ function loadStoredAdminSession_() {
     }
     return {
       token: token,
+      refreshToken: refreshToken,
       studentId: studentId,
       memberships: memberships,
     };
@@ -1577,12 +1579,14 @@ function storeAdminSession_(session) {
       window.localStorage.removeItem(STORAGE_KEYS.adminSession);
       return;
     }
+    const refreshToken = String(session.refreshToken || "").trim();
     const studentId = String(session.studentId || "").trim();
     const memberships = Array.isArray(session.memberships) ? session.memberships : [];
     window.localStorage.setItem(
       STORAGE_KEYS.adminSession,
       JSON.stringify({
         token: token,
+        refreshToken: refreshToken,
         studentId: studentId,
         memberships: memberships,
         savedAt: Date.now(),
@@ -2041,10 +2045,12 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const syncAdminSession_ = (sessionToken, studentId, nextMemberships) => {
+  const syncAdminSession_ = (sessionToken, studentId, nextMemberships, refreshToken) => {
     const token = String(sessionToken || "").trim();
+    const nextRefreshToken =
+      String(refreshToken || "").trim() || String((adminSession && adminSession.refreshToken) || "").trim();
     if (!token) {
-      const empty = { token: "", studentId: "", memberships: [] };
+      const empty = { token: "", refreshToken: "", studentId: "", memberships: [] };
       setAdminSession(empty);
       setMemberships([]);
       storeAdminSession_(null);
@@ -2052,6 +2058,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     }
     const payload = {
       token: token,
+      refreshToken: nextRefreshToken,
       studentId: String(studentId || "").trim(),
       memberships: Array.isArray(nextMemberships) ? nextMemberships : [],
     };
@@ -2107,13 +2114,58 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
           syncAdminSession_(
             responseData.sessionToken,
             linkedStudentId,
-            Array.isArray(responseData.memberships) ? responseData.memberships : adminSession.memberships
+            Array.isArray(responseData.memberships) ? responseData.memberships : adminSession.memberships,
+            responseData.refreshToken
           );
         }
       }
       return response;
     }
 
+    // 1) Prefer refresh-token based rotation (session-first).
+    const storedRefreshToken = String((adminSession && adminSession.refreshToken) || "").trim();
+    if (storedRefreshToken) {
+      try {
+        const refreshResponse = await apiRequest({
+          action: "refreshSession",
+          refreshToken: storedRefreshToken,
+        });
+        const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
+        if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
+          const linkedStudentId =
+            String((googleLinkedStudent && googleLinkedStudent.id) || "").trim() ||
+            String((adminSession && adminSession.studentId) || "").trim();
+          if (linkedStudentId) {
+            syncAdminSession_(
+              refreshResult.data.sessionToken,
+              linkedStudentId,
+              Array.isArray(refreshResult.data.memberships)
+                ? refreshResult.data.memberships
+                : adminSession.memberships,
+              refreshResult.data.refreshToken
+            );
+          }
+
+          const rotatedPayload = { ...(payload || {}), sessionToken: refreshResult.data.sessionToken };
+          if (existingToken) {
+            rotatedPayload.idToken = existingToken;
+          }
+          const rotatedResponse = await apiRequest(rotatedPayload);
+          const rotatedResult = rotatedResponse && rotatedResponse.result ? rotatedResponse.result : null;
+          const rotatedUnauthorized =
+            !rotatedResult || rotatedResult.ok !== false
+              ? false
+              : String(rotatedResult.error || "") === "Unauthorized";
+          if (!rotatedUnauthorized) {
+            return rotatedResponse;
+          }
+        }
+      } catch (error) {
+        // Fall through to Google-based rotation.
+      }
+    }
+
+    // 2) Fallback: refresh via Google idToken.
     setGoogleIdToken("");
     storeGoogleIdToken_("");
     const retryToken = await ensureIdToken_();
@@ -2137,7 +2189,8 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
           syncAdminSession_(
             retryData.sessionToken,
             linkedStudentId,
-            Array.isArray(retryData.memberships) ? retryData.memberships : adminSession.memberships
+            Array.isArray(retryData.memberships) ? retryData.memberships : adminSession.memberships,
+            retryData.refreshToken
           );
         }
       }
