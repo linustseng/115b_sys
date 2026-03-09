@@ -918,15 +918,31 @@ function FinancePage({ shared }) {
   const isPayment = form.type === "payment";
   const isPettyCash = form.type === "pettycash";
 
-  const CASE_STEPS = [
-    { id: "pending_lead", label: "組長" },
-    { id: "pending_committee", label: "班代" },
-    { id: "pending_accounting", label: "會計" },
-    { id: "pending_cashier", label: "出納" },
-    { id: "closed", label: "完成" },
-  ];
+  const getCaseStepsForRequest_ = (request) => {
+    const type = String((request && request.type) || "").trim();
 
-  const getCaseStepState_ = (status, stepId) => {
+    // Purchase requests are approvals only; they do not go through accounting/cashier.
+    if (type === "purchase") {
+      return [
+        { id: "pending_lead", label: "組長" },
+        { id: "pending_rep", label: "班代" },
+        { id: "pending_committee", label: "幹部" },
+        { id: "closed", label: "完成" },
+      ];
+    }
+
+    // Payment / pettycash: include accounting + cashier.
+    return [
+      { id: "pending_lead", label: "組長" },
+      { id: "pending_rep", label: "班代" },
+      { id: "pending_committee", label: "幹部" },
+      { id: "pending_accounting", label: "會計" },
+      { id: "pending_cashier", label: "出納" },
+      { id: "closed", label: "完成" },
+    ];
+  };
+
+  const getCaseStepState_ = (status, stepId, steps) => {
     const current = String(status || "").trim();
     if (!current) {
       return "todo";
@@ -937,9 +953,12 @@ function FinancePage({ shared }) {
     if (current === "withdrawn") {
       return "todo";
     }
-    const order = CASE_STEPS.map((item) => item.id);
+
+    const effectiveSteps = Array.isArray(steps) && steps.length ? steps : getCaseStepsForRequest_(null);
+    const order = effectiveSteps.map((item) => item.id);
     const currentIndex = order.indexOf(current);
     const stepIndex = order.indexOf(stepId);
+
     if (current === "closed") {
       return "done";
     }
@@ -1437,23 +1456,31 @@ function FinancePage({ shared }) {
 
                     <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-3">
                       <p className="text-[11px] font-semibold text-slate-500">Case 時間線</p>
-                      <div className="mt-2 grid grid-cols-5 gap-2">
-                        {CASE_STEPS.map((step) => {
-                          const stepState = getCaseStepState_(myLatestRequest.status, step.id);
-                          const badgeClass =
-                            stepState === "done"
-                              ? "bg-emerald-500"
-                              : stepState === "active"
-                              ? "bg-amber-500"
-                              : "bg-slate-300";
-                          return (
-                            <div key={`latest-${step.id}`} className="text-center">
-                              <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
-                              <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
+                      {(() => {
+                        const steps = getCaseStepsForRequest_(myLatestRequest);
+                        return (
+                          <div
+                            className="mt-2 grid gap-2"
+                            style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
+                          >
+                            {steps.map((step) => {
+                              const stepState = getCaseStepState_(myLatestRequest.status, step.id, steps);
+                              const badgeClass =
+                                stepState === "done"
+                                  ? "bg-emerald-500"
+                                  : stepState === "active"
+                                  ? "bg-amber-500"
+                                  : "bg-slate-300";
+                              return (
+                                <div key={`latest-${step.id}`} className="text-center">
+                                  <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
+                                  <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -2004,6 +2031,7 @@ function FinancePage({ shared }) {
                     : status === "closed"
                     ? { border: "border-emerald-200", bg: "bg-emerald-50/40", text: "text-emerald-900" }
                     : { border: "border-slate-200/70", bg: "bg-slate-50/60", text: "text-slate-700" };
+                  const caseSteps = getCaseStepsForRequest_(item);
 
                   return (
                     <div
@@ -2046,9 +2074,12 @@ function FinancePage({ shared }) {
                       </div>
                       <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
                         <p className="text-[11px] font-semibold text-slate-500">Case 時間線</p>
-                        <div className="mt-2 grid grid-cols-5 gap-2">
-                          {CASE_STEPS.map((step) => {
-                            const stepState = getCaseStepState_(item.status, step.id);
+                        <div
+                          className="mt-2 grid gap-2"
+                          style={{ gridTemplateColumns: `repeat(${caseSteps.length}, minmax(0, 1fr))` }}
+                        >
+                          {caseSteps.map((step) => {
+                            const stepState = getCaseStepState_(item.status, step.id, caseSteps);
                             const badgeClass =
                               stepState === "done"
                                 ? "bg-emerald-500"
