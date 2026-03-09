@@ -1423,9 +1423,16 @@ function FinancePage({ shared }) {
                   <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {myLatestRequest.title || "未命名"}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-semibold text-slate-900">
+                            {myLatestRequest.title || "未命名"}
+                          </p>
+                          {myLatestRequest.manualCreatedByName || (myLatestRequest.raw && myLatestRequest.raw.manualCreatedByName) ? (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                              由 {myLatestRequest.manualCreatedByName || myLatestRequest.raw.manualCreatedByName} 代建
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-1 text-xs text-slate-500">
                           {FINANCE_TYPES.find((type) => type.value === myLatestRequest.type)?.label ||
                             "申請"}
@@ -2051,7 +2058,14 @@ function FinancePage({ shared }) {
                     >
                       <div className="flex flex-wrap items-center justify-between gap-3">
                         <div>
-                          <p className="font-semibold text-slate-900">{item.title || "未命名"}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-slate-900">{item.title || "未命名"}</p>
+                            {item.manualCreatedByName || (item.raw && item.raw.manualCreatedByName) ? (
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                由 {item.manualCreatedByName || item.raw.manualCreatedByName} 代建
+                              </span>
+                            ) : null}
+                          </div>
                           <p className="text-xs text-slate-500">
                             {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
                             {formatFinanceAmount_(amount)} · {statusLabel}
