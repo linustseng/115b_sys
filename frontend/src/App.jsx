@@ -957,10 +957,12 @@ function buildApiV2Request_(payload) {
   const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
 
   if (action === "listEvents") {
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: `${base}/v1/events`,
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
@@ -981,19 +983,23 @@ function buildApiV2Request_(payload) {
   }
 
   if (action === "listStudents") {
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: `${base}/v1/students`,
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
 
   if (action === "listGroupMemberships") {
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: `${base}/v1/group-memberships`,
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
