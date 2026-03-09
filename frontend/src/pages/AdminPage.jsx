@@ -517,7 +517,7 @@ export default function AdminPage({
     const shouldLoadDirectory = () => {
       const storedToken = localStorage.getItem("directoryToken") || "";
       const activeToken = storedToken || directoryToken;
-      const marker = activeToken || "__idtoken__";
+      const marker = activeToken || "__session__";
       return directoryLoadedTokenRef.current !== marker;
     };
     if (activeTab === "registrations") {
@@ -765,26 +765,12 @@ export default function AdminPage({
       setDirectoryToken(storedToken);
     }
     const activeToken = storedToken || directoryToken;
-    const marker = activeToken || "__idtoken__";
+    const marker = activeToken || "__session__";
     setLoading(true);
     setError("");
     try {
-      let safeIdToken = "";
-      if (!activeToken && typeof getGoogleIdTokenSilently_ === "function") {
-        try {
-          safeIdToken = (await getGoogleIdTokenSilently_()) || "";
-        } catch (error) {
-          // 不要因 silent login 失敗直接中斷，改由 apiRequest 既有 auth/session header 嘗試
-          safeIdToken = "";
-        }
-      }
-
-      const payload = activeToken
-        ? { action: "listDirectory", authToken: activeToken }
-        : {
-            action: "listDirectory",
-            idToken: safeIdToken,
-          };
+      // Directory is session-first now. Avoid triggering extra Google auth prompts.
+      const payload = activeToken ? { action: "listDirectory", authToken: activeToken } : { action: "listDirectory" };
       const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
