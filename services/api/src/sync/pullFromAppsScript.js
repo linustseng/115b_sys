@@ -67,6 +67,37 @@ async function replaceTableRows(client, tableName, rows) {
   }
 }
 
+async function upsertTableRows(client, tableName, rows, conflictKeys = ["id"]) {
+  const tableSql = quoteIdentifier(tableName);
+  if (!rows.length) {
+    return;
+  }
+
+  for (const row of rows) {
+    const columns = Object.keys(row);
+    if (!columns.length) {
+      continue;
+    }
+    const quotedColumns = columns.map(quoteIdentifier).join(", ");
+    const placeholders = columns.map((_, index) => `$${index + 1}`).join(", ");
+    const values = columns.map((column) =>
+      Object.prototype.hasOwnProperty.call(row, column) ? row[column] : null
+    );
+    const conflictSql = conflictKeys.map(quoteIdentifier).join(", ");
+    const updateColumns = columns.filter((col) => !conflictKeys.includes(col));
+    const updateSql = updateColumns.length
+      ? updateColumns.map((col) => `${quoteIdentifier(col)} = EXCLUDED.${quoteIdentifier(col)}`).join(", ")
+      : "";
+
+    const sql =
+      `INSERT INTO ${tableSql} (${quotedColumns}) VALUES (${placeholders})` +
+      ` ON CONFLICT (${conflictSql}) DO ` +
+      (updateSql ? `UPDATE SET ${updateSql}` : "NOTHING");
+
+    await client.query(sql, values);
+  }
+}
+
 async function callAppsScript(action, payload = {}) {
   const requestPayload = {
     action,
@@ -254,7 +285,13 @@ export async function syncFromAppsScript() {
 
     await withTransaction(async (client) => {
       for (const payload of tablePayloads) {
-        await replaceTableRows(client, payload.table, payload.rows);
+        // Registrations/checkins may be created/edited locally (e.g., manual admin entries).
+        // Do not TRUNCATE them on each sync; merge incoming snapshot rows instead.
+        if (payload.table === "registrations" || payload.table === "checkins") {
+          await upsertTableRows(client, payload.table, payload.rows, ["id"]);
+        } else {
+          await replaceTableRows(client, payload.table, payload.rows);
+        }
       }
     });
 
