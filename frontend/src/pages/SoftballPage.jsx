@@ -64,6 +64,10 @@ function SoftballPage({ shared }) {
   const [fields, setFields] = useState([]);
   const [gear, setGear] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [statsAttendance, setStatsAttendance] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState("");
+  const [statsScope, setStatsScope] = useState("recent10");
   const [students, setStudents] = useState([]);
   const [studentsLoaded, setStudentsLoaded] = useState(false);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -139,6 +143,11 @@ function SoftballPage({ shared }) {
   const getStudentDisplayName_ = (student) =>
     String(
       (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
+    ).trim();
+
+  const getPlayerDisplayName_ = (player) =>
+    String(
+      (player && (player.preferredName || player.name || player.nickname || player.email || player.id)) || ""
     ).trim();
 
   const isTimeOnly_ = (value) => {
@@ -409,6 +418,26 @@ function SoftballPage({ shared }) {
     }
   };
 
+  const loadStatsAttendance = async () => {
+    if (statsLoading) {
+      return;
+    }
+    setStatsLoading(true);
+    setStatsError("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "listSoftballAttendance" });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setStatsAttendance(result.data && result.data.attendance ? result.data.attendance : []);
+    } catch (err) {
+      setStatsError(err.message || "出席統計載入失敗");
+      setStatsAttendance([]);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
   const loadSoftballConfig = async () => {
     try {
       const { result } = await effectiveApiRequest({ action: "listSoftballConfig" });
@@ -481,6 +510,12 @@ function SoftballPage({ shared }) {
       loadAttendance(activePracticeId);
     }
   }, [activePracticeId]);
+
+  useEffect(() => {
+    if (activeTab === "stats") {
+      loadStatsAttendance();
+    }
+  }, [activeTab]);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -2117,26 +2152,260 @@ function SoftballPage({ shared }) {
 
         {activeTab === "stats" ? (
           <section className="card p-7 sm:p-10">
-            <h3 className="text-lg font-semibold text-slate-900">出席統計</h3>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[
-                { label: "總出席", value: attendanceStats.attend },
-                { label: "遲到", value: attendanceStats.late },
-                { label: "缺席", value: attendanceStats.absent },
-                { label: "未回覆", value: attendanceStats.unknown },
-              ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <p className="text-xs text-slate-400">{item.label}</p>
-                  <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
-                </div>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-lg font-semibold text-slate-900">出席統計</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={statsScope}
+                  onChange={(event) => setStatsScope(event.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                >
+                  <option value="recent5">最近 5 場</option>
+                  <option value="recent10">最近 10 場</option>
+                  <option value="all">全部場次</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={loadStatsAttendance}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                >
+                  {statsLoading ? "更新中…" : "重新整理"}
+                </button>
+              </div>
             </div>
-            <div className="mt-6 card-muted p-5 text-sm text-slate-600">
-              <p className="font-semibold text-slate-900">備註</p>
-              <p className="mt-2 text-xs text-slate-500">
-                統計基於目前選擇的練習。後續可加入跨場次出席率與球員歷史趨勢。
-              </p>
-            </div>
+
+            {statsError ? <div className="mt-4 alert alert-error">{statsError}</div> : null}
+            {statsLoading ? (
+              <p className="mt-4 text-xs text-slate-500">統計載入中…</p>
+            ) : null}
+
+            {(() => {
+              const normalizeAttendanceStatus_ = (value) => {
+                const raw = String(value || "").trim().toLowerCase();
+                if (raw === "attend" || raw === "late" || raw === "absent" || raw === "unknown") {
+                  return raw;
+                }
+                return "unknown";
+              };
+
+              const activePlayersForStats = players.filter((player) => {
+                const status = String(player.status || "active").trim().toLowerCase();
+                const requestStatus = String(player.requestStatus || "").trim().toLowerCase();
+                if (status && status !== "active") {
+                  return false;
+                }
+                if (requestStatus === "pending") {
+                  return false;
+                }
+                return true;
+              });
+
+              const practicesSorted = practices
+                .slice()
+                .sort((a, b) => getPracticeSortKey_(b) - getPracticeSortKey_(a));
+
+              const scopedPractices = (() => {
+                if (statsScope === "recent5") {
+                  return practicesSorted.slice(0, 5);
+                }
+                if (statsScope === "all") {
+                  return practicesSorted;
+                }
+                return practicesSorted.slice(0, 10);
+              })();
+
+              const pastPractices = scopedPractices.filter((practice) => isPracticeExpired_(practice));
+
+              const attMap = new Map();
+              statsAttendance.forEach((item) => {
+                const practiceId = normalizeId_(item.practiceId || item.practice_id);
+                const playerId = normalizeId_(item.playerId || item.player_id || item.studentId || item.student_id);
+                if (!practiceId || !playerId) {
+                  return;
+                }
+                attMap.set(`${practiceId}:${playerId}`, item);
+              });
+
+              const practiceStats = scopedPractices.map((practice) => {
+                const practiceId = normalizeId_(practice.id);
+                const counts = { total: 0, attend: 0, late: 0, absent: 0, unknown: 0 };
+
+                for (const player of activePlayersForStats) {
+                  const playerId = normalizeId_(player.id);
+                  if (!playerId) {
+                    continue;
+                  }
+                  counts.total += 1;
+                  const record = attMap.get(`${practiceId}:${playerId}`);
+                  const status = normalizeAttendanceStatus_(record && record.status);
+                  counts[status] += 1;
+                }
+
+                const responded = counts.total - counts.unknown;
+                const present = counts.attend + counts.late;
+                const responseRate = counts.total ? Math.round((responded / counts.total) * 100) : 0;
+                const participationRate = counts.total ? Math.round((present / counts.total) * 100) : 0;
+
+                return {
+                  id: practiceId,
+                  title: practice.title || "練習",
+                  dateLabel: formatPracticeDate_(practice.date || practice.startAt),
+                  counts,
+                  responded,
+                  present,
+                  responseRate,
+                  participationRate,
+                };
+              });
+
+              const playerStats = activePlayersForStats
+                .map((player) => {
+                  const playerId = normalizeId_(player.id);
+                  const counts = { total: pastPractices.length, attend: 0, late: 0, absent: 0, unknown: 0 };
+
+                  for (const practice of pastPractices) {
+                    const practiceId = normalizeId_(practice.id);
+                    const record = attMap.get(`${practiceId}:${playerId}`);
+                    const status = normalizeAttendanceStatus_(record && record.status);
+                    counts[status] += 1;
+                  }
+
+                  const present = counts.attend + counts.late;
+                  const responseRate = counts.total ? Math.round(((counts.total - counts.unknown) / counts.total) * 100) : 0;
+                  const participationRate = counts.total ? Math.round((present / counts.total) * 100) : 0;
+
+                  return {
+                    id: playerId,
+                    name: getPlayerDisplayName_(player) || playerId,
+                    counts,
+                    present,
+                    responseRate,
+                    participationRate,
+                  };
+                })
+                .sort((a, b) => b.present - a.present || b.participationRate - a.participationRate || a.name.localeCompare(b.name));
+
+              const totals = practiceStats.reduce(
+                (acc, item) => {
+                  acc.totalPlayers = item.counts.total;
+                  acc.totalPractices += 1;
+                  acc.totalUnknown += item.counts.unknown;
+                  acc.totalPresent += item.present;
+                  return acc;
+                },
+                { totalPlayers: activePlayersForStats.length, totalPractices: 0, totalUnknown: 0, totalPresent: 0 }
+              );
+
+              return (
+                <>
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {[
+                      { label: "統計球員", value: activePlayersForStats.length },
+                      { label: "統計場次", value: scopedPractices.length },
+                      { label: "已結束場次", value: pastPractices.length },
+                      { label: "總出席(含遲到)", value: totals.totalPresent },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs text-slate-400">{item.label}</p>
+                        <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-8">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-slate-900">各次練習報名/出席概況</h4>
+                      <p className="text-xs text-slate-500">點「查看」可跳到點名明細。</p>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {practiceStats.length ? (
+                        practiceStats.map((p) => (
+                          <div key={p.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-semibold text-slate-900">{p.dateLabel} · {p.title}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  回覆率 {p.responseRate}% · 參與率 {p.participationRate}% · 未回覆 {p.counts.unknown}/{p.counts.total}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePracticeId(p.id);
+                                  setActiveTab("attendance");
+                                }}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                              >
+                                查看
+                              </button>
+                            </div>
+                            <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+                              {[
+                                { label: "出席", value: p.counts.attend, tone: "text-emerald-700" },
+                                { label: "遲到", value: p.counts.late, tone: "text-amber-700" },
+                                { label: "缺席", value: p.counts.absent, tone: "text-rose-700" },
+                                { label: "未回覆", value: p.counts.unknown, tone: "text-slate-600" },
+                              ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+                                  <p className={`text-[11px] font-semibold ${item.tone}`}>{item.label}</p>
+                                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">尚無練習資料。</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-10">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold text-slate-900">球員參與次數（已結束練習）</h4>
+                      <p className="text-xs text-slate-500">以 attend/late 視為參與。</p>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {playerStats.length ? (
+                        playerStats.map((p) => (
+                          <div key={p.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <p className="text-sm font-semibold text-slate-900">{p.name}</p>
+                              <p className="text-xs text-slate-500">
+                                參與 {p.present}/{p.counts.total} · 參與率 {p.participationRate}% · 未回覆 {p.counts.unknown}
+                              </p>
+                            </div>
+                            <div className="mt-2 grid grid-cols-4 gap-2 text-xs">
+                              {[
+                                { label: "出席", value: p.counts.attend },
+                                { label: "遲到", value: p.counts.late },
+                                { label: "缺席", value: p.counts.absent },
+                                { label: "未回覆", value: p.counts.unknown },
+                              ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+                                  <p className="text-[11px] text-slate-500">{item.label}</p>
+                                  <p className="mt-1 text-sm font-semibold text-slate-900">{item.value}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">尚無球員資料。</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50/60 p-5 text-sm text-slate-600">
+                    <p className="font-semibold text-slate-900">說明</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500">
+                      <li>「各次練習」包含未來排程，可用來看報名/回覆狀況。</li>
+                      <li>「球員參與次數」預設只統計已結束練習，避免未來報名干擾參與率。</li>
+                    </ul>
+                  </div>
+                </>
+              );
+            })()}
           </section>
         ) : null}
 
