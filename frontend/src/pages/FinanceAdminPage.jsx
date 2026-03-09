@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 
 function FinanceAdminPage({ shared }) {
   const {
@@ -78,12 +79,41 @@ function FinanceAdminPage({ shared }) {
     status: "pending_lead",
   }));
   const [manualRequestAttachmentInput, setManualRequestAttachmentInput] = useState("");
+  const [manualBankPickerQuery, setManualBankPickerQuery] = useState("");
+  const [manualBankPickerOpen, setManualBankPickerOpen] = useState(false);
   const adminDisplayName =
     (googleLinkedStudent &&
       (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
     (googleLinkedStudent && googleLinkedStudent.name) ||
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
+
+  const bankByCode = useMemo(() => {
+    const map = new Map();
+    for (const item of TW_BANK_CODES) {
+      map.set(String(item.code || "").trim(), item);
+    }
+    return map;
+  }, []);
+
+  const manualBankSuggestions = useMemo(() => {
+    const raw = String(manualBankPickerQuery || "").trim();
+    if (!raw) {
+      return [];
+    }
+    const normalized = normalizeTwBankName(raw);
+    const codeMatch = raw.match(/^\d{1,3}$/);
+    if (codeMatch) {
+      return TW_BANK_CODES.filter((item) => item.code.startsWith(raw)).slice(0, 10);
+    }
+    return TW_BANK_CODES.filter((item) => {
+      const name = String(item.name || "").trim();
+      if (!name) {
+        return false;
+      }
+      return normalizeTwBankName(name).includes(normalized);
+    }).slice(0, 10);
+  }, [manualBankPickerQuery]);
 
   const normalizeAmountForCopy_ = (value) => {
     const parsed = Number(parseFinanceAmount_(value));
@@ -177,6 +207,33 @@ function FinanceAdminPage({ shared }) {
       setLoading(false);
       return;
     }
+    if (!manualRequestForm.applicantDepartment) {
+      setError("請選擇申請組別");
+      setLoading(false);
+      return;
+    }
+
+    const isPayment = manualRequestForm.type === "payment";
+    if (isPayment && !manualRequestForm.relatedPurchaseId && !manualRequestForm.noPurchaseReason) {
+      setError("請填寫對應請購或未經請購原因");
+      setLoading(false);
+      return;
+    }
+    if (isPayment && !String(manualRequestForm.payeeName || "").trim()) {
+      setError("請填寫廠商/收款人");
+      setLoading(false);
+      return;
+    }
+    if (isPayment && !String(manualRequestForm.payeeBankCode || "").trim()) {
+      setError("請選擇銀行代碼");
+      setLoading(false);
+      return;
+    }
+    if (isPayment && !String(manualRequestForm.payeeAccount || "").trim()) {
+      setError("請填寫匯款帳號");
+      setLoading(false);
+      return;
+    }
 
     try {
       const { result } = await apiRequest({
@@ -199,6 +256,8 @@ function FinanceAdminPage({ shared }) {
         status: "pending_lead",
       });
       setManualRequestAttachmentInput("");
+      setManualBankPickerQuery("");
+      setManualBankPickerOpen(false);
       await loadRequests();
     } catch (err) {
       setError(err.message || "建立失敗");
@@ -1748,11 +1807,70 @@ function FinanceAdminPage({ shared }) {
                 />
               </div>
 
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  申請組別 <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={manualRequestForm.applicantDepartment}
+                  onChange={(e) =>
+                    setManualRequestForm({
+                      ...manualRequestForm,
+                      applicantDepartment: e.target.value,
+                    })
+                  }
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">請選擇</option>
+                  {CLASS_GROUPS.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {manualRequestForm.type === "payment" ? (
                 <>
                   <div>
                     <label className="block text-sm font-semibold text-slate-900">
-                      廠商/收款人
+                      對應請購單號
+                    </label>
+                    <input
+                      type="text"
+                      value={manualRequestForm.relatedPurchaseId}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          relatedPurchaseId: e.target.value,
+                        })
+                      }
+                      placeholder="例：P20250108001"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      未經請購原因
+                    </label>
+                    <input
+                      type="text"
+                      value={manualRequestForm.noPurchaseReason}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          noPurchaseReason: e.target.value,
+                        })
+                      }
+                      placeholder="若無對應請購單號，請填寫原因"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      廠商/收款人 <span className="text-rose-600">*</span>
                     </label>
                     <input
                       type="text"
@@ -1764,8 +1882,117 @@ function FinanceAdminPage({ shared }) {
                       className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
                   </div>
+
                   <div>
-                    <label className="block text-sm font-semibold text-slate-900">匯款帳號</label>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      銀行代碼 <span className="text-rose-600">*</span>
+                    </label>
+                    <div className="relative mt-2">
+                      <input
+                        type="text"
+                        value={manualBankPickerQuery}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setManualBankPickerQuery(next);
+                          setManualBankPickerOpen(true);
+
+                          const trimmed = String(next || "").trim();
+                          if (!trimmed) {
+                            setManualRequestForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: "",
+                              payeeBankName: "",
+                              payeeBank: "",
+                            }));
+                            return;
+                          }
+
+                          const codeMatch =
+                            trimmed.match(/^(\d{3})$/) || trimmed.match(/^(\d{3})\b/);
+                          if (codeMatch) {
+                            const code = codeMatch[1];
+                            const hit = bankByCode.get(code);
+                            setManualRequestForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: code,
+                              payeeBankName: hit
+                                ? hit.name
+                                : prev.payeeBankName || prev.payeeBank || "",
+                              payeeBank: hit
+                                ? hit.name
+                                : prev.payeeBankName || prev.payeeBank || "",
+                            }));
+                            return;
+                          }
+
+                          const normalized = normalizeTwBankName(trimmed);
+                          const exact = TW_BANK_CODES.find(
+                            (item) => normalizeTwBankName(item.name) === normalized
+                          );
+                          if (exact) {
+                            setManualRequestForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: exact.code,
+                              payeeBankName: exact.name,
+                              payeeBank: exact.name,
+                            }));
+                          }
+                        }}
+                        onFocus={() => {
+                          if (!manualBankPickerOpen) {
+                            setManualBankPickerOpen(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => setManualBankPickerOpen(false), 150);
+                        }}
+                        placeholder="輸入銀行名稱或代碼（例：台新 / 812）"
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                      />
+                      {manualBankPickerOpen && manualBankSuggestions.length ? (
+                        <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+                          {manualBankSuggestions.map((item) => (
+                            <button
+                              key={item.code}
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setManualRequestForm((prev) => ({
+                                  ...prev,
+                                  payeeBankCode: item.code,
+                                  payeeBankName: item.name,
+                                  payeeBank: item.name,
+                                }));
+                                setManualBankPickerQuery(`${item.code} ${item.name}`.trim());
+                                setManualBankPickerOpen(false);
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              <span className="font-semibold tabular-nums">{item.code}</span>
+                              <span className="ml-2">{item.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    {manualRequestForm.payeeBankCode ||
+                    manualRequestForm.payeeBankName ||
+                    manualRequestForm.payeeBank ? (
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        已選：{manualRequestForm.payeeBankCode || "-"}{" "}
+                        {manualRequestForm.payeeBankName || manualRequestForm.payeeBank || ""}
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        可輸入名稱快速搜尋（送出/匯款時用代碼）。
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      匯款帳號 <span className="text-rose-600">*</span>
+                    </label>
                     <input
                       type="text"
                       value={manualRequestForm.payeeAccount}
@@ -1775,9 +2002,67 @@ function FinanceAdminPage({ shared }) {
                           payeeAccount: e.target.value,
                         })
                       }
-                      placeholder="銀行帳號"
+                      placeholder="轉帳帳號"
                       className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">付款方式</label>
+                    <select
+                      value={manualRequestForm.paymentMethod}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          paymentMethod: e.target.value,
+                        })
+                      }
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    >
+                      <option value="">請選擇</option>
+                      {FINANCE_PAYMENT_METHODS.map((item) => (
+                        <option key={item.value} value={item.value}>
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      預計清款日
+                    </label>
+                    <input
+                      type="date"
+                      value={manualRequestForm.expectedClearDate}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          expectedClearDate: e.target.value,
+                        })
+                      }
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">幣別</label>
+                    <select
+                      value={manualRequestForm.currency}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          currency: e.target.value,
+                        })
+                      }
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    >
+                      <option value="TWD">TWD 新台幣</option>
+                      <option value="USD">USD 美元</option>
+                      <option value="EUR">EUR 歐元</option>
+                      <option value="JPY">JPY 日圓</option>
+                      <option value="CNY">CNY 人民幣</option>
+                    </select>
                   </div>
                 </>
               ) : null}
@@ -1864,6 +2149,8 @@ function FinanceAdminPage({ shared }) {
                       status: "pending_lead",
                     });
                     setManualRequestAttachmentInput("");
+                    setManualBankPickerQuery("");
+                    setManualBankPickerOpen(false);
                   }}
                   className="h-10 rounded-xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 hover:border-slate-300"
                 >
