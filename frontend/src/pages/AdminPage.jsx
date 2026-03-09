@@ -1751,6 +1751,15 @@ export default function AdminPage({
     const parsed = new Date(value);
     return isNaN(parsed.getTime()) ? 0 : parsed.getTime();
   };
+
+  const isVegetarianDietary_ = (value) => {
+    const text = String(value || "").trim();
+    if (!text) {
+      return false;
+    }
+    // Treat vegetarian/no-meat categories as requiring dedicated meal prep.
+    return /全素|蛋奶|奶蛋|素食|蔬食|不吃肉|不吃葷|vegan|vegetarian/i.test(text);
+  };
   const studentNameByStudentId = new Map(
     displayStudents
       .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
@@ -1852,11 +1861,17 @@ export default function AdminPage({
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
         bringDrinks: bringDrinks || "",
       });
-      if (dietary && dietary !== "無禁忌" && dietary !== "未填寫") {
-        acc.nonMeatAttendees.push({
+      const isSpecialDietary = dietary && dietary !== "無禁忌" && dietary !== "未填寫";
+      if (isSpecialDietary) {
+        const entry = {
           name: attendeeName,
           dietary: dietary,
-        });
+        };
+        if (isVegetarianDietary_(dietary)) {
+          acc.vegetarianAttendees.push(entry);
+        } else {
+          acc.specialDietAttendees.push(entry);
+        }
       }
       return acc;
     },
@@ -1877,7 +1892,8 @@ export default function AdminPage({
         otherDrinkQty: 0,
       },
       attendees: [],
-      nonMeatAttendees: [],
+      vegetarianAttendees: [],
+      specialDietAttendees: [],
     }
   );
   const dietaryStatsList = Object.entries(prepStats.dietary).sort((a, b) => b[1] - a[1]);
@@ -1892,10 +1908,10 @@ export default function AdminPage({
   ]
     .map((item) => ({ ...item, qty: prepStats.drinks[item.key] || 0 }))
     .filter((item) => item.qty > 0);
-  const nonMeatAttendeeList = prepStats.nonMeatAttendees.slice().sort((a, b) =>
+  const vegetarianAttendeeList = (prepStats.vegetarianAttendees || []).slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
-  const nonMeatAttendeeGroups = nonMeatAttendeeList.reduce((acc, item) => {
+  const vegetarianAttendeeGroups = vegetarianAttendeeList.reduce((acc, item) => {
     const key = String(item.dietary || "其他").trim() || "其他";
     if (!acc[key]) {
       acc[key] = [];
@@ -1903,7 +1919,22 @@ export default function AdminPage({
     acc[key].push(item.name || "未命名");
     return acc;
   }, {});
-  const nonMeatAttendeeGroupList = Object.entries(nonMeatAttendeeGroups).sort((a, b) =>
+  const vegetarianAttendeeGroupList = Object.entries(vegetarianAttendeeGroups).sort((a, b) =>
+    String(a[0] || "").localeCompare(String(b[0] || ""), "zh-Hant")
+  );
+
+  const specialDietAttendeeList = (prepStats.specialDietAttendees || []).slice().sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
+  );
+  const specialDietAttendeeGroups = specialDietAttendeeList.reduce((acc, item) => {
+    const key = String(item.dietary || "其他").trim() || "其他";
+    if (!acc[key]) {
+      acc[key] = [];
+    }
+    acc[key].push(item.name || "未命名");
+    return acc;
+  }, {});
+  const specialDietAttendeeGroupList = Object.entries(specialDietAttendeeGroups).sort((a, b) =>
     String(a[0] || "").localeCompare(String(b[0] || ""), "zh-Hant")
   );
   const attendingNameList = prepStats.attendees.slice().sort((a, b) =>
@@ -2004,9 +2035,17 @@ export default function AdminPage({
     }
     pushRow_([]);
 
-    pushRow_(["非葷食名單", "飲食偏好"]);
-    if (nonMeatAttendeeList.length) {
-      nonMeatAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
+    pushRow_(["素食/不吃肉名單", "飲食偏好"]);
+    if (vegetarianAttendeeList.length) {
+      vegetarianAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
+    } else {
+      pushRow_(["(無資料)", ""]);
+    }
+    pushRow_([]);
+
+    pushRow_(["其他特殊飲食/過敏名單", "飲食偏好"]);
+    if (specialDietAttendeeList.length) {
+      specialDietAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
     } else {
       pushRow_(["(無資料)", ""]);
     }
@@ -2733,37 +2772,73 @@ export default function AdminPage({
                       </div>
                     ) : null}
                   </div>
-                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold text-slate-600">非葷食名單</p>
-                      <span className="text-xs text-slate-500">共 {nonMeatAttendeeList.length} 位</span>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-600">素食/不吃肉名單</p>
+                        <span className="text-xs text-slate-500">共 {vegetarianAttendeeList.length} 位</span>
+                      </div>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {vegetarianAttendeeGroupList.length ? (
+                          vegetarianAttendeeGroupList.map(([dietary, names]) => (
+                            <div
+                              key={dietary}
+                              className="rounded-lg border border-emerald-200/70 bg-emerald-50/50 p-2"
+                            >
+                              <div className="mb-1 flex items-center justify-between text-emerald-700">
+                                <span className="font-semibold">{dietary}</span>
+                                <span className="tabular-nums">{names.length} 位</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {names.map((name, index) => (
+                                  <span
+                                    key={`${dietary}-${name}-${index}`}
+                                    className="rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-[11px] text-emerald-700"
+                                  >
+                                    {name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有素食/不吃肉名單。</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-2 space-y-2 text-xs">
-                      {nonMeatAttendeeGroupList.length ? (
-                        nonMeatAttendeeGroupList.map(([dietary, names]) => (
-                          <div
-                            key={dietary}
-                            className="rounded-lg border border-amber-200/70 bg-amber-50/50 p-2"
-                          >
-                            <div className="mb-1 flex items-center justify-between text-amber-700">
-                              <span className="font-semibold">{dietary}</span>
-                              <span className="tabular-nums">{names.length} 位</span>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-600">其他特殊飲食/過敏</p>
+                        <span className="text-xs text-slate-500">共 {specialDietAttendeeList.length} 位</span>
+                      </div>
+                      <div className="mt-2 space-y-2 text-xs">
+                        {specialDietAttendeeGroupList.length ? (
+                          specialDietAttendeeGroupList.map(([dietary, names]) => (
+                            <div
+                              key={dietary}
+                              className="rounded-lg border border-amber-200/70 bg-amber-50/50 p-2"
+                            >
+                              <div className="mb-1 flex items-center justify-between text-amber-700">
+                                <span className="font-semibold">{dietary}</span>
+                                <span className="tabular-nums">{names.length} 位</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {names.map((name, index) => (
+                                  <span
+                                    key={`${dietary}-${name}-${index}`}
+                                    className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[11px] text-amber-700"
+                                  >
+                                    {name}
+                                  </span>
+                                ))}
+                              </div>
                             </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              {names.map((name, index) => (
-                                <span
-                                  key={`${dietary}-${name}-${index}`}
-                                  className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-[11px] text-amber-700"
-                                >
-                                  {name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-slate-400">目前沒有非葷食名單。</p>
-                      )}
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有其他特殊需求名單。</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
