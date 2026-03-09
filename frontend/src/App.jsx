@@ -1409,6 +1409,38 @@ async function requestWithReadRetry_(payload) {
       if (response && response.result && response.result.ok) {
         return response;
       }
+
+      const unauthorized =
+        response && response.result && response.result.ok === false
+          ? String(response.result.error || "") === "Unauthorized"
+          : false;
+
+      // If we have a refresh token, try one session rotation and retry the same read.
+      if (unauthorized) {
+        const storedSession = loadStoredAdminSession_();
+        const refreshToken = String((storedSession && storedSession.refreshToken) || "").trim();
+        if (refreshToken && shouldUseApiV2Write_({ action: "refreshSession" })) {
+          const refreshResponse = await requestWithApiV2Write_({
+            action: "refreshSession",
+            refreshToken,
+          });
+          const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
+          if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
+            storeAdminSession_({
+              token: refreshResult.data.sessionToken,
+              refreshToken: refreshResult.data.refreshToken || refreshToken,
+              studentId: String((storedSession && storedSession.studentId) || "").trim(),
+              memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
+            });
+            // Retry once with rotated credentials.
+            const rotated = await requestWithApiV2Read_(payload);
+            if (rotated && rotated.result && rotated.result.ok) {
+              return rotated;
+            }
+          }
+        }
+      }
+
       // If API v2 returns non-ok payload, fallback to legacy Apps Script for safety.
     } catch (error) {
       // Fall through to Apps Script transport as safe fallback.
