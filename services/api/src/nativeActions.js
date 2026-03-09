@@ -655,13 +655,83 @@ export async function dispatchNativeAction({
       }
       const memberships = await listMembershipsByStudentId(studentId);
       const groupIds = memberships.map((m) => String(m.groupId || "").trim()).filter(Boolean);
+
+      // Todo notification: softball attendance for the next practice.
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const practiceResult = await query(
+          `select * from softball_practices
+           where coalesce(date,'') <> ''
+             and coalesce(date,'') >= $1
+           order by coalesce(date,''), id
+           limit 1`,
+          [today]
+        );
+        const practice = rowOrNull(practiceResult);
+        if (practice && practice.id) {
+          const practiceId = String(practice.id || "").trim();
+          const attendanceResult = await query(
+            `select 1 from softball_attendance
+             where practice_id = $1
+               and player_id = $2
+             limit 1`,
+            [practiceId, studentId]
+          );
+          const hasResponse = attendanceResult.rows && attendanceResult.rows.length > 0;
+          const todoId = `todo:softball:${practiceId}:${studentId}`;
+
+          if (!hasResponse) {
+            const createdAtText = nowIso();
+            const title = "壘球｜請回覆下一次練球";
+            const body = [firstText(practice.date, ""), firstText(practice.title, ""), firstText(practice.location, "")]
+              .filter(Boolean)
+              .join(" · ");
+            const url = `/softball/player?practiceId=${encodeURIComponent(practiceId)}`;
+            const raw = {
+              kind: "todo",
+              todoKey: todoId,
+              category: "softball",
+              practiceId,
+            };
+
+            await query(
+              `insert into notifications (
+                 id, dedupe_key, kind, status,
+                 target_student_id, target_group_id,
+                 title, body, url,
+                 created_at, updated_at, raw
+               ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+               on conflict (id) do update set
+                 status = 'open',
+                 title = excluded.title,
+                 body = excluded.body,
+                 url = excluded.url,
+                 raw = excluded.raw,
+                 target_student_id = excluded.target_student_id,
+                 -- Don't bump updated_at on every page load; only bump when transitioning from closed -> open.
+                 updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
+              [todoId, todoId, studentId, title, body, url, createdAtText, JSON.stringify(raw)]
+            );
+          } else {
+            await query(
+              `update notifications set status = 'closed', updated_at = now()
+               where id = $1 and coalesce(status,'open') <> 'closed'`,
+              [todoId]
+            );
+          }
+        }
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
-        `select n.*, r.read_at
+        `select n.*, r.read_at, r.seen_updated_at
          from notifications n
          left join notification_reads r
            on r.notification_id = n.id
           and r.student_id = $1
-         where (coalesce(n.target_student_id, '') = '' or n.target_student_id = $1)
+         where coalesce(n.status,'open') = 'open'
+           and (coalesce(n.target_student_id, '') = '' or n.target_student_id = $1)
            and (coalesce(n.target_group_id, '') = '' or n.target_group_id = any($2::text[]))
          order by coalesce(n.created_at, '') desc, n.id desc
          limit 50`,
@@ -669,13 +739,24 @@ export async function dispatchNativeAction({
       );
       const notifications = notificationsResult.rows.map((row) => {
         const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+        const kind = String(row.kind || raw.kind || "announcement").trim() || "announcement";
+        const updatedAt = row.updated_at || row.synced_at || null;
+        const seenUpdatedAt = row.seen_updated_at || row.read_at || null;
+        const isTodo = kind === "todo";
+        const isRead = isTodo
+          ? false
+          : seenUpdatedAt && updatedAt
+            ? new Date(seenUpdatedAt).getTime() >= new Date(updatedAt).getTime()
+            : Boolean(row.read_at);
+
         return {
           id: String(row.id || "").trim(),
+          kind,
           title: firstText(raw.title, row.title || ""),
           message: firstText(raw.message, row.body || ""),
           url: firstText(raw.url, row.url || ""),
           createdAt: firstText(raw.createdAt, row.created_at || ""),
-          isRead: Boolean(row.read_at),
+          isRead,
         };
       });
       const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -689,8 +770,10 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Missing notificationId" };
       }
       await query(
-        `insert into notification_reads (notification_id, student_id) values ($1,$2)
-         on conflict (notification_id, student_id) do nothing`,
+        `insert into notification_reads (notification_id, student_id, read_at, seen_updated_at)
+         values ($1,$2,now(),now())
+         on conflict (notification_id, student_id)
+         do update set seen_updated_at = excluded.seen_updated_at`,
         [notificationId, auth.studentId]
       );
       return { ok: true, data: { id: notificationId }, error: null };
@@ -705,8 +788,10 @@ export async function dispatchNativeAction({
       await withTransaction(async (client) => {
         for (const id of ids) {
           await client.query(
-            `insert into notification_reads (notification_id, student_id) values ($1,$2)
-             on conflict (notification_id, student_id) do nothing`,
+            `insert into notification_reads (notification_id, student_id, read_at, seen_updated_at)
+             values ($1,$2,now(),now())
+             on conflict (notification_id, student_id)
+             do update set seen_updated_at = excluded.seen_updated_at`,
             [id, auth.studentId]
           );
         }
