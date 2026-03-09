@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 
 function FinancePage({ shared }) {
 
@@ -84,6 +85,8 @@ function FinancePage({ shared }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [form, setForm] = useState(buildFinanceDraft_());
   const [editingId, setEditingId] = useState("");
+  const [bankPickerQuery, setBankPickerQuery] = useState("");
+  const [bankPickerOpen, setBankPickerOpen] = useState(false);
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [uploadAttachmentError, setUploadAttachmentError] = useState("");
@@ -117,6 +120,32 @@ function FinancePage({ shared }) {
     (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
     (googleLinkedStudent && googleLinkedStudent.name) ||
     "";
+
+  const bankByCode = useMemo(() => {
+    const map = new Map();
+    TW_BANK_CODES.forEach((item) => {
+      map.set(String(item.code || "").trim(), item);
+    });
+    return map;
+  }, []);
+
+  const bankSuggestions = useMemo(() => {
+    const raw = String(bankPickerQuery || "").trim();
+    const normalized = normalizeTwBankName(raw);
+    if (!normalized) {
+      return [];
+    }
+    const digitQuery = raw.replace(/\s+/g, "");
+    const results = TW_BANK_CODES.filter((item) => {
+      const code = String(item.code || "");
+      const name = String(item.name || "");
+      if (digitQuery && /^\d+$/.test(digitQuery) && code.includes(digitQuery)) {
+        return true;
+      }
+      return normalizeTwBankName(name).includes(normalized);
+    });
+    return results.slice(0, 12);
+  }, [bankPickerQuery]);
 
   const loadRequests = async (email) => {
     if (!email) {
@@ -465,6 +494,8 @@ function FinancePage({ shared }) {
   const resetForm = () => {
     setForm(buildFinanceDraft_());
     setEditingId("");
+    setBankPickerQuery("");
+    setBankPickerOpen(false);
     setAttachmentUrl("");
   };
 
@@ -608,6 +639,8 @@ function FinancePage({ shared }) {
       paymentMethod: item.paymentMethod || "reimbursement",
       vendorName: item.vendorName || "",
       payeeName: item.payeeName || "",
+      payeeBankCode: item.payeeBankCode || "",
+      payeeBankName: item.payeeBankName || item.payeeBank || "",
       payeeBank: item.payeeBank || "",
       payeeAccount: item.payeeAccount || "",
       relatedPurchaseId: item.relatedPurchaseId || "",
@@ -619,6 +652,10 @@ function FinancePage({ shared }) {
       applicantName: item.applicantName || "",
       applicantDepartment: item.applicantDepartment || "",
     });
+    const nextBankCode = String(item.payeeBankCode || "").trim();
+    const nextBankName = String(item.payeeBankName || item.payeeBank || "").trim();
+    setBankPickerQuery([nextBankCode, nextBankName].filter(Boolean).join(" ").trim());
+    setBankPickerOpen(false);
     setStatusMessage("");
     setError("");
   };
@@ -728,6 +765,10 @@ function FinancePage({ shared }) {
     }
     if (isPayment && !String(form.payeeName || "").trim()) {
       setError("請填寫廠商/收款人");
+      return;
+    }
+    if (isPayment && !String(form.payeeBankCode || "").trim()) {
+      setError("請選擇銀行代碼");
       return;
     }
     if (isPayment && !String(form.payeeAccount || "").trim()) {
@@ -1667,13 +1708,96 @@ function FinancePage({ shared }) {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">銀行</label>
-                    <input
-                      value={form.payeeBank}
-                      onChange={(event) => handleFormChange("payeeBank", event.target.value)}
-                      placeholder="銀行名稱（可選）"
-                      className="input-sm"
-                    />
+                    <label className="text-sm font-medium text-slate-700">
+                      銀行代碼 <span className="required-mark">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        value={bankPickerQuery}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          setBankPickerQuery(next);
+                          setBankPickerOpen(true);
+
+                          const trimmed = String(next || "").trim();
+                          if (!trimmed) {
+                            setForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: "",
+                              payeeBankName: "",
+                              payeeBank: "",
+                            }));
+                            return;
+                          }
+
+                          const codeMatch = trimmed.match(/^(\d{3})$/) || trimmed.match(/^(\d{3})\b/);
+                          if (codeMatch) {
+                            const code = codeMatch[1];
+                            const hit = bankByCode.get(code);
+                            setForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: code,
+                              payeeBankName: hit ? hit.name : prev.payeeBankName || prev.payeeBank || "",
+                              payeeBank: hit ? hit.name : prev.payeeBankName || prev.payeeBank || "",
+                            }));
+                            return;
+                          }
+
+                          const normalized = normalizeTwBankName(trimmed);
+                          const exact = TW_BANK_CODES.find((item) => normalizeTwBankName(item.name) === normalized);
+                          if (exact) {
+                            setForm((prev) => ({
+                              ...prev,
+                              payeeBankCode: exact.code,
+                              payeeBankName: exact.name,
+                              payeeBank: exact.name,
+                            }));
+                          }
+                        }}
+                        onFocus={() => {
+                          if (!bankPickerOpen) {
+                            setBankPickerOpen(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          window.setTimeout(() => setBankPickerOpen(false), 150);
+                        }}
+                        placeholder="輸入銀行名稱或代碼（例：台新 / 812）"
+                        className="input-sm"
+                      />
+                      {bankPickerOpen && bankSuggestions.length ? (
+                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+                          {bankSuggestions.map((item) => (
+                            <button
+                              key={item.code}
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => {
+                                setForm((prev) => ({
+                                  ...prev,
+                                  payeeBankCode: item.code,
+                                  payeeBankName: item.name,
+                                  payeeBank: item.name,
+                                }));
+                                setBankPickerQuery(`${item.code} ${item.name}`.trim());
+                                setBankPickerOpen(false);
+                              }}
+                              className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              <span className="font-semibold tabular-nums">{item.code}</span>
+                              <span className="ml-2">{item.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                    {form.payeeBankCode || form.payeeBankName || form.payeeBank ? (
+                      <p className="text-[11px] text-slate-500">
+                        已選：{form.payeeBankCode || "-"} {form.payeeBankName || form.payeeBank || ""}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400">可輸入名稱快速搜尋（送出/匯款時用代碼）。</p>
+                    )}
                   </div>
                   <div className="grid gap-2 sm:col-span-2">
                     <label className="text-sm font-medium text-slate-700">

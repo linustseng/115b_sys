@@ -588,6 +588,13 @@ function FinanceAdminPage({ shared }) {
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
   const selectedRequest = requests.find((item) => item.id === selectedId) || null;
+  const selectedPayeeBankName = selectedRequest
+    ? String(selectedRequest.payeeBankName || selectedRequest.payeeBank || "").trim()
+    : "";
+  const selectedPayeeBankCode = selectedRequest
+    ? String(selectedRequest.payeeBankCode || "").trim()
+    : "";
+
   const sortedActions = actions
     .slice()
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
@@ -1402,8 +1409,19 @@ function FinanceAdminPage({ shared }) {
                           <button type="button" onClick={() => copyText_(selectedRequest.payeeName, "廠商/收款人")} className="rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100" title="複製廠商/收款人">📋</button>
                         </div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">銀行：{selectedRequest.payeeBank || "-"}</span>
-                          <button type="button" onClick={() => copyText_(selectedRequest.payeeBank, "銀行")} className="rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100" title="複製銀行">📋</button>
+                          <span className="font-medium">銀行：{selectedPayeeBankName || "-"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">銀行代碼：{selectedPayeeBankCode || "-"}</span>
+                          <button
+                            type="button"
+                            disabled={!selectedPayeeBankCode}
+                            onClick={() => copyText_(selectedPayeeBankCode, "銀行代碼")}
+                            className={`rounded border border-amber-300 bg-white px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 ${!selectedPayeeBankCode ? "cursor-not-allowed opacity-50" : ""}`}
+                            title="複製銀行代碼"
+                          >
+                            📋
+                          </button>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium">帳號：{selectedRequest.payeeAccount || "-"}</span>

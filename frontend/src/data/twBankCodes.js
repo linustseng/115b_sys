@@ -1,0 +1,174 @@
+// Auto-generated once from Wikipedia raw wikitext (台灣金融機構代號列表).
+// Source: https://zh.wikipedia.org/w/index.php?title=%E5%8F%B0%E7%81%A3%E9%87%91%E8%9E%8D%E6%A9%9F%E6%A7%8B%E4%BB%A3%E8%99%9F%E5%88%97%E8%A1%A8&action=raw
+// NOTE: This is a convenience list for bank-code lookup UX; treat as best-effort.
+
+export const TW_BANK_CODES = [
+  {
+    "code": "004",
+    "name": "臺灣銀行"
+  },
+  {
+    "code": "005",
+    "name": "臺灣土地銀行"
+  },
+  {
+    "code": "006",
+    "name": "合作金庫商業銀行"
+  },
+  {
+    "code": "007",
+    "name": "第一商業銀行"
+  },
+  {
+    "code": "008",
+    "name": "華南商業銀行"
+  },
+  {
+    "code": "009",
+    "name": "彰化商業銀行"
+  },
+  {
+    "code": "011",
+    "name": "上海商業儲蓄銀行"
+  },
+  {
+    "code": "012",
+    "name": "台北富邦商業銀行"
+  },
+  {
+    "code": "013",
+    "name": "國泰世華商業銀行"
+  },
+  {
+    "code": "015",
+    "name": "中國輸出入銀行"
+  },
+  {
+    "code": "016",
+    "name": "高雄銀行"
+  },
+  {
+    "code": "017",
+    "name": "兆豐國際商業銀行"
+  },
+  {
+    "code": "018",
+    "name": "全國農業金庫"
+  },
+  {
+    "code": "021",
+    "name": "花旗（台灣）商業銀行"
+  },
+  {
+    "code": "048",
+    "name": "王道商業銀行"
+  },
+  {
+    "code": "050",
+    "name": "台灣中小企業銀行"
+  },
+  {
+    "code": "052",
+    "name": "渣打國際商業銀行"
+  },
+  {
+    "code": "053",
+    "name": "台中商業銀行"
+  },
+  {
+    "code": "054",
+    "name": "京城商業銀行"
+  },
+  {
+    "code": "081",
+    "name": "滙豐（台灣）商業銀行"
+  },
+  {
+    "code": "101",
+    "name": "瑞興商業銀行"
+  },
+  {
+    "code": "102",
+    "name": "華泰商業銀行"
+  },
+  {
+    "code": "103",
+    "name": "臺灣新光商業銀行"
+  },
+  {
+    "code": "108",
+    "name": "陽信商業銀行"
+  },
+  {
+    "code": "118",
+    "name": "板信商業銀行"
+  },
+  {
+    "code": "147",
+    "name": "三信商業銀行"
+  },
+  {
+    "code": "700",
+    "name": "中華郵政"
+  },
+  {
+    "code": "803",
+    "name": "聯邦商業銀行"
+  },
+  {
+    "code": "805",
+    "name": "遠東國際商業銀行"
+  },
+  {
+    "code": "806",
+    "name": "元大商業銀行"
+  },
+  {
+    "code": "807",
+    "name": "永豐商業銀行"
+  },
+  {
+    "code": "808",
+    "name": "玉山商業銀行"
+  },
+  {
+    "code": "809",
+    "name": "凱基商業銀行"
+  },
+  {
+    "code": "810",
+    "name": "星展（台灣）商業銀行"
+  },
+  {
+    "code": "812",
+    "name": "台新國際商業銀行"
+  },
+  {
+    "code": "816",
+    "name": "安泰商業銀行"
+  },
+  {
+    "code": "822",
+    "name": "中國信託商業銀行"
+  },
+  {
+    "code": "823",
+    "name": "將來商業銀行"
+  },
+  {
+    "code": "824",
+    "name": "連線商業銀行"
+  },
+  {
+    "code": "826",
+    "name": "樂天國際商業銀行"
+  }
+];
+
+export function normalizeTwBankName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replaceAll("臺", "台");
+}

@@ -101,7 +101,7 @@ function toFinanceRequestRow(input) {
     paymentMethod: firstText(raw.paymentMethod),
     vendorName: firstText(raw.vendorName),
     payeeName: firstText(raw.payeeName),
-    payeeBank: firstText(raw.payeeBank),
+    payeeBank: firstText(raw.payeeBankCode, raw.payeeBank),
     payeeAccount: firstText(raw.payeeAccount),
     relatedPurchaseId: firstText(raw.relatedPurchaseId),
     noPurchaseReason: firstText(raw.noPurchaseReason),

@@ -546,6 +546,8 @@ const buildFinanceDraft_ = () => ({
   paymentMethod: "reimbursement",
   vendorName: "",
   payeeName: "",
+  payeeBankCode: "",
+  payeeBankName: "",
   payeeBank: "",
   payeeAccount: "",
   relatedPurchaseId: "",
