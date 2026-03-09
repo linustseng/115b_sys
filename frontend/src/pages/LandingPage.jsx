@@ -1156,9 +1156,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                         </span>
                       )}
                     </div>
-                    {item.ctaUrl ? (
+                    {item.ctaUrl || item.url ? (
                       <a
-                        href={item.ctaUrl}
+                        href={item.ctaUrl || item.url}
                         onClick={() => {
                           setNotificationOpen(false);
                           if (!item.isRead && hasGoogleLogin) {
