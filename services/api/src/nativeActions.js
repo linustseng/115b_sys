@@ -242,7 +242,13 @@ export async function dispatchNativeAction({
   const name = String(action || "").trim();
   const body = payload && typeof payload === "object" ? payload : {};
 
-  const PUBLIC_ACTIONS = new Set(["verifyGoogle", "linkGoogleStudent", "refreshSession"]);
+  const PUBLIC_ACTIONS = new Set([
+    "verifyGoogle",
+    "linkGoogleStudent",
+    "refreshSession",
+    // Landing can render without login; it will return empty private sections when unauthenticated.
+    "listLandingBootstrap",
+  ]);
 
   // Helpers
   const requireAuth = () => {
@@ -639,8 +645,15 @@ export async function dispatchNativeAction({
     }
 
     case "listLandingBootstrap": {
-      requireAuth();
-      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const studentId = auth && auth.studentId ? String(auth.studentId || "").trim() : "";
+      if (!studentId) {
+        return {
+          ok: true,
+          data: { memberships: [], notifications: [], unreadCount: 0, needsLogin: true },
+          error: null,
+        };
+      }
+      const memberships = await listMembershipsByStudentId(studentId);
       const groupIds = memberships.map((m) => String(m.groupId || "").trim()).filter(Boolean);
       const notificationsResult = await query(
         `select n.*, r.read_at
@@ -652,7 +665,7 @@ export async function dispatchNativeAction({
            and (coalesce(n.target_group_id, '') = '' or n.target_group_id = any($2::text[]))
          order by coalesce(n.created_at, '') desc, n.id desc
          limit 50`,
-        [auth.studentId, groupIds.length ? groupIds : ["__none__"]]
+        [studentId, groupIds.length ? groupIds : ["__none__"]]
       );
       const notifications = notificationsResult.rows.map((row) => {
         const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
