@@ -1143,7 +1143,7 @@ export async function dispatchNativeAction({
       requireAuth();
       const result = await query(`select * from finance_category_types order by coalesce(label,''), id`);
       const items = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" }));
-      return { ok: true, data: { categoryTypes: items }, error: null };
+      return { ok: true, data: { categories: items, categoryTypes: items }, error: null };
     }
 
     case "upsertFinanceCategoryType": {
@@ -1399,6 +1399,7 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
+          categories: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
           categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
           requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
         },
@@ -1416,6 +1417,7 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
+          categories: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
           categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
           roles: roles.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
