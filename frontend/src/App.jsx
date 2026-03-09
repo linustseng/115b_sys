@@ -2444,7 +2444,6 @@ function AppShell() {
     }
   });
   const [copyStatus, setCopyStatus] = useState("");
-  const [authVersion, setAuthVersion] = useState(0);
   const showLineBanner = lineInfo.isLineInApp && !hideLineBanner;
   const shared = {
     apiRequest,
@@ -2554,9 +2553,6 @@ function AppShell() {
               studentId: storedSession.studentId || "",
               memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
             });
-            if (!ignore) {
-              setAuthVersion((v) => v + 1);
-            }
             return;
           }
         }
@@ -2592,9 +2588,7 @@ function AppShell() {
             studentId,
             memberships: Array.isArray(verifyResult.data.memberships) ? verifyResult.data.memberships : [],
           });
-          if (!ignore) {
-            setAuthVersion((v) => v + 1);
-          }
+
         }
       } catch (error) {
         // Best-effort only.
@@ -2807,7 +2801,6 @@ function AppShell() {
   } else {
     content = (
       <LandingPage
-        key={`landing-${authVersion}`}
         shared={shared}
         GoogleSigninPanel={GoogleSigninPanel}
         loadStoredGoogleStudent_={loadStoredGoogleStudent_}
