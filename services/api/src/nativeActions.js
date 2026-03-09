@@ -263,7 +263,7 @@ export async function dispatchNativeAction({
     requireAuth();
     const memberships = await listMembershipsByStudentId(auth.studentId);
     if (!canAccessByGroups(memberships, allowedGroupIds)) {
-      const error = new Error("Unauthorized");
+      const error = new Error("Forbidden");
       error.statusCode = 403;
       throw error;
     }

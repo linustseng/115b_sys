@@ -843,7 +843,7 @@ app.get("/v1/directory", async (req, res) => {
     }
     const memberships = await listMembershipsByStudentId(auth.studentId);
     if (!canViewDirectory_(memberships)) {
-      return res.status(403).json({ ok: false, data: null, error: "Unauthorized" });
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     }
 
     const result = await query(
