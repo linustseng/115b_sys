@@ -1586,29 +1586,50 @@ export async function dispatchNativeAction({
 
     case "getFundSummary": {
       await requireGroupAccess(["D", "E"]);
-      const events = await query(`select id, title, due_date, amount_general, amount_sponsor, status, raw from fund_events order by coalesce(due_date,'') desc, id desc`);
-      const payments = await query(`select event_id, payer_type, sum(coalesce(amount,0))::numeric as total_amount, count(*)::int as count
-                                   from fund_payments
-                                   group by event_id, payer_type`);
-      const paymentMap = new Map();
-      for (const row of payments.rows) {
-        paymentMap.set(`${row.event_id}:${row.payer_type}`, { totalAmount: row.total_amount, count: row.count });
-      }
-      const summary = events.rows.map((event) => {
-        const general = paymentMap.get(`${event.id}:general`) || { totalAmount: 0, count: 0 };
-        const sponsor = paymentMap.get(`${event.id}:sponsor`) || { totalAmount: 0, count: 0 };
-        return {
-          id: event.id,
-          title: event.title || (event.raw && event.raw.title) || "",
-          dueDate: event.due_date || (event.raw && event.raw.dueDate) || "",
-          status: event.status || (event.raw && event.raw.status) || "",
-          receivedGeneralAmount: Number(general.totalAmount || 0),
-          receivedGeneralCount: Number(general.count || 0),
-          receivedSponsorAmount: Number(sponsor.totalAmount || 0),
-          receivedSponsorCount: Number(sponsor.count || 0),
-        };
-      });
-      return { ok: true, data: { summary }, error: null };
+
+      const [totalsResult, expensesResult] = await Promise.all([
+        query(
+          `select
+             sum(case when coalesce(received_at,'') <> '' or coalesce(created_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as received,
+             sum(case when coalesce(accounted_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as accounted,
+             sum(case when coalesce(confirmed_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as confirmed
+           from fund_payments`
+        ),
+        query(
+          `select sum(coalesce(amount_actual,0))::numeric as total
+           from finance_requests
+           where lower(coalesce(status,'')) = 'closed'
+             and lower(coalesce(type,'')) in ('payment','pettycash')`
+        ),
+      ]);
+
+      const totalsRow = rowOrNull(totalsResult) || {};
+      const expensesRow = rowOrNull(expensesResult) || {};
+
+      const received = Number(totalsRow.received || 0);
+      const accounted = Number(totalsRow.accounted || 0);
+      const confirmed = Number(totalsRow.confirmed || 0);
+      const expensesTotal = Number(expensesRow.total || 0);
+
+      return {
+        ok: true,
+        data: {
+          income: {
+            received,
+            accounted,
+            confirmed,
+          },
+          expense: {
+            total: expensesTotal,
+          },
+          balance: {
+            received: received - expensesTotal,
+            accounted: accounted - expensesTotal,
+            confirmed: confirmed - expensesTotal,
+          },
+        },
+        error: null,
+      };
     }
 
     case "listSoftballConfig": {
