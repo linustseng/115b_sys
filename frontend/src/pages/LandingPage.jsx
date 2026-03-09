@@ -48,6 +48,22 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     (googleLinkedStudent && googleLinkedStudent.name) ||
     "";
   const hasGoogleLogin = Boolean(googleLinkedStudent && googleLinkedStudent.email);
+  const hasAuthMaterial = (() => {
+    try {
+      const rawSession = window.localStorage.getItem("emba115b.adminSession");
+      const session = rawSession ? JSON.parse(rawSession) : null;
+      const hasSession = Boolean(
+        session && (String(session.refreshToken || "").trim() || String(session.token || "").trim())
+      );
+      const hasIdToken = Boolean(
+        window.sessionStorage.getItem("emba115b.googleIdToken")
+      );
+      return hasSession || hasIdToken;
+    } catch (error) {
+      return false;
+    }
+  })();
+  const needsReauth = hasGoogleLogin && !hasAuthMaterial;
   const formatBirthdayName_ = (item) => {
     const preferred = String((item && item.name) || "").trim();
     const zh = String((item && item.nameZh) || "").trim();
@@ -270,7 +286,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
 
   useEffect(() => {
-    if (!hasGoogleLogin) {
+    if (!hasGoogleLogin || needsReauth) {
       return;
     }
     let ignore = false;
@@ -349,7 +365,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [apiRequest, hasGoogleLogin]);
 
   useEffect(() => {
-    if (!hasGoogleLogin) {
+    if (!hasGoogleLogin || needsReauth) {
       return;
     }
     let ignore = false;
@@ -428,7 +444,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
 
   const markNotificationRead = async (notificationId) => {
-    if (!notificationId || !hasGoogleLogin) {
+    if (!notificationId || !hasGoogleLogin || needsReauth) {
       return;
     }
     try {
@@ -773,7 +789,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900">
-                      {displayName ? `${displayName} 已登入` : "已登入"}
+                      {displayName ? displayName : "已綁定"}
+                      <span className="ml-2 text-xs font-semibold text-slate-500">
+                        {needsReauth ? "需重新登入" : "已登入"}
+                      </span>
                     </p>
                     <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
                   </div>
@@ -787,7 +806,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       </header>
 
       <main className="relative mx-auto max-w-6xl px-6 pb-32 pt-6 sm:px-12 sm:pb-24">
-        {!hasGoogleLogin ? (
+        {!hasGoogleLogin || needsReauth ? (
           <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
@@ -803,8 +822,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               <>
                 <div className="mt-4">
                   <GoogleSigninPanel
-                    title="Google 登入"
-                    helperText="請先完成綁定，才能使用活動、訂餐與壘球功能。"
+                    title={needsReauth ? "重新登入" : "Google 登入"}
+                    helperText={
+                      needsReauth
+                        ? "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
+                        : "請先完成綁定，才能使用活動、訂餐與壘球功能。"
+                    }
                     onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
                   />
                 </div>
