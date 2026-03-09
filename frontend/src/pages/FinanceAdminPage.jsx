@@ -1672,9 +1672,9 @@ function FinanceAdminPage({ shared }) {
                   className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                 >
                   <option value="">請選擇</option>
-                  {Object.keys(FINANCE_TYPES).map((key) => (
-                    <option key={key} value={key}>
-                      {FINANCE_TYPES[key]}
+                  {FINANCE_TYPES.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
                     </option>
                   ))}
                 </select>
