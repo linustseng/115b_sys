@@ -671,16 +671,21 @@ export async function dispatchNativeAction({
         if (practice && practice.id) {
           const practiceId = String(practice.id || "").trim();
           const attendanceResult = await query(
-            `select 1 from softball_attendance
+            `select status
+             from softball_attendance
              where practice_id = $1
                and player_id = $2
+             order by coalesce(updated_at,'') desc, id desc
              limit 1`,
             [practiceId, studentId]
           );
-          const hasResponse = attendanceResult.rows && attendanceResult.rows.length > 0;
+          const attendanceRow = rowOrNull(attendanceResult);
+          const normalizedStatus = String((attendanceRow && attendanceRow.status) || "").trim().toLowerCase();
+          // Treat "unknown" as not-yet-confirmed, so the todo stays until the user chooses attend/absent.
+          const hasConfirmedResponse = Boolean(normalizedStatus && normalizedStatus !== "unknown");
           const todoId = `todo:softball:${practiceId}:${studentId}`;
 
-          if (!hasResponse) {
+          if (!hasConfirmedResponse) {
             const createdAtText = nowIso();
             const title = "壘球｜請回覆下一次練球";
             const body = [firstText(practice.date, ""), firstText(practice.title, ""), firstText(practice.location, "")]
