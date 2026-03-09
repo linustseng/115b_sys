@@ -1130,48 +1130,84 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 {!notifications.length ? (
                   <div className="alert alert-info text-xs">目前沒有新的待辦或公告。</div>
                 ) : null}
-                {notifications.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`rounded-2xl border p-3 ${
-                      item.isRead ? "border-slate-200 bg-slate-50/50" : "border-slate-300 bg-white"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{item.title || "通知"}</p>
-                        <p className="mt-1 text-xs text-slate-600">{item.message || ""}</p>
+                {notifications.map((item) => {
+                  const targetUrl = item.ctaUrl || item.url;
+                  const isTodo = item.kind === "todo";
+                  const handleNavigate = () => {
+                    if (!targetUrl) {
+                      return;
+                    }
+                    setNotificationOpen(false);
+                    if (!isTodo && !item.isRead && hasGoogleLogin) {
+                      markNotificationRead(item.id);
+                    }
+                    window.location.href = targetUrl;
+                  };
+
+                  return (
+                    <div
+                      key={item.id}
+                      role={targetUrl ? "link" : undefined}
+                      tabIndex={targetUrl ? 0 : undefined}
+                      onClick={targetUrl ? handleNavigate : undefined}
+                      onKeyDown={
+                        targetUrl
+                          ? (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                handleNavigate();
+                              }
+                            }
+                          : undefined
+                      }
+                      className={`rounded-2xl border p-3 ${
+                        item.isRead ? "border-slate-200 bg-slate-50/50" : "border-slate-300 bg-white"
+                      } ${targetUrl ? "cursor-pointer hover:border-slate-400 hover:bg-slate-50/70" : ""}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{item.title || "通知"}</p>
+                          <p className="mt-1 text-xs text-slate-600">{item.message || ""}</p>
+                        </div>
+
+                        {isTodo ? (
+                          <span className="text-[10px] font-semibold text-amber-700">待處理</span>
+                        ) : !item.isRead && hasGoogleLogin ? (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              markNotificationRead(item.id);
+                            }}
+                            className="shrink-0 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-slate-300"
+                          >
+                            已讀
+                          </button>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {item.isRead ? "已讀" : "未讀"}
+                          </span>
+                        )}
                       </div>
-                      {!item.isRead && hasGoogleLogin ? (
-                        <button
-                          type="button"
-                          onClick={() => markNotificationRead(item.id)}
-                          className="shrink-0 rounded-full border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-slate-300"
+
+                      {targetUrl ? (
+                        <a
+                          href={targetUrl}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setNotificationOpen(false);
+                            if (!isTodo && !item.isRead && hasGoogleLogin) {
+                              markNotificationRead(item.id);
+                            }
+                          }}
+                          className="mt-2 inline-flex items-center text-xs font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
                         >
-                          已讀
-                        </button>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-slate-400">
-                          {item.isRead ? "已讀" : "未讀"}
-                        </span>
-                      )}
+                          {item.ctaLabel || "前往處理"}
+                        </a>
+                      ) : null}
                     </div>
-                    {item.ctaUrl || item.url ? (
-                      <a
-                        href={item.ctaUrl || item.url}
-                        onClick={() => {
-                          setNotificationOpen(false);
-                          if (!item.isRead && hasGoogleLogin) {
-                            markNotificationRead(item.id);
-                          }
-                        }}
-                        className="mt-2 inline-flex items-center text-xs font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                      >
-                        {item.ctaLabel || "前往處理"}
-                      </a>
-                    ) : null}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
           </aside>
