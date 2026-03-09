@@ -53,6 +53,9 @@ function SoftballPage({ shared }) {
     formatEventDate_,
   } = shared;
 
+  const effectiveApiRequest =
+    typeof authedApiRequest === "function" ? authedApiRequest : apiRequest;
+
   const [activeTab, setActiveTab] = useState("overview");
   const [initialLoading, setInitialLoading] = useState(true);
   const [error, setError] = useState("");
@@ -333,7 +336,7 @@ function SoftballPage({ shared }) {
 
   const loadPlayers = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listSoftballPlayers" });
+      const { result } = await effectiveApiRequest({ action: "listSoftballPlayers" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -345,7 +348,7 @@ function SoftballPage({ shared }) {
 
   const loadPractices = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listSoftballPractices" });
+      const { result } = await effectiveApiRequest({ action: "listSoftballPractices" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -359,7 +362,7 @@ function SoftballPage({ shared }) {
 
   const loadFields = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listSoftballFields" });
+      const { result } = await effectiveApiRequest({ action: "listSoftballFields" });
       if (!result.ok) {
         setError(`球場資料載入失敗：${result.error || "載入失敗"}`);
         setFields([]);
@@ -374,7 +377,7 @@ function SoftballPage({ shared }) {
 
   const loadGear = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listSoftballGear" });
+      const { result } = await effectiveApiRequest({ action: "listSoftballGear" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -390,7 +393,7 @@ function SoftballPage({ shared }) {
       return;
     }
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await effectiveApiRequest({
         action: "listSoftballAttendance",
         practiceId: practiceId,
       });
@@ -408,7 +411,7 @@ function SoftballPage({ shared }) {
 
   const loadSoftballConfig = async () => {
     try {
-      const { result } = await authedApiRequest({ action: "listSoftballConfig" });
+      const { result } = await effectiveApiRequest({ action: "listSoftballConfig" });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -426,7 +429,7 @@ function SoftballPage({ shared }) {
     }
     setStudentsLoading(true);
     try {
-      const { result } = await authedApiRequest({ action: "listStudents" });
+      const { result } = await effectiveApiRequest({ action: "listStudents" });
       if (result.ok) {
         setStudents(result.data && result.data.students ? result.data.students : []);
       } else {
@@ -579,7 +582,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await effectiveApiRequest({
         action: "updateSoftballConfig",
         data: {
           jerseyDeadline: jerseyDeadline,
@@ -662,7 +665,7 @@ function SoftballPage({ shared }) {
         payload.jerseyRequest = player.jerseyRequest || "";
         payload.positionRequest = player.positionRequest || "";
       }
-      const { result } = await authedApiRequest({ action: "updateSoftballPlayer", data: payload });
+      const { result } = await effectiveApiRequest({ action: "updateSoftballPlayer", data: payload });
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
@@ -687,7 +690,7 @@ function SoftballPage({ shared }) {
       const action = players.find((item) => normalizeId_(item.id) === normalizeId_(playerForm.id))
         ? "updateSoftballPlayer"
         : "createSoftballPlayer";
-      const { result } = await authedApiRequest({ action: action, data: playerForm });
+      const { result } = await effectiveApiRequest({ action: action, data: playerForm });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -714,7 +717,7 @@ function SoftballPage({ shared }) {
       const payload = practiceForm.id
         ? { action: action, id: practiceForm.id, data: practiceForm }
         : { action: action, data: practiceForm };
-      const { result } = await authedApiRequest(payload);
+      const { result } = await effectiveApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -743,7 +746,7 @@ function SoftballPage({ shared }) {
       const payload = fieldForm.id
         ? { action: action, id: fieldForm.id, data: fieldForm }
         : { action: action, data: fieldForm };
-      const { result } = await authedApiRequest(payload);
+      const { result } = await effectiveApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -770,7 +773,7 @@ function SoftballPage({ shared }) {
       const payload = gearForm.id
         ? { action: action, id: gearForm.id, data: gearForm }
         : { action: action, data: gearForm };
-      const { result } = await authedApiRequest(payload);
+      const { result } = await effectiveApiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -796,7 +799,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteSoftballPlayer", id: id });
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballPlayer", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -821,7 +824,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteSoftballPractice", id: id });
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballPractice", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -849,7 +852,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteSoftballField", id: id });
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballField", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -874,7 +877,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({ action: "deleteSoftballGear", id: id });
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballGear", id: id });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -894,7 +897,7 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
-      const { result } = await authedApiRequest({
+      const { result } = await effectiveApiRequest({
         action: "submitSoftballAttendance",
         data: {
           practiceId: activePracticeId,
@@ -941,7 +944,7 @@ function SoftballPage({ shared }) {
     let studentRoster = Array.isArray(students) ? students.slice() : [];
     if (!studentRoster.length) {
       try {
-        const { result } = await authedApiRequest({ action: "listStudents" });
+        const { result } = await effectiveApiRequest({ action: "listStudents" });
         if (result && result.ok && result.data && Array.isArray(result.data.students)) {
           studentRoster = result.data.students.slice();
           setStudents(studentRoster);
