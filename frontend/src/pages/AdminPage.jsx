@@ -1768,8 +1768,34 @@ export default function AdminPage({
   const activeRegistrationList = registrationList.filter(
     (item) => item && String(item.status || "").toLowerCase() !== "cancelled"
   );
+
+  // De-dupe registrations by studentId (pick the latest update) to avoid inflated counts.
+  const dedupedActiveRegistrations = (() => {
+    const map = new Map();
+    const scoreItem = (item) => {
+      const created = parseTimestampValue_(item && item.createdAt);
+      const updated = parseTimestampValue_(item && item.updatedAt);
+      return Math.max(created, updated);
+    };
+
+    for (const registration of activeRegistrationList) {
+      const fields = parseCustomFields_(registration.customFields);
+      const studentId = String(registration.studentId || fields.studentId || "").trim();
+      const key = studentId ? `student:${studentId}` : `row:${String(registration.id || "").trim()}`;
+      if (!key || key === "row:") {
+        continue;
+      }
+      const existing = map.get(key);
+      if (!existing || scoreItem(registration) >= scoreItem(existing)) {
+        map.set(key, registration);
+      }
+    }
+
+    return Array.from(map.values());
+  })();
+
   const attendanceByStudentId = new Map();
-  activeRegistrationList.forEach((registration) => {
+  dedupedActiveRegistrations.forEach((registration) => {
     const fields = parseCustomFields_(registration.customFields);
     const attendanceValue = String(fields.attendance || "").trim();
     const studentId = String(registration.studentId || fields.studentId || "").trim();
@@ -1777,23 +1803,25 @@ export default function AdminPage({
       attendanceByStudentId.set(studentId, attendanceValue);
     }
   });
+
   const registeredStudentIdSet = new Set(
-    activeRegistrationList
+    dedupedActiveRegistrations
       .map((item) => {
         const fields = parseCustomFields_(item.customFields);
         return String(item.studentId || fields.studentId || "").trim();
       })
       .filter((value) => value)
   );
+
   const totalStudents = displayStudents.length;
-  const registeredCount = activeRegistrationList.length;
+  const registeredCount = registeredStudentIdSet.size;
   const unregisteredCount = totalStudents
     ? Math.max(totalStudents - registeredStudentIdSet.size, 0)
     : 0;
-  const attendanceCounts = activeRegistrationList.reduce(
-    (acc, registration) => {
-      const fields = parseCustomFields_(registration.customFields);
-      const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
+
+  const attendanceCounts = Array.from(registeredStudentIdSet).reduce(
+    (acc, studentId) => {
+      const attendanceStatus = normalizeAttendanceStatus_(attendanceByStudentId.get(studentId));
       if (attendanceStatus === "attending") {
         acc.attending += 1;
       } else if (attendanceStatus === "not_attending") {
@@ -1805,7 +1833,8 @@ export default function AdminPage({
     },
     { attending: 0, notAttending: 0, unknown: 0 }
   );
-  const prepStats = activeRegistrationList.reduce(
+
+  const prepStats = dedupedActiveRegistrations.reduce(
     (acc, registration) => {
       const fields = parseCustomFields_(registration.customFields);
       const attendanceStatus = normalizeAttendanceStatus_(fields.attendance);
