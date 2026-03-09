@@ -87,6 +87,18 @@ function FinancePage({ shared }) {
   const [editingId, setEditingId] = useState("");
   const [bankPickerQuery, setBankPickerQuery] = useState("");
   const [bankPickerOpen, setBankPickerOpen] = useState(false);
+  const [recentBankCodes, setRecentBankCodes] = useState(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+    try {
+      const raw = window.localStorage.getItem("finance_recent_bank_codes_v1");
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.map((item) => String(item || "").trim()).filter(Boolean) : [];
+    } catch (error) {
+      return [];
+    }
+  });
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [uploadAttachmentError, setUploadAttachmentError] = useState("");
@@ -131,6 +143,17 @@ function FinancePage({ shared }) {
 
   const bankSuggestions = useMemo(() => {
     const raw = String(bankPickerQuery || "").trim();
+
+    // Mobile-first UX: when empty, show recent + full list as a dropdown.
+    if (!raw) {
+      const recent = recentBankCodes
+        .map((code) => bankByCode.get(String(code || "").trim()))
+        .filter(Boolean);
+      const recentCodeSet = new Set(recent.map((item) => String(item.code || "").trim()));
+      const rest = TW_BANK_CODES.filter((item) => !recentCodeSet.has(String(item.code || "").trim()));
+      return recent.concat(rest);
+    }
+
     const normalized = normalizeTwBankName(raw);
     if (!normalized) {
       return [];
@@ -144,8 +167,8 @@ function FinancePage({ shared }) {
       }
       return normalizeTwBankName(name).includes(normalized);
     });
-    return results.slice(0, 12);
-  }, [bankPickerQuery]);
+    return results.slice(0, 20);
+  }, [bankPickerQuery, recentBankCodes, bankByCode]);
 
   const loadRequests = async (email) => {
     if (!email) {
@@ -1766,7 +1789,7 @@ function FinancePage({ shared }) {
                         className="input-sm"
                       />
                       {bankPickerOpen && bankSuggestions.length ? (
-                        <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+                        <div className="absolute z-10 mt-1 max-h-72 w-full overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
                           {bankSuggestions.map((item) => (
                             <button
                               key={item.code}
@@ -1781,6 +1804,19 @@ function FinancePage({ shared }) {
                                 }));
                                 setBankPickerQuery(`${item.code} ${item.name}`.trim());
                                 setBankPickerOpen(false);
+
+                                setRecentBankCodes((prev) => {
+                                  const code = String(item.code || "").trim();
+                                  const next = [code]
+                                    .concat((prev || []).filter((c) => String(c || "").trim() && String(c || "").trim() !== code))
+                                    .slice(0, 5);
+                                  try {
+                                    window.localStorage.setItem("finance_recent_bank_codes_v1", JSON.stringify(next));
+                                  } catch (error) {
+                                    // ignore storage errors
+                                  }
+                                  return next;
+                                });
                               }}
                               className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
                             >
