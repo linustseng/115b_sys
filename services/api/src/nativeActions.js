@@ -475,6 +475,34 @@ export async function dispatchNativeAction({
       return { ok: true, data: { event }, error: null };
     }
 
+    case "updateRegistration": {
+      await requireGroupAccess(["C", "E"]);
+      const data = safeJsonObject(body.data || body.registration || body);
+      const registrationId = firstText(data.id || body.id || body.registrationId);
+      const status = firstText(data.status);
+      if (!registrationId) {
+        return { ok: false, data: null, error: "Missing registrationId" };
+      }
+      if (!status) {
+        return { ok: false, data: null, error: "Missing status" };
+      }
+
+      const existing = await query(`select raw from registrations where id = $1 limit 1`, [registrationId]);
+      const existingRow = rowOrNull(existing);
+      if (!existingRow) {
+        return { ok: false, data: null, error: "Registration not found" };
+      }
+      const existingRaw = existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw : {};
+      const updatedAt = nowIso();
+      const nextRaw = { ...existingRaw, status, updatedAt };
+
+      await query(
+        `update registrations set status=$2, updated_at=$3, raw=$4, synced_at=now() where id=$1`,
+        [registrationId, status, updatedAt, nextRaw]
+      );
+      return { ok: true, data: { id: registrationId }, error: null };
+    }
+
     case "deleteRegistration": {
       await requireGroupAccess(["C", "E"]);
       const registrationId = firstText(body.registrationId || body.id);
@@ -1341,11 +1369,133 @@ export async function dispatchNativeAction({
 
     case "updateFinanceRequest": {
       requireAuth();
-      const row = toFinanceRequestRow(body.data || body.request || body);
+
+      const requestId = firstText(body.id, body.data && body.data.id, body.request && body.request.id);
+      const requestAction = firstText(body.requestAction);
+      const hasData = Boolean(body.data && typeof body.data === "object");
+
+      if (!requestId && !hasData) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+
+      // Workflow transition mode (withdraw/approve/return) - do NOT overwrite the full record.
+      if (requestAction && !hasData) {
+        const existingResult = await query(`select * from finance_requests where id = $1 limit 1`, [requestId]);
+        const existingRow = rowOrNull(existingResult);
+        if (!existingRow) {
+          return { ok: false, data: null, error: "Request not found" };
+        }
+
+        const existingRaw = existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw : {};
+        const type = String(existingRow.type || existingRaw.type || "").trim().toLowerCase();
+        const fromStatus = String(existingRow.status || existingRaw.status || "").trim() || "draft";
+
+        const isOwner = String(existingRow.applicant_id || "").trim() === String(auth.studentId || "").trim();
+        const memberships = await listMembershipsByStudentId(auth.studentId);
+        const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+
+        const getWorkflowSteps_ = (requestType) => {
+          if (String(requestType || "").trim().toLowerCase() === "purchase") {
+            return ["pending_lead", "pending_rep", "pending_committee", "closed"];
+          }
+          return [
+            "pending_lead",
+            "pending_rep",
+            "pending_committee",
+            "pending_accounting",
+            "pending_cashier",
+            "closed",
+          ];
+        };
+
+        let toStatus = fromStatus;
+        if (requestAction === "withdraw") {
+          if (!isOwner) {
+            const error = new Error("Unauthorized");
+            error.statusCode = 403;
+            throw error;
+          }
+          toStatus = "withdrawn";
+        } else if (requestAction === "return") {
+          if (!isAdmin) {
+            const error = new Error("Unauthorized");
+            error.statusCode = 403;
+            throw error;
+          }
+          toStatus = "returned";
+        } else if (requestAction === "approve") {
+          if (!isAdmin) {
+            const error = new Error("Unauthorized");
+            error.statusCode = 403;
+            throw error;
+          }
+          const steps = getWorkflowSteps_(type);
+          const idx = steps.indexOf(fromStatus);
+          if (idx >= 0 && idx < steps.length - 1) {
+            toStatus = steps[idx + 1];
+          }
+        } else {
+          return { ok: false, data: null, error: `Unsupported requestAction: ${requestAction}` };
+        }
+
+        const now = nowIso();
+        const nextRaw = {
+          ...existingRaw,
+          status: toStatus,
+          updatedAt: now,
+        };
+
+        await query(
+          `update finance_requests set status=$2, updated_at=$3, raw=$4, synced_at=now() where id=$1`,
+          [requestId, toStatus, now, nextRaw]
+        );
+
+        // Record workflow action for approvals UI.
+        const actionId = crypto.randomUUID();
+        const actorName = firstText(body.actorName, auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId);
+        const actorRole = firstText(body.actorRole);
+        const notes = firstText(body.notes);
+        const actionRaw = {
+          id: actionId,
+          requestId: requestId,
+          actorId: auth.studentId,
+          actorName: actorName,
+          actorRole: actorRole,
+          action: requestAction,
+          actionType: requestAction,
+          fromStatus: fromStatus,
+          toStatus: toStatus,
+          notes: notes,
+          createdAt: now,
+        };
+        await query(
+          `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           on conflict (id) do nothing`,
+          [
+            actionId,
+            requestId,
+            auth.studentId,
+            actorName,
+            requestAction,
+            fromStatus,
+            toStatus,
+            notes,
+            now,
+            actionRaw,
+          ]
+        );
+
+        return { ok: true, data: { id: requestId, status: toStatus }, error: null };
+      }
+
+      // Full update mode (draft/update/submit): update the full record.
+      const row = toFinanceRequestRow((body.data || body.request || body));
+      row.id = firstText(row.id, requestId);
       if (!row.id) {
         return { ok: false, data: null, error: "Missing id" };
       }
-      // allow applicant update or finance admin
+
       const existing = await query(`select applicant_id from finance_requests where id = $1 limit 1`, [row.id]);
       const existingRow = rowOrNull(existing);
       const isOwner = existingRow && String(existingRow.applicant_id || "").trim() === String(auth.studentId || "").trim();
@@ -1426,19 +1576,64 @@ export async function dispatchNativeAction({
     case "listFinanceActionsByActor": {
       await requireGroupAccess(["D", "E"]);
       const actorId = firstText(body.actorId);
-      if (!actorId) {
+      const actorName = firstText(body.actorName);
+      const actorNames = safeJsonArray(body.actorNames)
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+
+      let result;
+      if (actorId) {
+        result = await query(
+          `select * from finance_actions where actor_id = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
+          [actorId]
+        );
+      } else if (actorName) {
+        result = await query(
+          `select * from finance_actions where actor_name = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
+          [actorName]
+        );
+      } else if (actorNames.length) {
+        result = await query(
+          `select * from finance_actions where actor_name = any($1::text[]) order by coalesce(created_at,'') desc, id desc limit 500`,
+          [actorNames]
+        );
+      } else {
         return { ok: true, data: { actions: [] }, error: null };
       }
-      const result = await query(
-        `select * from finance_actions where actor_id = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
-        [actorId]
-      );
+
       const actions = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { actions }, error: null };
     }
 
     case "listFinanceActionsSummary": {
       await requireGroupAccess(["D", "E"]);
+      const requestIds = safeJsonArray(body.requestIds)
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+
+      if (requestIds.length) {
+        const result = await query(
+          `with latest as (
+             select distinct on (request_id) *
+             from finance_actions
+             where request_id = any($1::text[])
+             order by request_id, coalesce(created_at,'') desc, id desc
+           )
+           select * from latest`,
+          [requestIds]
+        );
+        const summary = {};
+        for (const row of result.rows) {
+          const requestId = String(row.request_id || "").trim();
+          if (!requestId) {
+            continue;
+          }
+          summary[requestId] = { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id };
+        }
+        return { ok: true, data: { summary }, error: null };
+      }
+
+      // Fallback: global action_type counts.
       const result = await query(
         `select coalesce(action_type,'') as action_type, count(*)::int as count
          from finance_actions
@@ -1758,8 +1953,32 @@ export async function dispatchNativeAction({
     }
 
     case "upsertFundPayment": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+
       const row = toFundPaymentRow(body.data || body.payment || body);
+
+      if (!isAdmin) {
+        // Student submission: lock payer to self and ignore admin-only bookkeeping fields.
+        row.payerId = auth.studentId;
+        row.accountedAt = "";
+        row.confirmedAt = "";
+        row.raw = { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), payerId: auth.studentId, accountedAt: "", confirmedAt: "" };
+
+        // Prevent editing other people's payment rows.
+        const existing = await query(`select payer_id from fund_payments where id = $1 limit 1`, [row.id]);
+        const existingRow = rowOrNull(existing);
+        if (existingRow) {
+          const existingPayer = String(existingRow.payer_id || "").trim();
+          if (existingPayer && existingPayer !== String(auth.studentId || "").trim()) {
+            const error = new Error("Unauthorized");
+            error.statusCode = 403;
+            throw error;
+          }
+        }
+      }
+
       await query(
         `insert into fund_payments (id, event_id, payer_id, payer_name, payer_email, payer_type, amount, method, transfer_last5, received_at, accounted_at, confirmed_at, notes, raw, created_at, updated_at)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
@@ -1912,7 +2131,7 @@ export async function dispatchNativeAction({
          on conflict (id) do update set raw=excluded.raw, updated_at=excluded.updated_at, synced_at=now()`,
         [data, nowIso()]
       );
-      return { ok: true, data: { ok: true }, error: null };
+      return { ok: true, data: { config: data }, error: null };
     }
 
     case "listSoftballPlayers": {
@@ -2004,7 +2223,14 @@ export async function dispatchNativeAction({
            synced_at=now()`,
         [row.id, row.date, row.title, row.location, row.startAt, row.endAt, row.notes, row.raw, row.createdAt, row.updatedAt]
       );
-      return { ok: true, data: { id: row.id }, error: null };
+      return {
+        ok: true,
+        data: {
+          id: row.id,
+          practice: { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id },
+        },
+        error: null,
+      };
     }
 
     case "deleteSoftballPractice": {
