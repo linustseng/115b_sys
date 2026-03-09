@@ -171,11 +171,14 @@ function buildCheckinStatusForRegistration(registration, checkin) {
   }
   const fields = parseCustomFields(registration.custom_fields);
   const attendance = String(fields.attendance || "").trim();
-  if (!attendance) {
-    return { status: "attendance_unknown", attendance: "" };
+  if (!attendance || attendance === "尚未確定") {
+    return { status: "attendance_unknown", attendance: attendance || "" };
+  }
+  if (attendance === "不克出席") {
+    return { status: "not_attending", attendance };
   }
   if (attendance !== "出席") {
-    return { status: "not_attending", attendance };
+    return { status: "attendance_unknown", attendance };
   }
   if (checkin) {
     return {

@@ -729,6 +729,138 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Todo notification: event attendance confirmation (treat "尚未確定" as not-yet-confirmed).
+      try {
+        const parseEventDateValue_ = (value) => {
+          if (!value) {
+            return null;
+          }
+          if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value;
+          }
+          if (typeof value === "number") {
+            const parsedNumber = new Date(value);
+            return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+          }
+          const raw = String(value || "").trim();
+          if (!raw) {
+            return null;
+          }
+          const normalized =
+            /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+              ? raw.replace(/\//g, "-").replace(" ", "T")
+              : raw;
+          const parsed = new Date(normalized);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        const isEventExpired_ = (eventRow) => {
+          const status = String((eventRow && eventRow.status) || "").trim().toLowerCase();
+          if (status && status !== "open") {
+            return true;
+          }
+          const closeAt = parseEventDateValue_(eventRow && eventRow.registration_close_at);
+          const endAt = parseEventDateValue_(eventRow && eventRow.end_at);
+          const nowMs = Date.now();
+          if (closeAt && nowMs > closeAt.getTime()) {
+            return true;
+          }
+          if (endAt && nowMs > endAt.getTime()) {
+            return true;
+          }
+          return false;
+        };
+
+        const eventsResult = await query(
+          `select id, title, start_at, end_at, location, registration_close_at, status
+           from events
+           order by coalesce(start_at,''), id
+           limit 80`
+        );
+        const registrationsResult = await query(
+          `select event_id, custom_fields, status
+           from registrations
+           where student_id = $1
+             and lower(coalesce(status,'')) <> 'cancelled'
+           order by coalesce(updated_at,''), id`,
+          [studentId]
+        );
+
+        const registrationsByEventId = new Map();
+        registrationsResult.rows.forEach((row) => {
+          const eventId = String(row.event_id || "").trim();
+          if (!eventId || registrationsByEventId.has(eventId)) {
+            return;
+          }
+          registrationsByEventId.set(eventId, row);
+        });
+
+        const shouldTreatAsConfirmedAttendance_ = (value) => {
+          const attendance = String(value || "").trim();
+          return attendance === "出席" || attendance === "不克出席";
+        };
+
+        for (const eventRow of eventsResult.rows) {
+          const eventId = String(eventRow.id || "").trim();
+          if (!eventId) {
+            continue;
+          }
+          const registrationRow = registrationsByEventId.get(eventId);
+          if (!registrationRow) {
+            continue;
+          }
+
+          const fields = safeJsonObject(registrationRow.custom_fields);
+          const attendance = String(fields.attendance || "").trim();
+          const hasConfirmedAttendance = shouldTreatAsConfirmedAttendance_(attendance);
+          const expired = isEventExpired_(eventRow);
+          const todoId = `todo:event-attendance:${eventId}:${studentId}`;
+
+          if (!expired && !hasConfirmedAttendance) {
+            const createdAtText = nowIso();
+            const title = `活動｜請確認出席狀態${eventRow.title ? `：${String(eventRow.title || "").trim()}` : ""}`;
+            const body = [firstText(eventRow.start_at, ""), firstText(eventRow.location, "")]
+              .filter(Boolean)
+              .join(" · ");
+            const url = `/register?eventId=${encodeURIComponent(eventId)}`;
+            const raw = {
+              kind: "todo",
+              todoKey: todoId,
+              category: "event",
+              eventId,
+              rule: "attendance_confirm",
+              attendance,
+            };
+
+            await query(
+              `insert into notifications (
+                 id, dedupe_key, kind, status,
+                 target_student_id, target_group_id,
+                 title, body, url,
+                 created_at, updated_at, raw
+               ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+               on conflict (id) do update set
+                 status = 'open',
+                 title = excluded.title,
+                 body = excluded.body,
+                 url = excluded.url,
+                 raw = excluded.raw,
+                 target_student_id = excluded.target_student_id,
+                 updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
+              [todoId, todoId, studentId, title, body, url, createdAtText, JSON.stringify(raw)]
+            );
+          } else {
+            await query(
+              `update notifications set status = 'closed', updated_at = now()
+               where id = $1 and coalesce(status,'open') <> 'closed'`,
+              [todoId]
+            );
+          }
+        }
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
         `select n.*, r.read_at, r.seen_updated_at
          from notifications n
