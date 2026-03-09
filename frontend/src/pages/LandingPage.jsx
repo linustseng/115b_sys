@@ -96,6 +96,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
+  const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationUnread, setNotificationUnread] = useState(0);
@@ -178,6 +179,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     if (!hasGoogleLogin) {
       setMemberships([]);
       setMembershipsLoaded(false);
+      setSoftballAdminAllowed(false);
       setNotifications([]);
       setNotificationUnread(0);
       setNotificationError("");
@@ -284,6 +286,33 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       ignore = true;
     };
   }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin || needsReauth) {
+      setSoftballAdminAllowed(false);
+      return;
+    }
+    let ignore = false;
+    apiRequest({ action: "getSoftballAdminAccess" })
+      .then(({ result }) => {
+        if (ignore) {
+          return;
+        }
+        if (result && result.ok) {
+          setSoftballAdminAllowed(Boolean(result.data && result.data.allowed));
+        } else {
+          setSoftballAdminAllowed(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setSoftballAdminAllowed(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin, needsReauth, googleLinkedStudent && googleLinkedStudent.id]);
 
   useEffect(() => {
     if (!hasGoogleLogin || needsReauth) {
@@ -529,7 +558,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeEventAdmin = membershipsLoaded && hasGroupAccess_(["C", "E"]);
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
-  const canSeeSoftballAdmin = membershipsLoaded && hasGroupAccess_(["E", "H"]);
+  const canSeeSoftballAdmin = membershipsLoaded && (hasGroupAccess_(["E", "H"]) || softballAdminAllowed);
   const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
   const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
