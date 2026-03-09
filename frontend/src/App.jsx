@@ -2067,7 +2067,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   );
 }
 
-function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
+function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessAction, children }) {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [googleIdToken, setGoogleIdToken] = useState(() => loadStoredGoogleIdToken_());
   const [adminSession, setAdminSession] = useState(() => loadStoredAdminSession_());
@@ -2077,6 +2077,9 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [extraAllowed, setExtraAllowed] = useState(false);
+  const [extraLoading, setExtraLoading] = useState(false);
+  const [extraChecked, setExtraChecked] = useState(false);
 
   const syncAdminSession_ = (sessionToken, studentId, nextMemberships, refreshToken) => {
     const token = String(sessionToken || "").trim();
@@ -2276,6 +2279,12 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     loadMemberships();
   }, [googleLinkedStudent]);
 
+  useEffect(() => {
+    setExtraAllowed(false);
+    setExtraChecked(false);
+    setExtraLoading(false);
+  }, [googleLinkedStudent, extraAccessAction]);
+
   const normalizedId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
   const userMemberships = memberships.filter((item) => {
     const memberId = String(item.personId || "").trim();
@@ -2293,6 +2302,52 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     return allowedGroupIds.includes(groupId);
   });
   const allowedLabel = buildAccessLabel_(allowedGroupIds);
+
+  useEffect(() => {
+    if (!extraAccessAction) {
+      return;
+    }
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      return;
+    }
+    if (loading) {
+      return;
+    }
+    if (hasAccess) {
+      setExtraChecked(true);
+      return;
+    }
+    if (extraChecked || extraLoading) {
+      return;
+    }
+
+    let ignore = false;
+    setExtraLoading(true);
+    authedApiRequest({ action: extraAccessAction })
+      .then(({ result }) => {
+        if (ignore) {
+          return;
+        }
+        setExtraAllowed(Boolean(result && result.ok && result.data && result.data.allowed));
+      })
+      .catch(() => {
+        if (!ignore) {
+          setExtraAllowed(false);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setExtraChecked(true);
+          setExtraLoading(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [extraAccessAction, googleLinkedStudent, loading, hasAccess, extraChecked, extraLoading]);
+
+  const hasEffectiveAccess = hasAccess || extraAllowed;
 
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
@@ -2338,7 +2393,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     );
   }
 
-  if (loading) {
+  if (loading || extraLoading) {
     return (
       <div className="min-h-screen">
         <header className="px-6 pt-8 sm:px-12">
@@ -2360,7 +2415,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
     );
   }
 
-  if (error || !hasAccess) {
+  if (error || !hasEffectiveAccess) {
     return (
       <div className="min-h-screen">
         <header className="px-6 pt-8 sm:px-12">
@@ -2794,8 +2849,9 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="壘球隊管理 · 後台"
-        helperText="僅限班代、副班代、資管組、體育主將組成員。"
+        helperText="僅限班代、副班代、資管組、體育主將組、球隊經理。"
         allowedGroupIds={["E", "H"]}
+        extraAccessAction="getSoftballAdminAccess"
       >
         <SoftballPage shared={shared} />
       </AdminAccessGuard>

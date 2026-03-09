@@ -270,6 +270,65 @@ export async function dispatchNativeAction({
     return memberships;
   };
 
+  let softballManagerCache = null;
+  const normalizePositions_ = (value) => {
+    if (Array.isArray(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      return value
+        .split(/[,，]/)
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const isSoftballManager_ = async () => {
+    requireAuth();
+    if (softballManagerCache != null) {
+      return softballManagerCache;
+    }
+    try {
+      const result = await query(`select status, request_status, positions, raw from softball_players where id = $1 limit 1`, [auth.studentId]);
+      const row = rowOrNull(result);
+      if (!row) {
+        softballManagerCache = false;
+        return softballManagerCache;
+      }
+      const status = String((row.status || (row.raw && row.raw.status) || "active") || "").trim().toLowerCase();
+      const requestStatus = String((row.request_status || (row.raw && row.raw.requestStatus) || "") || "").trim().toLowerCase();
+      if (status && status !== "active") {
+        softballManagerCache = false;
+        return softballManagerCache;
+      }
+      if (requestStatus === "pending") {
+        softballManagerCache = false;
+        return softballManagerCache;
+      }
+      const positions = normalizePositions_(row.positions).concat(normalizePositions_(row.raw && row.raw.positions));
+      softballManagerCache = positions.some((item) => String(item || "").trim() === "球隊經理");
+      return softballManagerCache;
+    } catch (error) {
+      softballManagerCache = false;
+      return softballManagerCache;
+    }
+  };
+
+  const requireSoftballAdminAccess = async () => {
+    requireAuth();
+    const memberships = await listMembershipsByStudentId(auth.studentId);
+    if (canAccessByGroups(memberships, ["E", "H"])) {
+      return memberships;
+    }
+    if (await isSoftballManager_()) {
+      return memberships;
+    }
+    const error = new Error("Forbidden");
+    error.statusCode = 403;
+    throw error;
+  };
+
   if (!PUBLIC_ACTIONS.has(name)) {
     requireAuth();
   }
@@ -1800,6 +1859,21 @@ export async function dispatchNativeAction({
       };
     }
 
+    case "getSoftballAdminAccess": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const byGroup = canAccessByGroups(memberships, ["E", "H"]);
+      const byManager = byGroup ? false : await isSoftballManager_();
+      return {
+        ok: true,
+        data: {
+          allowed: Boolean(byGroup || byManager),
+          source: byGroup ? "group" : byManager ? "manager" : "",
+        },
+        error: null,
+      };
+    }
+
     case "listSoftballConfig": {
       requireAuth();
       const result = await query(`select * from softball_config where id = 'singleton' limit 1`);
@@ -1808,7 +1882,7 @@ export async function dispatchNativeAction({
     }
 
     case "listSoftballBootstrap": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const [configResult, playersResult, practicesResult, fieldsResult, gearResult] = await Promise.all([
         query(`select * from softball_config where id = 'singleton' limit 1`),
         query(`select * from softball_players order by coalesce(name,''), id`),
@@ -1831,7 +1905,7 @@ export async function dispatchNativeAction({
     }
 
     case "updateSoftballConfig": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const data = safeJsonObject(body.data || body.config || body);
       await query(
         `insert into softball_config (id, raw, updated_at) values ('singleton',$1,$2)
@@ -1850,7 +1924,7 @@ export async function dispatchNativeAction({
 
     case "createSoftballPlayer":
     case "updateSoftballPlayer": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const row = toSoftballPlayerRow(body.data || body.player || body);
       await query(
         `insert into softball_players (id, name, email, phone, jersey_no, jersey_size, positions, raw, created_at, updated_at)
@@ -1895,7 +1969,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteSoftballPlayer": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
@@ -1913,7 +1987,7 @@ export async function dispatchNativeAction({
 
     case "createSoftballPractice":
     case "updateSoftballPractice": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const row = toSoftballPracticeRow(body.data || body.practice || body);
       await query(
         `insert into softball_practices (id, date, title, location, start_at, end_at, notes, raw, created_at, updated_at)
@@ -1934,7 +2008,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteSoftballPractice": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
@@ -1947,7 +2021,7 @@ export async function dispatchNativeAction({
     case "listSoftballAttendance": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]);
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || (await isSoftballManager_());
       const practiceId = firstText(body.practiceId);
       const requestedStudentId = firstText(body.studentId);
       const studentId = firstText(body.studentId, auth.studentId);
@@ -2006,7 +2080,7 @@ export async function dispatchNativeAction({
     case "submitSoftballAttendance": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]);
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || (await isSoftballManager_());
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);
       const playerId = firstText(data.playerId || data.studentId || body.playerId || body.studentId, auth.studentId);
@@ -2057,7 +2131,7 @@ export async function dispatchNativeAction({
 
     case "createSoftballField":
     case "updateSoftballField": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const data = safeJsonObject(body.data || body.field || body);
       const id = firstText(data.id, crypto.randomUUID());
       const createdAt = firstText(data.createdAt, nowIso());
@@ -2078,7 +2152,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteSoftballField": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
@@ -2096,7 +2170,7 @@ export async function dispatchNativeAction({
 
     case "createSoftballGear":
     case "updateSoftballGear": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const data = safeJsonObject(body.data || body.gear || body);
       const id = firstText(data.id, crypto.randomUUID());
       const createdAt = firstText(data.createdAt, nowIso());
@@ -2116,7 +2190,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteSoftballGear": {
-      await requireGroupAccess(["E", "H"]);
+      await requireSoftballAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
