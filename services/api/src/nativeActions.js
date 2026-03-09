@@ -1367,6 +1367,98 @@ export async function dispatchNativeAction({
       return { ok: true, data: { id: row.id }, error: null };
     }
 
+    case "adminCreateFinanceRequest": {
+      await requireGroupAccess(["D", "E"]);
+      const row = toFinanceRequestRow(body.data || body.request || body);
+      const applicantId = firstText(row.applicantId, body.applicantId);
+      if (!applicantId) {
+        return { ok: false, data: null, error: "Missing applicantId" };
+      }
+      row.applicantId = applicantId;
+      const student = await findStudentProfileById(applicantId);
+      if (!row.applicantName && student && student.name) {
+        row.applicantName = student.name;
+      }
+
+      const now = nowIso();
+      const manualCreatedBy = auth.studentId;
+      const manualCreatedByName = firstText(
+        body.manualCreatedByName,
+        auth.profile && auth.profile.name ? auth.profile.name : "",
+        auth.studentId
+      );
+
+      row.raw = {
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        manualCreatedBy,
+        manualCreatedByName,
+        manualCreatedAt: now,
+      };
+
+      await query(
+        `insert into finance_requests (
+          id, type, title, description, category_type,
+          amount_estimated, amount_actual, currency, payment_method,
+          vendor_name, payee_name, payee_bank, payee_account,
+          related_purchase_id, no_purchase_reason, expected_clear_date,
+          attachments, status,
+          applicant_id, applicant_name, applicant_department,
+          created_at, updated_at, raw
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        on conflict (id) do update set
+          type=excluded.type,
+          title=excluded.title,
+          description=excluded.description,
+          category_type=excluded.category_type,
+          amount_estimated=excluded.amount_estimated,
+          amount_actual=excluded.amount_actual,
+          currency=excluded.currency,
+          payment_method=excluded.payment_method,
+          vendor_name=excluded.vendor_name,
+          payee_name=excluded.payee_name,
+          payee_bank=excluded.payee_bank,
+          payee_account=excluded.payee_account,
+          related_purchase_id=excluded.related_purchase_id,
+          no_purchase_reason=excluded.no_purchase_reason,
+          expected_clear_date=excluded.expected_clear_date,
+          attachments=excluded.attachments,
+          status=excluded.status,
+          applicant_id=excluded.applicant_id,
+          applicant_name=excluded.applicant_name,
+          applicant_department=excluded.applicant_department,
+          updated_at=excluded.updated_at,
+          raw=excluded.raw,
+          synced_at=now()`,
+        [
+          row.id,
+          row.type,
+          row.title,
+          row.description,
+          row.categoryType,
+          row.amountEstimated,
+          row.amountActual,
+          row.currency,
+          row.paymentMethod,
+          row.vendorName,
+          row.payeeName,
+          row.payeeBank,
+          row.payeeAccount,
+          row.relatedPurchaseId,
+          row.noPurchaseReason,
+          row.expectedClearDate,
+          row.attachments,
+          row.status,
+          row.applicantId,
+          row.applicantName,
+          row.applicantDepartment,
+          row.createdAt,
+          row.updatedAt,
+          row.raw,
+        ]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
     case "updateFinanceRequest": {
       requireAuth();
 

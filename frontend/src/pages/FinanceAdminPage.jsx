@@ -71,6 +71,13 @@ function FinanceAdminPage({ shared }) {
   const [fundPayerView, setFundPayerView] = useState("all");
   const [copyStatus, setCopyStatus] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
+  const [manualRequestForm, setManualRequestForm] = useState(() => ({
+    ...buildFinanceDraft_(),
+    applicantId: "",
+    applicantName: "",
+    status: "pending_lead",
+  }));
+  const [manualRequestAttachmentInput, setManualRequestAttachmentInput] = useState("");
   const adminDisplayName =
     (googleLinkedStudent &&
       (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -140,6 +147,93 @@ function FinanceAdminPage({ shared }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmitManualRequest = async () => {
+    setLoading(true);
+    setError("");
+    setStatusMessage("");
+    if (!manualRequestForm.applicantId) {
+      setError("請選擇申請人");
+      setLoading(false);
+      return;
+    }
+    if (!manualRequestForm.type) {
+      setError("請選擇申請類型");
+      setLoading(false);
+      return;
+    }
+    if (!manualRequestForm.title) {
+      setError("請填寫項目名稱");
+      setLoading(false);
+      return;
+    }
+    const amountValue =
+      manualRequestForm.type === "purchase"
+        ? manualRequestForm.amountEstimated
+        : manualRequestForm.amountActual;
+    if (!amountValue || parseFinanceAmount_(amountValue) <= 0) {
+      setError("請填寫金額");
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { result } = await apiRequest({
+        action: "adminCreateFinanceRequest",
+        applicantId: manualRequestForm.applicantId,
+        manualCreatedByName: adminDisplayName,
+        data: {
+          ...manualRequestForm,
+          attachments: JSON.stringify(manualRequestForm.attachments || []),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "建立失敗");
+      }
+      setStatusMessage("已代為建立申請");
+      setManualRequestForm({
+        ...buildFinanceDraft_(),
+        applicantId: "",
+        applicantName: "",
+        status: "pending_lead",
+      });
+      setManualRequestAttachmentInput("");
+      await loadRequests();
+    } catch (err) {
+      setError(err.message || "建立失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddManualAttachment = () => {
+    const url = String(manualRequestAttachmentInput || "").trim();
+    if (!url) {
+      return;
+    }
+    const existing = Array.isArray(manualRequestForm.attachments)
+      ? manualRequestForm.attachments
+      : [];
+    if (existing.includes(url)) {
+      setManualRequestAttachmentInput("");
+      return;
+    }
+    setManualRequestForm({
+      ...manualRequestForm,
+      attachments: [...existing, url],
+    });
+    setManualRequestAttachmentInput("");
+  };
+
+  const handleRemoveManualAttachment = (url) => {
+    const existing = Array.isArray(manualRequestForm.attachments)
+      ? manualRequestForm.attachments
+      : [];
+    setManualRequestForm({
+      ...manualRequestForm,
+      attachments: existing.filter((item) => item !== url),
+    });
   };
 
   const loadStudents = async () => {
@@ -1159,6 +1253,7 @@ function FinanceAdminPage({ shared }) {
             <div className="flex flex-wrap items-center gap-2">
               {[
                 { id: "requests", label: "請款/請購" },
+                { id: "manual", label: "代為建單" },
                 { id: "funds", label: "班費管理" },
                 { id: "roles", label: "財務角色" },
                 { id: "categories", label: "班務性質" },
@@ -1529,6 +1624,254 @@ function FinanceAdminPage({ shared }) {
             )}
           </div>
         </section>
+        ) : null}
+
+        {adminTab === "manual" ? (
+          <section className="mt-6 card p-6 sm:p-8">
+            <h2 className="text-lg font-semibold text-slate-900">代為建立財務申請</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              會計可代為建立申請單並上傳相關憑據（LINE 截圖等）。申請人會在「我的申請」看到這筆紀錄。
+            </p>
+
+            <div className="mt-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  申請人 <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={manualRequestForm.applicantId}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const student = students.find((s) => s.id === selectedId);
+                    setManualRequestForm({
+                      ...manualRequestForm,
+                      applicantId: selectedId,
+                      applicantName: student ? student.name : "",
+                    });
+                  }}
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">請選擇申請人</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.name} ({student.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  申請類型 <span className="text-rose-600">*</span>
+                </label>
+                <select
+                  value={manualRequestForm.type}
+                  onChange={(e) =>
+                    setManualRequestForm({ ...manualRequestForm, type: e.target.value })
+                  }
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">請選擇</option>
+                  {Object.keys(FINANCE_TYPES).map((key) => (
+                    <option key={key} value={key}>
+                      {FINANCE_TYPES[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  項目名稱 <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={manualRequestForm.title}
+                  onChange={(e) =>
+                    setManualRequestForm({ ...manualRequestForm, title: e.target.value })
+                  }
+                  placeholder="請填寫項目名稱"
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">說明/活動內容</label>
+                <textarea
+                  value={manualRequestForm.description}
+                  onChange={(e) =>
+                    setManualRequestForm({ ...manualRequestForm, description: e.target.value })
+                  }
+                  placeholder="活動內容、費用說明等"
+                  rows={3}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">班務性質</label>
+                <select
+                  value={manualRequestForm.categoryType}
+                  onChange={(e) =>
+                    setManualRequestForm({ ...manualRequestForm, categoryType: e.target.value })
+                  }
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="">請選擇</option>
+                  {financeCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  {manualRequestForm.type === "purchase" ? "預估金額" : "實支金額"}{" "}
+                  <span className="text-rose-600">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={
+                    manualRequestForm.type === "purchase"
+                      ? manualRequestForm.amountEstimated
+                      : manualRequestForm.amountActual
+                  }
+                  onChange={(e) => {
+                    const field =
+                      manualRequestForm.type === "purchase" ? "amountEstimated" : "amountActual";
+                    setManualRequestForm({ ...manualRequestForm, [field]: e.target.value });
+                  }}
+                  placeholder="金額"
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                />
+              </div>
+
+              {manualRequestForm.type === "payment" ? (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">
+                      廠商/收款人
+                    </label>
+                    <input
+                      type="text"
+                      value={manualRequestForm.payeeName}
+                      onChange={(e) =>
+                        setManualRequestForm({ ...manualRequestForm, payeeName: e.target.value })
+                      }
+                      placeholder="廠商或收款人名稱"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-900">匯款帳號</label>
+                    <input
+                      type="text"
+                      value={manualRequestForm.payeeAccount}
+                      onChange={(e) =>
+                        setManualRequestForm({
+                          ...manualRequestForm,
+                          payeeAccount: e.target.value,
+                        })
+                      }
+                      placeholder="銀行帳號"
+                      className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    />
+                  </div>
+                </>
+              ) : null}
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">
+                  附件（LINE 截圖等憑據）
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    type="text"
+                    value={manualRequestAttachmentInput}
+                    onChange={(e) => setManualRequestAttachmentInput(e.target.value)}
+                    placeholder="貼上圖片或 PDF 網址"
+                    className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddManualAttachment();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddManualAttachment}
+                    className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                  >
+                    新增
+                  </button>
+                </div>
+                {Array.isArray(manualRequestForm.attachments) &&
+                manualRequestForm.attachments.length > 0 ? (
+                  <div className="mt-3 space-y-2">
+                    {manualRequestForm.attachments.map((url, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
+                      >
+                        <span className="flex-1 truncate text-xs text-slate-600">{url}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveManualAttachment(url)}
+                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                        >
+                          移除
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-slate-900">初始狀態</label>
+                <select
+                  value={manualRequestForm.status}
+                  onChange={(e) =>
+                    setManualRequestForm({ ...manualRequestForm, status: e.target.value })
+                  }
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                  <option value="draft">草稿（申請人可繼續編輯）</option>
+                  <option value="pending_lead">送出待審</option>
+                  <option value="closed">直接結案（線下已審核）</option>
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSubmitManualRequest}
+                  disabled={loading}
+                  className="h-10 rounded-xl bg-slate-900 px-6 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                >
+                  {loading ? "建立中..." : "建立申請"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManualRequestForm({
+                      ...buildFinanceDraft_(),
+                      applicantId: "",
+                      applicantName: "",
+                      status: "pending_lead",
+                    });
+                    setManualRequestAttachmentInput("");
+                  }}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                >
+                  清空
+                </button>
+              </div>
+            </div>
+          </section>
         ) : null}
 
         {adminTab === "funds" ? (
