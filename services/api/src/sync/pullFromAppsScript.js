@@ -265,6 +265,9 @@ const TABLE_SYNC_MAP = [
 ];
 
 export async function syncFromAppsScript() {
+  if (!config.appsScriptSyncEnabled) {
+    throw new Error("Apps Script sync disabled");
+  }
   const runStart = await query(
     "INSERT INTO sync_runs (status, summary) VALUES ('running', '{}'::jsonb) RETURNING id"
   );

@@ -46,6 +46,9 @@ export function getConfig() {
   const appsScriptUrl = String(process.env.APPS_SCRIPT_URL || "").trim();
   const syncPullToken = String(process.env.SYNC_PULL_TOKEN || "").trim();
 
+  const appsScriptSyncEnabled = parseBoolean(process.env.APPS_SCRIPT_SYNC_ENABLED, false);
+  const appsScriptMirrorEnabled = parseBoolean(process.env.APPS_SCRIPT_MIRROR_ENABLED, false);
+
   cachedConfig = {
     nodeEnv,
     port: parseNumber(process.env.PORT, 8080),
@@ -55,6 +58,8 @@ export function getConfig() {
     appsScriptUrl,
     appsScriptTimeoutMs: parseNumber(process.env.APPS_SCRIPT_TIMEOUT_MS, 20000),
     syncPullToken,
+    appsScriptSyncEnabled,
+    appsScriptMirrorEnabled,
     sessionSecret,
     googleClientId,
     driveFinanceFolderId,
