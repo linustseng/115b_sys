@@ -1389,19 +1389,99 @@ export async function dispatchNativeAction({
       return { ok: true, data: { summary: result.rows }, error: null };
     }
 
-    case "listFinanceBootstrap":
-    case "listFinanceApplicantBootstrap": {
+    case "listFinanceBootstrap": {
       requireAuth();
-      const [categoryTypes, requests] = await Promise.all([
+      const [students, memberships, categoryTypes, fundEvents] = await Promise.all([
+        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
-        query(`select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`, [auth.studentId]),
+        query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
       ]);
+
+      const categories = categoryTypes.rows.map((row) => ({
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        label: row.label || "",
+      }));
+
       return {
         ok: true,
         data: {
-          categories: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
-          categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
-          requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          students: students.rows.map((row) => ({
+            id: row.id || "",
+            name: row.name || "",
+            googleSub: row.google_sub || "",
+            googleEmail: row.google_email || "",
+          })),
+          groupMemberships: memberships.rows.map((row) => ({
+            id: row.id || "",
+            personId: row.person_id || "",
+            personName: row.person_name || "",
+            groupId: row.group_id || "",
+            roleInGroup: row.role_in_group || "",
+            notes: row.notes || "",
+            createdAt: row.created_at || "",
+            updatedAt: row.updated_at || "",
+          })),
+          categories,
+          categoryTypes: categories,
+          fundEvents: fundEvents.rows.map((row) => ({
+            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+            id: row.id,
+          })),
+        },
+        error: null,
+      };
+    }
+
+    case "listFinanceApplicantBootstrap": {
+      requireAuth();
+      const [students, memberships, categoryTypes, fundEvents, requests] = await Promise.all([
+        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
+        query(`select * from finance_category_types order by coalesce(label,''), id`),
+        query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
+        query(
+          `select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`,
+          [auth.studentId]
+        ),
+      ]);
+
+      const categories = categoryTypes.rows.map((row) => ({
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        label: row.label || "",
+      }));
+
+      return {
+        ok: true,
+        data: {
+          requests: requests.rows.map((row) => ({
+            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+            id: row.id,
+          })),
+          students: students.rows.map((row) => ({
+            id: row.id || "",
+            name: row.name || "",
+            googleSub: row.google_sub || "",
+            googleEmail: row.google_email || "",
+          })),
+          groupMemberships: memberships.rows.map((row) => ({
+            id: row.id || "",
+            personId: row.person_id || "",
+            personName: row.person_name || "",
+            groupId: row.group_id || "",
+            roleInGroup: row.role_in_group || "",
+            notes: row.notes || "",
+            createdAt: row.created_at || "",
+            updatedAt: row.updated_at || "",
+          })),
+          categories,
+          categoryTypes: categories,
+          fundEvents: fundEvents.rows.map((row) => ({
+            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+            id: row.id,
+          })),
         },
         error: null,
       };
@@ -1409,18 +1489,87 @@ export async function dispatchNativeAction({
 
     case "listFinanceAdminBootstrap": {
       await requireGroupAccess(["D", "E"]);
-      const [categoryTypes, roles, requests] = await Promise.all([
+      const includeRequests = body.includeRequests === true;
+
+      const [students, memberships, categoryTypes, roles, fundEvents, fundSummary, requests] = await Promise.all([
+        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
         query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
-        query(`select * from finance_requests order by coalesce(updated_at,'') desc, id desc`),
+        query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
+        (async () => {
+          const [totalsResult, expensesResult] = await Promise.all([
+            query(
+              `select
+                 sum(case when coalesce(received_at,'') <> '' or coalesce(created_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as received,
+                 sum(case when coalesce(accounted_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as accounted,
+                 sum(case when coalesce(confirmed_at,'') <> '' then coalesce(amount,0) else 0 end)::numeric as confirmed
+               from fund_payments`
+            ),
+            query(
+              `select sum(coalesce(amount_actual,0))::numeric as total
+               from finance_requests
+               where lower(coalesce(status,'')) = 'closed'
+                 and lower(coalesce(type,'')) in ('payment','pettycash')`
+            ),
+          ]);
+          const totalsRow = rowOrNull(totalsResult) || {};
+          const expensesRow = rowOrNull(expensesResult) || {};
+          const received = Number(totalsRow.received || 0);
+          const accounted = Number(totalsRow.accounted || 0);
+          const confirmed = Number(totalsRow.confirmed || 0);
+          const expensesTotal = Number(expensesRow.total || 0);
+          return {
+            income: { received, accounted, confirmed },
+            expense: { total: expensesTotal },
+            balance: {
+              received: received - expensesTotal,
+              accounted: accounted - expensesTotal,
+              confirmed: confirmed - expensesTotal,
+            },
+          };
+        })(),
+        includeRequests
+          ? query(`select * from finance_requests order by coalesce(updated_at,'') desc, id desc`)
+          : Promise.resolve({ rows: [] }),
       ]);
+
+      const categories = categoryTypes.rows.map((row) => ({
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        label: row.label || "",
+      }));
+
       return {
         ok: true,
         data: {
-          categories: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
-          categoryTypes: categoryTypes.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id, label: row.label || "" })),
+          requests: includeRequests
+            ? requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }))
+            : undefined,
+          students: students.rows.map((row) => ({
+            id: row.id || "",
+            name: row.name || "",
+            googleSub: row.google_sub || "",
+            googleEmail: row.google_email || "",
+          })),
+          groupMemberships: memberships.rows.map((row) => ({
+            id: row.id || "",
+            personId: row.person_id || "",
+            personName: row.person_name || "",
+            groupId: row.group_id || "",
+            roleInGroup: row.role_in_group || "",
+            notes: row.notes || "",
+            createdAt: row.created_at || "",
+            updatedAt: row.updated_at || "",
+          })),
           roles: roles.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
-          requests: requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          categories,
+          categoryTypes: categories,
+          fundEvents: fundEvents.rows.map((row) => ({
+            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+            id: row.id,
+          })),
+          fundSummary,
         },
         error: null,
       };
@@ -1465,7 +1614,7 @@ export async function dispatchNativeAction({
     }
 
     case "listFundEvents": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
       const result = await query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`);
       const events = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { events }, error: null };
@@ -1521,12 +1670,31 @@ export async function dispatchNativeAction({
     }
 
     case "listFundPayments": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+
       const eventId = firstText(body.eventId);
+      if (!eventId && !isAdmin) {
+        return { ok: true, data: { payments: [] }, error: null };
+      }
+
       const result = eventId
-        ? await query(`select * from fund_payments where event_id = $1 order by coalesce(received_at,'') desc, id desc`, [eventId])
+        ? isAdmin
+          ? await query(
+              `select * from fund_payments where event_id = $1 order by coalesce(received_at,'') desc, id desc`,
+              [eventId]
+            )
+          : await query(
+              `select * from fund_payments where event_id = $1 and payer_id = $2 order by coalesce(received_at,'') desc, id desc`,
+              [eventId, auth.studentId]
+            )
         : await query(`select * from fund_payments order by coalesce(received_at,'') desc, id desc limit 1000`);
-      const payments = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+
+      const payments = result.rows.map((row) => ({
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+      }));
       return { ok: true, data: { payments }, error: null };
     }
 
