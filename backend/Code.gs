@@ -345,6 +345,8 @@ function handleActionPayload_(payload) {
         checkins: listCheckinsCached_(),
         directory: listDirectoryCached_(),
         groupMemberships: listGroupMembershipsCached_(),
+        financeCategoryTypes: listFinanceCategoryTypesCached_(),
+        financeRoles: listFinanceRolesCached_(),
       },
       error: null,
     };

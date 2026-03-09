@@ -255,6 +255,32 @@ function buildGroupMembershipRows(sourceRows) {
     .filter((row) => row.id);
 }
 
+function buildFinanceCategoryTypeRows(sourceRows) {
+  return sourceRows
+    .map((item) => ({
+      id: asText(item.id),
+      label: asText(item.label),
+      notes: asText(item.notes),
+      raw: item || {},
+      synced_at: new Date().toISOString(),
+    }))
+    .filter((row) => row.id);
+}
+
+function buildFinanceRoleRows(sourceRows) {
+  return sourceRows
+    .map((item) => ({
+      id: asText(item.id),
+      role: asText(item.role),
+      student_id: asText(item.personId || item.studentId),
+      student_name: asText(item.personName || item.studentName),
+      group_ids: asJson(item.groupIds, []),
+      raw: item || {},
+      synced_at: new Date().toISOString(),
+    }))
+    .filter((row) => row.id);
+}
+
 const TABLE_SYNC_MAP = [
   { key: "events", table: "events", buildRows: buildEventRows },
   { key: "students", table: "students", buildRows: buildStudentRows },
@@ -262,6 +288,8 @@ const TABLE_SYNC_MAP = [
   { key: "checkins", table: "checkins", buildRows: buildCheckinRows },
   { key: "directory", table: "directories", buildRows: buildDirectoryRows },
   { key: "groupMemberships", table: "group_memberships", buildRows: buildGroupMembershipRows },
+  { key: "financeCategoryTypes", table: "finance_category_types", buildRows: buildFinanceCategoryTypeRows },
+  { key: "financeRoles", table: "finance_roles", buildRows: buildFinanceRoleRows },
 ];
 
 export async function syncFromAppsScript() {
