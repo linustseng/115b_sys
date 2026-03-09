@@ -1005,14 +1005,17 @@ function buildApiV2Request_(payload) {
   }
 
   if (action === "listDirectory") {
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
+    // idToken is optional here; server accepts session token as well.
     const idToken = String((payload && payload.idToken) || "").trim();
-    if (!idToken) {
-      throw new Error("Missing idToken");
+    if (idToken) {
+      headers["x-id-token"] = idToken;
     }
     return {
       method: "GET",
       url: `${base}/v1/directory`,
-      headers: { Accept: "application/json", "x-id-token": idToken },
+      headers,
       body: null,
     };
   }
