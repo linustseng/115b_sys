@@ -593,8 +593,23 @@ async function findStudentProfileByEmail(email) {
 }
 
 async function resolveAuthContext(req) {
-  const providedSessionToken = getSessionTokenFromRequest(req);
-  if (providedSessionToken) {
+  // 1) Prefer Bearer token, but if it's invalid, fall back to a body/query sessionToken.
+  const bearerToken = getBearerToken(req);
+  if (bearerToken) {
+    const payload = verifySessionToken(bearerToken);
+    if (payload && payload.studentId) {
+      return {
+        sessionToken: bearerToken,
+        studentId: payload.studentId,
+        profile: payload,
+      };
+    }
+  }
+
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const queryParams = req.query && typeof req.query === "object" ? req.query : {};
+  const providedSessionToken = String(body.sessionToken || body.token || queryParams.sessionToken || "").trim();
+  if (providedSessionToken && providedSessionToken !== bearerToken) {
     const payload = verifySessionToken(providedSessionToken);
     if (payload && payload.studentId) {
       return {
