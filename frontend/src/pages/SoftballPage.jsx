@@ -140,6 +140,67 @@ function SoftballPage({ shared }) {
 
   const normalizeId_ = (value) => String(value || "").trim();
 
+  const statusTimerRef = useRef(null);
+  const flashStatusMessage_ = (message, timeoutMs = 2500) => {
+    setStatusMessage(String(message || "").trim());
+    if (statusTimerRef.current) {
+      clearTimeout(statusTimerRef.current);
+    }
+    statusTimerRef.current = setTimeout(() => {
+      setStatusMessage("");
+    }, timeoutMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) {
+        clearTimeout(statusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const copyTextToClipboard_ = async (text, successMessage = "已複製") => {
+    const value = String(text || "");
+    if (!value.trim()) {
+      flashStatusMessage_("沒有內容可複製");
+      return;
+    }
+
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof window !== "undefined" &&
+        window.isSecureContext
+      ) {
+        await navigator.clipboard.writeText(value);
+        flashStatusMessage_(successMessage);
+        return;
+      }
+      throw new Error("Clipboard unavailable");
+    } catch (err) {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = value;
+        textarea.style.position = "fixed";
+        textarea.style.top = "-1000px";
+        textarea.style.left = "-1000px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(textarea);
+        if (ok) {
+          flashStatusMessage_(successMessage);
+          return;
+        }
+      } catch (error) {
+        // Fall through to prompt.
+      }
+      window.prompt("複製以下文字", value);
+    }
+  };
+
   const getStudentDisplayName_ = (student) =>
     String(
       (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
@@ -2296,6 +2357,43 @@ function SoftballPage({ shared }) {
                 { totalPlayers: activePlayersForStats.length, totalPractices: 0, totalUnknown: 0, totalPresent: 0 }
               );
 
+              const nextPracticeId = normalizeId_(nextPractice && nextPractice.id);
+              const nextPracticeLabel = nextPractice
+                ? `${formatPracticeDate_(nextPractice.date || nextPractice.startAt)} · ${nextPractice.title || "練習"}`
+                : "";
+              const nextUnknownNames = [];
+              const nextAbsentNames = [];
+              if (nextPracticeId) {
+                for (const player of activePlayersForStats) {
+                  const playerId = normalizeId_(player.id);
+                  if (!playerId) {
+                    continue;
+                  }
+                  const record = attMap.get(`${nextPracticeId}:${playerId}`);
+                  const status = normalizeAttendanceStatus_(record && record.status);
+                  const displayName = getPlayerDisplayName_(player) || playerId;
+
+                  if (status === "absent") {
+                    nextAbsentNames.push(displayName);
+                  } else if (status === "unknown") {
+                    nextUnknownNames.push(displayName);
+                  }
+                }
+              }
+
+              const buildMentionList_ = (names) =>
+                (Array.isArray(names) ? names : []).map((name) => `@${String(name || "").trim()}`).filter((name) => name.length > 1).join(" ");
+
+              const nextUnknownMentions = buildMentionList_(nextUnknownNames);
+              const nextAbsentMentions = buildMentionList_(nextAbsentNames);
+              const siteRoot = String(
+                PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "") || ""
+              ).replace(/\/$/, "");
+              const playerLink = siteRoot ? `${siteRoot}/softball/player` : "/softball/player";
+              const nextReminderText = nextPractice
+                ? `【壘球練習回覆提醒】${nextPracticeLabel}\n未回覆：${nextUnknownMentions || "（無）"}\n缺席：${nextAbsentMentions || "（無）"}\n請到系統回覆出席狀態：${playerLink}\n（已回覆者可忽略）`
+                : "";
+
               return (
                 <>
                   <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2310,6 +2408,64 @@ function SoftballPage({ shared }) {
                         <p className="mt-2 text-xl font-semibold text-slate-900">{item.value}</p>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/60 p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-900">下一次練習 · 催回覆</h4>
+                        {nextPractice ? (
+                          <p className="mt-1 text-xs text-slate-500">{nextPracticeLabel}</p>
+                        ) : (
+                          <p className="mt-1 text-xs text-slate-400">尚未安排下一次練習。</p>
+                        )}
+                      </div>
+                      {nextPractice ? (
+                        <button
+                          type="button"
+                          onClick={() => copyTextToClipboard_(nextReminderText, "已複製提醒文案")}
+                          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                        >
+                          複製提醒文案
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {nextPractice ? (
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900">未回覆（{nextUnknownNames.length}）</p>
+                            <button
+                              type="button"
+                              onClick={() => copyTextToClipboard_(nextUnknownMentions, "已複製未回覆名單")}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            >
+                              複製 @名單
+                            </button>
+                          </div>
+                          <p className="mt-2 break-words text-xs text-slate-600">
+                            {nextUnknownMentions || "（無）"}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-semibold text-slate-900">缺席（{nextAbsentNames.length}）</p>
+                            <button
+                              type="button"
+                              onClick={() => copyTextToClipboard_(nextAbsentMentions, "已複製缺席名單")}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                            >
+                              複製 @名單
+                            </button>
+                          </div>
+                          <p className="mt-2 break-words text-xs text-slate-600">
+                            {nextAbsentMentions || "（無）"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="mt-8">
