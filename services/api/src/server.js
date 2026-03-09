@@ -825,7 +825,7 @@ function canViewDirectory_(memberships) {
   return list.some((item) => {
     const groupId = String(item.groupId || item.group_id || "").trim();
     const role = String(item.roleInGroup || item.role_in_group || "").trim();
-    if (groupId === "E") {
+    if (groupId === "E" && role === "lead") {
       return true;
     }
     if (groupId === "A" && (role === "lead" || role === "deputy")) {
