@@ -2212,8 +2212,18 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, children }) {
         syncAdminSession_(result.data.sessionToken, linkedStudentId, nextMemberships);
       }
     } catch (err) {
-      setError(err.message || "權限載入失敗");
+      const message = String((err && err.message) || "權限載入失敗");
+      setError(message);
       setMemberships([]);
+
+      // If we're effectively unauthenticated, show the login flow instead of a misleading "no permission".
+      if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
+        setGoogleLinkedStudent(null);
+        setGoogleIdToken("");
+        storeGoogleStudent_(null);
+        storeGoogleIdToken_("");
+        syncAdminSession_("", "", []);
+      }
     } finally {
       setLoading(false);
     }
