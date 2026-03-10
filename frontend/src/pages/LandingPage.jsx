@@ -7,7 +7,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
-  const birthdaysCachePrefix = "landing_birthdays_v3";
+  const birthdaysCachePrefix = "landing_birthdays_v4";
   const approvalsOverviewCacheTtlMs = 45 * 1000;
   const approvalsOverviewCachePrefix = "landing_approvals_overview_v1";
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() =>

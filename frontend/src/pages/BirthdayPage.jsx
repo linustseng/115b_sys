@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 function BirthdayPage({ shared }) {
   const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_ } = shared;
-  const cacheKey = "birthdays_page_cache_v3";
+  const cacheKey = "birthdays_page_cache_v4";
   const cacheTtlMs = 6 * 60 * 60 * 1000;
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [birthdaysByMonth, setBirthdaysByMonth] = useState(() => ({}));
