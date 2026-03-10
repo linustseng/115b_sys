@@ -53,6 +53,8 @@ function FinanceAdminPage({ shared }) {
   const [completedView, setCompletedView] = useState("relevant");
   const [showFundEventModal, setShowFundEventModal] = useState(false);
   const [showFundPaymentModal, setShowFundPaymentModal] = useState(false);
+  const [fundEventEditingLoadingId, setFundEventEditingLoadingId] = useState("");
+  const [fundPaymentEditingLoadingId, setFundPaymentEditingLoadingId] = useState("");
   const [financeRoleForm, setFinanceRoleForm] = useState({
     id: "",
     personId: "",
@@ -81,6 +83,8 @@ function FinanceAdminPage({ shared }) {
   const [manualRequestAttachmentInput, setManualRequestAttachmentInput] = useState("");
   const [manualBankPickerQuery, setManualBankPickerQuery] = useState("");
   const [manualBankPickerOpen, setManualBankPickerOpen] = useState(false);
+  const fundEventModalRef = useRef(null);
+  const fundPaymentModalRef = useRef(null);
   const adminDisplayName =
     (googleLinkedStudent &&
       (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
@@ -540,6 +544,30 @@ function FinanceAdminPage({ shared }) {
     }
   }, [fundPaymentForm.eventId]);
 
+  useEffect(() => {
+    if (!showFundEventModal) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      if (fundEventModalRef.current) {
+        fundEventModalRef.current.scrollTop = 0;
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, [showFundEventModal]);
+
+  useEffect(() => {
+    if (!showFundPaymentModal) {
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      if (fundPaymentModalRef.current) {
+        fundPaymentModalRef.current.scrollTop = 0;
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, [showFundPaymentModal]);
+
   const roleStatusMap = {
     lead: "pending_lead",
     rep: "pending_rep",
@@ -849,6 +877,7 @@ function FinanceAdminPage({ shared }) {
 
   const closeFundEventModal_ = () => {
     setShowFundEventModal(false);
+    setFundEventEditingLoadingId("");
   };
 
   const openFundPaymentModal_ = () => {
@@ -857,6 +886,7 @@ function FinanceAdminPage({ shared }) {
 
   const closeFundPaymentModal_ = () => {
     setShowFundPaymentModal(false);
+    setFundPaymentEditingLoadingId("");
   };
 
   const handleFinanceRoleChange = (key, value) => {
@@ -1079,11 +1109,13 @@ function FinanceAdminPage({ shared }) {
   };
 
   const startNewFundEvent_ = () => {
+    setFundEventEditingLoadingId("");
     resetFundEventForm();
     openFundEventModal_();
   };
 
   const startNewFundPayment_ = () => {
+    setFundPaymentEditingLoadingId("");
     resetFundPaymentForm(fundPaymentForm.eventId);
     openFundPaymentModal_();
   };
@@ -1121,6 +1153,8 @@ function FinanceAdminPage({ shared }) {
     if (!item) {
       return;
     }
+    const editingId = String(item.id || "").trim();
+    setFundEventEditingLoadingId(editingId);
     setFundEventForm({
       id: item.id || "",
       title: item.title || "",
@@ -1134,6 +1168,9 @@ function FinanceAdminPage({ shared }) {
       notes: item.notes || "",
     });
     openFundEventModal_();
+    window.setTimeout(() => {
+      setFundEventEditingLoadingId("");
+    }, 150);
   };
 
   const handleDeleteFundEvent = async (eventId) => {
@@ -1215,6 +1252,8 @@ function FinanceAdminPage({ shared }) {
     if (!item) {
       return;
     }
+    const editingId = String(item.id || "").trim();
+    setFundPaymentEditingLoadingId(editingId);
     setFundPaymentForm({
       id: item.id || "",
       eventId: item.eventId || fundPaymentForm.eventId || "",
@@ -1231,6 +1270,9 @@ function FinanceAdminPage({ shared }) {
       notes: item.notes || "",
     });
     openFundPaymentModal_();
+    window.setTimeout(() => {
+      setFundPaymentEditingLoadingId("");
+    }, 150);
   };
 
   const handleDeleteFundPayment = async (paymentId) => {
@@ -2273,9 +2315,10 @@ function FinanceAdminPage({ shared }) {
                                   handleEditFundEvent(item);
                                   resetFundPaymentForm(item.id);
                                 }}
-                                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                                disabled={fundEventEditingLoadingId === String(item.id || "").trim()}
+                                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
                               >
-                                編輯
+                                {fundEventEditingLoadingId === String(item.id || "").trim() ? "載入中..." : "編輯"}
                               </button>
                               <button
                                 type="button"
@@ -2361,9 +2404,10 @@ function FinanceAdminPage({ shared }) {
                             <button
                               type="button"
                               onClick={() => handleEditFundPayment(item)}
-                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                              disabled={fundPaymentEditingLoadingId === String(item.id || "").trim()}
+                              className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
                             >
-                              編輯
+                              {fundPaymentEditingLoadingId === String(item.id || "").trim() ? "載入中..." : "編輯"}
                             </button>
                             <button
                               type="button"
@@ -2758,7 +2802,7 @@ function FinanceAdminPage({ shared }) {
 
         {showFundEventModal ? (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 px-6">
-            <div className="w-full max-w-2xl rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
+            <div ref={fundEventModalRef} className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">
                   {fundEventForm.id ? "編輯班費事件" : "新增班費事件"}
@@ -2871,7 +2915,7 @@ function FinanceAdminPage({ shared }) {
 
         {showFundPaymentModal ? (
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 px-6">
-            <div className="w-full max-w-2xl rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
+            <div ref={fundPaymentModalRef} className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-slate-900">
                   {fundPaymentForm.id ? "編輯收款" : "新增收款"}
