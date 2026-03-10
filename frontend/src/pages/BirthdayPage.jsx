@@ -107,16 +107,12 @@ function BirthdayPage({ shared }) {
     : [];
 
   const formatBirthdayName_ = (item) => {
-    const displayName = String((item && item.name) || "").trim();
     const chineseName = String((item && item.nameZh) || "").trim();
-    const hasCjkInDisplayName = /[\u3400-\u9fff]/.test(displayName);
-    if (displayName && hasCjkInDisplayName) {
-      return displayName;
+    const displayName = String((item && (item.displayName || item.name)) || "").trim();
+    if (chineseName && displayName && chineseName !== displayName) {
+      return `${chineseName} (${displayName})`;
     }
-    if (displayName && chineseName && displayName !== chineseName) {
-      return `${displayName} (${chineseName})`;
-    }
-    return displayName || chineseName || "未命名";
+    return chineseName || displayName || "未命名";
   };
 
   const buildBirthdayMessage_ = (month, list) => {

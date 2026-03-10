@@ -65,16 +65,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   })();
   const needsReauth = hasGoogleLogin && !hasAuthMaterial;
   const formatBirthdayName_ = (item) => {
-    const preferred = String((item && item.name) || "").trim();
     const zh = String((item && item.nameZh) || "").trim();
-    const hasCjkInPreferred = /[\u3400-\u9fff]/.test(preferred);
-    if (preferred && hasCjkInPreferred) {
-      return preferred;
+    const displayName = String((item && (item.displayName || item.name)) || "").trim();
+    if (zh && displayName && zh !== displayName) {
+      return `${zh} (${displayName})`;
     }
-    if (preferred && zh && preferred !== zh) {
-      return `${preferred} (${zh})`;
-    }
-    return preferred || zh || "未命名";
+    return zh || displayName || "未命名";
   };
   const [loginCollapsed, setLoginCollapsed] = useState(() => {
     if (typeof window === "undefined") {
