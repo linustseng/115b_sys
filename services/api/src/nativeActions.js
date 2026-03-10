@@ -718,13 +718,26 @@ export async function dispatchNativeAction({
 
     case "listBirthdays": {
       const result = await query(
-        `select id, email, name_zh, name_en, preferred_name, company, title, mobile, birthday_month, birthday_day, group_id
-         from directories
-         where coalesce(birthday_month, '') <> '' and coalesce(birthday_day, '') <> ''
+        `select
+           d.id,
+           d.email,
+           d.name_zh,
+           d.name_en,
+           d.preferred_name,
+           d.company,
+           d.title,
+           d.mobile,
+           d.birthday_month,
+           d.birthday_day,
+           d.group_id,
+           s.name as student_name
+         from directories d
+         left join students s on s.id = d.id
+         where coalesce(d.birthday_month, '') <> '' and coalesce(d.birthday_day, '') <> ''
          order by
-           case when coalesce(birthday_month,'') ~ '^[0-9]{1,2}$' then birthday_month::int else 99 end,
-           case when coalesce(birthday_day,'') ~ '^[0-9]{1,2}$' then birthday_day::int else 99 end,
-           id`
+           case when coalesce(d.birthday_month,'') ~ '^[0-9]{1,2}$' then d.birthday_month::int else 99 end,
+           case when coalesce(d.birthday_day,'') ~ '^[0-9]{1,2}$' then d.birthday_day::int else 99 end,
+           d.id`
       );
       const months = {};
       for (const row of result.rows) {
@@ -737,11 +750,12 @@ export async function dispatchNativeAction({
         }
         const birthdayMonth = String(row.birthday_month || "").trim();
         const birthdayDay = String(row.birthday_day || "").trim();
+        const fallbackName = firstText(row.student_name, row.name_en || "");
         months[month].push({
           id: String(row.id || "").trim(),
           email: normalizeEmail(row.email || ""),
-          name: firstText(row.preferred_name, firstText(row.name_zh, row.name_en || "")),
-          nameZh: firstText(row.name_zh),
+          name: firstText(row.preferred_name, firstText(row.name_zh, fallbackName)),
+          nameZh: firstText(row.name_zh, fallbackName),
           displayName: firstText(row.preferred_name),
           company: firstText(row.company),
           group: firstText(row.group_id),
