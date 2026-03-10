@@ -700,7 +700,10 @@ export async function dispatchNativeAction({
         `select id, email, name_zh, name_en, preferred_name, company, title, mobile, birthday_month, birthday_day, group_id
          from directories
          where coalesce(birthday_month, '') <> '' and coalesce(birthday_day, '') <> ''
-         order by coalesce(birthday_month, ''), coalesce(birthday_day, ''), id`
+         order by
+           case when coalesce(birthday_month,'') ~ '^[0-9]{1,2}$' then birthday_month::int else 99 end,
+           case when coalesce(birthday_day,'') ~ '^[0-9]{1,2}$' then birthday_day::int else 99 end,
+           id`
       );
       const months = {};
       for (const row of result.rows) {
