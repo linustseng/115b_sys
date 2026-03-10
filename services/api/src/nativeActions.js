@@ -276,6 +276,43 @@ export async function dispatchNativeAction({
     return memberships;
   };
 
+  const maybeEscalateLeadSubmission_ = async (requestRow) => {
+    if (!requestRow || typeof requestRow !== "object") {
+      return requestRow;
+    }
+    const status = String(requestRow.status || "").trim().toLowerCase();
+    if (status !== "pending_lead") {
+      return requestRow;
+    }
+    const applicantId = firstText(requestRow.applicantId);
+    const applicantDepartment = firstText(requestRow.applicantDepartment).toUpperCase();
+    if (!applicantId || !applicantDepartment) {
+      return requestRow;
+    }
+
+    const membershipResult = await query(
+      `select role_in_group
+       from group_memberships
+       where person_id = $1 and group_id = $2
+       order by id
+       limit 1`,
+      [applicantId, applicantDepartment]
+    );
+    const roleInGroup = firstText(rowOrNull(membershipResult)?.role_in_group).toLowerCase();
+    if (roleInGroup !== "lead") {
+      return requestRow;
+    }
+
+    requestRow.status = "pending_rep";
+    requestRow.raw = {
+      ...(requestRow.raw && typeof requestRow.raw === "object" ? requestRow.raw : {}),
+      status: "pending_rep",
+      escalatedByPolicy: "lead-submission-to-rep",
+      escalatedAt: nowIso(),
+    };
+    return requestRow;
+  };
+
   let softballManagerCache = null;
   const normalizePositions_ = (value) => {
     if (Array.isArray(value)) {
@@ -1343,6 +1380,7 @@ export async function dispatchNativeAction({
       if (!row.applicantName && student && student.name) {
         row.applicantName = student.name;
       }
+      await maybeEscalateLeadSubmission_(row);
       await query(
         `insert into finance_requests (
           id, type, title, description, category_type,
@@ -1435,6 +1473,7 @@ export async function dispatchNativeAction({
         manualCreatedAt: now,
       };
 
+      await maybeEscalateLeadSubmission_(row);
       await query(
         `insert into finance_requests (
           id, type, title, description, category_type,
@@ -1642,6 +1681,7 @@ export async function dispatchNativeAction({
         throw error;
       }
 
+      await maybeEscalateLeadSubmission_(row);
       await query(
         `update finance_requests set
           type=$2,title=$3,description=$4,category_type=$5,
