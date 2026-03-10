@@ -2511,6 +2511,7 @@ function AppShell() {
     }
   });
   const [copyStatus, setCopyStatus] = useState("");
+  const [swUpdateReady, setSwUpdateReady] = useState(false);
   const showLineBanner = lineInfo.isLineInApp && !hideLineBanner;
   const shared = {
     apiRequest,
@@ -2599,6 +2600,25 @@ function AppShell() {
     }
   };
 
+  useEffect(() => {
+    const handler = () => setSwUpdateReady(true);
+    window.addEventListener("sw:update", handler);
+    return () => window.removeEventListener("sw:update", handler);
+  }, []);
+
+  const handleReloadForUpdate_ = () => {
+    try {
+      const reg = window.__swRegistration;
+      if (reg && reg.waiting) {
+        reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        return;
+      }
+    } catch (error) {
+      // Ignore
+    }
+    window.location.reload();
+  };
+
   // Session bootstrap (session-first): ensure we have an access session token for protected reads on the landing page.
   useEffect(() => {
     let ignore = false;
@@ -2667,6 +2687,33 @@ function AppShell() {
       ignore = true;
     };
   }, []);
+
+  const swBanner = swUpdateReady ? (
+    <div className="fixed bottom-4 left-1/2 z-50 w-[min(92vw,560px)] -translate-x-1/2 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_18px_48px_-28px_rgba(15,23,42,0.55)]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">有新版已更新</p>
+          <p className="mt-0.5 text-xs text-slate-500">重新整理後會套用最新功能與修正。</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSwUpdateReady(false)}
+            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+          >
+            稍後
+          </button>
+          <button
+            type="button"
+            onClick={handleReloadForUpdate_}
+            className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800"
+          >
+            重新整理
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const lineBanner = showLineBanner ? (
     <div className="sticky top-0 z-50 border-b border-amber-200 bg-amber-50/95 px-4 py-3 text-xs text-amber-900 backdrop-blur">
@@ -2879,6 +2926,7 @@ function AppShell() {
   return (
     <>
       {lineBanner}
+      {swBanner}
       {content}
     </>
   );
