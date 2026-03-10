@@ -1317,7 +1317,7 @@ export async function dispatchNativeAction({
           attachments, status,
           applicant_id, applicant_name, applicant_department,
           created_at, updated_at, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb)
         on conflict (id) do update set
           type=excluded.type,
           title=excluded.title,
@@ -1359,14 +1359,14 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          row.attachments,
+          JSON.stringify(row.attachments || []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.createdAt,
           row.updatedAt,
-          row.raw,
+          JSON.stringify(row.raw || {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
@@ -1409,7 +1409,7 @@ export async function dispatchNativeAction({
           attachments, status,
           applicant_id, applicant_name, applicant_department,
           created_at, updated_at, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb)
         on conflict (id) do update set
           type=excluded.type,
           title=excluded.title,
@@ -1451,14 +1451,14 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          row.attachments,
+          JSON.stringify(row.attachments || []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.createdAt,
           row.updatedAt,
-          row.raw,
+          JSON.stringify(row.raw || {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
@@ -1543,8 +1543,8 @@ export async function dispatchNativeAction({
         };
 
         await query(
-          `update finance_requests set status=$2, updated_at=$3, raw=$4, synced_at=now() where id=$1`,
-          [requestId, toStatus, now, nextRaw]
+          `update finance_requests set status=$2, updated_at=$3, raw=$4::jsonb, synced_at=now() where id=$1`,
+          [requestId, toStatus, now, JSON.stringify(nextRaw || {})]
         );
 
         // Record workflow action for approvals UI.
@@ -1613,9 +1613,9 @@ export async function dispatchNativeAction({
           amount_estimated=$6,amount_actual=$7,currency=$8,payment_method=$9,
           vendor_name=$10,payee_name=$11,payee_bank=$12,payee_account=$13,
           related_purchase_id=$14,no_purchase_reason=$15,expected_clear_date=$16,
-          attachments=$17,status=$18,
+          attachments=$17::jsonb,status=$18,
           applicant_id=$19,applicant_name=$20,applicant_department=$21,
-          updated_at=$22,raw=$23,synced_at=now()
+          updated_at=$22,raw=$23::jsonb,synced_at=now()
         where id=$1`,
         [
           row.id,
@@ -1634,13 +1634,13 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          row.attachments,
+          JSON.stringify(row.attachments || []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.updatedAt,
-          row.raw,
+          JSON.stringify(row.raw || {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
