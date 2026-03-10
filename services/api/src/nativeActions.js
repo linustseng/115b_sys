@@ -48,15 +48,21 @@ function mapDirectoryProfile(row) {
   if (!row) {
     return null;
   }
+  const preferredName = String(row.preferred_name || "").trim();
+  const mobile = String(row.mobile || "").trim();
   return {
     id: String(row.id || "").trim(),
     email: normalizeEmail(row.email || ""),
     nameZh: String(row.name_zh || "").trim(),
     nameEn: String(row.name_en || "").trim(),
-    preferredName: String(row.preferred_name || "").trim(),
+    preferredName,
+    // Alias for old/new frontend compatibility.
+    displayName: preferredName,
     company: String(row.company || "").trim(),
     title: String(row.title || "").trim(),
-    mobile: String(row.mobile || "").trim(),
+    mobile,
+    // Alias for old/new frontend compatibility.
+    phone: mobile,
     backupPhone: String(row.backup_phone || "").trim(),
     emergencyContact: String(row.emergency_contact || "").trim(),
     emergencyPhone: String(row.emergency_phone || "").trim(),
@@ -646,7 +652,22 @@ export async function dispatchNativeAction({
       if (!studentId) {
         return { ok: false, data: null, error: "Missing id" };
       }
-      const email = normalizeEmail(firstText(data.email));
+
+      const existingResult = await query(`select * from directories where id = $1 limit 1`, [studentId]);
+      const existing = rowOrNull(existingResult) || {};
+
+      const preferredName = firstText(data.preferredName, data.displayName, existing.preferred_name || "");
+      const mobile = firstText(data.mobile, data.phone, existing.mobile || "");
+      const email = normalizeEmail(firstText(data.email, existing.email || ""));
+      const mergedRaw = {
+        ...(existing.raw && typeof existing.raw === "object" ? existing.raw : {}),
+        ...data,
+        preferredName,
+        displayName: preferredName,
+        mobile,
+        phone: mobile,
+      };
+
       await query(
         `insert into directories (
           id, group_id, email, name_zh, name_en, preferred_name, company, title, mobile,
@@ -673,22 +694,22 @@ export async function dispatchNativeAction({
           synced_at = now()`,
         [
           studentId,
-          firstText(data.group),
+          firstText(data.group, existing.group_id || ""),
           email,
-          firstText(data.nameZh),
-          firstText(data.nameEn),
-          firstText(data.preferredName),
-          firstText(data.company),
-          firstText(data.title),
-          firstText(data.mobile),
-          firstText(data.backupPhone),
-          firstText(data.emergencyContact),
-          firstText(data.emergencyPhone),
-          firstText(data.dietaryRestrictions),
-          firstText(data.photoUrl),
-          firstText(data.birthdayMonth),
-          firstText(data.birthdayDay),
-          data,
+          firstText(data.nameZh, existing.name_zh || ""),
+          firstText(data.nameEn, existing.name_en || ""),
+          preferredName,
+          firstText(data.company, existing.company || ""),
+          firstText(data.title, existing.title || ""),
+          mobile,
+          firstText(data.backupPhone, existing.backup_phone || ""),
+          firstText(data.emergencyContact, existing.emergency_contact || ""),
+          firstText(data.emergencyPhone, existing.emergency_phone || ""),
+          firstText(data.dietaryRestrictions, existing.dietary_restrictions || ""),
+          firstText(data.photoUrl, existing.photo_url || ""),
+          firstText(data.birthdayMonth, existing.birthday_month || ""),
+          firstText(data.birthdayDay, existing.birthday_day || ""),
+          mergedRaw,
         ]
       );
       const result = await query(`select * from directories where id = $1 limit 1`, [studentId]);
