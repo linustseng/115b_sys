@@ -935,21 +935,19 @@ function FinancePage({ shared }) {
   const getCaseStepsForRequest_ = (request) => {
     const type = String((request && request.type) || "").trim();
 
-    // Purchase requests are approvals only; they do not go through accounting/cashier.
+    // Purchase requests: lead -> rep -> closed.
     if (type === "purchase") {
       return [
         { id: "pending_lead", label: "組長" },
         { id: "pending_rep", label: "班代" },
-        { id: "pending_committee", label: "幹部" },
         { id: "closed", label: "完成" },
       ];
     }
 
-    // Payment / pettycash: include accounting + cashier.
+    // Payment / pettycash: include accounting + cashier after rep.
     return [
       { id: "pending_lead", label: "組長" },
       { id: "pending_rep", label: "班代" },
-      { id: "pending_committee", label: "幹部" },
       { id: "pending_accounting", label: "會計" },
       { id: "pending_cashier", label: "出納" },
       { id: "closed", label: "完成" },

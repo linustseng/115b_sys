@@ -1572,12 +1572,11 @@ export async function dispatchNativeAction({
 
         const getWorkflowSteps_ = (requestType) => {
           if (String(requestType || "").trim().toLowerCase() === "purchase") {
-            return ["pending_lead", "pending_rep", "pending_committee", "closed"];
+            return ["pending_lead", "pending_rep", "closed"];
           }
           return [
             "pending_lead",
             "pending_rep",
-            "pending_committee",
             "pending_accounting",
             "pending_cashier",
             "closed",
