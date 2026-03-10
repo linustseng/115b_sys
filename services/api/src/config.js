@@ -38,6 +38,7 @@ export function getConfig() {
   const driveServiceAccountJsonBase64 = String(
     process.env.DRIVE_SERVICE_ACCOUNT_JSON_BASE64 || ""
   ).trim();
+  const driveAttachmentPublicRead = parseBoolean(process.env.DRIVE_ATTACHMENT_PUBLIC_READ, false);
 
   const nodeEnv = String(process.env.NODE_ENV || "development").trim();
   const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
@@ -55,6 +56,10 @@ export function getConfig() {
     strictNodeOnly,
     databaseUrl,
     databaseSsl: parseBoolean(process.env.DATABASE_SSL, true),
+    databaseSslRejectUnauthorized: parseBoolean(
+      process.env.DATABASE_SSL_REJECT_UNAUTHORIZED,
+      nodeEnv === "production"
+    ),
     appsScriptUrl,
     appsScriptTimeoutMs: parseNumber(process.env.APPS_SCRIPT_TIMEOUT_MS, 20000),
     syncPullToken,
@@ -64,6 +69,7 @@ export function getConfig() {
     googleClientId,
     driveFinanceFolderId,
     driveServiceAccountJsonBase64,
+    driveAttachmentPublicRead,
   };
 
   return cachedConfig;

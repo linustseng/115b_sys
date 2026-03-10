@@ -976,10 +976,12 @@ function buildApiV2Request_(payload) {
     }
     const url = new URL(`${base}/v1/bootstrap/home`);
     url.searchParams.set("email", email);
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: url.toString(),
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
@@ -1029,10 +1031,12 @@ function buildApiV2Request_(payload) {
     }
     const url = new URL(`${base}/v1/lookup-student`);
     url.searchParams.set("email", email);
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: url.toString(),
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
@@ -1071,10 +1075,12 @@ function buildApiV2Request_(payload) {
     if (email) {
       url.searchParams.set("email", email);
     }
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: url.toString(),
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
@@ -1090,10 +1096,12 @@ function buildApiV2Request_(payload) {
     if (email) {
       url.searchParams.set("email", email);
     }
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "GET",
       url: url.toString(),
-      headers: { Accept: "application/json" },
+      headers,
       body: null,
     };
   }
@@ -1103,13 +1111,15 @@ function buildApiV2Request_(payload) {
       email: String((payload && payload.email) || "").trim(),
       eventIds: Array.isArray(payload && payload.eventIds) ? payload.eventIds : [],
     };
+    let headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    headers = applyApiV2AuthHeaders_(headers, payload);
     return {
       method: "POST",
       url: `${base}/v1/checkin-status`,
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers,
       body: JSON.stringify(requestBody),
     };
   }

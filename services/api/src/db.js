@@ -5,7 +5,9 @@ const config = getConfig();
 
 const pool = new Pool({
   connectionString: config.databaseUrl,
-  ssl: config.databaseSsl ? { rejectUnauthorized: false } : false,
+  ssl: config.databaseSsl
+    ? { rejectUnauthorized: Boolean(config.databaseSslRejectUnauthorized) }
+    : false,
   max: 10,
   idleTimeoutMillis: 30000,
 });

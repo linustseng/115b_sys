@@ -357,8 +357,8 @@ function getSessionTokenFromRequest(req) {
     return headerToken;
   }
   const body = req.body && typeof req.body === "object" ? req.body : {};
-  const queryParams = req.query && typeof req.query === "object" ? req.query : {};
-  return String(body.sessionToken || body.token || queryParams.sessionToken || "").trim();
+  // Security hardening: do not accept session token from query string.
+  return String(body.sessionToken || body.token || "").trim();
 }
 
 function getIdTokenFromRequest(req) {
@@ -367,8 +367,8 @@ function getIdTokenFromRequest(req) {
     return headerToken;
   }
   const body = req.body && typeof req.body === "object" ? req.body : {};
-  const queryParams = req.query && typeof req.query === "object" ? req.query : {};
-  return String(body.idToken || queryParams.idToken || "").trim();
+  // Security hardening: do not accept id token from query string.
+  return String(body.idToken || "").trim();
 }
 
 function isAuthorizedSyncRequest(req) {
@@ -781,8 +781,24 @@ app.get("/v1/students", async (req, res) => {
   }
 });
 
-app.get("/v1/group-memberships", async (_req, res) => {
+app.get("/v1/group-memberships", async (req, res) => {
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+
+    const myMemberships = await listMembershipsByStudentId(auth.studentId);
+    const canViewAll = canViewAllMemberships_(myMemberships);
+
+    if (!canViewAll) {
+      return res.json({
+        ok: true,
+        data: { memberships: myMemberships },
+        error: null,
+      });
+    }
+
     const result = await query(
       `SELECT *
        FROM group_memberships
@@ -841,6 +857,30 @@ function canViewDirectory_(memberships) {
   });
 }
 
+function canViewAllMemberships_(memberships) {
+  const list = Array.isArray(memberships) ? memberships : [];
+  return list.some((item) => {
+    const groupId = String(item.groupId || item.group_id || "").trim();
+    const role = String(item.roleInGroup || item.role_in_group || "").trim();
+    if (groupId === "E" && (role === "lead" || role === "deputy")) {
+      return true;
+    }
+    if (groupId === "A" && (role === "lead" || role === "deputy")) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function isOwnEmailRequest_(auth, email) {
+  const target = normalizeEmail(email);
+  if (!target) {
+    return false;
+  }
+  const authEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+  return Boolean(authEmail && authEmail === target);
+}
+
 app.get("/v1/directory", async (req, res) => {
   try {
     const auth = await resolveAuthContext(req);
@@ -871,6 +911,17 @@ app.get("/v1/lookup-student", async (req, res) => {
   }
 
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+
+    const myMemberships = await listMembershipsByStudentId(auth.studentId);
+    const canLookupAny = canViewAllMemberships_(myMemberships);
+    if (!canLookupAny && !isOwnEmailRequest_(auth, email)) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
+
     const result = await query(
       `${STUDENT_PROFILE_SELECT}
        FROM directories d
@@ -895,6 +946,16 @@ app.get("/v1/bootstrap/home", async (req, res) => {
   }
 
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const myMemberships = await listMembershipsByStudentId(auth.studentId);
+    const canReadOthers = canViewAllMemberships_(myMemberships);
+    if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
+
     const [eventsResult, registrationsResult] = await Promise.all([
       query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`),
       query(
@@ -935,6 +996,20 @@ app.get("/v1/bootstrap/registration", async (req, res) => {
   }
 
   try {
+    let auth = null;
+    let canReadOthers = false;
+    if (email) {
+      auth = await resolveAuthContext(req);
+      if (!auth || !auth.studentId) {
+        return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+      }
+      const myMemberships = await listMembershipsByStudentId(auth.studentId);
+      canReadOthers = canViewAllMemberships_(myMemberships);
+      if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+        return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+      }
+    }
+
     const event = await findEventById(eventId);
     if (!event) {
       return res.json({ ok: false, data: null, error: "Event not found" });
@@ -963,6 +1038,18 @@ app.get("/v1/bootstrap/checkin", async (req, res) => {
   }
 
   try {
+    if (email) {
+      const auth = await resolveAuthContext(req);
+      if (!auth || !auth.studentId) {
+        return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+      }
+      const myMemberships = await listMembershipsByStudentId(auth.studentId);
+      const canReadOthers = canViewAllMemberships_(myMemberships);
+      if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+        return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+      }
+    }
+
     const event = await findEventById(eventId);
     if (!event) {
       return res.json({ ok: false, data: null, error: "Event not found" });
@@ -998,6 +1085,16 @@ async function handleListCheckinStatus(req, res) {
   }
 
   try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const myMemberships = await listMembershipsByStudentId(auth.studentId);
+    const canReadOthers = canViewAllMemberships_(myMemberships);
+    if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
+
     const statuses = await listStatusesByEmail(email, eventIds);
     return res.json({ ok: true, data: { statuses }, error: null });
   } catch (error) {
@@ -1498,14 +1595,18 @@ app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, re
       throw new Error("Drive upload failed");
     }
 
-    await drive.permissions.create({
-      fileId,
-      requestBody: {
-        role: "reader",
-        type: "anyone",
-      },
-      supportsAllDrives: true,
-    });
+    // Security hardening: do NOT expose attachments as public-by-link by default.
+    // Access is governed by Drive folder permissions.
+    if (config.driveAttachmentPublicRead) {
+      await drive.permissions.create({
+        fileId,
+        requestBody: {
+          role: "reader",
+          type: "anyone",
+        },
+        supportsAllDrives: true,
+      });
+    }
 
     const url = `https://drive.google.com/file/d/${fileId}/view`;
     return res.json({
