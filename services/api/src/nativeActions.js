@@ -96,6 +96,69 @@ function mapFinanceRoleRow(row) {
   };
 }
 
+function mapFundEventRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  const id = firstText(row && row.id ? row.id : raw.id);
+  return {
+    ...raw,
+    id,
+    title: firstText(raw.title, row && row.title ? row.title : ""),
+    description: firstText(raw.description, row && row.description ? row.description : ""),
+    dueDate: firstText(raw.dueDate, row && row.due_date ? row.due_date : ""),
+    amountGeneral:
+      raw.amountGeneral != null && raw.amountGeneral !== ""
+        ? raw.amountGeneral
+        : row && row.amount_general != null
+        ? row.amount_general
+        : "",
+    amountSponsor:
+      raw.amountSponsor != null && raw.amountSponsor !== ""
+        ? raw.amountSponsor
+        : row && row.amount_sponsor != null
+        ? row.amount_sponsor
+        : "",
+    expectedGeneralCount:
+      raw.expectedGeneralCount != null && raw.expectedGeneralCount !== ""
+        ? raw.expectedGeneralCount
+        : row && row.expected_general_count != null
+        ? row.expected_general_count
+        : "",
+    expectedSponsorCount:
+      raw.expectedSponsorCount != null && raw.expectedSponsorCount !== ""
+        ? raw.expectedSponsorCount
+        : row && row.expected_sponsor_count != null
+        ? row.expected_sponsor_count
+        : "",
+    status: firstText(raw.status, row && row.status ? row.status : ""),
+    notes: firstText(raw.notes, row && row.notes ? row.notes : ""),
+  };
+}
+
+function mapFundPaymentRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id ? row.id : raw.id),
+    eventId: firstText(raw.eventId, row && row.event_id ? row.event_id : ""),
+    payerId: firstText(raw.payerId, row && row.payer_id ? row.payer_id : ""),
+    payerName: firstText(raw.payerName, row && row.payer_name ? row.payer_name : ""),
+    payerEmail: firstText(raw.payerEmail, row && row.payer_email ? row.payer_email : ""),
+    payerType: firstText(raw.payerType, row && row.payer_type ? row.payer_type : ""),
+    amount:
+      raw.amount != null && raw.amount !== ""
+        ? raw.amount
+        : row && row.amount != null
+        ? row.amount
+        : "",
+    method: firstText(raw.method, row && row.method ? row.method : ""),
+    transferLast5: firstText(raw.transferLast5, row && row.transfer_last5 ? row.transfer_last5 : ""),
+    receivedAt: firstText(raw.receivedAt, row && row.received_at ? row.received_at : ""),
+    accountedAt: firstText(raw.accountedAt, row && row.accounted_at ? row.accounted_at : ""),
+    confirmedAt: firstText(raw.confirmedAt, row && row.confirmed_at ? row.confirmed_at : ""),
+    notes: firstText(raw.notes, row && row.notes ? row.notes : ""),
+  };
+}
+
 function canAccessByGroups(memberships, allowedGroupIds = []) {
   const list = asArray(memberships);
   return list.some((item) => {
@@ -1877,10 +1940,7 @@ export async function dispatchNativeAction({
           })),
           categories,
           categoryTypes: categories,
-          fundEvents: fundEvents.rows.map((row) => ({
-            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-            id: row.id,
-          })),
+          fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),
         },
         error: null,
       };
@@ -1930,10 +1990,7 @@ export async function dispatchNativeAction({
           })),
           categories,
           categoryTypes: categories,
-          fundEvents: fundEvents.rows.map((row) => ({
-            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-            id: row.id,
-          })),
+          fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),
         },
         error: null,
       };
@@ -2017,10 +2074,7 @@ export async function dispatchNativeAction({
           roles: roles.rows.map((row) => mapFinanceRoleRow(row)),
           categories,
           categoryTypes: categories,
-          fundEvents: fundEvents.rows.map((row) => ({
-            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-            id: row.id,
-          })),
+          fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),
           fundSummary,
         },
         error: null,
@@ -2068,7 +2122,7 @@ export async function dispatchNativeAction({
     case "listFundEvents": {
       requireAuth();
       const result = await query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`);
-      const events = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const events = result.rows.map((row) => mapFundEventRow(row));
       return { ok: true, data: { events }, error: null };
     }
 
@@ -2143,10 +2197,7 @@ export async function dispatchNativeAction({
             )
         : await query(`select * from fund_payments order by coalesce(received_at,'') desc, id desc limit 1000`);
 
-      const payments = result.rows.map((row) => ({
-        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-        id: row.id,
-      }));
+      const payments = result.rows.map((row) => mapFundPaymentRow(row));
       return { ok: true, data: { payments }, error: null };
     }
 

@@ -1217,7 +1217,7 @@ function FinanceAdminPage({ shared }) {
     }
     setFundPaymentForm({
       id: item.id || "",
-      eventId: item.eventId || "",
+      eventId: item.eventId || fundPaymentForm.eventId || "",
       payerId: item.payerId || "",
       payerName: item.payerName || "",
       payerEmail: item.payerEmail || "",
