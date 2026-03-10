@@ -74,6 +74,28 @@ function mapDirectoryProfile(row) {
   };
 }
 
+function mapFinanceRoleRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  const role = firstText(raw.role, row && row.role ? row.role : "");
+  const personId = firstText(raw.personId, raw.studentId, row && row.student_id ? row.student_id : "");
+  const personName = firstText(raw.personName, raw.studentName, row && row.student_name ? row.student_name : "");
+  const groupIds = Array.isArray(raw.groupIds)
+    ? raw.groupIds
+    : Array.isArray(row && row.group_ids)
+    ? row.group_ids
+    : safeJsonArray(row && row.group_ids);
+  return {
+    ...raw,
+    id: firstText(row && row.id ? row.id : raw.id),
+    role,
+    personId,
+    studentId: personId,
+    personName,
+    studentName: personName,
+    groupIds,
+  };
+}
+
 function canAccessByGroups(memberships, allowedGroupIds = []) {
   const list = asArray(memberships);
   return list.some((item) => {
@@ -1341,7 +1363,7 @@ export async function dispatchNativeAction({
     case "listFinanceRoles": {
       await requireGroupAccess(["D", "E"]);
       const result = await query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`);
-      const roles = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const roles = result.rows.map((row) => mapFinanceRoleRow(row));
       return { ok: true, data: { roles }, error: null };
     }
 
@@ -1992,7 +2014,7 @@ export async function dispatchNativeAction({
             createdAt: row.created_at || "",
             updatedAt: row.updated_at || "",
           })),
-          roles: roles.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          roles: roles.rows.map((row) => mapFinanceRoleRow(row)),
           categories,
           categoryTypes: categories,
           fundEvents: fundEvents.rows.map((row) => ({

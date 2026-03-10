@@ -372,11 +372,27 @@ function FinanceAdminPage({ shared }) {
     }
   };
 
+  const normalizeFinanceRole_ = (item) => {
+    const raw = item && typeof item === "object" ? item : {};
+    const personId = String(raw.personId || raw.studentId || "").trim();
+    const personName = String(raw.personName || raw.studentName || "").trim();
+    const personEmail = String(raw.personEmail || raw.studentEmail || raw.email || "").trim();
+    return {
+      ...raw,
+      personId,
+      studentId: personId,
+      personName,
+      studentName: personName,
+      personEmail,
+    };
+  };
+
   const loadFinanceRoles = async () => {
     try {
       const { result } = await apiRequest({ action: "listFinanceRoles" });
       if (result.ok) {
-        setFinanceRoles(result.data && result.data.roles ? result.data.roles : []);
+        const roles = result.data && result.data.roles ? result.data.roles : [];
+        setFinanceRoles((roles || []).map(normalizeFinanceRole_));
       }
     } catch (err) {
       setFinanceRoles([]);
@@ -410,7 +426,7 @@ function FinanceAdminPage({ shared }) {
       }
       setStudents(data.students || []);
       setGroupMemberships(data.groupMemberships || []);
-      setFinanceRoles(data.roles || []);
+      setFinanceRoles((data.roles || []).map(normalizeFinanceRole_));
       setFinanceCategories(data.categories || []);
       setFundEvents(data.fundEvents || []);
       setFundSummary(data.fundSummary || null);
@@ -466,7 +482,8 @@ function FinanceAdminPage({ shared }) {
       return false;
     });
     const financeRoleItems = financeRoles.filter((item) => {
-      if (personId && String(item.personId || "").trim() === personId) {
+      const rolePersonId = String(item.personId || item.studentId || "").trim();
+      if (personId && rolePersonId === personId) {
         return true;
       }
       return false;
@@ -906,7 +923,9 @@ function FinanceAdminPage({ shared }) {
         data: {
           id: financeRoleForm.id,
           personId: financeRoleForm.personId,
+          studentId: financeRoleForm.personId,
           personName: financeRoleForm.personName,
+          studentName: financeRoleForm.personName,
           personEmail: financeRoleForm.personEmail,
           role: financeRoleForm.role,
           notes: financeRoleForm.notes,
