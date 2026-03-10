@@ -56,9 +56,11 @@ export function getConfig() {
     strictNodeOnly,
     databaseUrl,
     databaseSsl: parseBoolean(process.env.DATABASE_SSL, true),
+    // Keep compatibility with managed DBs that use self-signed/intermediate chains.
+    // Opt-in strict validation via DATABASE_SSL_REJECT_UNAUTHORIZED=true when CA chain is trusted.
     databaseSslRejectUnauthorized: parseBoolean(
       process.env.DATABASE_SSL_REJECT_UNAUTHORIZED,
-      nodeEnv === "production"
+      false
     ),
     appsScriptUrl,
     appsScriptTimeoutMs: parseNumber(process.env.APPS_SCRIPT_TIMEOUT_MS, 20000),
