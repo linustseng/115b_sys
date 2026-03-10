@@ -299,6 +299,10 @@ export async function dispatchNativeAction({
       [applicantId, applicantDepartment]
     );
     const roleInGroup = firstText(rowOrNull(membershipResult)?.role_in_group).toLowerCase();
+
+    // Policy:
+    // - 組長本人申請：跳過 pending_lead，往上到 pending_rep（避免自簽）
+    // - A 組副班代申請：維持 pending_lead，由班代簽核
     if (roleInGroup !== "lead") {
       return requestRow;
     }
@@ -307,7 +311,8 @@ export async function dispatchNativeAction({
     requestRow.raw = {
       ...(requestRow.raw && typeof requestRow.raw === "object" ? requestRow.raw : {}),
       status: "pending_rep",
-      escalatedByPolicy: "lead-submission-to-rep",
+      escalatedByPolicy:
+        applicantDepartment === "A" ? "class-rep-lead-self-skip" : "lead-submission-to-rep",
       escalatedAt: nowIso(),
     };
     return requestRow;
