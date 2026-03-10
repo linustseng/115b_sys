@@ -548,6 +548,7 @@ function FinanceAdminPage({ shared }) {
     if (!showFundEventModal) {
       return;
     }
+    setFundEventEditingLoadingId("");
     window.requestAnimationFrame(() => {
       if (fundEventModalRef.current) {
         fundEventModalRef.current.scrollTop = 0;
@@ -560,6 +561,7 @@ function FinanceAdminPage({ shared }) {
     if (!showFundPaymentModal) {
       return;
     }
+    setFundPaymentEditingLoadingId("");
     window.requestAnimationFrame(() => {
       if (fundPaymentModalRef.current) {
         fundPaymentModalRef.current.scrollTop = 0;
@@ -2315,10 +2317,16 @@ function FinanceAdminPage({ shared }) {
                                   handleEditFundEvent(item);
                                   resetFundPaymentForm(item.id);
                                 }}
-                                disabled={fundEventEditingLoadingId === String(item.id || "").trim()}
+                                disabled={
+                                  String(item.id || "").trim() &&
+                                  fundEventEditingLoadingId === String(item.id || "").trim()
+                                }
                                 className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
                               >
-                                {fundEventEditingLoadingId === String(item.id || "").trim() ? "載入中..." : "編輯"}
+                                {String(item.id || "").trim() &&
+                                fundEventEditingLoadingId === String(item.id || "").trim()
+                                  ? "載入中..."
+                                  : "編輯"}
                               </button>
                               <button
                                 type="button"
@@ -2404,10 +2412,16 @@ function FinanceAdminPage({ shared }) {
                             <button
                               type="button"
                               onClick={() => handleEditFundPayment(item)}
-                              disabled={fundPaymentEditingLoadingId === String(item.id || "").trim()}
+                              disabled={
+                                String(item.id || "").trim() &&
+                                fundPaymentEditingLoadingId === String(item.id || "").trim()
+                              }
                               className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
                             >
-                              {fundPaymentEditingLoadingId === String(item.id || "").trim() ? "載入中..." : "編輯"}
+                              {String(item.id || "").trim() &&
+                              fundPaymentEditingLoadingId === String(item.id || "").trim()
+                                ? "載入中..."
+                                : "編輯"}
                             </button>
                             <button
                               type="button"
