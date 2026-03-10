@@ -14,6 +14,13 @@ import { dispatchNativeAction } from "./nativeActions.js";
 const config = getConfig();
 const app = express();
 
+if (!config.sessionSecret) {
+  throw new Error("Missing required env: SESSION_SECRET");
+}
+if (!config.googleClientId) {
+  throw new Error("Missing required env: GOOGLE_CLIENT_ID");
+}
+
 app.use(
   cors({
     origin: true,

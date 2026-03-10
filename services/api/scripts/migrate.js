@@ -65,7 +65,10 @@ async function run() {
 
 run()
   .catch((error) => {
-    console.error("Migration failed:", error.message);
+    console.error("Migration failed:", error && error.message ? error.message : String(error || "Unknown error"));
+    if (error && error.stack) {
+      console.error(error.stack);
+    }
     process.exitCode = 1;
   })
   .finally(async () => {

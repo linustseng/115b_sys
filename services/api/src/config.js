@@ -31,8 +31,10 @@ export function getConfig() {
   }
 
   const databaseUrl = requireEnv("DATABASE_URL");
-  const sessionSecret = requireEnv("SESSION_SECRET");
-  const googleClientId = requireEnv("GOOGLE_CLIENT_ID");
+  // Keep optional at config-load time so migration/predeploy can run with DB-only env.
+  // Server runtime validates required auth secrets before accepting traffic.
+  const sessionSecret = String(process.env.SESSION_SECRET || "").trim();
+  const googleClientId = String(process.env.GOOGLE_CLIENT_ID || "").trim();
 
   const driveFinanceFolderId = String(process.env.DRIVE_FINANCE_FOLDER_ID || "").trim();
   const driveServiceAccountJsonBase64 = String(
