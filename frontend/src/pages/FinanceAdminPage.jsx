@@ -27,6 +27,8 @@ function FinanceAdminPage({ shared }) {
     FUND_PAYMENT_METHODS,
     CLASS_GROUPS,
     normalizeId_,
+    parseLocalInputDate_,
+    toDateInputValue_,
     adminGuardAccess,
   } = shared;
 
@@ -355,8 +357,8 @@ function FinanceAdminPage({ shared }) {
     if (!raw) {
       return "";
     }
-    const parsed = parseLocalInputDate_(raw);
-    if (parsed) {
+    const parsed = typeof parseLocalInputDate_ === "function" ? parseLocalInputDate_(raw) : null;
+    if (parsed && typeof toDateInputValue_ === "function") {
       return toDateInputValue_(parsed);
     }
     const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -1157,22 +1159,27 @@ function FinanceAdminPage({ shared }) {
     }
     const editingId = String(item.id || "").trim();
     setFundEventEditingLoadingId(editingId);
-    setFundEventForm({
-      id: item.id || "",
-      title: item.title || "",
-      description: item.description || "",
-      dueDate: item.dueDate || "",
-      amountGeneral: item.amountGeneral || "50000",
-      amountSponsor: item.amountSponsor || "200000",
-      expectedGeneralCount: item.expectedGeneralCount || "",
-      expectedSponsorCount: item.expectedSponsorCount || "",
-      status: item.status || "collecting",
-      notes: item.notes || "",
-    });
-    openFundEventModal_();
-    window.setTimeout(() => {
+    try {
+      setFundEventForm({
+        id: item.id || "",
+        title: item.title || "",
+        description: item.description || "",
+        dueDate: item.dueDate || "",
+        amountGeneral: item.amountGeneral || "50000",
+        amountSponsor: item.amountSponsor || "200000",
+        expectedGeneralCount: item.expectedGeneralCount || "",
+        expectedSponsorCount: item.expectedSponsorCount || "",
+        status: item.status || "collecting",
+        notes: item.notes || "",
+      });
+      openFundEventModal_();
+      window.setTimeout(() => {
+        setFundEventEditingLoadingId("");
+      }, 150);
+    } catch (err) {
       setFundEventEditingLoadingId("");
-    }, 150);
+      setError(err && err.message ? err.message : "班費事件資料載入失敗");
+    }
   };
 
   const handleDeleteFundEvent = async (eventId) => {
@@ -1256,25 +1263,30 @@ function FinanceAdminPage({ shared }) {
     }
     const editingId = String(item.id || "").trim();
     setFundPaymentEditingLoadingId(editingId);
-    setFundPaymentForm({
-      id: item.id || "",
-      eventId: item.eventId || fundPaymentForm.eventId || "",
-      payerId: item.payerId || "",
-      payerName: item.payerName || "",
-      payerEmail: item.payerEmail || "",
-      payerType: item.payerType || "general",
-      amount: item.amount || "",
-      method: item.method || "transfer",
-      transferLast5: item.transferLast5 || "",
-      receivedAt: normalizeDateInputValue_(item.receivedAt),
-      accountedAt: normalizeDateInputValue_(item.accountedAt),
-      confirmedAt: normalizeDateInputValue_(item.confirmedAt),
-      notes: item.notes || "",
-    });
-    openFundPaymentModal_();
-    window.setTimeout(() => {
+    try {
+      setFundPaymentForm({
+        id: item.id || "",
+        eventId: item.eventId || fundPaymentForm.eventId || "",
+        payerId: item.payerId || "",
+        payerName: item.payerName || "",
+        payerEmail: item.payerEmail || "",
+        payerType: item.payerType || "general",
+        amount: item.amount || "",
+        method: item.method || "transfer",
+        transferLast5: item.transferLast5 || "",
+        receivedAt: normalizeDateInputValue_(item.receivedAt),
+        accountedAt: normalizeDateInputValue_(item.accountedAt),
+        confirmedAt: normalizeDateInputValue_(item.confirmedAt),
+        notes: item.notes || "",
+      });
+      openFundPaymentModal_();
+      window.setTimeout(() => {
+        setFundPaymentEditingLoadingId("");
+      }, 150);
+    } catch (err) {
       setFundPaymentEditingLoadingId("");
-    }, 150);
+      setError(err && err.message ? err.message : "收款資料載入失敗");
+    }
   };
 
   const handleDeleteFundPayment = async (paymentId) => {
