@@ -90,6 +90,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   });
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
+  const [copiedStudentId, setCopiedStudentId] = useState(false);
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
@@ -869,22 +870,25 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                     </p>
                     <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
                     {googleLinkedStudent.id ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(googleLinkedStudent.id);
-                          const btn = event.currentTarget;
-                          const original = btn.textContent;
-                          btn.textContent = "已複製";
-                          setTimeout(() => {
-                            btn.textContent = original;
-                          }, 1500);
-                        }}
-                        className="mt-1 text-slate-400 hover:text-slate-600 transition-colors"
-                        title="點擊複製學號"
-                      >
-                        學號：{googleLinkedStudent.id}
-                      </button>
+                      <p className="mt-1 text-slate-400">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(googleLinkedStudent.id);
+                            setCopiedStudentId(true);
+                            setTimeout(() => {
+                              setCopiedStudentId(false);
+                            }, 1500);
+                          }}
+                          className="hover:text-slate-600 transition-colors"
+                          title="點擊複製學號"
+                        >
+                          學號：{googleLinkedStudent.id}
+                        </button>
+                        {copiedStudentId ? (
+                          <span className="ml-2 text-xs text-green-600">已複製</span>
+                        ) : null}
+                      </p>
                     ) : null}
                   </div>
                 </div>
