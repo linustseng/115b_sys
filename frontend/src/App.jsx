@@ -967,7 +967,7 @@ function shouldUseApiV2Read_(payload) {
     return false;
   }
   const action = String((payload && payload.action) || "").trim();
-  return Boolean(action);
+  return API_V2_READ_ACTIONS.has(action);
 }
 
 function applyApiV2AuthHeaders_(headers, payload) {
@@ -1244,7 +1244,7 @@ function shouldUseApiV2Write_(payload) {
     return false;
   }
   const action = String((payload && payload.action) || "").trim();
-  return Boolean(action);
+  return API_V2_WRITE_ACTIONS.has(action);
 }
 
 function buildApiV2WriteRequest_(payload) {
