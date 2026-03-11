@@ -860,7 +860,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                       </div>
                     )}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-semibold text-slate-900">
                       {displayName ? displayName : "已綁定"}
                       <span className="ml-2 text-xs font-semibold text-slate-500">
@@ -868,6 +868,24 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                       </span>
                     </p>
                     <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
+                    {googleLinkedStudent.id ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(googleLinkedStudent.id);
+                          const btn = event.currentTarget;
+                          const original = btn.textContent;
+                          btn.textContent = "已複製";
+                          setTimeout(() => {
+                            btn.textContent = original;
+                          }, 1500);
+                        }}
+                        className="mt-1 text-slate-400 hover:text-slate-600 transition-colors"
+                        title="點擊複製學號"
+                      >
+                        學號：{googleLinkedStudent.id}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ) : (
