@@ -222,11 +222,18 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   };
 
   const loadRequests = async () => {
-    const { result } = await apiRequest({ action: "listFinanceRequests" });
-    if (!result.ok) {
-      throw new Error(result.error || "載入失敗");
+    const data = await loadBootstrap({ includeRequests: true });
+    const email = String((googleLinkedStudent && googleLinkedStudent.email) || "")
+      .trim()
+      .toLowerCase();
+    if (email) {
+      saveApprovalsCache_(email, {
+        requests: data.requests || [],
+        students: data.students || [],
+        groupMemberships: data.groupMemberships || [],
+        financeRoles: data.roles || [],
+      });
     }
-    setRequests(result.data && result.data.requests ? result.data.requests : []);
   };
 
   const loadActionsByActor = async () => {

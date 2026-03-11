@@ -790,9 +790,38 @@ const API_V2_READ_ACTIONS = new Set([
   "getCheckinBootstrap",
   "listCheckinStatus",
   "listDirectory",
+  // Finance / approvals (DB v2 cutover)
+  "listFinanceBootstrap",
+  "listFinanceApplicantBootstrap",
+  "listFinanceAdminBootstrap",
+  "listFinanceRequests",
+  "listFinanceCategoryTypes",
+  "listFinanceRoles",
+  "listFinanceActions",
+  "listFinanceActionsByActor",
+  "listFinanceActionsSummary",
+  "listApprovalsOverview",
+  "listFundEvents",
+  "listFundPayments",
 ]);
 
-const API_V2_WRITE_ACTIONS = new Set(["register", "checkin", "updateRegistration"]);
+const API_V2_WRITE_ACTIONS = new Set([
+  "register",
+  "checkin",
+  "updateRegistration",
+  // Finance / approvals (DB v2 cutover)
+  "createFinanceRequest",
+  "adminCreateFinanceRequest",
+  "updateFinanceRequest",
+  "upsertFinanceCategoryType",
+  "deleteFinanceCategoryType",
+  "upsertFinanceRole",
+  "deleteFinanceRole",
+  "upsertFundEvent",
+  "deleteFundEvent",
+  "upsertFundPayment",
+  "deleteFundPayment",
+]);
 
 function isAllowedApiEndpointHost_(host) {
   const normalized = String(host || "").trim().toLowerCase();

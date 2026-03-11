@@ -77,8 +77,11 @@ function mapDirectoryProfile(row) {
 function mapFinanceRoleRow(row) {
   const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
   const role = firstText(raw.role, row && row.role ? row.role : "");
-  const personId = firstText(raw.personId, raw.studentId, row && row.student_id ? row.student_id : "");
-  const personName = firstText(raw.personName, raw.studentName, row && row.student_name ? row.student_name : "");
+  const personId = firstText(raw.personId, firstText(raw.studentId, row && row.student_id ? row.student_id : ""));
+  const personName = firstText(raw.personName, firstText(raw.studentName, row && row.student_name ? row.student_name : ""));
+  const personEmail = normalizeEmail(
+    firstText(raw.personEmail, firstText(raw.studentEmail, row && row.person_email ? row.person_email : ""))
+  );
   const groupIds = Array.isArray(raw.groupIds)
     ? raw.groupIds
     : Array.isArray(row && row.group_ids)
@@ -92,6 +95,8 @@ function mapFinanceRoleRow(row) {
     studentId: personId,
     personName,
     studentName: personName,
+    personEmail,
+    studentEmail: personEmail,
     groupIds,
   };
 }
@@ -317,6 +322,352 @@ function rowOrNull(result) {
   return result && result.rows && result.rows.length ? result.rows[0] : null;
 }
 
+function normalizeGroupId_(value) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (!raw) {
+    return "";
+  }
+  const match = raw.match(/[A-Z0-9]+/);
+  return match ? match[0] : raw;
+}
+
+function parseFinanceAmount_(value) {
+  const raw = String(value || "")
+    .replace(/,/g, "")
+    .trim();
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isPettyCashRequest_(record) {
+  const type = String((record && record.type) || "")
+    .trim()
+    .toLowerCase();
+  const method = String((record && record.paymentMethod) || "")
+    .trim()
+    .toLowerCase();
+  return type === "pettycash" || method === "pettycash";
+}
+
+function isPurchaseRequest_(record) {
+  const type = String((record && record.type) || "")
+    .trim()
+    .toLowerCase();
+  return type === "purchase";
+}
+
+function requiresRepresentative_(record) {
+  return parseFinanceAmount_(record && (record.amountActual || record.amountEstimated)) > 50000;
+}
+
+function requiresCommittee_(record) {
+  const amount = parseFinanceAmount_(record && (record.amountActual || record.amountEstimated));
+  const categoryType = String((record && record.categoryType) || "")
+    .trim()
+    .toLowerCase();
+  return amount >= 200000 || categoryType === "special";
+}
+
+function buildStudentIdByEmailMap_(rows) {
+  const map = {};
+  (rows || []).forEach((row) => {
+    const studentId = String((row && row.id) || "").trim();
+    if (!studentId) {
+      return;
+    }
+    const emailList = [
+      normalizeEmail((row && row.google_email) || ""),
+      normalizeEmail((row && row.email) || ""),
+    ].filter(Boolean);
+    emailList.forEach((email) => {
+      map[email] = studentId;
+    });
+  });
+  return map;
+}
+
+function mapFinanceRequestRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id ? row.id : raw.id),
+    type: firstText(raw.type, row && row.type ? row.type : ""),
+    title: firstText(raw.title, row && row.title ? row.title : ""),
+    description: firstText(raw.description, row && row.description ? row.description : ""),
+    categoryType: firstText(raw.categoryType, row && row.category_type ? row.category_type : ""),
+    amountEstimated:
+      raw.amountEstimated != null && raw.amountEstimated !== ""
+        ? raw.amountEstimated
+        : row && row.amount_estimated != null
+        ? row.amount_estimated
+        : "",
+    amountActual:
+      raw.amountActual != null && raw.amountActual !== ""
+        ? raw.amountActual
+        : row && row.amount_actual != null
+        ? row.amount_actual
+        : "",
+    currency: firstText(raw.currency, row && row.currency ? row.currency : "TWD"),
+    paymentMethod: firstText(raw.paymentMethod, row && row.payment_method ? row.payment_method : ""),
+    vendorName: firstText(raw.vendorName, row && row.vendor_name ? row.vendor_name : ""),
+    payeeName: firstText(raw.payeeName, row && row.payee_name ? row.payee_name : ""),
+    payeeBank: firstText(raw.payeeBank, row && row.payee_bank ? row.payee_bank : ""),
+    payeeBankCode: firstText(raw.payeeBankCode, firstText(raw.payeeBank, row && row.payee_bank ? row.payee_bank : "")),
+    payeeAccount: firstText(raw.payeeAccount, row && row.payee_account ? row.payee_account : ""),
+    relatedPurchaseId: firstText(raw.relatedPurchaseId, row && row.related_purchase_id ? row.related_purchase_id : ""),
+    noPurchaseReason: firstText(raw.noPurchaseReason, row && row.no_purchase_reason ? row.no_purchase_reason : ""),
+    expectedClearDate: firstText(raw.expectedClearDate, row && row.expected_clear_date ? row.expected_clear_date : ""),
+    attachments: Array.isArray(raw.attachments) ? raw.attachments : safeJsonArray(row && row.attachments),
+    status: firstText(raw.status, row && row.status ? row.status : ""),
+    applicantId: firstText(raw.applicantId, row && row.applicant_id ? row.applicant_id : ""),
+    applicantName: firstText(raw.applicantName, row && row.applicant_name ? row.applicant_name : ""),
+    applicantRole: firstText(raw.applicantRole),
+    applicantDepartment: firstText(raw.applicantDepartment, row && row.applicant_department ? row.applicant_department : ""),
+    applicantEmail: normalizeEmail(firstText(raw.applicantEmail)),
+    submittedAt: firstText(raw.submittedAt),
+    createdAt: firstText(raw.createdAt, row && row.created_at ? row.created_at : ""),
+    updatedAt: firstText(raw.updatedAt, row && row.updated_at ? row.updated_at : ""),
+  };
+}
+
+function mapFinanceActionRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id ? row.id : raw.id),
+    requestId: firstText(raw.requestId, row && row.request_id ? row.request_id : ""),
+    actorId: firstText(raw.actorId, row && row.actor_id ? row.actor_id : ""),
+    actorName: firstText(raw.actorName, row && row.actor_name ? row.actor_name : ""),
+    actorRole: firstText(raw.actorRole),
+    action: firstText(raw.action, firstText(raw.actionType, row && row.action_type ? row.action_type : "")),
+    actionType: firstText(raw.actionType, firstText(raw.action, row && row.action_type ? row.action_type : "")),
+    fromStatus: firstText(raw.fromStatus, row && row.from_status ? row.from_status : ""),
+    toStatus: firstText(raw.toStatus, row && row.to_status ? row.to_status : ""),
+    notes: firstText(raw.notes, row && row.notes ? row.notes : ""),
+    note: firstText(raw.note, firstText(raw.notes, row && row.notes ? row.notes : "")),
+    createdAt: firstText(raw.createdAt, row && row.created_at ? row.created_at : ""),
+  };
+}
+
+function resolveApplicantGroupRoleByMemberships_(record, memberships, studentIdByEmail = {}) {
+  let applicantId = String((record && record.applicantId) || "").trim();
+  if (!applicantId) {
+    const applicantEmail = normalizeEmail(record && record.applicantEmail);
+    applicantId = applicantEmail && studentIdByEmail[applicantEmail] ? String(studentIdByEmail[applicantEmail]).trim() : "";
+  }
+  if (!applicantId) {
+    return "";
+  }
+  const groupId = normalizeGroupId_(record && record.applicantDepartment);
+  for (const item of memberships || []) {
+    if (String(item.personId || "").trim() !== applicantId) {
+      continue;
+    }
+    if (groupId && normalizeGroupId_(item.groupId || "") !== groupId) {
+      continue;
+    }
+    return String(item.roleInGroup || "")
+      .trim()
+      .toLowerCase();
+  }
+  return "";
+}
+
+function resolveFinanceInitialStatus_(record, memberships, studentIdByEmail = {}) {
+  let applicantRole = String((record && record.applicantRole) || "")
+    .trim()
+    .toLowerCase();
+  if (!applicantRole) {
+    applicantRole = resolveApplicantGroupRoleByMemberships_(record, memberships, studentIdByEmail);
+  }
+  return applicantRole === "lead" ? "pending_rep" : "pending_lead";
+}
+
+function isSameApplicant_(record, actorId, actorEmail) {
+  const applicantId = String((record && record.applicantId) || "").trim();
+  const applicantEmail = normalizeEmail((record && record.applicantEmail) || "");
+  if (actorId && applicantId && actorId === applicantId) {
+    return true;
+  }
+  if (actorEmail && applicantEmail && normalizeEmail(actorEmail) === applicantEmail) {
+    return true;
+  }
+  return false;
+}
+
+function actorHasGroupRole_(memberships, actorId, groupId, roleList) {
+  const normalizedGroup = normalizeGroupId_(groupId || "");
+  const roleSet = new Set((roleList || []).map((item) => String(item || "").trim().toLowerCase()));
+  for (const item of memberships || []) {
+    if (String(item.personId || "").trim() !== actorId) {
+      continue;
+    }
+    if (normalizedGroup && normalizeGroupId_(item.groupId || "") !== normalizedGroup) {
+      continue;
+    }
+    const roleInGroup = String(item.roleInGroup || "")
+      .trim()
+      .toLowerCase();
+    if (roleSet.has(roleInGroup)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function actorHasFinanceRole_(roles, actorId, actorEmail, targetRole) {
+  const target = String(targetRole || "")
+    .trim()
+    .toLowerCase();
+  const normalizedEmail = normalizeEmail(actorEmail || "");
+  return (roles || []).some((item) => {
+    const role = String(item.role || "")
+      .trim()
+      .toLowerCase();
+    if (role !== target) {
+      return false;
+    }
+    const personId = String(item.personId || item.studentId || "").trim();
+    const personEmail = normalizeEmail(item.personEmail || item.studentEmail || "");
+    if (actorId && personId && actorId === personId) {
+      return true;
+    }
+    if (normalizedEmail && personEmail && normalizedEmail === personEmail) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function canFinanceActorApprove_(record, actorRole, actorId, actorEmail, memberships, financeRoles, studentIdByEmail = {}) {
+  const status = String((record && record.status) || "")
+    .trim()
+    .toLowerCase();
+  const role = String(actorRole || "")
+    .trim()
+    .toLowerCase();
+  if (!status || !status.startsWith("pending_")) {
+    return false;
+  }
+
+  let resolvedActorId = String(actorId || "").trim();
+  if (!resolvedActorId) {
+    const normalizedActorEmail = normalizeEmail(actorEmail || "");
+    resolvedActorId = normalizedActorEmail && studentIdByEmail[normalizedActorEmail] ? String(studentIdByEmail[normalizedActorEmail]).trim() : "";
+  }
+
+  if (isSameApplicant_(record, resolvedActorId, actorEmail)) {
+    return false;
+  }
+
+  if (status === "pending_lead") {
+    if (role !== "lead") {
+      return false;
+    }
+    let applicantRole = String((record && record.applicantRole) || "")
+      .trim()
+      .toLowerCase();
+    if (!applicantRole) {
+      applicantRole = resolveApplicantGroupRoleByMemberships_(record, memberships, studentIdByEmail);
+    }
+    const groupId = String((record && record.applicantDepartment) || "").trim();
+    if (applicantRole === "deputy") {
+      return actorHasGroupRole_(memberships, resolvedActorId, groupId, ["lead"]);
+    }
+    return actorHasGroupRole_(memberships, resolvedActorId, groupId, ["lead", "deputy"]);
+  }
+
+  if (status === "pending_rep") {
+    if (role !== "rep") {
+      return false;
+    }
+    return actorHasGroupRole_(memberships, resolvedActorId, "A", ["lead", "deputy"]);
+  }
+
+  if (status === "pending_committee") {
+    if (role !== "committee") {
+      return false;
+    }
+    return actorHasGroupRole_(memberships, resolvedActorId, "", ["lead", "deputy"]);
+  }
+
+  if (status === "pending_accounting") {
+    if (role !== "accounting") {
+      return false;
+    }
+    return actorHasFinanceRole_(financeRoles, resolvedActorId, actorEmail, "accounting");
+  }
+
+  if (status === "pending_cashier") {
+    if (role !== "cashier") {
+      return false;
+    }
+    return actorHasFinanceRole_(financeRoles, resolvedActorId, actorEmail, "cashier");
+  }
+
+  return false;
+}
+
+function canApproveFinanceRequestForIdentity_(record, actorId, actorEmail, memberships, financeRoles, studentIdByEmail = {}) {
+  const roles = ["lead", "rep", "committee", "accounting", "cashier"];
+  return roles.some((role) =>
+    canFinanceActorApprove_(record, role, actorId, actorEmail, memberships, financeRoles, studentIdByEmail)
+  );
+}
+
+function resolveFinanceNextStatus_(record, actorRole) {
+  const role = String(actorRole || "")
+    .trim()
+    .toLowerCase();
+  const status = String((record && record.status) || "")
+    .trim()
+    .toLowerCase();
+  const needsRep = requiresRepresentative_(record);
+  const needsCommittee = requiresCommittee_(record);
+  const isPettyCash = isPettyCashRequest_(record);
+  const isPurchase = isPurchaseRequest_(record);
+
+  if (role === "lead") {
+    if (needsRep || needsCommittee) {
+      return "pending_rep";
+    }
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "rep") {
+    if (needsCommittee) {
+      return "pending_committee";
+    }
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "committee") {
+    if (isPurchase) {
+      return "closed";
+    }
+    return isPettyCash ? "pending_cashier" : "pending_accounting";
+  }
+
+  if (role === "accounting") {
+    return isPettyCash ? "closed" : "pending_cashier";
+  }
+
+  if (role === "cashier") {
+    if (status === "pending_cashier" && isPettyCash) {
+      return "pending_accounting";
+    }
+    return "closed";
+  }
+
+  return String((record && record.status) || "").trim();
+}
+
 export async function dispatchNativeAction({
   action,
   payload,
@@ -361,46 +712,91 @@ export async function dispatchNativeAction({
     return memberships;
   };
 
-  const maybeEscalateLeadSubmission_ = async (requestRow) => {
-    if (!requestRow || typeof requestRow !== "object") {
-      return requestRow;
+  let financeApprovalContextCache = null;
+  const loadFinanceApprovalContext_ = async () => {
+    if (financeApprovalContextCache) {
+      return financeApprovalContextCache;
     }
-    const status = String(requestRow.status || "").trim().toLowerCase();
-    if (status !== "pending_lead") {
-      return requestRow;
-    }
-    const applicantId = firstText(requestRow.applicantId);
-    const applicantDepartment = firstText(requestRow.applicantDepartment).toUpperCase();
-    if (!applicantId || !applicantDepartment) {
-      return requestRow;
-    }
+    const [membershipsResult, rolesResult, studentsResult, directoriesResult] = await Promise.all([
+      query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
+      query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
+      query(`select id, google_email from students order by coalesce(id,'')`),
+      query(`select id, email from directories order by coalesce(id,'')`),
+    ]);
 
-    const membershipResult = await query(
-      `select role_in_group
-       from group_memberships
-       where person_id = $1 and group_id = $2
-       order by id
-       limit 1`,
-      [applicantId, applicantDepartment]
-    );
-    const roleInGroup = firstText(rowOrNull(membershipResult)?.role_in_group).toLowerCase();
-
-    // Policy:
-    // - 組長本人申請：跳過 pending_lead，往上到 pending_rep（避免自簽）
-    // - A 組副班代申請：維持 pending_lead，由班代簽核
-    if (roleInGroup !== "lead") {
-      return requestRow;
-    }
-
-    requestRow.status = "pending_rep";
-    requestRow.raw = {
-      ...(requestRow.raw && typeof requestRow.raw === "object" ? requestRow.raw : {}),
-      status: "pending_rep",
-      escalatedByPolicy:
-        applicantDepartment === "A" ? "class-rep-lead-self-skip" : "lead-submission-to-rep",
-      escalatedAt: nowIso(),
+    financeApprovalContextCache = {
+      memberships: membershipsResult.rows.map((row) => ({
+        id: row.id || "",
+        personId: row.person_id || "",
+        personName: row.person_name || "",
+        groupId: row.group_id || "",
+        roleInGroup: row.role_in_group || "",
+        notes: row.notes || "",
+        createdAt: row.created_at || "",
+        updatedAt: row.updated_at || "",
+      })),
+      financeRoles: rolesResult.rows.map((row) => mapFinanceRoleRow(row)),
+      studentIdByEmail: {
+        ...buildStudentIdByEmailMap_(studentsResult.rows),
+        ...buildStudentIdByEmailMap_(directoriesResult.rows),
+      },
     };
-    return requestRow;
+    return financeApprovalContextCache;
+  };
+
+  const canViewFinanceRequest_ = async (requestRecord) => {
+    requireAuth();
+    if (!requestRecord || !requestRecord.id) {
+      return false;
+    }
+
+    const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+    if (isSameApplicant_(requestRecord, auth.studentId, actorEmail)) {
+      return true;
+    }
+
+    const context = await loadFinanceApprovalContext_();
+    if (
+      canApproveFinanceRequestForIdentity_(
+        requestRecord,
+        auth.studentId,
+        actorEmail,
+        context.memberships,
+        context.financeRoles,
+        context.studentIdByEmail
+      )
+    ) {
+      return true;
+    }
+
+    const ownMemberships = await listMembershipsByStudentId(auth.studentId);
+    const studentProfile = await findStudentProfileById(auth.studentId);
+    const ownNameCandidates = new Set([
+      firstText(auth && auth.profile && auth.profile.name ? auth.profile.name : "").toLowerCase(),
+      firstText(studentProfile && studentProfile.name ? studentProfile.name : "").toLowerCase(),
+    ]);
+    ownMemberships.forEach((item) => {
+      const value = firstText(item.personName).toLowerCase();
+      if (value) {
+        ownNameCandidates.add(value);
+      }
+    });
+    const ownNames = Array.from(ownNameCandidates).filter(Boolean);
+
+    const signedResult = ownNames.length
+      ? await query(
+          `select 1
+           from finance_actions
+           where request_id = $1
+             and (actor_id = $2 or lower(coalesce(actor_name,'')) = any($3::text[]))
+           limit 1`,
+          [String(requestRecord.id || "").trim(), auth.studentId, ownNames]
+        )
+      : await query(`select 1 from finance_actions where request_id = $1 and actor_id = $2 limit 1`, [
+          String(requestRecord.id || "").trim(),
+          auth.studentId,
+        ]);
+    return Boolean(rowOrNull(signedResult));
   };
 
   let softballManagerCache = null;
@@ -1470,7 +1866,57 @@ export async function dispatchNativeAction({
       if (!row.applicantName && student && student.name) {
         row.applicantName = student.name;
       }
-      await maybeEscalateLeadSubmission_(row);
+
+      const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
+      const normalizedStatus = String(row.status || "").trim().toLowerCase();
+      if (!normalizedStatus || normalizedStatus === "pending_lead") {
+        row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+
+      const applicantEmail = normalizeEmail(
+        firstText(
+          row.raw && row.raw.applicantEmail,
+          firstText(
+            auth && auth.profile && auth.profile.email ? auth.profile.email : "",
+            student && student.email ? student.email : ""
+          )
+        )
+      );
+
+      row.raw = {
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        description: row.description,
+        categoryType: row.categoryType,
+        amountEstimated: row.amountEstimated,
+        amountActual: row.amountActual,
+        currency: row.currency,
+        paymentMethod: row.paymentMethod,
+        vendorName: row.vendorName,
+        payeeName: row.payeeName,
+        payeeBank: row.payeeBank,
+        payeeBankCode: firstText(row.raw && row.raw.payeeBankCode, row.payeeBank),
+        payeeAccount: row.payeeAccount,
+        relatedPurchaseId: row.relatedPurchaseId,
+        noPurchaseReason: row.noPurchaseReason,
+        expectedClearDate: row.expectedClearDate,
+        attachments: row.attachments || [],
+        status: row.status,
+        applicantId: row.applicantId,
+        applicantName: row.applicantName,
+        applicantDepartment: row.applicantDepartment,
+        applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
+        applicantEmail: applicantEmail,
+        submittedAt:
+          row.status !== "draft"
+            ? firstText(row.raw && row.raw.submittedAt, nowIso())
+            : firstText(row.raw && row.raw.submittedAt),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
       await query(
         `insert into finance_requests (
           id, type, title, description, category_type,
@@ -1552,18 +1998,56 @@ export async function dispatchNativeAction({
       const manualCreatedBy = auth.studentId;
       const manualCreatedByName = firstText(
         body.manualCreatedByName,
-        auth.profile && auth.profile.name ? auth.profile.name : "",
-        auth.studentId
+        firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId)
+      );
+
+      const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
+      const normalizedStatus = String(row.status || "").trim().toLowerCase();
+      if (!normalizedStatus || normalizedStatus === "pending_lead") {
+        row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+
+      const applicantEmail = normalizeEmail(
+        firstText(row.raw && row.raw.applicantEmail, student && student.email ? student.email : "")
       );
 
       row.raw = {
         ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        description: row.description,
+        categoryType: row.categoryType,
+        amountEstimated: row.amountEstimated,
+        amountActual: row.amountActual,
+        currency: row.currency,
+        paymentMethod: row.paymentMethod,
+        vendorName: row.vendorName,
+        payeeName: row.payeeName,
+        payeeBank: row.payeeBank,
+        payeeBankCode: firstText(row.raw && row.raw.payeeBankCode, row.payeeBank),
+        payeeAccount: row.payeeAccount,
+        relatedPurchaseId: row.relatedPurchaseId,
+        noPurchaseReason: row.noPurchaseReason,
+        expectedClearDate: row.expectedClearDate,
+        attachments: row.attachments || [],
+        status: row.status,
+        applicantId: row.applicantId,
+        applicantName: row.applicantName,
+        applicantDepartment: row.applicantDepartment,
+        applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
+        applicantEmail: applicantEmail,
+        submittedAt:
+          row.status !== "draft"
+            ? firstText(row.raw && row.raw.submittedAt, nowIso())
+            : firstText(row.raw && row.raw.submittedAt),
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
         manualCreatedBy,
         manualCreatedByName,
         manualCreatedAt: now,
       };
-
-      await maybeEscalateLeadSubmission_(row);
       await query(
         `insert into finance_requests (
           id, type, title, description, category_type,
@@ -1631,7 +2115,7 @@ export async function dispatchNativeAction({
     case "updateFinanceRequest": {
       requireAuth();
 
-      const requestId = firstText(body.id, body.data && body.data.id, body.request && body.request.id);
+      const requestId = firstText(body.id, firstText(body.data && body.data.id, body.request && body.request.id));
       const requestAction = firstText(body.requestAction);
       const hasData = Boolean(body.data && typeof body.data === "object");
 
@@ -1648,27 +2132,13 @@ export async function dispatchNativeAction({
         }
 
         const existingRaw = existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw : {};
-        const type = String(existingRow.type || existingRaw.type || "").trim().toLowerCase();
-        const fromStatus = String(existingRow.status || existingRaw.status || "").trim() || "draft";
+        const existingRecord = mapFinanceRequestRow(existingRow);
+        const fromStatus = String(existingRecord.status || "").trim() || "draft";
 
-        const isOwner = String(existingRow.applicant_id || "").trim() === String(auth.studentId || "").trim();
-        const memberships = await listMembershipsByStudentId(auth.studentId);
-        const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
-
-        const getWorkflowSteps_ = (requestType) => {
-          if (String(requestType || "").trim().toLowerCase() === "purchase") {
-            return ["pending_lead", "pending_rep", "closed"];
-          }
-          return [
-            "pending_lead",
-            "pending_rep",
-            "pending_accounting",
-            "pending_cashier",
-            "closed",
-          ];
-        };
+        const isOwner = String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim();
 
         let toStatus = fromStatus;
+        let approvalContext = null;
         if (requestAction === "withdraw") {
           if (!isOwner) {
             const error = new Error("Unauthorized");
@@ -1676,32 +2146,51 @@ export async function dispatchNativeAction({
             throw error;
           }
           toStatus = "withdrawn";
-        } else if (requestAction === "return") {
-          if (!isAdmin) {
+        } else if (requestAction === "return" || requestAction === "approve") {
+          const actorRole = firstText(body.actorRole).toLowerCase();
+          if (!actorRole) {
             const error = new Error("Unauthorized");
             error.statusCode = 403;
             throw error;
           }
-          toStatus = "returned";
-        } else if (requestAction === "approve") {
-          if (!isAdmin) {
+
+          approvalContext = await loadFinanceApprovalContext_();
+          const { memberships, financeRoles, studentIdByEmail } = approvalContext;
+
+          const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+          const canApprove = canFinanceActorApprove_(
+            existingRecord,
+            actorRole,
+            auth.studentId,
+            actorEmail,
+            memberships,
+            financeRoles,
+            studentIdByEmail
+          );
+          if (!canApprove) {
             const error = new Error("Unauthorized");
             error.statusCode = 403;
             throw error;
           }
-          const steps = getWorkflowSteps_(type);
-          const idx = steps.indexOf(fromStatus);
-          if (idx >= 0 && idx < steps.length - 1) {
-            toStatus = steps[idx + 1];
+
+          if (requestAction === "return") {
+            toStatus = "returned";
+          } else {
+            toStatus = resolveFinanceNextStatus_(existingRecord, actorRole);
           }
         } else {
           return { ok: false, data: null, error: `Unsupported requestAction: ${requestAction}` };
         }
 
         const now = nowIso();
+        const resolvedApplicantRole =
+          approvalContext && !firstText(existingRaw.applicantRole)
+            ? resolveApplicantGroupRoleByMemberships_(existingRecord, approvalContext.memberships, approvalContext.studentIdByEmail)
+            : "";
         const nextRaw = {
           ...existingRaw,
           status: toStatus,
+          applicantRole: firstText(existingRaw.applicantRole, resolvedApplicantRole),
           updatedAt: now,
         };
 
@@ -1712,9 +2201,12 @@ export async function dispatchNativeAction({
 
         // Record workflow action for approvals UI.
         const actionId = crypto.randomUUID();
-        const actorName = firstText(body.actorName, auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId);
+        const actorName = firstText(
+          body.actorName,
+          firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId)
+        );
         const actorRole = firstText(body.actorRole);
-        const notes = firstText(body.notes);
+        const notes = firstText(body.actorNote, body.notes);
         const actionRaw = {
           id: actionId,
           requestId: requestId,
@@ -1756,9 +2248,10 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Missing id" };
       }
 
-      const existing = await query(`select applicant_id from finance_requests where id = $1 limit 1`, [row.id]);
+      const existing = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
       const existingRow = rowOrNull(existing);
-      const isOwner = existingRow && String(existingRow.applicant_id || "").trim() === String(auth.studentId || "").trim();
+      const existingRecord = existingRow ? mapFinanceRequestRow(existingRow) : null;
+      const isOwner = existingRecord && String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim();
       let isAdmin = false;
       if (!isOwner) {
         const memberships = await listMembershipsByStudentId(auth.studentId);
@@ -1770,7 +2263,77 @@ export async function dispatchNativeAction({
         throw error;
       }
 
-      await maybeEscalateLeadSubmission_(row);
+      row.applicantId = firstText(row.applicantId, existingRecord && existingRecord.applicantId ? existingRecord.applicantId : auth.studentId);
+      row.applicantDepartment = firstText(
+        row.applicantDepartment,
+        existingRecord && existingRecord.applicantDepartment ? existingRecord.applicantDepartment : ""
+      );
+      const applicantProfile = await findStudentProfileById(row.applicantId);
+      if (!row.applicantName && applicantProfile && applicantProfile.name) {
+        row.applicantName = applicantProfile.name;
+      }
+
+      const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
+      const normalizedAction = requestAction.toLowerCase();
+      const normalizedStatus = String(row.status || "").trim().toLowerCase();
+      if (normalizedAction === "submit" || !normalizedStatus || normalizedStatus === "pending_lead") {
+        row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+
+      const applicantEmail = normalizeEmail(
+        firstText(
+          row.raw && row.raw.applicantEmail,
+          firstText(
+            existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "",
+            firstText(
+              applicantProfile && applicantProfile.email ? applicantProfile.email : "",
+              auth && auth.profile && auth.profile.email ? auth.profile.email : ""
+            )
+          )
+        )
+      );
+
+      row.raw = {
+        ...((existingRow && existingRow.raw && typeof existingRow.raw === "object" && existingRow.raw) || {}),
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        description: row.description,
+        categoryType: row.categoryType,
+        amountEstimated: row.amountEstimated,
+        amountActual: row.amountActual,
+        currency: row.currency,
+        paymentMethod: row.paymentMethod,
+        vendorName: row.vendorName,
+        payeeName: row.payeeName,
+        payeeBank: row.payeeBank,
+        payeeBankCode: firstText(row.raw && row.raw.payeeBankCode, row.payeeBank),
+        payeeAccount: row.payeeAccount,
+        relatedPurchaseId: row.relatedPurchaseId,
+        noPurchaseReason: row.noPurchaseReason,
+        expectedClearDate: row.expectedClearDate,
+        attachments: row.attachments || [],
+        status: row.status,
+        applicantId: row.applicantId,
+        applicantName: row.applicantName,
+        applicantDepartment: row.applicantDepartment,
+        applicantRole: firstText(
+          row.raw && row.raw.applicantRole,
+          firstText(existingRecord && existingRecord.applicantRole ? existingRecord.applicantRole : "", applicantRole)
+        ),
+        applicantEmail: applicantEmail,
+        submittedAt:
+          normalizedAction === "submit" || row.status !== "draft"
+            ? firstText(
+                row.raw && row.raw.submittedAt,
+                firstText(existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : "", nowIso())
+              )
+            : firstText(row.raw && row.raw.submittedAt, existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : ""),
+        createdAt: firstText(existingRecord && existingRecord.createdAt ? existingRecord.createdAt : "", row.createdAt),
+        updatedAt: row.updatedAt,
+      };
       await query(
         `update finance_requests set
           type=$2,title=$3,description=$4,category_type=$5,
@@ -1820,22 +2383,48 @@ export async function dispatchNativeAction({
             `select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`,
             [auth.studentId]
           );
-      const requests = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const requests = result.rows.map((row) => mapFinanceRequestRow(row));
       return { ok: true, data: { requests }, error: null };
     }
 
     case "listFinanceActions": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
       const requestId = firstText(body.requestId);
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+
+      if (!requestId && !isAdmin) {
+        const error = new Error("Unauthorized");
+        error.statusCode = 403;
+        throw error;
+      }
+
+      if (requestId && !isAdmin) {
+        const requestResult = await query(`select * from finance_requests where id = $1 limit 1`, [requestId]);
+        const requestRow = rowOrNull(requestResult);
+        if (!requestRow) {
+          return { ok: true, data: { actions: [] }, error: null };
+        }
+        const canView = await canViewFinanceRequest_(mapFinanceRequestRow(requestRow));
+        if (!canView) {
+          const error = new Error("Unauthorized");
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+
       const result = requestId
         ? await query(`select * from finance_actions where request_id = $1 order by coalesce(created_at,''), id`, [requestId])
         : await query(`select * from finance_actions order by coalesce(created_at,'') desc, id desc limit 500`);
-      const actions = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const actions = result.rows.map((row) => mapFinanceActionRow(row));
       return { ok: true, data: { actions }, error: null };
     }
 
     case "listFinanceActionsByActor": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+
       const actorId = firstText(body.actorId);
       const actorName = firstText(body.actorName);
       const actorNames = safeJsonArray(body.actorNames)
@@ -1843,36 +2432,92 @@ export async function dispatchNativeAction({
         .filter(Boolean);
 
       let result;
-      if (actorId) {
-        result = await query(
-          `select * from finance_actions where actor_id = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
-          [actorId]
-        );
-      } else if (actorName) {
-        result = await query(
-          `select * from finance_actions where actor_name = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
-          [actorName]
-        );
-      } else if (actorNames.length) {
-        result = await query(
-          `select * from finance_actions where actor_name = any($1::text[]) order by coalesce(created_at,'') desc, id desc limit 500`,
-          [actorNames]
-        );
+      if (isAdmin) {
+        if (actorId) {
+          result = await query(
+            `select * from finance_actions where actor_id = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
+            [actorId]
+          );
+        } else if (actorName) {
+          result = await query(
+            `select * from finance_actions where actor_name = $1 order by coalesce(created_at,'') desc, id desc limit 500`,
+            [actorName]
+          );
+        } else if (actorNames.length) {
+          result = await query(
+            `select * from finance_actions where actor_name = any($1::text[]) order by coalesce(created_at,'') desc, id desc limit 500`,
+            [actorNames]
+          );
+        } else {
+          return { ok: true, data: { actions: [] }, error: null };
+        }
       } else {
-        return { ok: true, data: { actions: [] }, error: null };
+        const studentProfile = await findStudentProfileById(auth.studentId);
+        const ownNameCandidates = new Set([
+          firstText(auth && auth.profile && auth.profile.name ? auth.profile.name : "").toLowerCase(),
+          firstText(studentProfile && studentProfile.name ? studentProfile.name : "").toLowerCase(),
+        ]);
+        memberships.forEach((item) => {
+          const value = firstText(item.personName).toLowerCase();
+          if (value) {
+            ownNameCandidates.add(value);
+          }
+        });
+        const ownNames = Array.from(ownNameCandidates).filter(Boolean);
+
+        if (ownNames.length) {
+          result = await query(
+            `select *
+             from finance_actions
+             where actor_id = $1
+                or lower(coalesce(actor_name,'')) = any($2::text[])
+             order by coalesce(created_at,'') desc, id desc
+             limit 500`,
+            [auth.studentId, ownNames]
+          );
+        } else {
+          result = await query(
+            `select *
+             from finance_actions
+             where actor_id = $1
+             order by coalesce(created_at,'') desc, id desc
+             limit 500`,
+            [auth.studentId]
+          );
+        }
       }
 
-      const actions = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const actions = result.rows.map((row) => mapFinanceActionRow(row));
       return { ok: true, data: { actions }, error: null };
     }
 
     case "listFinanceActionsSummary": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
       const requestIds = safeJsonArray(body.requestIds)
         .map((item) => String(item || "").trim())
         .filter(Boolean);
 
       if (requestIds.length) {
+        let allowedIds = requestIds;
+        if (!isAdmin) {
+          const requestsResult = await query(`select * from finance_requests where id = any($1::text[])`, [requestIds]);
+          const allowedSet = new Set();
+          for (const row of requestsResult.rows) {
+            const record = mapFinanceRequestRow(row);
+            const canView = await canViewFinanceRequest_(record);
+            if (canView) {
+              allowedSet.add(String(record.id || "").trim());
+            }
+          }
+          allowedIds = requestIds.filter((id) => allowedSet.has(id));
+        }
+
+        if (!allowedIds.length) {
+          return { ok: true, data: { summary: {} }, error: null };
+        }
+
         const result = await query(
           `with latest as (
              select distinct on (request_id) *
@@ -1881,7 +2526,7 @@ export async function dispatchNativeAction({
              order by request_id, coalesce(created_at,'') desc, id desc
            )
            select * from latest`,
-          [requestIds]
+          [allowedIds]
         );
         const summary = {};
         for (const row of result.rows) {
@@ -1889,9 +2534,13 @@ export async function dispatchNativeAction({
           if (!requestId) {
             continue;
           }
-          summary[requestId] = { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id };
+          summary[requestId] = mapFinanceActionRow(row);
         }
         return { ok: true, data: { summary }, error: null };
+      }
+
+      if (!isAdmin) {
+        return { ok: true, data: { summary: [] }, error: null };
       }
 
       // Fallback: global action_type counts.
@@ -1968,10 +2617,7 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
-          requests: requests.rows.map((row) => ({
-            ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-            id: row.id,
-          })),
+          requests: requests.rows.map((row) => mapFinanceRequestRow(row)),
           students: students.rows.map((row) => ({
             id: row.id || "",
             name: row.name || "",
@@ -1997,7 +2643,7 @@ export async function dispatchNativeAction({
     }
 
     case "listFinanceAdminBootstrap": {
-      await requireGroupAccess(["D", "E"]);
+      requireAuth();
       const includeRequests = body.includeRequests === true;
 
       const [students, memberships, categoryTypes, roles, fundEvents, fundSummary, requests] = await Promise.all([
@@ -2052,9 +2698,7 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
-          requests: includeRequests
-            ? requests.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }))
-            : undefined,
+          requests: includeRequests ? requests.rows.map((row) => mapFinanceRequestRow(row)) : undefined,
           students: students.rows.map((row) => ({
             id: row.id || "",
             name: row.name || "",
@@ -2089,33 +2733,59 @@ export async function dispatchNativeAction({
 
     case "listApprovalsOverview": {
       requireAuth();
-      // Overview is user-centric: always summarize the caller's own requests.
-      const result = await query(
-        `select status, count(*)::int as count
-         from finance_requests
-         where applicant_id = $1
-         group by status`,
-        [auth.studentId]
-      );
+
+      const context = await loadFinanceApprovalContext_();
+      const requestsResult = await query(`select * from finance_requests order by coalesce(updated_at,'') desc, id desc`);
+      const actorId = String(auth.studentId || "").trim();
+      const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+
       let pending = 0;
-      let returned = 0;
-      let completed = 0;
       let inProgress = 0;
-      let total = 0;
-      for (const row of result.rows) {
-        const status = String(row.status || "").trim();
-        const count = Number(row.count || 0);
-        total += count;
+      let completed = 0;
+      let returned = 0;
+
+      for (const row of requestsResult.rows) {
+        const record = mapFinanceRequestRow(row);
+        const status = String(record.status || "").trim().toLowerCase();
+        const isMine = isSameApplicant_(record, actorId, actorEmail);
+
+        if (status === "closed") {
+          if (isMine) {
+            completed += 1;
+          }
+          continue;
+        }
+
         if (status === "returned") {
-          returned += count;
-        } else if (status === "closed" || status === "withdrawn") {
-          completed += count;
-        } else if (status.startsWith("pending_")) {
-          pending += count;
-        } else if (status && status !== "draft") {
-          inProgress += count;
+          if (isMine) {
+            returned += 1;
+          }
+          continue;
+        }
+
+        if (!status.startsWith("pending_")) {
+          continue;
+        }
+
+        const canApprove = canApproveFinanceRequestForIdentity_(
+          record,
+          actorId,
+          actorEmail,
+          context.memberships,
+          context.financeRoles,
+          context.studentIdByEmail
+        );
+        if (canApprove) {
+          pending += 1;
+          continue;
+        }
+
+        if (isMine) {
+          inProgress += 1;
         }
       }
+
+      const total = pending + inProgress + completed + returned;
       return { ok: true, data: { pending, inProgress, completed, returned, total }, error: null };
     }
 
