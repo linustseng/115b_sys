@@ -1278,7 +1278,7 @@ export async function dispatchNativeAction({
           id: String(row.id || "").trim(),
           email: normalizeEmail(row.email || ""),
           name: firstText(row.preferred_name, firstText(row.name_zh, fallbackName)),
-          nameZh: firstText(row.name_zh, fallbackName),
+          nameZh: firstText(row.name_zh),
           displayName: firstText(row.preferred_name),
           company: firstText(row.company),
           group: firstText(row.group_id),
