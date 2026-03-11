@@ -2493,29 +2493,31 @@ function FinanceAdminPage({ shared }) {
 
             <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
               <div className="card p-6 sm:p-8">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-lg font-semibold text-slate-900">收款紀錄</h2>
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="badge">
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
                       {fundEvents.find((item) => item.id === fundPaymentForm.eventId)?.title ||
                         "尚未選擇班費事件"}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={openBatchAccountModal_}
+                        disabled={!fundPayments.length}
+                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                        title="將目前未入帳的收款一次入帳"
+                      >
+                        批次入帳
+                      </button>
+                      <button
+                        type="button"
+                        onClick={startNewFundPayment_}
+                        className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        新增收款
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={openBatchAccountModal_}
-                      disabled={!fundPayments.length}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-50"
-                      title="將目前未入帳的收款一次入帳"
-                    >
-                      批次入帳
-                    </button>
-                    <button
-                      type="button"
-                      onClick={startNewFundPayment_}
-                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      新增收款
-                    </button>
                   </div>
                 </div>
                 <div className="mt-4 space-y-3">
@@ -2567,10 +2569,10 @@ function FinanceAdminPage({ shared }) {
                                 (String(item.id || "").trim() &&
                                   fundPaymentEditingLoadingId === String(item.id || "").trim())
                               }
-                              className={`rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60 ${
+                              className={`rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
                                 item.accountedAt
-                                  ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300"
+                                  ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                  : "bg-emerald-600 text-white hover:bg-emerald-700"
                               }`}
                               title={item.accountedAt ? "撤銷入帳（清除入帳日期）" : "一鍵入帳：入帳日期=今天"}
                             >
