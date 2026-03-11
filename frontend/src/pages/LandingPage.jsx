@@ -519,9 +519,57 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   };
 
+  const refreshApprovalsOverviewNow_ = async () => {
+    if (!hasGoogleLogin || needsReauth) {
+      return;
+    }
+    const studentId = googleLinkedStudent && googleLinkedStudent.id ? String(googleLinkedStudent.id).trim() : "";
+    const email =
+      googleLinkedStudent && googleLinkedStudent.email
+        ? String(googleLinkedStudent.email).trim().toLowerCase()
+        : "";
+    if (!studentId && !email) {
+      return;
+    }
+    const cacheKey = `${approvalsOverviewCachePrefix}:${studentId || email}`;
+    try {
+      const { result } = await apiRequest({
+        action: "listApprovalsOverview",
+        studentId: studentId,
+        email: email,
+        // Avoid reusing any short-lived in-memory read cache when the user explicitly opens details.
+        cacheBuster: Date.now(),
+      });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "簽核總覽載入失敗");
+      }
+      const data = result.data || {};
+      const payload = {
+        pending: Number(data.pending || 0),
+        inProgress: Number(data.inProgress || 0),
+        completed: Number(data.completed || 0),
+        returned: Number(data.returned || 0),
+        total: Number(data.total || 0),
+      };
+      setApprovalsOverview(payload);
+      setApprovalsOverviewLoaded(true);
+      setApprovalsOverviewError("");
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), ...payload }));
+      } catch (error) {
+        // Ignore cache write errors.
+      }
+    } catch (error) {
+      setApprovalsOverviewError(error.message || "簽核總覽載入失敗");
+      setApprovalsOverviewLoaded(true);
+    }
+  };
+
   const openApprovalsCenter = (targetTab = "pending") => {
     setApprovalsDetailTab(String(targetTab || "pending").trim().toLowerCase());
     setShowApprovalsCenter(true);
+    // If the user is expanding details, refresh the summary to avoid "摘要有數字但明細是 0" confusion.
+    refreshApprovalsOverviewNow_();
     if (mountApprovalsCenter) {
       return;
     }

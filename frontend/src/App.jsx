@@ -721,6 +721,7 @@ const API_POST_ACTIONS = new Set([
   "upsertMySoftballPlayerProfile",
   "listHomeBootstrap",
   "listLandingBootstrap",
+  "listApprovalsOverview",
   "getCheckinBootstrap",
   "getRegistrationBootstrap",
   "listEvents",
