@@ -1,19 +1,66 @@
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
 import lineLinkGuide from "./assets/line_link.jpg";
-const AdminPage = React.lazy(() => import("./pages/AdminPage"));
-const HomePage = React.lazy(() => import("./pages/HomePage"));
-const LandingPage = React.lazy(() => import("./pages/LandingPage"));
-const ProfilePage = React.lazy(() => import("./pages/ProfilePage"));
-const BirthdayPage = React.lazy(() => import("./pages/BirthdayPage"));
-const RegistrationPage = React.lazy(() => import("./pages/RegistrationPage"));
-const CheckinPage = React.lazy(() => import("./pages/CheckinPage"));
-const OrderingPage = React.lazy(() => import("./pages/OrderingPage"));
-const FinancePage = React.lazy(() => import("./pages/FinancePage"));
-const ApprovalsPage = React.lazy(() => import("./pages/ApprovalsPage"));
-const FinanceAdminPage = React.lazy(() => import("./pages/FinanceAdminPage"));
-const SoftballPage = React.lazy(() => import("./pages/SoftballPage"));
-const SoftballPlayerPage = React.lazy(() => import("./pages/SoftballPlayerPage"));
+
+const lazyImportWithRetry_ = (loader, key) => {
+  const storageKey = `emba115b.lazy_retry:${String(key || "").trim() || "page"}`;
+  return React.lazy(() =>
+    loader()
+      .then((module) => {
+        if (typeof window !== "undefined") {
+          try {
+            window.sessionStorage.removeItem(storageKey);
+          } catch (error) {
+            // Ignore storage failures.
+          }
+        }
+        return module;
+      })
+      .catch((error) => {
+        const message = String((error && error.message) || "");
+        const isChunkError =
+          message.includes("Failed to fetch dynamically imported module") ||
+          message.includes("Importing a module script failed") ||
+          message.includes("ChunkLoadError") ||
+          message.includes("Loading chunk");
+
+        if (typeof window !== "undefined" && isChunkError) {
+          let hasRetried = false;
+          try {
+            hasRetried = window.sessionStorage.getItem(storageKey) === "1";
+          } catch (storageError) {
+            hasRetried = false;
+          }
+          if (!hasRetried) {
+            try {
+              window.sessionStorage.setItem(storageKey, "1");
+            } catch (storageError) {
+              // ignore
+            }
+            // A new deployment might have happened while the SPA is still open.
+            // Reload once to fetch the latest entry bundle and chunk map.
+            window.location.reload();
+          }
+        }
+
+        throw error;
+      })
+  );
+};
+
+const AdminPage = lazyImportWithRetry_(() => import("./pages/AdminPage"), "AdminPage");
+const HomePage = lazyImportWithRetry_(() => import("./pages/HomePage"), "HomePage");
+const LandingPage = lazyImportWithRetry_(() => import("./pages/LandingPage"), "LandingPage");
+const ProfilePage = lazyImportWithRetry_(() => import("./pages/ProfilePage"), "ProfilePage");
+const BirthdayPage = lazyImportWithRetry_(() => import("./pages/BirthdayPage"), "BirthdayPage");
+const RegistrationPage = lazyImportWithRetry_(() => import("./pages/RegistrationPage"), "RegistrationPage");
+const CheckinPage = lazyImportWithRetry_(() => import("./pages/CheckinPage"), "CheckinPage");
+const OrderingPage = lazyImportWithRetry_(() => import("./pages/OrderingPage"), "OrderingPage");
+const FinancePage = lazyImportWithRetry_(() => import("./pages/FinancePage"), "FinancePage");
+const ApprovalsPage = lazyImportWithRetry_(() => import("./pages/ApprovalsPage"), "ApprovalsPage");
+const FinanceAdminPage = lazyImportWithRetry_(() => import("./pages/FinanceAdminPage"), "FinanceAdminPage");
+const SoftballPage = lazyImportWithRetry_(() => import("./pages/SoftballPage"), "SoftballPage");
+const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPlayerPage"), "SoftballPlayerPage");
 import {
   addDays_,
   addMinutes_,
