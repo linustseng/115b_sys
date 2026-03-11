@@ -57,6 +57,11 @@ function FinanceAdminPage({ shared }) {
   const [showFundPaymentModal, setShowFundPaymentModal] = useState(false);
   const [fundEventEditingLoadingId, setFundEventEditingLoadingId] = useState("");
   const [fundPaymentEditingLoadingId, setFundPaymentEditingLoadingId] = useState("");
+  const [batchAccountModalOpen, setBatchAccountModalOpen] = useState(false);
+  const [batchAccountDate, setBatchAccountDate] = useState("");
+  const [batchAccountLoading, setBatchAccountLoading] = useState(false);
+  const [batchAccountMessage, setBatchAccountMessage] = useState("");
+  const batchAccountModalRef = useRef(null);
   const [financeRoleForm, setFinanceRoleForm] = useState({
     id: "",
     personId: "",
@@ -363,6 +368,16 @@ function FinanceAdminPage({ shared }) {
     }
     const isoMatch = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     return isoMatch ? isoMatch[1] : raw;
+  };
+
+  const getTodayDateInputValue_ = () => {
+    if (typeof toDateInputValue_ === "function") {
+      return toDateInputValue_(new Date());
+    }
+    // Fallback: YYYY-MM-DD
+    const now = new Date();
+    const pad2 = (n) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())}`;
   };
 
   const loadGroupMemberships = async () => {
@@ -1313,6 +1328,120 @@ function FinanceAdminPage({ shared }) {
       setError(err.message || "刪除失敗");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleFundPaymentAccounted_ = async (payment) => {
+    if (!payment || !payment.id) {
+      return;
+    }
+    if (!hasAccountingPrivilege) {
+      setError("你沒有入帳權限");
+      return;
+    }
+    const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
+    if (!actorId) {
+      setError("尚未識別登入者");
+      return;
+    }
+
+    const paymentId = String(payment.id || "").trim();
+    const nextAccountedAt = payment.accountedAt ? "" : getTodayDateInputValue_();
+
+    if (payment.accountedAt) {
+      if (!confirmDelete_("確定要撤銷入帳嗎？這會清除入帳日期。")) {
+        return;
+      }
+    }
+
+    setFundPaymentEditingLoadingId(paymentId);
+    setError("");
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: payment.accountedAt ? "unmarkFundPaymentAccounted" : "markFundPaymentAccounted",
+        id: paymentId,
+        accountedAt: nextAccountedAt,
+        actorId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新入帳狀態失敗");
+      }
+      await loadFundPayments(fundPaymentForm.eventId);
+      await loadFundSummary();
+      setStatusMessage(payment.accountedAt ? "已撤銷入帳" : "已入帳");
+    } catch (err) {
+      setError(err.message || "更新入帳狀態失敗");
+    } finally {
+      setFundPaymentEditingLoadingId("");
+    }
+  };
+
+  const openBatchAccountModal_ = () => {
+    if (!hasAccountingPrivilege) {
+      setError("你沒有入帳權限");
+      return;
+    }
+    if (!fundPaymentForm.eventId) {
+      setError("請先選擇班費事件");
+      return;
+    }
+    setBatchAccountDate(getTodayDateInputValue_());
+    setBatchAccountMessage("");
+    setBatchAccountModalOpen(true);
+    window.setTimeout(() => {
+      try {
+        batchAccountModalRef.current?.showModal?.();
+      } catch {}
+    }, 0);
+  };
+
+  const closeBatchAccountModal_ = () => {
+    setBatchAccountModalOpen(false);
+    setBatchAccountLoading(false);
+    try {
+      batchAccountModalRef.current?.close?.();
+    } catch {}
+  };
+
+  const handleBatchAccountFundPayments_ = async () => {
+    if (!fundPaymentForm.eventId) {
+      setError("請先選擇班費事件");
+      return;
+    }
+    const actorId = googleLinkedStudent ? String(googleLinkedStudent.id || "").trim() : "";
+    if (!actorId) {
+      setError("尚未識別登入者");
+      return;
+    }
+    const dateValue = String(batchAccountDate || "").trim();
+    if (!dateValue) {
+      setError("請選擇入帳日期");
+      return;
+    }
+    setBatchAccountLoading(true);
+    setError("");
+    setBatchAccountMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "batchMarkFundPaymentsAccounted",
+        eventId: fundPaymentForm.eventId,
+        accountedAt: dateValue,
+        actorId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "批次入帳失敗");
+      }
+      const updated = result.data || {};
+      await loadFundPayments(fundPaymentForm.eventId);
+      await loadFundSummary();
+      setBatchAccountMessage(`已批次入帳 ${updated.updated || 0} 筆，略過 ${updated.skipped || 0} 筆`);
+      closeBatchAccountModal_();
+      setStatusMessage(`已批次入帳 ${updated.updated || 0} 筆`);
+    } catch (err) {
+      setError(err.message || "批次入帳失敗");
+    } finally {
+      setBatchAccountLoading(false);
     }
   };
 
@@ -2373,6 +2502,15 @@ function FinanceAdminPage({ shared }) {
                     </div>
                     <button
                       type="button"
+                      onClick={openBatchAccountModal_}
+                      disabled={!fundPayments.length}
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-50"
+                      title="將目前未入帳的收款一次入帳"
+                    >
+                      批次入帳
+                    </button>
+                    <button
+                      type="button"
                       onClick={startNewFundPayment_}
                       className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
                     >
@@ -2421,6 +2559,23 @@ function FinanceAdminPage({ shared }) {
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleFundPaymentAccounted_(item)}
+                              disabled={
+                                !hasAccountingPrivilege ||
+                                (String(item.id || "").trim() &&
+                                  fundPaymentEditingLoadingId === String(item.id || "").trim())
+                              }
+                              className={`rounded-full border px-3 py-1 text-xs font-semibold disabled:opacity-60 ${
+                                item.accountedAt
+                                  ? "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300"
+                              }`}
+                              title={item.accountedAt ? "撤銷入帳（清除入帳日期）" : "一鍵入帳：入帳日期=今天"}
+                            >
+                              {item.accountedAt ? "撤銷入帳" : "入帳"}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleEditFundPayment(item)}
@@ -3172,6 +3327,57 @@ function FinanceAdminPage({ shared }) {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        ) : null}
+
+        {batchAccountModalOpen ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 px-6">
+            <div className="w-full max-w-lg rounded-[2rem] bg-white p-6 shadow-[0_40px_120px_-60px_rgba(15,23,42,0.9)] sm:p-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-slate-900">批次入帳</h3>
+                <button
+                  type="button"
+                  onClick={closeBatchAccountModal_}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  關閉
+                </button>
+              </div>
+              <div className="mt-4 space-y-4 text-sm text-slate-600">
+                <p>
+                  將「目前尚未入帳」的收款紀錄一次入帳（不會覆蓋已入帳的日期）。
+                </p>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">入帳日期</label>
+                  <input
+                    type="date"
+                    value={batchAccountDate}
+                    onChange={(event) => setBatchAccountDate(event.target.value)}
+                    className="input-sm"
+                  />
+                </div>
+                {batchAccountMessage ? (
+                  <p className="text-xs font-semibold text-emerald-700">{batchAccountMessage}</p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleBatchAccountFundPayments_}
+                    disabled={batchAccountLoading}
+                    className="btn-primary"
+                  >
+                    {batchAccountLoading ? "處理中..." : "確定批次入帳"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeBatchAccountModal_}
+                    className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}

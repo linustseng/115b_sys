@@ -753,6 +753,44 @@ function handleActionPayload_(payload) {
     return { ok: true, data: { payment: updated }, error: null };
   }
 
+  if (payload.action === "markFundPaymentAccounted") {
+    const paymentId = String(payload.id || "").trim();
+    if (!paymentId) {
+      return { ok: false, data: null, error: "Missing payment id" };
+    }
+    const accountedAt = String(payload.accountedAt || "").trim();
+    const actorId = String(payload.actorId || "").trim() || getAdminActorInfo_(payload).studentId;
+    const updated = markFundPaymentAccounted_(paymentId, accountedAt || new Date().toISOString(), actorId);
+    invalidateCacheKeys_([CACHE_KEYS.fundPayments, CACHE_KEYS.fundSummary]);
+    return { ok: true, data: { payment: updated }, error: null };
+  }
+
+  if (payload.action === "unmarkFundPaymentAccounted") {
+    const paymentId = String(payload.id || "").trim();
+    if (!paymentId) {
+      return { ok: false, data: null, error: "Missing payment id" };
+    }
+    const actorId = String(payload.actorId || "").trim() || getAdminActorInfo_(payload).studentId;
+    const updated = markFundPaymentAccounted_(paymentId, "", actorId);
+    invalidateCacheKeys_([CACHE_KEYS.fundPayments, CACHE_KEYS.fundSummary]);
+    return { ok: true, data: { payment: updated }, error: null };
+  }
+
+  if (payload.action === "batchMarkFundPaymentsAccounted") {
+    const eventId = String(payload.eventId || "").trim();
+    if (!eventId) {
+      return { ok: false, data: null, error: "Missing event id" };
+    }
+    const accountedAt = String(payload.accountedAt || "").trim();
+    if (!accountedAt) {
+      return { ok: false, data: null, error: "Missing accountedAt" };
+    }
+    const actorId = String(payload.actorId || "").trim() || getAdminActorInfo_(payload).studentId;
+    const stats = batchMarkFundPaymentsAccounted_(eventId, accountedAt, actorId);
+    invalidateCacheKeys_([CACHE_KEYS.fundPayments, CACHE_KEYS.fundSummary]);
+    return { ok: true, data: stats, error: null };
+  }
+
   if (payload.action === "deleteFundEvent") {
     const eventId = String(payload.id || "").trim();
     if (!eventId) {
@@ -5365,6 +5403,74 @@ function updateFundPayment_(paymentId, data) {
     return record;
   }
   throw new Error("Fund payment not found");
+}
+
+function markFundPaymentAccounted_(paymentId, accountedAt, actorId) {
+  const targetId = String(paymentId || "").trim();
+  if (!targetId) {
+    throw new Error("Missing payment id");
+  }
+  const value = String(accountedAt || "").trim();
+  const payload = {
+    id: targetId,
+    accountedAt: value,
+    actorId: String(actorId || "").trim(),
+  };
+  return updateFundPayment_(targetId, payload);
+}
+
+function batchMarkFundPaymentsAccounted_(eventId, accountedAt, actorId) {
+  const targetEventId = String(eventId || "").trim();
+  if (!targetEventId) {
+    throw new Error("Missing event id");
+  }
+  const dateValue = String(accountedAt || "").trim();
+  if (!dateValue) {
+    throw new Error("Missing accountedAt");
+  }
+  const actor = String(actorId || "").trim();
+
+  const sheet = getSheet_(SHEETS.fundPayments);
+  const headers = getHeaders_(sheet);
+  const headerMap = getHeaderMap_(sheet);
+  const idIndex = headerMap.id;
+  const eventIndex = headerMap.eventId;
+  const accountedIndex = headerMap.accountedAt;
+  const updatedAtIndex = headerMap.updatedAt;
+  const updatedByIndex = headerMap.updatedById;
+
+  if (idIndex === undefined || eventIndex === undefined || accountedIndex === undefined) {
+    throw new Error("FundPayments sheet missing required columns");
+  }
+
+  const rows = getDataRows_(sheet);
+  var updated = 0;
+  var skipped = 0;
+  for (var i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (String(row[eventIndex] || "").trim() !== targetEventId) {
+      continue;
+    }
+    const existingAccounted = String(row[accountedIndex] || "").trim();
+    if (existingAccounted) {
+      skipped += 1;
+      continue;
+    }
+    row[accountedIndex] = dateValue;
+    if (updatedAtIndex !== undefined) {
+      row[updatedAtIndex] = new Date().toISOString();
+    }
+    if (updatedByIndex !== undefined && actor) {
+      row[updatedByIndex] = actor;
+    }
+    updated += 1;
+  }
+
+  if (updated > 0) {
+    sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+  }
+
+  return { updated: updated, skipped: skipped };
 }
 
 function deleteFundPayment_(paymentId) {
