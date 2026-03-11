@@ -1365,7 +1365,14 @@ function FinanceAdminPage({ shared }) {
         actorId,
       });
       if (!result.ok) {
-        throw new Error(result.error || "更新入帳狀態失敗");
+        const rawError = String(result.error || "").trim();
+        if (/unauthorized/i.test(rawError)) {
+          throw new Error("權限不足或登入已過期，請重新整理頁面後再試一次。");
+        }
+        if (/not found/i.test(rawError)) {
+          throw new Error("這筆收款可能已被刪除或資料已更新，請重新整理後再試一次。");
+        }
+        throw new Error(rawError || "更新入帳狀態失敗");
       }
       await loadFundPayments(fundPaymentForm.eventId);
       await loadFundSummary();
@@ -1430,7 +1437,11 @@ function FinanceAdminPage({ shared }) {
         actorId,
       });
       if (!result.ok) {
-        throw new Error(result.error || "批次入帳失敗");
+        const rawError = String(result.error || "").trim();
+        if (/unauthorized/i.test(rawError)) {
+          throw new Error("權限不足或登入已過期，請重新整理頁面後再試一次。");
+        }
+        throw new Error(rawError || "批次入帳失敗");
       }
       const updated = result.data || {};
       await loadFundPayments(fundPaymentForm.eventId);
@@ -2501,15 +2512,32 @@ function FinanceAdminPage({ shared }) {
                         "尚未選擇班費事件"}
                     </span>
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={openBatchAccountModal_}
-                        disabled={!fundPayments.length}
-                        className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                        title="將目前未入帳的收款一次入帳"
-                      >
-                        批次入帳
-                      </button>
+                      {(() => {
+                        const disabledReason = !hasAccountingPrivilege
+                          ? "需要『會計』權限才能批次入帳"
+                          : !fundPaymentForm.eventId
+                            ? "請先選擇班費事件"
+                            : !googleLinkedStudent || !String(googleLinkedStudent.id || "").trim()
+                              ? "尚未識別登入者（請重新整理/重新登入）"
+                              : !fundPayments.length
+                                ? "目前沒有收款紀錄可批次入帳"
+                                : "";
+                        return (
+                          <button
+                            type="button"
+                            onClick={openBatchAccountModal_}
+                            disabled={!!disabledReason}
+                            className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                            title={
+                              disabledReason
+                                ? disabledReason
+                                : "將目前未入帳的收款一次入帳（不會覆蓋已入帳）"
+                            }
+                          >
+                            批次入帳
+                          </button>
+                        );
+                      })()}
                       <button
                         type="button"
                         onClick={startNewFundPayment_}
@@ -2561,23 +2589,38 @@ function FinanceAdminPage({ shared }) {
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleFundPaymentAccounted_(item)}
-                              disabled={
-                                !hasAccountingPrivilege ||
-                                (String(item.id || "").trim() &&
-                                  fundPaymentEditingLoadingId === String(item.id || "").trim())
-                              }
-                              className={`rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
-                                item.accountedAt
-                                  ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-                              }`}
-                              title={item.accountedAt ? "撤銷入帳（清除入帳日期）" : "一鍵入帳：入帳日期=今天"}
-                            >
-                              {item.accountedAt ? "撤銷入帳" : "入帳"}
-                            </button>
+                            {(() => {
+                              const isBusy =
+                                String(item.id || "").trim() &&
+                                fundPaymentEditingLoadingId === String(item.id || "").trim();
+                              const disabledReason = !hasAccountingPrivilege
+                                ? "需要『會計』權限才能入帳/撤銷"
+                                : !googleLinkedStudent || !String(googleLinkedStudent.id || "").trim()
+                                  ? "尚未識別登入者（請重新整理/重新登入）"
+                                  : isBusy
+                                    ? "處理中..."
+                                    : "";
+                              const titleText = disabledReason
+                                ? disabledReason
+                                : item.accountedAt
+                                  ? "撤銷入帳（清除入帳日期）"
+                                  : "一鍵入帳：入帳日期=今天";
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleFundPaymentAccounted_(item)}
+                                  disabled={!!disabledReason}
+                                  className={`rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-60 ${
+                                    item.accountedAt
+                                      ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                                      : "bg-emerald-600 text-white hover:bg-emerald-700"
+                                  }`}
+                                  title={titleText}
+                                >
+                                  {item.accountedAt ? "撤銷入帳" : "入帳"}
+                                </button>
+                              );
+                            })()}
                             <button
                               type="button"
                               onClick={() => handleEditFundPayment(item)}
