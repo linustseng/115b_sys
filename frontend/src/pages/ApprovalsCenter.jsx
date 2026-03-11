@@ -390,7 +390,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   };
 
   const hasLeadPrivilege = adminLeadGroups.length || adminDeputyGroups.length;
-  const hasRepPrivilege = adminLeadGroups.includes("A");
+  const hasRepPrivilege = adminLeadGroups.includes("A") || adminDeputyGroups.includes("A");
   const hasCommitteePrivilege = hasLeadPrivilege || hasRepPrivilege || adminDeputyGroups.includes("A");
   const hasAccountingPrivilege = adminRoles.includes("accounting");
   const hasCashierPrivilege = adminRoles.includes("cashier");
