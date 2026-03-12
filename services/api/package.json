@@ -11,6 +11,7 @@
     "backfill:cutover": "node scripts/backfillCutover.js",
     "reconcile:snapshot": "node scripts/reconcileSnapshot.js",
     "audit:only": "node scripts/auditReadOnly.js",
+    "repair:dry-run": "node scripts/repairDryRun.js",
     "bench:reads": "node scripts/benchReadPaths.js"
   },
   "dependencies": {
