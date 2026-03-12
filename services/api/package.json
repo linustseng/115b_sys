@@ -10,6 +10,7 @@
     "sync:pull": "node scripts/syncPull.js",
     "backfill:cutover": "node scripts/backfillCutover.js",
     "reconcile:snapshot": "node scripts/reconcileSnapshot.js",
+    "audit:only": "node scripts/auditReadOnly.js",
     "bench:reads": "node scripts/benchReadPaths.js"
   },
   "dependencies": {
