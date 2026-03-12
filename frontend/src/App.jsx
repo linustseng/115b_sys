@@ -2439,14 +2439,24 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
     }
     return Boolean(memberId && normalizedId === memberId);
   });
-  const hasAccess = userMemberships.some((item) => {
-    const groupId = String(item.groupId || "").trim();
-    const roleInGroup = String(item.roleInGroup || "").trim();
-    if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
-      return true;
-    }
-    return allowedGroupIds.includes(groupId);
-  });
+  const hasSoftballTeamRole =
+    extraAccessAction === "getSoftballAdminAccess" &&
+    userMemberships.some((item) => {
+      const groupId = String(item.groupId || "").trim();
+      const roleInGroup = String(item.roleInGroup || "").trim().toLowerCase();
+      return groupId === "K" && (roleInGroup === "manager" || roleInGroup === "lead" || roleInGroup === "deputy");
+    });
+
+  const hasAccess =
+    hasSoftballTeamRole ||
+    userMemberships.some((item) => {
+      const groupId = String(item.groupId || "").trim();
+      const roleInGroup = String(item.roleInGroup || "").trim();
+      if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
+        return true;
+      }
+      return allowedGroupIds.includes(groupId);
+    });
   const allowedLabel = buildAccessLabel_(allowedGroupIds);
 
   useEffect(() => {
