@@ -103,6 +103,13 @@ function buildAgentAuditKey(row) {
   ].join("::");
 }
 
+function buildNotificationReadKey(row) {
+  return [
+    asText(row && (row.notificationId || row.notification_id)),
+    asText(row && (row.readerStudentId || row.student_id)),
+  ].join("::");
+}
+
 async function fetchDirectoryRows() {
   const result = await query(
     `select id, email, name_zh, name_en, preferred_name, company, title, mobile, backup_phone, emergency_contact, emergency_phone, birthday_month, birthday_day from directories order by id`
@@ -167,6 +174,15 @@ const AUDITABLE_DATASETS = [
     sheet: "Announcements",
     table: "announcements",
     source: { kind: "action", action: "listAnnouncements", dataKey: "announcements" },
+  },
+  {
+    name: "notification_reads",
+    sheet: "NotificationReads",
+    table: "notification_reads",
+    source: { kind: "action", action: "listNotificationReads", dataKey: "notificationReads" },
+    rowKey: buildNotificationReadKey,
+    dbColumns: ["notification_id", "student_id"],
+    dbRowKey: buildNotificationReadKey,
   },
   {
     name: "group_memberships",
@@ -258,13 +274,7 @@ const AUDITABLE_DATASETS = [
   },
 ];
 
-const SCHEMA_ONLY_SHEETS = [
-  {
-    sheet: "NotificationReads",
-    table: "notification_reads",
-    reason: "Internal listNotificationReads action now exists, but the PostgreSQL table is not yet a legacy-mirror schema for row-id audit parity.",
-  },
-];
+const SCHEMA_ONLY_SHEETS = [];
 
 async function getSourceRows(snapshot, dataset) {
   if (dataset.source.kind === "snapshot") {

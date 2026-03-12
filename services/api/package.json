@@ -12,6 +12,7 @@
     "reconcile:snapshot": "node scripts/reconcileSnapshot.js",
     "audit:only": "node scripts/auditReadOnly.js",
     "repair:dry-run": "node scripts/repairDryRun.js",
+    "repair:apply": "node scripts/repairApply.js",
     "bench:reads": "node scripts/benchReadPaths.js"
   },
   "dependencies": {

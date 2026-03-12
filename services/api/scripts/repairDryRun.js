@@ -78,6 +78,13 @@ function buildAgentAuditKey(row) {
   ].join("::");
 }
 
+function buildNotificationReadKey(row) {
+  return [
+    asText(row && (row.notificationId || row.notification_id)),
+    asText(row && (row.readerStudentId || row.student_id)),
+  ].join("::");
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     asText(value)
@@ -415,9 +422,11 @@ const DATASETS = {
     rowKey: (row) => asText(row && row.id),
   },
   notification_reads: {
-    policy: "schema_gap",
+    policy: "mixed_state",
     table: "notification_reads",
-    readPath: true,
+    source: { kind: "action", action: "listNotificationReads", dataKey: "notificationReads" },
+    rowKey: (row) => buildNotificationReadKey(row),
+    dbColumns: ["notification_id", "student_id"],
   },
   line_bindings: {
     policy: "mirror_safe",
@@ -634,6 +643,13 @@ function classifyDbOnlyMixedState(name, row) {
     };
   }
 
+  if (name === "notification_reads") {
+    return {
+      type: "db_only_expected_local",
+      reason: "notification_read_exists_only_in_db_runtime_state",
+    };
+  }
+
   return {
     type: "db_only_unexpected",
     reason: "db_only_row",
@@ -656,6 +672,7 @@ async function planMixedStateDataset(name, definition, snapshot, includeSamples)
     fund_payments: ["id", "created_at", "updated_at"],
     softball_players: ["id", "created_at", "updated_at"],
     softball_attendance: ["id", "practice_id", "player_id", "created_at", "updated_at"],
+    notification_reads: ["notification_id", "student_id", "read_at", "seen_updated_at"],
   };
   const dbRows = await listTableRows(definition.table, dbColumnMap[name] || ["id"]);
 
