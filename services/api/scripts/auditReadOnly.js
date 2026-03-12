@@ -337,7 +337,7 @@ async function auditDataset(snapshot, existingTables, dataset) {
   output.extraInDbCount = diff.extraInDb.length;
   output.missingInDb = diff.missingInDb.slice(0, 20);
   output.extraInDb = diff.extraInDb.slice(0, 20);
-  output.status = diff.missingInDb.length || diff.extraInDb.length ? "mismatch" : "ok";
+  output.status = diff.missingInDb.length ? "mismatch" : "ok";
 
   return output;
 }

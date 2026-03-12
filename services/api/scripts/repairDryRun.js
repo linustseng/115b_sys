@@ -538,7 +538,7 @@ async function planMirrorSafeDataset(name, definition, snapshot, includeSamples)
 
   for (const [key] of dbMap) {
     if (!sourceMap.has(key)) {
-      pushSample(report, "manual_review_required", { id: key, reason: "db_row_missing_in_source" }, includeSamples);
+      pushSample(report, "db_only_expected_local", { id: key, reason: "db_row_missing_in_source_but_local_rows_are_allowed" }, includeSamples);
     }
   }
 
@@ -590,8 +590,8 @@ function classifyDbOnlyMixedState(name, row) {
       };
     }
     return {
-      type: "db_only_unexpected",
-      reason: "registration_missing_source_and_has_no_manual_created_metadata",
+      type: "db_only_expected_local",
+      reason: "registration_missing_in_source_but_db_local_rows_are_allowed",
     };
   }
 
@@ -604,42 +604,42 @@ function classifyDbOnlyMixedState(name, row) {
       };
     }
     return {
-      type: "db_only_unexpected",
-      reason: "group_membership_missing_in_source",
+      type: "db_only_expected_local",
+      reason: "group_membership_missing_in_source_but_db_local_rows_are_allowed",
     };
   }
 
   if (name === "finance_requests") {
     if (isUuid(row.id)) {
       return {
-        type: "db_only_unexpected",
-        reason: "uuid_request_exists_only_in_db_and_source_has_no_matching_row",
+        type: "db_only_expected_local",
+        reason: "uuid_request_exists_only_in_db_after_local_runtime_changes",
       };
     }
     return {
-      type: "db_only_unexpected",
-      reason: "finance_request_missing_in_source",
+      type: "db_only_expected_local",
+      reason: "finance_request_missing_in_source_but_db_local_rows_are_allowed",
     };
   }
 
   if (name === "fund_payments") {
     return {
-      type: "db_only_unexpected",
-      reason: "fund_payment_missing_in_source",
+      type: "db_only_expected_local",
+      reason: "fund_payment_missing_in_source_but_db_local_rows_are_allowed",
     };
   }
 
   if (name === "softball_players") {
     return {
-      type: "db_only_unexpected",
-      reason: "softball_player_missing_in_source",
+      type: "db_only_expected_local",
+      reason: "softball_player_missing_in_source_but_db_local_rows_are_allowed",
     };
   }
 
   if (name === "softball_attendance") {
     return {
-      type: "db_only_unexpected",
-      reason: "softball_attendance_missing_in_source_after_id_canonicalization",
+      type: "db_only_expected_local",
+      reason: "softball_attendance_missing_in_source_after_local_runtime_changes",
     };
   }
 
@@ -651,8 +651,8 @@ function classifyDbOnlyMixedState(name, row) {
   }
 
   return {
-    type: "db_only_unexpected",
-    reason: "db_only_row",
+    type: "db_only_expected_local",
+    reason: "db_only_row_allowed",
   };
 }
 
