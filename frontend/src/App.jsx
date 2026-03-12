@@ -241,8 +241,10 @@ const meetingFields = [
   },
 ];
 
-const API_URL = import.meta.env.VITE_API_URL || "https://script.google.com/macros/s/REPLACE_ME/exec";
 const API_V2_URL = import.meta.env.VITE_API_V2_URL || "";
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (API_V2_URL ? `${API_V2_URL.replace(/\/$/, "")}/v1/action` : "");
 // Default to enabled when API_V2_URL is configured.
 const API_V2_READ_ENABLED = String(import.meta.env.VITE_API_V2_READ_ENABLED || "1").trim() === "1";
 const API_V2_WRITE_ENABLED = String(import.meta.env.VITE_API_V2_WRITE_ENABLED || "1").trim() === "1";
@@ -1561,47 +1563,34 @@ async function requestWithReadRetry_(payload) {
     if (API_V2_STRICT) {
       return requestWithApiV2Read_(payload);
     }
-    try {
-      const response = await requestWithApiV2Read_(payload);
-      if (response && response.result && response.result.ok) {
-        return response;
-      }
+    const response = await requestWithApiV2Read_(payload);
+    const unauthorized =
+      response && response.result && response.result.ok === false
+        ? String(response.result.error || "") === "Unauthorized"
+        : false;
 
-      const unauthorized =
-        response && response.result && response.result.ok === false
-          ? String(response.result.error || "") === "Unauthorized"
-          : false;
-
-      // If we have a refresh token, try one session rotation and retry the same read.
-      if (unauthorized) {
-        const storedSession = loadStoredAdminSession_();
-        const refreshToken = String((storedSession && storedSession.refreshToken) || "").trim();
-        if (refreshToken && shouldUseApiV2Write_({ action: "refreshSession" })) {
-          const refreshResponse = await requestWithApiV2Write_({
-            action: "refreshSession",
-            refreshToken,
+    if (unauthorized) {
+      const storedSession = loadStoredAdminSession_();
+      const refreshToken = String((storedSession && storedSession.refreshToken) || "").trim();
+      if (refreshToken && shouldUseApiV2Write_({ action: "refreshSession" })) {
+        const refreshResponse = await requestWithApiV2Write_({
+          action: "refreshSession",
+          refreshToken,
+        });
+        const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
+        if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
+          storeAdminSession_({
+            token: refreshResult.data.sessionToken,
+            refreshToken: refreshResult.data.refreshToken || refreshToken,
+            studentId: String((storedSession && storedSession.studentId) || "").trim(),
+            memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
           });
-          const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
-          if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
-            storeAdminSession_({
-              token: refreshResult.data.sessionToken,
-              refreshToken: refreshResult.data.refreshToken || refreshToken,
-              studentId: String((storedSession && storedSession.studentId) || "").trim(),
-              memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
-            });
-            // Retry once with rotated credentials.
-            const rotated = await requestWithApiV2Read_(payload);
-            if (rotated && rotated.result && rotated.result.ok) {
-              return rotated;
-            }
-          }
+          return requestWithApiV2Read_(payload);
         }
       }
-
-      // If API v2 returns non-ok payload, fallback to legacy Apps Script for safety.
-    } catch (error) {
-      // Fall through to Apps Script transport as safe fallback.
     }
+
+    return response;
   }
 
   let attempt = 0;
@@ -1625,12 +1614,7 @@ function apiRequest(payload) {
   if (!isReadAction_(requestPayload)) {
     clearReadResponseCache_();
     if (shouldUseApiV2Write_(requestPayload)) {
-      if (API_V2_STRICT) {
-        return requestWithApiV2Write_(requestPayload);
-      }
-      return requestWithApiV2Write_(requestPayload).catch(() =>
-        requestWithTransportFallback_(requestPayload)
-      );
+      return requestWithApiV2Write_(requestPayload);
     }
     return requestWithTransportFallback_(requestPayload);
   }

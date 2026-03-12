@@ -1,6 +1,6 @@
-# 115b_sys 一次到位切換 Runbook
+# 115b_sys Node-only Runbook
 
-目標：前端讀寫 100% 切到 Node API（Render），Apps Script 保留回滾備援。
+目標：前端與 API runtime 100% 走 Node API（Render + PostgreSQL），不再把 Apps Script 當正式 fallback。
 
 ## 1) 上線前檢查（必做）
 
@@ -16,18 +16,17 @@ curl https://one15b-sys.onrender.com/health
 檢查重點：
 - reconcile 無重大差異（或差異可解釋）
 - health `ok=true`
-- benchmark 顯示 Node 路徑延遲明顯優於 Apps Script
+- benchmark 顯示 Node 路徑延遲穩定
 
 ---
 
-## 2) API 切換策略（已實作）
+## 2) API 切換策略
 
 - register / update-registration / checkin：
-  - 先寫 Node DB
-  - mirror 到 Apps Script 若失敗，僅 `console.warn` 記錄
-  - 不阻斷使用者成功回應
+  - 直接寫 Node DB
+  - 不再 mirror 到 Apps Script
 
-說明：Node DB 為主寫入來源，Apps Script 作備援。
+說明：Node DB 為唯一正式寫入來源。
 
 ---
 
@@ -53,8 +52,10 @@ curl https://one15b-sys.onrender.com/health
 Production 環境變數：
 
 - `VITE_API_V2_URL=https://one15b-sys.onrender.com`
+- `VITE_API_URL=https://one15b-sys.onrender.com/v1/action`
 - `VITE_API_V2_READ_ENABLED=1`
 - `VITE_API_V2_WRITE_ENABLED=1`
+- `VITE_API_V2_STRICT=1`
 
 重新部署前端。
 
@@ -84,24 +85,24 @@ npm run reconcile:snapshot
 
 ```bash
 curl https://one15b-sys.onrender.com/health
-cd /home/linus/.openclaw/workspace/115b_sys/services/api && npm run reconcile:snapshot
 ```
 
 觀察重點：
 - Render logs 無大量 5xx
-- mirror warning 不持續暴增
+- 前端未出現 legacy transport / Apps Script 相關錯誤
 - 使用者無回報資料不一致
 
 ---
 
 ## 7) 緊急回滾（10 分鐘內）
 
-Vercel Production 變數改回：
+Vercel Production 如需止血：
 
-- `VITE_API_V2_WRITE_ENABLED=0`
-- （必要時）`VITE_API_V2_READ_ENABLED=0`
+- 保留 `VITE_API_V2_URL`
+- 視情況暫時把 `VITE_API_V2_READ_ENABLED=0`
+- 視情況暫時把 `VITE_API_V2_WRITE_ENABLED=0`
 
-重新部署前端後，流量回 Apps Script。
+重新部署前端後，流量維持在 Node `/v1/action` 與 `/v1/actions/*`，不回 Google。
 
 ---
 
@@ -110,5 +111,5 @@ Vercel Production 變數改回：
 滿足以下全部即視為一次到位完成：
 - 前端讀寫已全走 Node API
 - 連續 48 小時無重大故障
-- reconcile 穩定且可接受
+- runtime 不再依賴 Apps Script fallback
 - 無需人工頻繁回補資料

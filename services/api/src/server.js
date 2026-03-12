@@ -6,7 +6,6 @@ import cors from "cors";
 import { google } from "googleapis";
 import { getConfig } from "./config.js";
 import { query, withTransaction } from "./db.js";
-import { syncFromAppsScript } from "./sync/pullFromAppsScript.js";
 import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
 import { dispatchNativeAction } from "./nativeActions.js";
@@ -236,15 +235,6 @@ function buildNodeCheckinPayload(inputData, eventId, registrationId) {
   };
 }
 
-function normalizeEventPayloadForMirror(data) {
-  const input = data || {};
-  const output = { ...input };
-  if (Object.prototype.hasOwnProperty.call(output, "slug")) {
-    delete output.slug;
-  }
-  return output;
-}
-
 async function findEventById(eventId, client) {
   const executor = client || { query };
   const result = await executor.query(`SELECT * FROM events WHERE id = $1 LIMIT 1`, [String(eventId || "").trim()]);
@@ -376,79 +366,6 @@ function getIdTokenFromRequest(req) {
   const body = req.body && typeof req.body === "object" ? req.body : {};
   // Security hardening: do not accept id token from query string.
   return String(body.idToken || "").trim();
-}
-
-function isAuthorizedSyncRequest(req) {
-  const bearerToken = getBearerToken(req);
-  if (bearerToken && bearerToken === config.syncPullToken) {
-    return true;
-  }
-  const bodyToken = String((req.body && (req.body.syncToken || req.body.token)) || "").trim();
-  return Boolean(bodyToken && bodyToken === config.syncPullToken);
-}
-
-async function parseJsonResponse_(response, actionLabel) {
-  const text = await response.text();
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    throw new Error(`Invalid JSON response for ${actionLabel}`);
-  }
-}
-
-async function callAppsScriptAction_(action, payload = {}) {
-  const requestPayload = {
-    action,
-    ...payload,
-  };
-  const requestJson = JSON.stringify(requestPayload);
-  const baseUrl = String(config.appsScriptUrl || "").trim();
-  if (!baseUrl) {
-    throw new Error("Missing APPS_SCRIPT_URL");
-  }
-
-  const canUseGet = requestJson.length < 7000;
-
-  if (canUseGet) {
-    try {
-      const getUrl = new URL(baseUrl);
-      getUrl.searchParams.set("payload", requestJson);
-      const response = await fetch(getUrl.toString(), {
-        method: "GET",
-        redirect: "follow",
-      });
-      const json = await parseJsonResponse_(response, action);
-      if (json && typeof json.ok === "boolean") {
-        return json;
-      }
-      throw new Error(`Unexpected response for ${action}`);
-    } catch (error) {
-      // Try POST fallback below.
-    }
-  }
-
-  const response = await fetch(baseUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: requestJson,
-    redirect: "follow",
-  });
-  const json = await parseJsonResponse_(response, action);
-  if (json && typeof json.ok === "boolean") {
-    return json;
-  }
-  throw new Error(`Unexpected response for ${action}`);
-}
-
-function triggerBackgroundSync_() {
-  if (!config.appsScriptSyncEnabled) {
-    return;
-  }
-  syncFromAppsScript().catch((error) => {
-    console.error("[syncFromAppsScript] background sync failed:", error && error.message ? error.message : error);
-  });
 }
 
 function toEventPayload(row) {
@@ -1207,33 +1124,7 @@ app.post("/v1/register", async (req, res) => {
         ]
       );
 
-      const mirrorData = normalizeEventPayloadForMirror({
-        ...data,
-        id: registrationPayload.id,
-        eventId: registrationPayload.eventId,
-        studentId: registrationPayload.studentId,
-        userEmail: registrationPayload.userEmail,
-        userName: registrationPayload.userName,
-        userPhone: registrationPayload.userPhone,
-        classYear: registrationPayload.classYear,
-        customFields: registrationPayload.customFields,
-        createdAt: registrationPayload.createdAt,
-        updatedAt: registrationPayload.updatedAt,
-      });
-
-      if (config.appsScriptMirrorEnabled) {
-        const mirrored = await callAppsScriptAction_("register", { data: mirrorData });
-        if (!mirrored || mirrored.ok !== true) {
-          console.warn("[mirror:register] failed", {
-            registrationId: registrationPayload.id,
-            eventId: registrationPayload.eventId,
-            error: (mirrored && mirrored.error) || "Register failed",
-          });
-        }
-      }
     });
-
-    triggerBackgroundSync_();
     return res.json({ ok: true, data: { registrationId: registrationPayload.id }, error: null });
   } catch (error) {
     const isBusiness = String(error && error.code || "") === "BUSINESS";
@@ -1327,33 +1218,9 @@ app.post("/v1/update-registration", async (req, res) => {
         ]
       );
 
-      if (config.appsScriptMirrorEnabled) {
-        const mirrored = await callAppsScriptAction_("updateRegistration", {
-          data: {
-            id: nextPayload.id,
-            eventId: nextPayload.eventId,
-            studentId: nextPayload.studentId,
-            userName: nextPayload.userName,
-            userEmail: nextPayload.userEmail,
-            userPhone: nextPayload.userPhone,
-            classYear: nextPayload.classYear,
-            customFields: JSON.stringify(nextPayload.customFields || {}),
-            status: nextPayload.status,
-          },
-          email: nextPayload.userEmail,
-        });
-        if (!mirrored || mirrored.ok !== true) {
-          console.warn("[mirror:updateRegistration] failed", {
-            registrationId: nextPayload.id,
-            eventId: nextPayload.eventId,
-            error: (mirrored && mirrored.error) || "更新失敗",
-          });
-        }
-      }
     });
 
     const updated = await findRegistrationById(registrationId);
-    triggerBackgroundSync_();
     return res.json({
       ok: true,
       data: { registration: updated ? toRegistrationPayload(updated) : null },
@@ -1440,29 +1307,7 @@ app.post("/v1/checkin", async (req, res) => {
         ]
       );
 
-      if (config.appsScriptMirrorEnabled) {
-        const mirrored = await callAppsScriptAction_("checkin", {
-          data: normalizeEventPayloadForMirror({
-            ...data,
-            eventId: eventId,
-            userEmail: email,
-            checkinId: checkinPayload.id,
-            checkinAt: checkinPayload.checkinAt,
-            checkinMethod: checkinPayload.checkinMethod,
-          }),
-        });
-        if (!mirrored || mirrored.ok !== true) {
-          console.warn("[mirror:checkin] failed", {
-            checkinId: checkinPayload.id,
-            eventId,
-            email,
-            error: (mirrored && mirrored.error) || "Checkin failed",
-          });
-        }
-      }
     });
-
-    triggerBackgroundSync_();
     return res.json({
       ok: true,
       data: {
@@ -1659,39 +1504,6 @@ async function handleListMyMemberships(req, res) {
 
 app.get("/v1/memberships/my", handleListMyMemberships);
 app.post("/v1/memberships/my", handleListMyMemberships);
-
-app.post("/internal/sync/pull", async (req, res) => {
-  if (!isAuthorizedSyncRequest(req)) {
-    return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
-  }
-
-  try {
-    const result = await syncFromAppsScript();
-    return res.json({ ok: true, data: result, error: null });
-  } catch (error) {
-    return res.status(500).json({ ok: false, data: null, error: error.message || "Sync failed" });
-  }
-});
-
-app.get("/internal/sync/runs", async (req, res) => {
-  if (!isAuthorizedSyncRequest(req)) {
-    return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
-  }
-  const limitRaw = Number(req.query.limit);
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(100, Math.trunc(limitRaw))) : 20;
-  try {
-    const result = await query(
-      `SELECT id, started_at, finished_at, status, summary, error
-       FROM sync_runs
-       ORDER BY id DESC
-       LIMIT $1`,
-      [limit]
-    );
-    return res.json({ ok: true, data: { runs: result.rows }, error: null });
-  } catch (error) {
-    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
-  }
-});
 
 app.use((_req, res) => {
   res.status(404).json({ ok: false, data: null, error: "Not found" });
