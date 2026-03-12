@@ -2157,7 +2157,10 @@ export async function dispatchNativeAction({
         const existingRecord = mapFinanceRequestRow(existingRow);
         const fromStatus = String(existingRecord.status || "").trim() || "draft";
 
-        const isOwner = String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim();
+        const manualCreatedBy = firstText(existingRaw && typeof existingRaw === "object" ? existingRaw.manualCreatedBy : "");
+        const isOwner =
+          String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim() ||
+          (manualCreatedBy && String(manualCreatedBy).trim() === String(auth.studentId || "").trim());
 
         let toStatus = fromStatus;
         let approvalContext = null;
@@ -2273,7 +2276,13 @@ export async function dispatchNativeAction({
       const existing = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
       const existingRow = rowOrNull(existing);
       const existingRecord = existingRow ? mapFinanceRequestRow(existingRow) : null;
-      const isOwner = existingRecord && String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim();
+      const manualCreatedBy = firstText(
+        existingRow && existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw.manualCreatedBy : ""
+      );
+      const isOwner =
+        Boolean(existingRecord) &&
+        (String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim() ||
+          (manualCreatedBy && String(manualCreatedBy).trim() === String(auth.studentId || "").trim()));
       let isAdmin = false;
       if (!isOwner) {
         const memberships = await listMembershipsByStudentId(auth.studentId);
@@ -2402,7 +2411,11 @@ export async function dispatchNativeAction({
       const result = isAdmin
         ? await query(`select * from finance_requests order by coalesce(updated_at,'' ) desc, id desc`)
         : await query(
-            `select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`,
+            `select *
+             from finance_requests
+             where applicant_id = $1
+                or coalesce(raw->>'manualCreatedBy','') = $1
+             order by coalesce(updated_at,'') desc, id desc`,
             [auth.studentId]
           );
       const requests = result.rows.map((row) => mapFinanceRequestRow(row));
@@ -2625,7 +2638,11 @@ export async function dispatchNativeAction({
         query(`select * from finance_category_types order by coalesce(label,''), id`),
         query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
         query(
-          `select * from finance_requests where applicant_id = $1 order by coalesce(updated_at,'') desc, id desc`,
+          `select *
+           from finance_requests
+           where applicant_id = $1
+              or coalesce(raw->>'manualCreatedBy','') = $1
+           order by coalesce(updated_at,'') desc, id desc`,
           [auth.studentId]
         ),
       ]);
