@@ -159,10 +159,16 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [hasGoogleLogin]);
 
   useEffect(() => {
-    if (hasGoogleLogin) {
+    if (hasGoogleLogin && !needsReauth) {
       setLoginCollapsed(true);
     }
-  }, [hasGoogleLogin]);
+  }, [hasGoogleLogin, needsReauth]);
+
+  useEffect(() => {
+    if (needsReauth) {
+      setLoginCollapsed(false);
+    }
+  }, [needsReauth]);
 
   useEffect(() => {
     try {
