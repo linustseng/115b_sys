@@ -844,12 +844,31 @@ export async function dispatchNativeAction({
     }
   };
 
+  const hasSoftballTeamRole_ = (memberships) => {
+    const list = asArray(memberships);
+    return list.some((item) => {
+      const groupId = normalizeGroupId_(item.groupId || item.group_id || "");
+      if (groupId !== "K") {
+        return false;
+      }
+      const role = String(item.roleInGroup || item.role_in_group || "").trim().toLowerCase();
+      // K 組的 manager/lead/deputy 有後台權限
+      return role === "manager" || role === "lead" || role === "deputy";
+    });
+  };
+
   const requireSoftballAdminAccess = async () => {
     requireAuth();
     const memberships = await listMembershipsByStudentId(auth.studentId);
+    // 1. E/H 組（資管組、體育主將組）
     if (canAccessByGroups(memberships, ["E", "H"])) {
       return memberships;
     }
+    // 2. K 組的 manager/lead/deputy
+    if (hasSoftballTeamRole_(memberships)) {
+      return memberships;
+    }
+    // 3. 球員表裡有「球隊經理」位置（向下相容）
     if (await isSoftballManager_()) {
       return memberships;
     }
@@ -3004,15 +3023,72 @@ export async function dispatchNativeAction({
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const byGroup = canAccessByGroups(memberships, ["E", "H"]);
-      const byManager = byGroup ? false : await isSoftballManager_();
+      const byTeamRole = byGroup ? false : hasSoftballTeamRole_(memberships);
+      const byManager = byGroup || byTeamRole ? false : await isSoftballManager_();
       return {
         ok: true,
         data: {
-          allowed: Boolean(byGroup || byManager),
-          source: byGroup ? "group" : byManager ? "manager" : "",
+          allowed: Boolean(byGroup || byTeamRole || byManager),
+          source: byGroup ? "group" : byTeamRole ? "team-role" : byManager ? "manager" : "",
         },
         error: null,
       };
+    }
+
+    case "listSoftballMemberships": {
+      await requireSoftballAdminAccess();
+      const result = await query(
+        `select * from group_memberships where group_id = 'K' order by coalesce(role_in_group,''), coalesce(person_name,''), person_id`
+      );
+      const memberships = result.rows.map((row) => ({
+        id: row.id || "",
+        personId: row.person_id || "",
+        personName: row.person_name || "",
+        groupId: row.group_id || "",
+        roleInGroup: row.role_in_group || "",
+        notes: row.notes || "",
+        createdAt: row.created_at || "",
+        updatedAt: row.updated_at || "",
+      }));
+      return { ok: true, data: { memberships }, error: null };
+    }
+
+    case "setSoftballMembershipRole": {
+      await requireSoftballAdminAccess();
+      const personId = firstText(body.personId);
+      const role = firstText(body.role);
+      if (!personId) {
+        return { ok: false, data: null, error: "Missing personId" };
+      }
+      // 移除角色
+      if (role === "" || role === "none") {
+        await query(`delete from group_memberships where person_id = $1 and group_id = 'K'`, [personId]);
+        return { ok: true, data: { personId, action: "removed" }, error: null };
+      }
+      // 檢查角色是否有效
+      const validRoles = ["manager", "lead", "deputy", "member"];
+      const normalizedRole = role.toLowerCase();
+      if (!validRoles.includes(normalizedRole)) {
+        return { ok: false, data: null, error: `Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}, none` };
+      }
+      // 查詢球員姓名
+      const personResult = await query(`select name_zh, name_en, preferred_name from directories where id = $1 limit 1`, [personId]);
+      const personRow = rowOrNull(personResult);
+      const personName = personRow ? firstText(personRow.preferred_name, firstText(personRow.name_zh, personRow.name_en)) : "";
+      // 設定角色
+      const id = `${personId}::K::${normalizedRole}`;
+      const createdAt = nowIso();
+      const updatedAt = nowIso();
+      await query(
+        `insert into group_memberships (id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at)
+         values ($1,$2,$3,'K',$4,'',$5,$6)
+         on conflict (id) do update set
+           person_name=excluded.person_name,
+           role_in_group=excluded.role_in_group,
+           updated_at=excluded.updated_at`,
+        [id, personId, personName, normalizedRole, createdAt, updatedAt]
+      );
+      return { ok: true, data: { personId, role: normalizedRole, action: "set" }, error: null };
     }
 
     case "listSoftballConfig": {

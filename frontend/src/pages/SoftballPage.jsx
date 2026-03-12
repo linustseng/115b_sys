@@ -71,6 +71,8 @@ function SoftballPage({ shared }) {
   const [students, setStudents] = useState([]);
   const [studentsLoaded, setStudentsLoaded] = useState(false);
   const [studentsLoading, setStudentsLoading] = useState(false);
+  const [memberships, setMemberships] = useState([]);
+  const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const [softballConfig, setSoftballConfig] = useState({});
   const [jerseyDeadline, setJerseyDeadline] = useState("");
   const [activePracticeId, setActivePracticeId] = useState("");
@@ -533,6 +535,21 @@ function SoftballPage({ shared }) {
     }
   };
 
+  const loadMemberships = async () => {
+    try {
+      const { result } = await effectiveApiRequest({ action: "listSoftballMemberships" });
+      if (result.ok) {
+        setMemberships(result.data && result.data.memberships ? result.data.memberships : []);
+      } else {
+        setMemberships([]);
+      }
+    } catch (err) {
+      setMemberships([]);
+    } finally {
+      setMembershipsLoaded(true);
+    }
+  };
+
   useEffect(() => {
     let ignore = false;
     const loadAll = async () => {
@@ -559,12 +576,20 @@ function SoftballPage({ shared }) {
   }, []);
 
   useEffect(() => {
-    const needsStudents = activeTab === "players" || activeTab === "stats";
+    const needsStudents = activeTab === "players" || activeTab === "stats" || activeTab === "roles";
     if (!needsStudents || studentsLoaded || studentsLoading) {
       return;
     }
     loadStudents();
   }, [activeTab, studentsLoaded, studentsLoading]);
+
+  useEffect(() => {
+    const needsMemberships = activeTab === "roles";
+    if (!needsMemberships || membershipsLoaded) {
+      return;
+    }
+    loadMemberships();
+  }, [activeTab, membershipsLoaded]);
 
   useEffect(() => {
     if (activePracticeId) {
@@ -1280,6 +1305,7 @@ function SoftballPage({ shared }) {
               { id: "fields", label: "球場" },
               { id: "gear", label: "器材" },
               { id: "stats", label: "統計" },
+              { id: "roles", label: "角色權限" },
             ].map((item) => (
               <button
                 key={item.id}
@@ -2557,6 +2583,169 @@ function SoftballPage({ shared }) {
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500">
                       <li>「各次練習」包含未來排程，可用來看報名/回覆狀況。</li>
                       <li>「球員參與次數」預設只統計已結束練習，避免未來報名干擾參與率。</li>
+                    </ul>
+                  </div>
+                </>
+              );
+            })()}
+          </section>
+        ) : null}
+
+        {activeTab === "roles" ? (
+          <section className="card p-6">
+            <div className="mb-6">
+              <h2 className="text-lg font-bold text-slate-900">壘球隊角色權限管理</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                設定球員的 K 組（壘球隊）角色。擁有 manager / lead / deputy 角色者可進入壘球後台。
+              </p>
+            </div>
+
+            {(() => {
+              const roleOptions = [
+                { value: "none", label: "無角色", desc: "移除 K 組角色" },
+                { value: "manager", label: "球隊經理", desc: "有後台權限" },
+                { value: "lead", label: "隊長", desc: "有後台權限" },
+                { value: "deputy", label: "副隊長", desc: "有後台權限" },
+                { value: "member", label: "一般成員", desc: "無後台權限" },
+              ];
+
+              const membershipByPersonId = memberships.reduce((acc, item) => {
+                const personId = String(item.personId || "").trim();
+                if (personId) {
+                  acc[personId] = item;
+                }
+                return acc;
+              }, {});
+
+              const playersWithMembership = players.map((player) => {
+                const personId = String(player.id || "").trim();
+                const membership = membershipByPersonId[personId] || null;
+                return {
+                  ...player,
+                  membership,
+                  currentRole: membership ? String(membership.roleInGroup || "").trim().toLowerCase() : "none",
+                };
+              });
+
+              const handleSetRole = async (personId, role) => {
+                if (!personId) {
+                  return;
+                }
+                try {
+                  setSaving(true);
+                  const { result } = await effectiveApiRequest({
+                    action: "setSoftballMembershipRole",
+                    personId,
+                    role,
+                  });
+                  if (!result.ok) {
+                    throw new Error(result.error || "設定失敗");
+                  }
+                  flashStatusMessage_(role === "none" ? "已移除角色" : "角色設定成功");
+                  await loadMemberships();
+                } catch (err) {
+                  setError(err.message || "角色設定失敗");
+                } finally {
+                  setSaving(false);
+                }
+              };
+
+              return (
+                <>
+                  {!studentsLoaded || !membershipsLoaded ? (
+                    <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">
+                      <div className="flex items-center gap-2">
+                        <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-sky-500" />
+                        <span className="font-medium">載入中…</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse text-sm">
+                        <thead>
+                          <tr className="border-b border-slate-200 bg-slate-50/60 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
+                            <th className="px-4 py-3">球員</th>
+                            <th className="px-4 py-3">Email</th>
+                            <th className="px-4 py-3">目前角色</th>
+                            <th className="px-4 py-3">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {playersWithMembership.length ? (
+                            playersWithMembership.map((player) => {
+                              const personId = String(player.id || "").trim();
+                              const displayName = String(
+                                player.preferredName || player.name || player.nameEn || player.email || personId
+                              ).trim();
+                              const email = String(player.email || "").trim();
+                              const currentRole = player.currentRole;
+                              const currentRoleLabel =
+                                roleOptions.find((opt) => opt.value === currentRole)?.label || "無角色";
+
+                              return (
+                                <tr key={personId} className="border-b border-slate-100 hover:bg-slate-50/40">
+                                  <td className="px-4 py-3 font-semibold text-slate-900">{displayName}</td>
+                                  <td className="px-4 py-3 text-xs text-slate-600">{email || "-"}</td>
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${
+                                        currentRole === "manager" || currentRole === "lead" || currentRole === "deputy"
+                                          ? "bg-emerald-100 text-emerald-700"
+                                          : currentRole === "member"
+                                          ? "bg-slate-100 text-slate-600"
+                                          : "bg-slate-50 text-slate-400"
+                                      }`}
+                                    >
+                                      {currentRoleLabel}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <select
+                                      value={currentRole}
+                                      onChange={(e) => {
+                                        const newRole = e.target.value;
+                                        if (newRole !== currentRole) {
+                                          handleSetRole(personId, newRole);
+                                        }
+                                      }}
+                                      disabled={saving}
+                                      className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:border-slate-300 focus:border-slate-400 disabled:opacity-50"
+                                    >
+                                      {roleOptions.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>
+                                          {opt.label} {opt.desc ? `(${opt.desc})` : ""}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : (
+                            <tr>
+                              <td colSpan="4" className="px-4 py-8 text-center text-sm text-slate-400">
+                                尚無球員資料。
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 text-sm text-slate-600">
+                    <p className="font-semibold text-slate-900">說明</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-500">
+                      <li>
+                        <strong>manager（球隊經理）/ lead（隊長）/ deputy（副隊長）</strong>：可進入壘球後台。
+                      </li>
+                      <li>
+                        <strong>member（一般成員）</strong>：K 組成員但無後台權限。
+                      </li>
+                      <li>
+                        <strong>無角色</strong>：不在 K 組群組名單中。
+                      </li>
+                      <li>球員自己填寫的「職位」（投手、捕手、球隊經理等）不影響後台權限，只作為參考。</li>
                     </ul>
                   </div>
                 </>
