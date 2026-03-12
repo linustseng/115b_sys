@@ -387,8 +387,8 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     }
     const applicantId = String(item.applicantId || "").trim();
     const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
-    if (personId && applicantId && applicantId === personId) {
-      return true;
+    if (applicantId) {
+      return Boolean(personId && applicantId === personId);
     }
     if (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail) {
       return true;
@@ -414,8 +414,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     const excludeSet = new Set();
     if (applicantId) {
       excludeSet.add(`id:${applicantId}`);
-    }
-    if (applicantEmail) {
+    } else if (applicantEmail) {
       excludeSet.add(`email:${applicantEmail}`);
     }
     const normalizeName_ = (value) => String(value || "").trim();
@@ -576,9 +575,9 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       const requestId = String(item.id || "").trim();
       const applicantId = String(item.applicantId || "").trim();
       const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
-      const isMine =
-        (personId && applicantId && applicantId === personId) ||
-        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail);
+      const isMine = applicantId
+        ? Boolean(personId && applicantId === personId)
+        : Boolean(normalizedEmail && applicantEmail && applicantEmail === normalizedEmail);
       const signedByMe = requestId && signedByMeIdSet.has(requestId);
       return isMine || signedByMe;
     })
@@ -603,10 +602,9 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     .filter((item) => {
       const applicantId = String(item.applicantId || "").trim();
       const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
-      return (
-        (personId && applicantId && applicantId === personId) ||
-        (normalizedEmail && applicantEmail && applicantEmail === normalizedEmail)
-      );
+      return applicantId
+        ? Boolean(personId && applicantId === personId)
+        : Boolean(normalizedEmail && applicantEmail && applicantEmail === normalizedEmail);
     })
     .map((item) => ({ request: item }))
     .sort((a, b) => String(b.request.createdAt || "").localeCompare(String(a.request.createdAt || "")));

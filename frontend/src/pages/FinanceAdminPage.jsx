@@ -830,8 +830,8 @@ function FinanceAdminPage({ shared }) {
     }
     const applicantId = String(item.applicantId || "").trim();
     const applicantEmail = String(item.applicantEmail || "").trim().toLowerCase();
-    if (adminPersonId && applicantId && adminPersonId === applicantId) {
-      return true;
+    if (applicantId) {
+      return Boolean(adminPersonId && adminPersonId === applicantId);
     }
     if (adminEmail && applicantEmail && adminEmail === applicantEmail) {
       return true;

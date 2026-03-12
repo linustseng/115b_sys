@@ -483,13 +483,26 @@ function resolveFinanceInitialStatus_(record, memberships, studentIdByEmail = {}
   return applicantRole === "lead" ? "pending_rep" : "pending_lead";
 }
 
-function isSameApplicant_(record, actorId, actorEmail) {
-  const applicantId = String((record && record.applicantId) || "").trim();
+function resolveApplicantIdentity_(record, studentIdByEmail = {}) {
   const applicantEmail = normalizeEmail((record && record.applicantEmail) || "");
-  if (actorId && applicantId && actorId === applicantId) {
-    return true;
+  let applicantId = String((record && record.applicantId) || "").trim();
+  if (!applicantId && applicantEmail && studentIdByEmail[applicantEmail]) {
+    applicantId = String(studentIdByEmail[applicantEmail]).trim();
   }
-  if (actorEmail && applicantEmail && normalizeEmail(actorEmail) === applicantEmail) {
+  return { applicantId, applicantEmail };
+}
+
+function isSameApplicant_(record, actorId, actorEmail, studentIdByEmail = {}) {
+  const { applicantId, applicantEmail } = resolveApplicantIdentity_(record, studentIdByEmail);
+  let resolvedActorId = String(actorId || "").trim();
+  const normalizedActorEmail = normalizeEmail(actorEmail || "");
+  if (!resolvedActorId && normalizedActorEmail && studentIdByEmail[normalizedActorEmail]) {
+    resolvedActorId = String(studentIdByEmail[normalizedActorEmail]).trim();
+  }
+  if (applicantId) {
+    return Boolean(resolvedActorId && applicantId && resolvedActorId === applicantId);
+  }
+  if (normalizedActorEmail && applicantEmail && normalizedActorEmail === applicantEmail) {
     return true;
   }
   return false;
@@ -556,7 +569,7 @@ function canFinanceActorApprove_(record, actorRole, actorId, actorEmail, members
     resolvedActorId = normalizedActorEmail && studentIdByEmail[normalizedActorEmail] ? String(studentIdByEmail[normalizedActorEmail]).trim() : "";
   }
 
-  if (isSameApplicant_(record, resolvedActorId, actorEmail)) {
+  if (isSameApplicant_(record, resolvedActorId, actorEmail, studentIdByEmail)) {
     return false;
   }
 
@@ -615,7 +628,12 @@ function canApproveFinanceRequestForIdentity_(record, actorId, actorEmail, membe
   );
 }
 
-function resolveFinanceNextStatus_(record, actorRole) {
+function applicantHasFinanceRole_(record, financeRoles, studentIdByEmail = {}, targetRole) {
+  const { applicantId, applicantEmail } = resolveApplicantIdentity_(record, studentIdByEmail);
+  return actorHasFinanceRole_(financeRoles, applicantId, applicantEmail, targetRole);
+}
+
+function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], studentIdByEmail = {}) {
   const role = String(actorRole || "")
     .trim()
     .toLowerCase();
@@ -626,6 +644,7 @@ function resolveFinanceNextStatus_(record, actorRole) {
   const needsCommittee = requiresCommittee_(record);
   const isPettyCash = isPettyCashRequest_(record);
   const isPurchase = isPurchaseRequest_(record);
+  const applicantIsAccounting = applicantHasFinanceRole_(record, financeRoles, studentIdByEmail, "accounting");
 
   if (role === "lead") {
     if (needsRep || needsCommittee) {
@@ -634,7 +653,7 @@ function resolveFinanceNextStatus_(record, actorRole) {
     if (isPurchase) {
       return "closed";
     }
-    return isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "rep") {
@@ -644,14 +663,14 @@ function resolveFinanceNextStatus_(record, actorRole) {
     if (isPurchase) {
       return "closed";
     }
-    return isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "committee") {
     if (isPurchase) {
       return "closed";
     }
-    return isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "accounting") {
@@ -1898,10 +1917,10 @@ export async function dispatchNativeAction({
 
       const applicantEmail = normalizeEmail(
         firstText(
-          row.raw && row.raw.applicantEmail,
+          student && student.email ? student.email : "",
           firstText(
-            auth && auth.profile && auth.profile.email ? auth.profile.email : "",
-            student && student.email ? student.email : ""
+            row.raw && row.raw.applicantEmail,
+            auth && auth.profile && auth.profile.email ? auth.profile.email : ""
           )
         )
       );
@@ -2031,7 +2050,7 @@ export async function dispatchNativeAction({
       }
 
       const applicantEmail = normalizeEmail(
-        firstText(row.raw && row.raw.applicantEmail, student && student.email ? student.email : "")
+        firstText(student && student.email ? student.email : "", row.raw && row.raw.applicantEmail)
       );
 
       row.raw = {
@@ -2201,7 +2220,7 @@ export async function dispatchNativeAction({
           if (requestAction === "return") {
             toStatus = "returned";
           } else {
-            toStatus = resolveFinanceNextStatus_(existingRecord, actorRole);
+            toStatus = resolveFinanceNextStatus_(existingRecord, actorRole, financeRoles, studentIdByEmail);
           }
         } else {
           return { ok: false, data: null, error: `Unsupported requestAction: ${requestAction}` };
@@ -2314,11 +2333,11 @@ export async function dispatchNativeAction({
 
       const applicantEmail = normalizeEmail(
         firstText(
-          row.raw && row.raw.applicantEmail,
+          applicantProfile && applicantProfile.email ? applicantProfile.email : "",
           firstText(
-            existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "",
+            row.raw && row.raw.applicantEmail,
             firstText(
-              applicantProfile && applicantProfile.email ? applicantProfile.email : "",
+              existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "",
               auth && auth.profile && auth.profile.email ? auth.profile.email : ""
             )
           )

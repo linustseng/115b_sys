@@ -621,33 +621,46 @@ function FinancePage({ shared }) {
     }));
   };
 
+  const studentOptions = students.map((student) => {
+    const id = String(student.id || "").trim();
+    const name = String(
+      student.preferredName || student.nameZh || student.nameEn || student.name || ""
+    ).trim();
+    const email = String(student.googleEmail || student.email || "")
+      .trim()
+      .toLowerCase();
+    const label = [id, name].filter(Boolean).join(" ").trim();
+    return { id, name, email, label, normalizedLabel: label.toLowerCase() };
+  });
+
+  const resolveApplicantById_ = (applicantId) => {
+    const normalizedId = String(applicantId || "").trim();
+    if (!normalizedId) {
+      return { id: "", name: "", email: "" };
+    }
+    const exact = studentOptions.find((item) => item.id === normalizedId);
+    return exact || { id: "", name: "", email: "" };
+  };
+
   const resolveApplicantFromInput_ = (inputValue) => {
     const raw = String(inputValue || "").trim();
-    if (!raw || !students.length) {
-      return { id: "", name: "" };
+    if (!raw || !studentOptions.length) {
+      return { id: "", name: "", email: "" };
     }
     const normalized = raw.toLowerCase();
-    const studentOptions = students.map((student) => {
-      const id = String(student.id || "").trim();
-      const name = String(
-        student.preferredName || student.nameZh || student.nameEn || student.name || ""
-      ).trim();
-      const label = [id, name].filter(Boolean).join(" ").trim();
-      return { id, name, label, normalizedLabel: label.toLowerCase() };
-    });
     const exact = studentOptions.find((item) => item.normalizedLabel === normalized);
     if (exact && exact.id) {
-      return { id: exact.id, name: exact.name };
+      return exact;
     }
     const idMatch = studentOptions.find((item) => item.id && item.id.toLowerCase() === normalized);
     if (idMatch) {
-      return { id: idMatch.id, name: idMatch.name };
+      return idMatch;
     }
     const nameMatches = studentOptions.filter((item) => item.name.toLowerCase() === normalized);
     if (nameMatches.length === 1) {
-      return { id: nameMatches[0].id, name: nameMatches[0].name };
+      return nameMatches[0];
     }
-    return { id: "", name: "" };
+    return { id: "", name: "", email: "" };
   };
 
   const handleApplicantInputChange = (value) => {
@@ -705,19 +718,22 @@ function FinancePage({ shared }) {
       return;
     }
     const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
-    const draftApplicantId =
-      form.applicantId ||
-      resolvedApplicant.id ||
-      String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    const currentStudentId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    const draftApplicantId = form.applicantId || resolvedApplicant.id || currentStudentId;
+    const selectedApplicant = resolveApplicantById_(draftApplicantId);
     const payload = {
       ...form,
       attachments: JSON.stringify(form.attachments || []),
       status: "draft",
       applicantId: draftApplicantId || "",
       applicantName: String(
-        resolvedApplicant.name || form.applicantName || applicantName || ""
+        selectedApplicant.name || resolvedApplicant.name || form.applicantName || applicantName || ""
       ).trim(),
-      applicantEmail: googleLinkedStudent.email || "",
+      applicantEmail:
+        selectedApplicant.email ||
+        (draftApplicantId && draftApplicantId === currentStudentId
+          ? String(googleLinkedStudent.email || "").trim().toLowerCase()
+          : ""),
     };
     setLoading(true);
     try {
@@ -757,12 +773,11 @@ function FinancePage({ shared }) {
       return;
     }
     const resolvedApplicant = resolveApplicantFromInput_(form.applicantName);
-    const resolvedApplicantId =
-      form.applicantId ||
-      resolvedApplicant.id ||
-      String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    const currentStudentId = String((googleLinkedStudent && googleLinkedStudent.id) || "").trim();
+    const resolvedApplicantId = form.applicantId || resolvedApplicant.id || currentStudentId;
+    const selectedApplicant = resolveApplicantById_(resolvedApplicantId);
     const resolvedApplicantName = String(
-      resolvedApplicant.name || form.applicantName || applicantName || ""
+      selectedApplicant.name || resolvedApplicant.name || form.applicantName || applicantName || ""
     ).trim();
     if (!resolvedApplicantId) {
       setError("請選擇請款人學號");
@@ -818,7 +833,11 @@ function FinancePage({ shared }) {
       status: "pending_lead",
       applicantId: resolvedApplicantId,
       applicantName: resolvedApplicantName,
-      applicantEmail: googleLinkedStudent.email || "",
+      applicantEmail:
+        selectedApplicant.email ||
+        (resolvedApplicantId && resolvedApplicantId === currentStudentId
+          ? String(googleLinkedStudent.email || "").trim().toLowerCase()
+          : ""),
     };
     if (isPettyCash) {
       payload.paymentMethod = "pettycash";
