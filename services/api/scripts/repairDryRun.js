@@ -63,6 +63,21 @@ function normalizePhone(value, options = {}) {
   return text;
 }
 
+function buildAgentAuditKey(row) {
+  const id = asText(row && row.id);
+  if (id) {
+    return id;
+  }
+  return [
+    asText(row && (row.createdAt || row.created_at)),
+    asText(row && row.action),
+    asText(row && (row.lineUserId || row.line_user_id)),
+    asText(row && (row.studentId || row.student_id)),
+    asText(row && (row.requestId || row.request_id)),
+    asText(row && (row.eventId || row.event_id)),
+  ].join("::");
+}
+
 function isUuid(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     asText(value)
@@ -382,34 +397,40 @@ const DATASETS = {
     rowKey: (row) => asText(row && row.id),
   },
   directory_logs: {
-    policy: "schema_gap",
+    policy: "mirror_safe",
     table: "directory_logs",
-    readPath: false,
+    source: { kind: "action", action: "listDirectoryLogs", dataKey: "directoryLogs" },
+    rowKey: (row) => asText(row && row.id),
   },
   admin_users: {
-    policy: "schema_gap",
+    policy: "mirror_safe",
     table: "admin_users",
-    readPath: false,
+    source: { kind: "action", action: "listAdminUsers", dataKey: "adminUsers" },
+    rowKey: (row) => asText(row && row.id),
   },
   announcements: {
-    policy: "schema_gap",
+    policy: "mirror_safe",
     table: "announcements",
-    readPath: false,
+    source: { kind: "action", action: "listAnnouncements", dataKey: "announcements" },
+    rowKey: (row) => asText(row && row.id),
   },
   notification_reads: {
     policy: "schema_gap",
     table: "notification_reads",
-    readPath: false,
+    readPath: true,
   },
   line_bindings: {
-    policy: "schema_gap",
+    policy: "mirror_safe",
     table: "line_bindings",
-    readPath: false,
+    source: { kind: "action", action: "listLineBindings", dataKey: "lineBindings" },
+    rowKey: (row) => asText(row && row.id),
   },
   agent_audit: {
-    policy: "schema_gap",
+    policy: "mirror_safe",
     table: "agent_audit",
-    readPath: false,
+    source: { kind: "action", action: "listAgentAudit", dataKey: "agentAudit" },
+    rowKey: (row) => buildAgentAuditKey(row),
+    dbColumns: ["id", "created_at", "action", "line_user_id", "student_id", "request_id", "event_id"],
   },
   notifications: {
     policy: "derived_runtime",
@@ -480,7 +501,7 @@ async function planMirrorSafeDataset(name, definition, snapshot, includeSamples)
   }
 
   const sourceRows = await getSourceRows(snapshot, definition.source);
-  const dbRows = await listTableRows(definition.table, ["id"]);
+  const dbRows = await listTableRows(definition.table, definition.dbColumns || ["id"]);
   const sourceMap = new Map();
   const dbMap = new Map();
 

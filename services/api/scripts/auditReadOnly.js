@@ -81,6 +81,28 @@ async function listTableIds(tableName) {
   return result.rows.map((row) => asText(row.id)).filter(Boolean);
 }
 
+async function listTableRows(tableName, columns = ["id"]) {
+  const result = await query(
+    `select ${columns.map(quoteIdentifier).join(", ")} from ${quoteIdentifier(tableName)} order by 1 nulls last`
+  );
+  return result.rows;
+}
+
+function buildAgentAuditKey(row) {
+  const id = asText(row && row.id);
+  if (id) {
+    return id;
+  }
+  return [
+    asText(row && (row.createdAt || row.created_at)),
+    asText(row && row.action),
+    asText(row && (row.lineUserId || row.line_user_id)),
+    asText(row && (row.studentId || row.student_id)),
+    asText(row && (row.requestId || row.request_id)),
+    asText(row && (row.eventId || row.event_id)),
+  ].join("::");
+}
+
 async function fetchDirectoryRows() {
   const result = await query(
     `select id, email, name_zh, name_en, preferred_name, company, title, mobile, backup_phone, emergency_contact, emergency_phone, birthday_month, birthday_day from directories order by id`
@@ -128,6 +150,24 @@ const AUDITABLE_DATASETS = [
   },
   { name: "checkins", sheet: "Checkins", table: "checkins", source: { kind: "snapshot", key: "checkins" } },
   { name: "directory", sheet: "Directory", table: "directories", source: { kind: "snapshot", key: "directory" } },
+  {
+    name: "directory_logs",
+    sheet: "DirectoryLogs",
+    table: "directory_logs",
+    source: { kind: "action", action: "listDirectoryLogs", dataKey: "directoryLogs" },
+  },
+  {
+    name: "admin_users",
+    sheet: "AdminUsers",
+    table: "admin_users",
+    source: { kind: "action", action: "listAdminUsers", dataKey: "adminUsers" },
+  },
+  {
+    name: "announcements",
+    sheet: "Announcements",
+    table: "announcements",
+    source: { kind: "action", action: "listAnnouncements", dataKey: "announcements" },
+  },
   {
     name: "group_memberships",
     sheet: "GroupMemberships",
@@ -201,15 +241,29 @@ const AUDITABLE_DATASETS = [
     source: { kind: "action", action: "listSoftballAttendance", dataKey: "attendance" },
     normalizeId: toCanonicalAttendanceId,
   },
+  {
+    name: "line_bindings",
+    sheet: "LineBindings",
+    table: "line_bindings",
+    source: { kind: "action", action: "listLineBindings", dataKey: "lineBindings" },
+  },
+  {
+    name: "agent_audit",
+    sheet: "AgentAudit",
+    table: "agent_audit",
+    source: { kind: "action", action: "listAgentAudit", dataKey: "agentAudit" },
+    rowKey: buildAgentAuditKey,
+    dbColumns: ["id", "created_at", "action", "line_user_id", "student_id", "request_id", "event_id"],
+    dbRowKey: buildAgentAuditKey,
+  },
 ];
 
 const SCHEMA_ONLY_SHEETS = [
-  { sheet: "DirectoryLogs", table: "directory_logs", reason: "Apps Script sync/audit path does not currently expose a listDirectoryLogs action." },
-  { sheet: "AdminUsers", table: "admin_users", reason: "No read action wired into the current Node audit flow." },
-  { sheet: "Announcements", table: "announcements", reason: "No listAnnouncements action in the current Apps Script API." },
-  { sheet: "NotificationReads", table: "notification_reads", reason: "No listNotificationReads action in the current Apps Script API." },
-  { sheet: "LineBindings", table: "line_bindings", reason: "No listLineBindings action in the current Apps Script API." },
-  { sheet: "AgentAudit", table: "agent_audit", reason: "No listAgentAudit action in the current Apps Script API." },
+  {
+    sheet: "NotificationReads",
+    table: "notification_reads",
+    reason: "Internal listNotificationReads action now exists, but the PostgreSQL table is not yet a legacy-mirror schema for row-id audit parity.",
+  },
 ];
 
 async function getSourceRows(snapshot, dataset) {
@@ -257,8 +311,16 @@ async function auditDataset(snapshot, existingTables, dataset) {
   output.dbCount = await countTableRows(dataset.table);
 
   const normalizer = typeof dataset.normalizeId === "function" ? dataset.normalizeId : asText;
-  const sourceIds = sourceRows.map((row) => normalizer(row && row.id)).filter(Boolean).sort();
-  const dbIds = (await listTableIds(dataset.table)).map((id) => normalizer(id)).filter(Boolean).sort();
+  const sourceKey = typeof dataset.rowKey === "function" ? dataset.rowKey : (row) => normalizer(row && row.id);
+  const dbRowKey = typeof dataset.dbRowKey === "function" ? dataset.dbRowKey : (row) => normalizer(row && row.id);
+
+  const sourceIds = sourceRows.map((row) => sourceKey(row)).filter(Boolean).sort();
+  const dbIds = dataset.dbColumns || dataset.dbRowKey
+    ? (await listTableRows(dataset.table, dataset.dbColumns || ["id"]))
+        .map((row) => dbRowKey(row))
+        .filter(Boolean)
+        .sort()
+    : (await listTableIds(dataset.table)).map((id) => normalizer(id)).filter(Boolean).sort();
   const diff = compareIds(sourceIds, dbIds);
 
   output.missingInDbCount = diff.missingInDb.length;

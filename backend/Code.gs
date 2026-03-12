@@ -96,6 +96,8 @@ const CACHE_KEYS = {
   softballConfig: "softballConfig:list:v1",
   softballAttendance: "softballAttendance:list:v1",
   directory: "directory:list:v1",
+  directoryLogs: "directoryLogs:list:v1",
+  adminUsers: "adminUsers:list:v1",
   orderPlans: "orderPlans:list:v1",
   orderResponses: "orderResponses:list:v1",
   financeRequests: "financeRequests:list:v1",
@@ -103,6 +105,7 @@ const CACHE_KEYS = {
   fundPayments: "fundPayments:list:v1",
   announcements: "announcements:list:v1",
   notificationReads: "notificationReads:list:v1",
+  agentAudit: "agentAudit:list:v1",
   fundSummary: "fundSummary:v1",
   notificationsPayloadPrefix: "notificationsPayload:v1",
   checkinStatusMapPrefix: "checkinStatusMap:v1",
@@ -270,6 +273,14 @@ function listDirectoryCached_() {
   return getCachedJson_(CACHE_KEYS.directory, 300, listDirectory_);
 }
 
+function listDirectoryLogsCached_() {
+  return getCachedJson_(CACHE_KEYS.directoryLogs, 120, listDirectoryLogs_);
+}
+
+function listAdminUsersCached_() {
+  return getCachedJson_(CACHE_KEYS.adminUsers, 120, listAdminUsers_);
+}
+
 function listOrderPlansCached_() {
   return getCachedJson_(CACHE_KEYS.orderPlans, 90, listOrderPlans_);
 }
@@ -312,6 +323,10 @@ function listLineBindingsCached_() {
   return getCachedJson_(CACHE_KEYS.lineBindings, 120, listLineBindings_);
 }
 
+function listAgentAuditCached_() {
+  return getCachedJson_(CACHE_KEYS.agentAudit, 120, listAgentAudit_);
+}
+
 function buildFundSummaryCached_() {
   return getCachedJson_(CACHE_KEYS.fundSummary, 90, buildFundSummary_);
 }
@@ -350,6 +365,54 @@ function handleActionPayload_(payload) {
       },
       error: null,
     };
+  }
+
+  if (payload.action === "listDirectoryLogs") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { directoryLogs: listDirectoryLogsCached_() }, error: null };
+  }
+
+  if (payload.action === "listAdminUsers") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { adminUsers: listAdminUsersCached_() }, error: null };
+  }
+
+  if (payload.action === "listAnnouncements") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { announcements: listAnnouncementsCached_() }, error: null };
+  }
+
+  if (payload.action === "listNotificationReads") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { notificationReads: listNotificationReadsCached_() }, error: null };
+  }
+
+  if (payload.action === "listLineBindings") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { lineBindings: listLineBindingsCached_() }, error: null };
+  }
+
+  if (payload.action === "listAgentAudit") {
+    const syncAuth = requireSyncPullAccess_(payload || {});
+    if (!syncAuth.ok) {
+      return syncAuth;
+    }
+    return { ok: true, data: { agentAudit: listAgentAuditCached_() }, error: null };
   }
 
   if (payload.action === "lookupStudent") {
@@ -2958,6 +3021,34 @@ function listDirectory_() {
   });
 }
 
+function listDirectoryLogs_() {
+  const sheet = getSheet_(SHEETS.directoryLogs);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return normalizeDirectoryLogRecord_(mapRowToObject_(headerMap, row));
+    })
+    .sort(function (a, b) {
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    });
+}
+
+function listAdminUsers_() {
+  const sheet = getSheet_(SHEETS.admins);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return normalizeAdminUserRecord_(mapRowToObject_(headerMap, row));
+    })
+    .sort(function (a, b) {
+      const left = String(a.name || a.email || a.id || "");
+      const right = String(b.name || b.email || b.id || "");
+      return left.localeCompare(right);
+    });
+}
+
 function listBirthdays_() {
   const months = {};
   for (var month = 1; month <= 12; month += 1) {
@@ -3202,6 +3293,19 @@ function listLineBindings_() {
   return rows.map(function (row) {
     return normalizeLineBindingRecord_(mapRowToObject_(headerMap, row));
   });
+}
+
+function listAgentAudit_() {
+  const sheet = getSheet_(SHEETS.agentAudit);
+  const headerMap = getHeaderMap_(sheet);
+  const rows = getDataRows_(sheet);
+  return rows
+    .map(function (row) {
+      return normalizeAgentAuditRecord_(mapRowToObject_(headerMap, row));
+    })
+    .sort(function (a, b) {
+      return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    });
 }
 
 function listFinanceRoles_() {
@@ -4499,6 +4603,7 @@ function appendDirectoryLog_(payload) {
     }
   });
   sheet.appendRow(values);
+  invalidateCacheKeys_([CACHE_KEYS.directoryLogs]);
   return record;
 }
 
@@ -5841,6 +5946,28 @@ function normalizeGroupMembershipRecord_(data) {
   };
 }
 
+function normalizeDirectoryLogRecord_(data) {
+  return {
+    id: String((data && data.id) || "").trim(),
+    createdAt: String((data && data.createdAt) || "").trim(),
+    actorEmail: normalizeEmail_(data && data.actorEmail),
+    targetId: String((data && data.targetId) || "").trim(),
+    targetEmail: normalizeEmail_(data && data.targetEmail),
+    action: String((data && data.action) || "").trim(),
+    changes: String((data && data.changes) || "").trim(),
+  };
+}
+
+function normalizeAdminUserRecord_(data) {
+  return {
+    id: String((data && data.id) || "").trim(),
+    name: String((data && data.name) || "").trim(),
+    email: normalizeEmail_(data && data.email),
+    role: String((data && data.role) || "").trim(),
+    passwordHash: String((data && data.passwordHash) || "").trim(),
+  };
+}
+
 function normalizeLineBindingRecord_(data) {
   const metadata = data && Object.prototype.hasOwnProperty.call(data, "metadata") ? data.metadata : "";
   return {
@@ -6983,6 +7110,7 @@ function appendAgentAudit_(data) {
       }
     });
     sheet.appendRow(values);
+    invalidateCacheKeys_([CACHE_KEYS.agentAudit]);
     return record;
   } catch (error) {
     return null;
