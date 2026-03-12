@@ -783,6 +783,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listEvents",
   "listHomeBootstrap",
   "listLandingBootstrap",
+  "listAdminBootstrap",
   "listStudents",
   "listGroupMemberships",
   "lookupStudent",
@@ -791,8 +792,15 @@ const API_V2_READ_ACTIONS = new Set([
   "getCheckinBootstrap",
   "listCheckinStatus",
   "listDirectory",
+  "getDirectoryProfile",
   "listBirthdays",
   "getSoftballAdminAccess",
+  "searchStudents",
+  "verifyGoogle",
+  "refreshSession",
+  // Registrations & Checkins
+  "listRegistrations",
+  "listCheckins",
   // Finance / approvals (DB v2 cutover)
   "listFinanceBootstrap",
   "listFinanceApplicantBootstrap",
@@ -806,12 +814,38 @@ const API_V2_READ_ACTIONS = new Set([
   "listApprovalsOverview",
   "listFundEvents",
   "listFundPayments",
+  "getFundSummary",
+  // Ordering
+  "listOrderPlans",
+  "listOrderResponses",
+  "listOrderResponsesByStudent",
+  // Softball
+  "listSoftballBootstrap",
+  "listSoftballPlayerBootstrap",
+  "listSoftballPlayers",
+  "listSoftballPractices",
+  "listSoftballFields",
+  "listSoftballGear",
+  "listSoftballConfig",
+  "listSoftballAttendance",
 ]);
 
 const API_V2_WRITE_ACTIONS = new Set([
   "register",
   "checkin",
   "updateRegistration",
+  "adminCreateRegistration",
+  "deleteRegistration",
+  "deleteCheckin",
+  "linkGoogleStudent",
+  "updateDirectoryProfile",
+  "batchUpdateGroupMemberships",
+  "markNotificationRead",
+  "markAllNotificationsRead",
+  // Events
+  "createEvent",
+  "updateEvent",
+  "deleteEvent",
   // Finance / approvals (DB v2 cutover)
   "createFinanceRequest",
   "adminCreateFinanceRequest",
@@ -824,6 +858,26 @@ const API_V2_WRITE_ACTIONS = new Set([
   "deleteFundEvent",
   "upsertFundPayment",
   "deleteFundPayment",
+  // Ordering
+  "createOrderPlan",
+  "updateOrderPlan",
+  "submitOrderResponse",
+  // Softball
+  "createSoftballPlayer",
+  "updateSoftballPlayer",
+  "deleteSoftballPlayer",
+  "upsertMySoftballPlayerProfile",
+  "createSoftballPractice",
+  "updateSoftballPractice",
+  "deleteSoftballPractice",
+  "createSoftballField",
+  "updateSoftballField",
+  "deleteSoftballField",
+  "createSoftballGear",
+  "updateSoftballGear",
+  "deleteSoftballGear",
+  "updateSoftballConfig",
+  "submitSoftballAttendance",
 ]);
 
 function isAllowedApiEndpointHost_(host) {
