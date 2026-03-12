@@ -1274,12 +1274,15 @@ export async function dispatchNativeAction({
         const birthdayMonth = String(row.birthday_month || "").trim();
         const birthdayDay = String(row.birthday_day || "").trim();
         const fallbackName = firstText(row.student_name, row.name_en || "");
+        const nameZh = firstText(row.name_zh);
+        const preferredName = firstText(row.preferred_name);
+        const displayName = preferredName && preferredName !== nameZh ? preferredName : "";
         months[month].push({
           id: String(row.id || "").trim(),
           email: normalizeEmail(row.email || ""),
-          name: firstText(row.preferred_name, firstText(row.name_zh, fallbackName)),
-          nameZh: firstText(row.name_zh),
-          displayName: firstText(row.preferred_name),
+          name: firstText(preferredName, firstText(nameZh, fallbackName)),
+          nameZh,
+          displayName,
           company: firstText(row.company),
           group: firstText(row.group_id),
           // 新舊前端欄位相容
