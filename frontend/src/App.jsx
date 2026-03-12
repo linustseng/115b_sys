@@ -782,6 +782,7 @@ const API_POST_ACTIONS = new Set([
 const API_V2_READ_ACTIONS = new Set([
   "listEvents",
   "listHomeBootstrap",
+  "listLandingBootstrap",
   "listStudents",
   "listGroupMemberships",
   "lookupStudent",
@@ -790,6 +791,8 @@ const API_V2_READ_ACTIONS = new Set([
   "getCheckinBootstrap",
   "listCheckinStatus",
   "listDirectory",
+  "listBirthdays",
+  "getSoftballAdminAccess",
   // Finance / approvals (DB v2 cutover)
   "listFinanceBootstrap",
   "listFinanceApplicantBootstrap",
