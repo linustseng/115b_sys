@@ -2935,7 +2935,7 @@ function AppShell() {
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
           CLASS_GROUPS={CLASS_GROUPS}
           initialTab="ordering"
-          allowedTabs={["ordering"]}
+          allowedTabs={["ordering", "dietary"]}
         />
       </AdminAccessGuard>
     );
