@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { getConfig } from "../src/config.js";
-import { query, closePool } from "../src/db.js";
+import { getConfig } from "../../src/config.js";
+import { query, closePool } from "../../src/db.js";
 
 const config = getConfig();
 

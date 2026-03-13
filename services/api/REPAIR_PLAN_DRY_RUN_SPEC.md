@@ -6,7 +6,7 @@ _Last updated: 2026-03-13 Asia/Taipei_
 
 Current state is **not** a clean one-time cutover from Google Sheets / Apps Script to PostgreSQL.
 
-The new read-only audit (`npm run audit:only`) shows three distinct problems:
+The new read-only audit (`npm run legacy:audit:only`) shows three distinct problems:
 
 1. **Schema gaps**: some legacy Sheets do not have corresponding PostgreSQL tables yet.
 2. **Read coverage gaps**: some legacy datasets exist in Apps Script, but no read action / snapshot path exposes them for audit or backfill.
@@ -63,7 +63,7 @@ The following sheet-backed domains are expected but currently missing in Postgre
 
 ## Do NOT treat the current `backfill:cutover` script as a repair script.
 
-Current `scripts/backfillCutover.js` uses **TRUNCATE + replace** semantics for several tables. That is unsafe for mixed-state datasets where PostgreSQL already contains DB-only rows created after cutover.
+Current `scripts/legacy/backfillCutover.js` uses **TRUNCATE + replace** semantics for several tables. That is unsafe for mixed-state datasets where PostgreSQL already contains DB-only rows created after cutover.
 
 Unsafe-to-reuse-as-is for repair:
 
@@ -292,7 +292,7 @@ Exit criteria:
 Create a new script (proposed name):
 
 ```bash
-node scripts/repairDryRun.js
+node scripts/legacy/repairDryRun.js
 ```
 
 This script must:
@@ -325,7 +325,7 @@ Recommended order:
 
 After first repair apply:
 
-- rerun `npm run audit:only`
+- rerun `npm run legacy:audit:only`
 - confirm no missing expected tables
 - reduce mismatch count
 - decide per dataset whether final source-of-truth is:
@@ -342,13 +342,13 @@ After first repair apply:
 Proposed:
 
 ```bash
-npm run repair:dry-run
+npm run legacy:repair:dry-run
 ```
 
 backed by:
 
 ```bash
-node scripts/repairDryRun.js
+node scripts/legacy/repairDryRun.js
 ```
 
 ## Hard requirements
@@ -368,7 +368,7 @@ node scripts/repairDryRun.js
 ### Optional CLI flags
 
 ```bash
-node scripts/repairDryRun.js \
+node scripts/legacy/repairDryRun.js \
   --datasets=all \
   --format=json \
   --out=./reports/repair-dry-run.json \
@@ -534,7 +534,7 @@ Repair phase is considered successful when:
 
 1. All expected legacy-backed tables exist in PostgreSQL.
 2. All expected legacy-backed tables are readable via audit path.
-3. `npm run audit:only` reports:
+3. `npm run legacy:audit:only` reports:
    - `missingExpectedTableCount = 0`
    - `schemaOnlySheetCount = 0` or only explicitly deprecated items remain
 4. `directories` has no obvious “source non-empty / db blank” cases left.

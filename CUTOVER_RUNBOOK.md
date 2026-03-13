@@ -8,7 +8,7 @@
 cd /home/linus/.openclaw/workspace/115b_sys/services/api
 npm install
 npm run migrate
-npm run reconcile:snapshot
+npm run legacy:reconcile:snapshot
 BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=20 npm run bench:reads
 curl https://one15b-sys.onrender.com/health
 ```
@@ -74,7 +74,7 @@ Production 環境變數：
 
 ```bash
 cd /home/linus/.openclaw/workspace/115b_sys/services/api
-npm run reconcile:snapshot
+npm run legacy:reconcile:snapshot
 ```
 
 ---

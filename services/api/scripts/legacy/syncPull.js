@@ -1,5 +1,5 @@
-import { closePool } from "../src/db.js";
-import { syncFromAppsScript } from "../src/sync/pullFromAppsScript.js";
+import { closePool } from "../../src/db.js";
+import { syncFromAppsScript } from "../../src/sync/pullFromAppsScript.js";
 
 async function run() {
   const result = await syncFromAppsScript();

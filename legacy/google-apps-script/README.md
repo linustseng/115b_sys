@@ -1,7 +1,10 @@
-# Backend Setup
+# Archived Google Apps Script Backend
+
+> Legacy reference only. This directory is no longer part of the production runtime path.
+
 
 ## Google Sheets Templates
-Create a Google Sheet with the following tabs and headers. You can copy from `backend/templates/*.csv`:
+Create a Google Sheet with the following tabs and headers. You can copy from `legacy/google-apps-script/templates/*.csv`:
 
 - Events
 - Registrations
@@ -44,7 +47,7 @@ Create a Google Sheet with the following tabs and headers. You can copy from `ba
 - K: 壘球隊
 
 ## Apps Script
-Deploy as Web App and copy the URL into `frontend/.env` as `VITE_API_URL`.
+Deploy as Web App only if you explicitly need legacy migration / reconciliation tooling. Do not use it as the default production frontend endpoint.
 
 ## Google OAuth
 Set Script Properties:

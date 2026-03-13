@@ -1,5 +1,5 @@
-import { getConfig } from "../src/config.js";
-import { query, withTransaction, closePool } from "../src/db.js";
+import { getConfig } from "../../src/config.js";
+import { query, withTransaction, closePool } from "../../src/db.js";
 
 const config = getConfig();
 

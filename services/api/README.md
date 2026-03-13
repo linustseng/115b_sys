@@ -1,12 +1,12 @@
-# 115b_sys API (Migration MVP)
+# 115b_sys API
 
-Node.js read-path API for 115b_sys, backed by Postgres.
+Node.js runtime API for 115b_sys, backed by PostgreSQL.
 
-## What this includes (Day 3)
+## What this includes
 
 - Express API service
 - Postgres schema migration (`migrations/001_init.sql`)
-- Internal pull sync from Apps Script (`syncPullSnapshot`)
+- Node-only runtime endpoints
 - Read endpoints:
   - `GET /health`
   - `GET /v1/events`
@@ -17,7 +17,7 @@ Node.js read-path API for 115b_sys, backed by Postgres.
   - `GET /v1/bootstrap/registration?eventId=...&email=...`
   - `GET /v1/bootstrap/checkin?eventId=...&email=...`
   - `GET/POST /v1/checkin-status`
-- Write endpoints (Node DB write + mirror to Apps Script):
+- Write endpoints (Node DB only):
   - `POST /v1/register`
   - `POST /v1/checkin`
   - `POST /v1/update-registration`
@@ -25,9 +25,7 @@ Node.js read-path API for 115b_sys, backed by Postgres.
   - `POST /v1/auth/verify-google` (input: `idToken`)
   - `POST /v1/auth/create-session` (input: `sessionToken` or `idToken`)
   - `GET/POST /v1/memberships/my` (input: Bearer `sessionToken` or `idToken`)
-- Internal endpoints:
-  - `POST /internal/sync/pull` (Bearer token)
-  - `GET /internal/sync/runs?limit=20` (Bearer token)
+- Internal sync endpoints removed from runtime
 
 ## Setup
 
@@ -44,13 +42,7 @@ npm install
 npm run migrate
 ```
 
-4. Pull first snapshot from Apps Script:
-
-```bash
-npm run sync:pull
-```
-
-5. Start API:
+4. Start API:
 
 ```bash
 npm run dev
@@ -58,23 +50,23 @@ npm run dev
 
 ## Optional ops scripts
 
-- Reconcile Apps Script snapshot counts vs Postgres:
-
-```bash
-npm run reconcile:snapshot
-```
-
-- Quick latency benchmark (Node vs Apps Script read path):
+- Quick latency benchmark:
 
 ```bash
 BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=10 npm run bench:reads
 ```
 
-## Required Apps Script change
+## Legacy Google tooling
 
-`backend/Code.gs` must support internal action `syncPullSnapshot` and validate `SYNC_PULL_TOKEN` script property.
+Legacy Google migration / reconciliation tooling has been moved under:
+
+- `services/api/scripts/legacy/`
+- `legacy/google-apps-script/`
+
+If you need to audit or backfill against the archived Google source, use the `legacy:*` npm scripts.
 
 ## Security note
 
-- Keep `SYNC_PULL_TOKEN`, `SESSION_SECRET`, and `DATABASE_URL` in server-side env only.
+- Keep `SESSION_SECRET` and `DATABASE_URL` in server-side env only.
+- `SYNC_PULL_TOKEN` is only needed for legacy Google migration tooling.
 - Never commit `.env`.

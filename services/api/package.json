@@ -7,12 +7,12 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
-    "sync:pull": "node scripts/syncPull.js",
-    "backfill:cutover": "node scripts/backfillCutover.js",
-    "reconcile:snapshot": "node scripts/reconcileSnapshot.js",
-    "audit:only": "node scripts/auditReadOnly.js",
-    "repair:dry-run": "node scripts/repairDryRun.js",
-    "repair:apply": "node scripts/repairApply.js",
+    "legacy:sync:pull": "node scripts/legacy/syncPull.js",
+    "legacy:backfill:cutover": "node scripts/legacy/backfillCutover.js",
+    "legacy:reconcile:snapshot": "node scripts/legacy/reconcileSnapshot.js",
+    "legacy:audit:only": "node scripts/legacy/auditReadOnly.js",
+    "legacy:repair:dry-run": "node scripts/legacy/repairDryRun.js",
+    "legacy:repair:apply": "node scripts/legacy/repairApply.js",
     "bench:reads": "node scripts/benchReadPaths.js"
   },
   "dependencies": {
