@@ -1,7 +1,3 @@
-import { getConfig } from "../src/config.js";
-
-const config = getConfig();
-
 const iterations = Math.max(1, Number(process.env.BENCH_ITERATIONS || 10));
 const benchEmail = String(process.env.BENCH_EMAIL || "").trim() || "linustseng@gmail.com";
 const apiV2Base = String(process.env.BENCH_API_V2_URL || "").trim();
@@ -35,15 +31,9 @@ async function requestJson(url, options = {}) {
   return json;
 }
 
-function buildAppsScriptUrl(payload) {
-  const url = new URL(config.appsScriptUrl);
-  url.searchParams.set("payload", JSON.stringify(payload));
-  return url.toString();
-}
-
 async function benchCase(name, requester) {
   const samples = [];
-  for (var i = 0; i < iterations; i++) {
+  for (let i = 0; i < iterations; i++) {
     const started = Date.now();
     await requester();
     samples.push(Date.now() - started);
@@ -64,24 +54,12 @@ async function run() {
 
   const cases = [
     {
-      name: "apps:listEvents",
-      requester: () => requestJson(buildAppsScriptUrl({ action: "listEvents" })),
-    },
-    {
       name: "node:listEvents",
       requester: () => requestJson(`${base}/v1/events`),
     },
     {
-      name: "apps:listHomeBootstrap",
-      requester: () => requestJson(buildAppsScriptUrl({ action: "listHomeBootstrap", email: benchEmail })),
-    },
-    {
       name: "node:listHomeBootstrap",
       requester: () => requestJson(`${base}/v1/bootstrap/home?email=${encodeURIComponent(benchEmail)}`),
-    },
-    {
-      name: "apps:listStudents",
-      requester: () => requestJson(buildAppsScriptUrl({ action: "listStudents" })),
     },
     {
       name: "node:listStudents",

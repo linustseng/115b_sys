@@ -1,6 +1,6 @@
 # 115b_sys Node-only Runbook
 
-目標：前端與 API runtime 100% 走 Node API（Render + PostgreSQL），不再把 Apps Script 當正式 fallback。
+目標：前端與 API runtime 100% 走 Node API（Render + PostgreSQL），不再依賴任何舊版 fallback backend。
 
 ## 1) 上線前檢查（必做）
 
@@ -8,13 +8,11 @@
 cd /home/linus/.openclaw/workspace/115b_sys/services/api
 npm install
 npm run migrate
-npm run legacy:reconcile:snapshot
 BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=20 npm run bench:reads
 curl https://one15b-sys.onrender.com/health
 ```
 
 檢查重點：
-- reconcile 無重大差異（或差異可解釋）
 - health `ok=true`
 - benchmark 顯示 Node 路徑延遲穩定
 
@@ -24,7 +22,7 @@ curl https://one15b-sys.onrender.com/health
 
 - register / update-registration / checkin：
   - 直接寫 Node DB
-  - 不再 mirror 到 Apps Script
+  - 不再 mirror 到任何舊版 backend
 
 說明：Node DB 為唯一正式寫入來源。
 
@@ -70,12 +68,7 @@ Production 環境變數：
 - [ ] 後台名單查詢
 - [ ] 前台報名/簽到狀態查詢
 
-再跑一次：
-
-```bash
-cd /home/linus/.openclaw/workspace/115b_sys/services/api
-npm run legacy:reconcile:snapshot
-```
+再確認一次 health 與主要操作流程都正常。
 
 ---
 
@@ -89,7 +82,7 @@ curl https://one15b-sys.onrender.com/health
 
 觀察重點：
 - Render logs 無大量 5xx
-- 前端未出現 legacy transport / Apps Script 相關錯誤
+- 前端未出現 legacy transport 相關錯誤
 - 使用者無回報資料不一致
 
 ---
@@ -111,5 +104,5 @@ Vercel Production 如需止血：
 滿足以下全部即視為一次到位完成：
 - 前端讀寫已全走 Node API
 - 連續 48 小時無重大故障
-- runtime 不再依賴 Apps Script fallback
+- runtime 不再依賴舊版 fallback backend
 - 無需人工頻繁回補資料

@@ -884,11 +884,6 @@ const API_V2_WRITE_ACTIONS = new Set([
   "setSoftballMembershipRole",
 ]);
 
-function isAllowedApiEndpointHost_(host) {
-  const normalized = String(host || "").trim().toLowerCase();
-  return normalized === "script.google.com" || normalized === "script.googleusercontent.com";
-}
-
 function normalizeApiEndpoint_(rawUrl) {
   const value = String(rawUrl || "").trim();
   if (!value) {
@@ -896,7 +891,7 @@ function normalizeApiEndpoint_(rawUrl) {
   }
   try {
     const parsed = new URL(value);
-    if (!isAllowedApiEndpointHost_(parsed.hostname)) {
+    if (!["http:", "https:"].includes(parsed.protocol)) {
       return "";
     }
     return parsed.toString();

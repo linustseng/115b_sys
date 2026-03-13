@@ -45,13 +45,6 @@ export function getConfig() {
   const nodeEnv = String(process.env.NODE_ENV || "development").trim();
   const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
 
-  // Legacy Apps Script fallback is removed (native-only). Keep these optional for any remaining tooling.
-  const appsScriptUrl = String(process.env.APPS_SCRIPT_URL || "").trim();
-  const syncPullToken = String(process.env.SYNC_PULL_TOKEN || "").trim();
-
-  const appsScriptSyncEnabled = parseBoolean(process.env.APPS_SCRIPT_SYNC_ENABLED, false);
-  const appsScriptMirrorEnabled = parseBoolean(process.env.APPS_SCRIPT_MIRROR_ENABLED, false);
-
   cachedConfig = {
     nodeEnv,
     port: parseNumber(process.env.PORT, 8080),
@@ -64,11 +57,6 @@ export function getConfig() {
       process.env.DATABASE_SSL_REJECT_UNAUTHORIZED,
       false
     ),
-    appsScriptUrl,
-    appsScriptTimeoutMs: parseNumber(process.env.APPS_SCRIPT_TIMEOUT_MS, 20000),
-    syncPullToken,
-    appsScriptSyncEnabled,
-    appsScriptMirrorEnabled,
     sessionSecret,
     googleClientId,
     driveFinanceFolderId,

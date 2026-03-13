@@ -56,17 +56,7 @@ npm run dev
 BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=10 npm run bench:reads
 ```
 
-## Legacy Google tooling
-
-Legacy Google migration / reconciliation tooling has been moved under:
-
-- `services/api/scripts/legacy/`
-- `legacy/google-apps-script/`
-
-If you need to audit or backfill against the archived Google source, use the `legacy:*` npm scripts.
-
 ## Security note
 
 - Keep `SESSION_SECRET` and `DATABASE_URL` in server-side env only.
-- `SYNC_PULL_TOKEN` is only needed for legacy Google migration tooling.
 - Never commit `.env`.

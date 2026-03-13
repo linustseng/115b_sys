@@ -33,8 +33,8 @@
 
 ### 4.2 建議架構 (MVP)
 - 前端: 靜態網站 (React/Vite 或純 HTML)
-- 後端: Serverless API (Google Apps Script)
-- 資料存放: Google Sheets + Apps Script API
+- 後端: Node.js API
+- 資料存放: PostgreSQL
 - 短鏈結:
   - 由後端生成短碼 (slug) -> 前端解析
 - QRCode:
@@ -43,7 +43,7 @@
 ### 4.3 GitHub 版本控管與部署
 - Repository 結構:
   - /frontend (GitHub Pages)
-  - /backend (如果使用 Apps Script, 可獨立存放)
+  - /services/api (Node.js runtime API)
 - GitHub Actions 部署靜態網站到 Pages
 
 ## 5. 資料模型 (初版)
@@ -108,7 +108,7 @@
   - 設定報名/簽到期間
   - 活動類別與報名表單設定
 - 同學資料管理
-  - 名單匯入/更新 (CSV/Google Sheet)
+  - 名單匯入/更新 (CSV)
   - 基本資料維護
   - 作為報名自動帶入來源
 - 名單管理
@@ -129,7 +129,7 @@
 3) 管理者於後台查看名單, 下載 CSV
 
 ## 8.1 同學資料匯入與帶入流程
-- 匯入: 管理者上傳 CSV 或貼入 Google Sheet -> 系統以 email 作為唯一鍵寫入/更新
+- 匯入: 管理者上傳 CSV -> 系統以 email 作為唯一鍵寫入/更新
 - 欄位: email 必填, 姓名必填, 其他欄位可選 (學號為空可略過)
 - 帶入: 報名頁輸入 email 後, 讀取同學資料並帶入姓名與其他欄位
 

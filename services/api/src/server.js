@@ -602,8 +602,7 @@ async function handleNativeActionRequest_(req, res, actionName, payload) {
   }
 }
 
-// Legacy endpoint: in strict mode, only native actions are allowed.
-// In non-strict mode, unsupported actions may fall back to Apps Script.
+// Legacy-style action endpoint retained for Node runtime compatibility.
 app.post("/v1/action", async (req, res) => {
   const payload = req.body && typeof req.body === "object" ? req.body : {};
   const action = String(payload.action || "").trim();
@@ -645,7 +644,6 @@ app.post("/v1/action", async (req, res) => {
         .json(nativeResult || { ok: false, data: null, error: "Action failed" });
     }
 
-    // Legacy Apps Script fallback removed: native-only.
     return res.status(400).json(nativeResult);
   } catch (error) {
     const statusCode =
