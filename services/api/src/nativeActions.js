@@ -741,6 +741,76 @@ async function resolveFinanceWorkflowRoleForActor_(query, actorId) {
   return "";
 }
 
+function shouldAutoFixFinanceWorkflow_(record, financeRoles = []) {
+  if (!record) {
+    return false;
+  }
+  const status = firstText(record.status).toLowerCase();
+  if (status !== "pending_accounting") {
+    return false;
+  }
+  const type = firstText(record.type).toLowerCase();
+  const paymentMethod = firstText(record.paymentMethod, record && record.raw && record.raw.paymentMethod).toLowerCase();
+  if (type === "purchase" || type === "pettycash" || paymentMethod === "pettycash") {
+    return false;
+  }
+  return resolveWorkflowCreatedByRole_(record, financeRoles) === "accounting";
+}
+
+async function autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles = []) {
+  const record = mapFinanceRequestRow(row);
+  if (!shouldAutoFixFinanceWorkflow_(record, financeRoles)) {
+    return row;
+  }
+  const now = nowIso();
+  const raw = {
+    ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+    status: "pending_cashier",
+    updatedAt: now,
+    workflowCreatedByRole: firstText(
+      row.raw && row.raw.workflowCreatedByRole,
+      resolveWorkflowCreatedByRole_(record, financeRoles) || "accounting"
+    ),
+  };
+  await query(
+    `update finance_requests
+        set status = 'pending_cashier',
+            updated_at = $2,
+            raw = $3,
+            synced_at = now()
+      where id = $1`,
+    [row.id, now, raw]
+  );
+  await query(
+    `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     on conflict (id) do nothing`,
+    [
+      `sys-fix-finance-workflow-runtime-${row.id}`,
+      row.id,
+      null,
+      "system",
+      "system_fix",
+      "pending_accounting",
+      "pending_cashier",
+      "Auto-fix accounting-created request routed to cashier on read",
+      now,
+      {
+        id: `sys-fix-finance-workflow-runtime-${row.id}`,
+        requestId: row.id,
+        actorName: "system",
+        actionType: "system_fix",
+        fromStatus: "pending_accounting",
+        toStatus: "pending_cashier",
+        notes: "Auto-fix accounting-created request routed to cashier on read",
+        createdAt: now,
+      },
+    ]
+  );
+  const refreshed = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
+  return rowOrNull(refreshed) || row;
+}
+
 function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], studentIdByEmail = {}) {
   const role = String(actorRole || "")
     .trim()
@@ -2615,17 +2685,25 @@ export async function dispatchNativeAction({
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
-      const result = isAdmin
-        ? await query(`select * from finance_requests order by coalesce(updated_at,'' ) desc, id desc`)
-        : await query(
-            `select *
-             from finance_requests
-             where applicant_id = $1
-                or coalesce(raw->>'manualCreatedBy','') = $1
-             order by coalesce(updated_at,'') desc, id desc`,
-            [auth.studentId]
-          );
-      const requests = result.rows.map((row) => mapFinanceRequestRow(row));
+      const [result, financeRolesResult] = await Promise.all([
+        isAdmin
+          ? query(`select * from finance_requests order by coalesce(updated_at,'' ) desc, id desc`)
+          : query(
+              `select *
+               from finance_requests
+               where applicant_id = $1
+                  or coalesce(raw->>'manualCreatedBy','') = $1
+               order by coalesce(updated_at,'') desc, id desc`,
+              [auth.studentId]
+            ),
+        query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
+      ]);
+      const financeRoles = financeRolesResult.rows.map((row) => mapFinanceRoleRow(row));
+      const rows = [];
+      for (const row of result.rows) {
+        rows.push(await autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles));
+      }
+      const requests = rows.map((row) => mapFinanceRequestRow(row));
       return { ok: true, data: { requests }, error: null };
     }
 
@@ -2839,7 +2917,7 @@ export async function dispatchNativeAction({
 
     case "listFinanceApplicantBootstrap": {
       requireAuth();
-      const [students, memberships, categoryTypes, fundEvents, requests] = await Promise.all([
+      const [students, memberships, categoryTypes, fundEvents, requests, financeRolesResult] = await Promise.all([
         query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
         query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
@@ -2852,6 +2930,7 @@ export async function dispatchNativeAction({
            order by coalesce(updated_at,'') desc, id desc`,
           [auth.studentId]
         ),
+        query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
       ]);
 
       const categories = categoryTypes.rows.map((row) => ({
@@ -2859,11 +2938,16 @@ export async function dispatchNativeAction({
         id: row.id,
         label: row.label || "",
       }));
+      const financeRoles = financeRolesResult.rows.map((row) => mapFinanceRoleRow(row));
+      const requestRows = [];
+      for (const row of requests.rows) {
+        requestRows.push(await autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles));
+      }
 
       return {
         ok: true,
         data: {
-          requests: requests.rows.map((row) => mapFinanceRequestRow(row)),
+          requests: requestRows.map((row) => mapFinanceRequestRow(row)),
           students: students.rows.map((row) => ({
             id: row.id || "",
             name: row.name || "",
@@ -2941,10 +3025,18 @@ export async function dispatchNativeAction({
         label: row.label || "",
       }));
 
+      const requestRows = [];
+      if (includeRequests) {
+        const financeRolesForFix = roles.rows.map((row) => mapFinanceRoleRow(row));
+        for (const row of requests.rows) {
+          requestRows.push(await autoFixFinanceWorkflowIfNeeded_(query, row, financeRolesForFix));
+        }
+      }
+
       return {
         ok: true,
         data: {
-          requests: includeRequests ? requests.rows.map((row) => mapFinanceRequestRow(row)) : undefined,
+          requests: includeRequests ? requestRows.map((row) => mapFinanceRequestRow(row)) : undefined,
           students: students.rows.map((row) => ({
             id: row.id || "",
             name: row.name || "",
