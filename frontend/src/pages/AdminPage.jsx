@@ -83,6 +83,7 @@ export default function AdminPage({
   const [registrationEventId, setRegistrationEventId] = useState("");
   const [checkinEventId, setCheckinEventId] = useState("");
   const [orderStatusMessage, setOrderStatusMessage] = useState("");
+  const [orderingSubtab, setOrderingSubtab] = useState("manage");
   const [dietaryQuery, setDietaryQuery] = useState("");
   const [showOnlyCurrentOrderDietary, setShowOnlyCurrentOrderDietary] = useState(false);
   const [orderForm, setOrderForm] = useState({
@@ -2544,6 +2545,31 @@ export default function AdminPage({
 
           {activeTab === "ordering" ? (
             <div className="mt-6 space-y-6">
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { id: "manage", label: "訂餐設定" },
+                  { id: "dietary", label: "餐食喜好" },
+                ].map((item) => {
+                  const active = orderingSubtab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setOrderingSubtab(item.id)}
+                      className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                        active
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {orderingSubtab === "manage" ? (
+              <>
               <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
@@ -2742,11 +2768,59 @@ export default function AdminPage({
                   </div>
                 </div>
 
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold text-slate-600">訂餐名單</p>
+                    <div className="mt-3 space-y-2 text-xs text-slate-600">
+                      {orderResponses.length ? (
+                        orderResponses.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
+                          >
+                            <span
+                              className="font-semibold text-slate-800"
+                              title={item.studentId ? `學號 ${item.studentId}` : ""}
+                            >
+                              {item.studentName || "未命名"}
+                            </span>
+                            <span className="text-xs text-slate-500">{item.choice}</span>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">目前尚無訂餐資料。</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <p className="text-xs font-semibold text-slate-600">匿名意見</p>
+                    <div className="mt-3 space-y-2 text-xs text-slate-600">
+                      {orderComments.length ? (
+                        orderComments.map((comment, index) => (
+                          <div
+                            key={`${comment}-${index}`}
+                            className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
+                          >
+                            {comment}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400">目前沒有留言。</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              </>
+              ) : null}
+
+              {orderingSubtab === "dietary" ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">同學餐食喜好</p>
-                      <span className="text-xs text-slate-500">依通訊錄 / 同學資料中的飲食禁忌整理</span>
+                      <span className="text-xs text-slate-500">給美食組快速查看全班飲食偏好</span>
                     </div>
                     <span className="text-xs text-slate-500">目前顯示 {dietaryFilteredRows.length} 位</span>
                   </div>
@@ -2773,6 +2847,11 @@ export default function AdminPage({
                     >
                       匯出餐食喜好 CSV
                     </button>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-500">
+                    {showOnlyCurrentOrderDietary
+                      ? `目前篩選：${activeOrderPlan ? activeOrderPlan.title || formatOrderDateLabel_(activeOrderPlan.date) || activeOrderPlan.id : "本次訂餐"} 已回覆同學`
+                      : "目前篩選：全部同學"}
                   </div>
                   <div className="mt-4 grid gap-3 lg:grid-cols-4 sm:grid-cols-2">
                     <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3">
@@ -2864,50 +2943,7 @@ export default function AdminPage({
                     </div>
                   </div>
                 </div>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold text-slate-600">訂餐名單</p>
-                    <div className="mt-3 space-y-2 text-xs text-slate-600">
-                      {orderResponses.length ? (
-                        orderResponses.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
-                          >
-                            <span
-                              className="font-semibold text-slate-800"
-                              title={item.studentId ? `學號 ${item.studentId}` : ""}
-                            >
-                              {item.studentName || "未命名"}
-                            </span>
-                            <span className="text-xs text-slate-500">{item.choice}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-400">目前尚無訂餐資料。</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold text-slate-600">匿名意見</p>
-                    <div className="mt-3 space-y-2 text-xs text-slate-600">
-                      {orderComments.length ? (
-                        orderComments.map((comment, index) => (
-                          <div
-                            key={`${comment}-${index}`}
-                            className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
-                          >
-                            {comment}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-xs text-slate-400">目前沒有留言。</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ) : null}
             </div>
           ) : null}
 
