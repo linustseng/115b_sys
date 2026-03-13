@@ -83,6 +83,8 @@ export default function AdminPage({
   const [registrationEventId, setRegistrationEventId] = useState("");
   const [checkinEventId, setCheckinEventId] = useState("");
   const [orderStatusMessage, setOrderStatusMessage] = useState("");
+  const [dietaryQuery, setDietaryQuery] = useState("");
+  const [showOnlyCurrentOrderDietary, setShowOnlyCurrentOrderDietary] = useState(false);
   const [orderForm, setOrderForm] = useState({
     id: "",
     date: "",
@@ -2177,7 +2179,17 @@ export default function AdminPage({
       .filter(([studentId]) => studentId)
   );
 
-  const dietaryPreferenceRows = students
+  const activeOrderPlan =
+    orderPlans.find((plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId)) || null;
+
+  const currentOrderStudentIdSet = new Set(
+    orderResponses
+      .map((item) => String(item.studentId || "").trim())
+      .filter((studentId) => studentId)
+  );
+
+  const dietaryBaseStudents = displayStudents.length ? displayStudents : students;
+  const dietaryPreferenceRows = dietaryBaseStudents
     .map((student) => {
       const studentId = String(student.id || "").trim();
       const mergedStudent = displayStudentById.get(studentId) || student;
@@ -2205,12 +2217,81 @@ export default function AdminPage({
       })
     );
 
-  const dietaryNoRestrictionList = dietaryPreferenceRows.filter((item) => item.isNoRestriction);
-  const dietaryVegetarianList = dietaryPreferenceRows.filter((item) => item.isVegetarian);
-  const dietarySpecialList = dietaryPreferenceRows.filter(
+  const dietaryFilteredRows = dietaryPreferenceRows.filter((item) => {
+    if (showOnlyCurrentOrderDietary && item.id && !currentOrderStudentIdSet.has(item.id)) {
+      return false;
+    }
+    const needle = String(dietaryQuery || "").trim().toLowerCase();
+    if (!needle) {
+      return true;
+    }
+    const haystack = [item.id, item.name, item.dietaryRaw, item.dietaryLabel]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(needle);
+  });
+
+  const dietaryNoRestrictionList = dietaryFilteredRows.filter((item) => item.isNoRestriction);
+  const dietaryVegetarianList = dietaryFilteredRows.filter((item) => item.isVegetarian);
+  const dietarySpecialList = dietaryFilteredRows.filter(
     (item) => !item.isNoRestriction && !item.isVegetarian && !item.isUnspecified
   );
-  const dietaryUnspecifiedList = dietaryPreferenceRows.filter((item) => item.isUnspecified);
+  const dietaryUnspecifiedList = dietaryFilteredRows.filter((item) => item.isUnspecified);
+
+  const buildDietaryPreferenceCsv_ = () => {
+    const rows = [];
+    const pushRow_ = (values) =>
+      rows.push(
+        values
+          .map((value) => {
+            const raw = String(value == null ? "" : value);
+            if (raw.includes(",") || raw.includes("\"") || raw.includes("\n")) {
+              return `"${raw.replace(/"/g, '""')}"`;
+            }
+            return raw;
+          })
+          .join(",")
+      );
+
+    pushRow_(["訂餐名稱", activeOrderPlan ? activeOrderPlan.title || activeOrderPlan.date || activeOrderPlan.id : "-"]);
+    pushRow_(["訂餐ID", activeOrderPlan ? activeOrderPlan.id || "-" : "-"]);
+    pushRow_(["匯出時間", new Date().toLocaleString()]);
+    pushRow_(["範圍", showOnlyCurrentOrderDietary ? "只看本次已訂餐" : "全部同學"]);
+    pushRow_(["搜尋條件", String(dietaryQuery || "").trim() || "(無)"]);
+    pushRow_([]);
+    pushRow_(["分類", "中文姓名", "學號", "飲食偏好"]);
+
+    const appendCategoryRows_ = (label, list) => {
+      if (list.length) {
+        list.forEach((item) => pushRow_([label, item.name || "-", item.id || "-", item.dietaryLabel || "-"]));
+      } else {
+        pushRow_([label, "(無資料)", "", ""]);
+      }
+    };
+
+    appendCategoryRows_("無禁忌", dietaryNoRestrictionList);
+    appendCategoryRows_("素食/蔬食", dietaryVegetarianList);
+    appendCategoryRows_("其他特殊飲食", dietarySpecialList);
+    appendCategoryRows_("未填寫", dietaryUnspecifiedList);
+    return rows.join("\n");
+  };
+
+  const handleExportDietaryPreferenceCsv = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const csv = buildDietaryPreferenceCsv_();
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeOrderId = String(orderActiveId || "all").trim() || "all";
+    link.href = url;
+    link.download = `ordering-dietary-preferences-${safeOrderId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   const pendingCheckins = checkinEventId
     ? (registrationsByEvent[normalizeEventId_(checkinEventId)] || []).filter((registration) => {
@@ -2663,8 +2744,35 @@ export default function AdminPage({
 
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-slate-900">同學餐食喜好</p>
-                    <span className="text-xs text-slate-500">依通訊錄 / 同學資料中的飲食禁忌整理</span>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">同學餐食喜好</p>
+                      <span className="text-xs text-slate-500">依通訊錄 / 同學資料中的飲食禁忌整理</span>
+                    </div>
+                    <span className="text-xs text-slate-500">目前顯示 {dietaryFilteredRows.length} 位</span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <input
+                      value={dietaryQuery}
+                      onChange={(event) => setDietaryQuery(event.target.value)}
+                      placeholder="搜尋姓名、學號、飲食偏好..."
+                      className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                    />
+                    <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={showOnlyCurrentOrderDietary}
+                        onChange={(event) => setShowOnlyCurrentOrderDietary(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                      />
+                      只看本次已訂餐
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleExportDietaryPreferenceCsv}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      匯出餐食喜好 CSV
+                    </button>
                   </div>
                   <div className="mt-4 grid gap-3 lg:grid-cols-4 sm:grid-cols-2">
                     <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3">
