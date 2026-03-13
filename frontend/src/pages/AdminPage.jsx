@@ -2233,6 +2233,21 @@ export default function AdminPage({
   );
   const dietaryUnspecifiedList = dietaryFilteredRows.filter((item) => item.isUnspecified);
 
+  const groupDietaryRowsByLabel_ = (list) =>
+    Object.entries(
+      list.reduce((acc, item) => {
+        const key = String(item.dietaryLabel || "其他").trim() || "其他";
+        if (!acc[key]) {
+          acc[key] = [];
+        }
+        acc[key].push(item);
+        return acc;
+      }, {})
+    ).sort((a, b) => a[0].localeCompare(b[0], "zh-Hant", { numeric: true, sensitivity: "base" }));
+
+  const dietaryVegetarianGroups = groupDietaryRowsByLabel_(dietaryVegetarianList);
+  const dietarySpecialGroups = groupDietaryRowsByLabel_(dietarySpecialList);
+
   const buildDietaryPreferenceCsv_ = () => {
     const rows = [];
     const pushRow_ = (values) =>
@@ -2839,16 +2854,26 @@ export default function AdminPage({
                       <p className="text-xs font-semibold">素食 / 蔬食</p>
                       <span className="text-xs tabular-nums">{dietaryVegetarianList.length} 位</span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                      {dietaryVegetarianList.length ? (
-                        dietaryVegetarianList.map((item) => (
-                          <span
-                            key={`dietary-veg-${item.id || item.name}`}
-                            className="rounded-full border border-lime-200 bg-white px-2 py-0.5 text-lime-700"
-                            title={`${item.dietaryLabel}${item.id ? ` · 學號 ${item.id}` : ""}`}
-                          >
-                            {item.name}
-                          </span>
+                    <div className="mt-2 space-y-2 text-xs">
+                      {dietaryVegetarianGroups.length ? (
+                        dietaryVegetarianGroups.map(([label, items]) => (
+                          <div key={`veg-group-${label}`} className="rounded-lg border border-lime-200/70 bg-white/80 p-2">
+                            <div className="mb-1 flex items-center justify-between text-lime-700">
+                              <span className="font-semibold">{label}</span>
+                              <span className="tabular-nums">{items.length} 位</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {items.map((item) => (
+                                <span
+                                  key={`dietary-veg-${item.id || item.name}`}
+                                  className="rounded-full border border-lime-200 bg-white px-2 py-0.5 text-lime-700"
+                                  title={item.id ? `學號 ${item.id}` : ""}
+                                >
+                                  {item.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         ))
                       ) : (
                         <p className="text-slate-400">目前沒有資料。</p>
@@ -2861,16 +2886,26 @@ export default function AdminPage({
                       <p className="text-xs font-semibold">其他特殊飲食</p>
                       <span className="text-xs tabular-nums">{dietarySpecialList.length} 位</span>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
-                      {dietarySpecialList.length ? (
-                        dietarySpecialList.map((item) => (
-                          <span
-                            key={`dietary-special-${item.id || item.name}`}
-                            className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-amber-700"
-                            title={`${item.dietaryLabel}${item.id ? ` · 學號 ${item.id}` : ""}`}
-                          >
-                            {item.name}
-                          </span>
+                    <div className="mt-2 space-y-2 text-xs">
+                      {dietarySpecialGroups.length ? (
+                        dietarySpecialGroups.map(([label, items]) => (
+                          <div key={`special-group-${label}`} className="rounded-lg border border-amber-200/70 bg-white/80 p-2">
+                            <div className="mb-1 flex items-center justify-between text-amber-700">
+                              <span className="font-semibold">{label}</span>
+                              <span className="tabular-nums">{items.length} 位</span>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {items.map((item) => (
+                                <span
+                                  key={`dietary-special-${item.id || item.name}`}
+                                  className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-amber-700"
+                                  title={item.id ? `學號 ${item.id}` : ""}
+                                >
+                                  {item.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
                         ))
                       ) : (
                         <p className="text-slate-400">目前沒有資料。</p>
