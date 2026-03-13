@@ -2171,6 +2171,47 @@ export default function AdminPage({
     .map((item) => String(item.comment || "").trim())
     .filter((value) => value);
 
+  const displayStudentById = new Map(
+    displayStudents
+      .map((student) => [String(student.id || "").trim(), student])
+      .filter(([studentId]) => studentId)
+  );
+
+  const dietaryPreferenceRows = students
+    .map((student) => {
+      const studentId = String(student.id || "").trim();
+      const mergedStudent = displayStudentById.get(studentId) || student;
+      const dietaryRaw = String(
+        student.dietaryRestrictions || mergedStudent.dietaryRestrictions || ""
+      ).trim();
+      const dietaryLabel = dietaryRaw || "未填寫";
+      const displayName =
+        getChineseName_(mergedStudent) || getDisplayName_(mergedStudent) || studentId || "未命名";
+      return {
+        id: studentId,
+        name: displayName,
+        dietaryRaw,
+        dietaryLabel,
+        isVegetarian: isVegetarianDietary_(dietaryRaw),
+        isNoRestriction: dietaryRaw === "無禁忌",
+        isUnspecified: !dietaryRaw,
+      };
+    })
+    .filter((item) => item.id || item.name)
+    .sort((a, b) =>
+      String(a.name || a.id || "").localeCompare(String(b.name || b.id || ""), "zh-Hant", {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+
+  const dietaryNoRestrictionList = dietaryPreferenceRows.filter((item) => item.isNoRestriction);
+  const dietaryVegetarianList = dietaryPreferenceRows.filter((item) => item.isVegetarian);
+  const dietarySpecialList = dietaryPreferenceRows.filter(
+    (item) => !item.isNoRestriction && !item.isVegetarian && !item.isUnspecified
+  );
+  const dietaryUnspecifiedList = dietaryPreferenceRows.filter((item) => item.isUnspecified);
+
   const pendingCheckins = checkinEventId
     ? (registrationsByEvent[normalizeEventId_(checkinEventId)] || []).filter((registration) => {
         if (!registration || String(registration.status || "").toLowerCase() === "cancelled") {
@@ -2617,6 +2658,102 @@ export default function AdminPage({
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">不吃</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.NONE}</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">同學餐食喜好</p>
+                    <span className="text-xs text-slate-500">依通訊錄 / 同學資料中的飲食禁忌整理</span>
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-4 sm:grid-cols-2">
+                    <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 text-emerald-700">
+                        <p className="text-xs font-semibold">無禁忌</p>
+                        <span className="text-xs tabular-nums">{dietaryNoRestrictionList.length} 位</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                        {dietaryNoRestrictionList.length ? (
+                          dietaryNoRestrictionList.map((item) => (
+                            <span
+                              key={`dietary-none-${item.id || item.name}`}
+                              className="rounded-full border border-emerald-200 bg-white px-2 py-0.5 text-emerald-700"
+                              title={item.id ? `學號 ${item.id}` : ""}
+                            >
+                              {item.name}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有資料。</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-lime-200/70 bg-lime-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 text-lime-700">
+                        <p className="text-xs font-semibold">素食 / 蔬食</p>
+                        <span className="text-xs tabular-nums">{dietaryVegetarianList.length} 位</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                        {dietaryVegetarianList.length ? (
+                          dietaryVegetarianList.map((item) => (
+                            <span
+                              key={`dietary-veg-${item.id || item.name}`}
+                              className="rounded-full border border-lime-200 bg-white px-2 py-0.5 text-lime-700"
+                              title={`${item.dietaryLabel}${item.id ? ` · 學號 ${item.id}` : ""}`}
+                            >
+                              {item.name}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有資料。</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-amber-200/70 bg-amber-50/50 p-3">
+                      <div className="flex items-center justify-between gap-2 text-amber-700">
+                        <p className="text-xs font-semibold">其他特殊飲食</p>
+                        <span className="text-xs tabular-nums">{dietarySpecialList.length} 位</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                        {dietarySpecialList.length ? (
+                          dietarySpecialList.map((item) => (
+                            <span
+                              key={`dietary-special-${item.id || item.name}`}
+                              className="rounded-full border border-amber-200 bg-white px-2 py-0.5 text-amber-700"
+                              title={`${item.dietaryLabel}${item.id ? ` · 學號 ${item.id}` : ""}`}
+                            >
+                              {item.name}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有資料。</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                      <div className="flex items-center justify-between gap-2 text-slate-600">
+                        <p className="text-xs font-semibold">未填寫</p>
+                        <span className="text-xs tabular-nums">{dietaryUnspecifiedList.length} 位</span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                        {dietaryUnspecifiedList.length ? (
+                          dietaryUnspecifiedList.map((item) => (
+                            <span
+                              key={`dietary-empty-${item.id || item.name}`}
+                              className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600"
+                              title={item.id ? `學號 ${item.id}` : ""}
+                            >
+                              {item.name}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-slate-400">目前沒有資料。</p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
