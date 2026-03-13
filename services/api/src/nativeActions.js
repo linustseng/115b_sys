@@ -3546,29 +3546,40 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Unauthorized" };
       }
       const canonicalId = `${practiceId}:${playerId}`;
-      const legacyId = `${practiceId}-${playerId}`;
-      const id = firstText(data.id, canonicalId);
-      const createdAt = firstText(data.createdAt, nowIso());
+      const id = canonicalId;
+      const existing = await query(
+        `select * from softball_attendance where practice_id = $1 and player_id = $2 limit 1`,
+        [practiceId, playerId]
+      );
+      const existingRow = existing.rows && existing.rows.length ? existing.rows[0] : null;
+      const createdAt = firstText(existingRow && existingRow.created_at ? existingRow.created_at : "", data.createdAt, nowIso());
       const updatedAt = nowIso();
       const notes = firstText(data.notes || data.note || body.note || body.notes);
+      const raw = {
+        ...(data || {}),
+        id,
+        practiceId,
+        playerId,
+        studentId: playerId,
+        notes,
+      };
       await query(
         `insert into softball_attendance (id, practice_id, player_id, status, notes, raw, created_at, updated_at)
          values ($1,$2,$3,$4,$5,$6,$7,$8)
-         on conflict (id) do update set
+         on conflict (practice_id, player_id) do update set
+           id=excluded.id,
            status=excluded.status,
            notes=excluded.notes,
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, practiceId, playerId, firstText(data.status), notes, { ...data, playerId, notes }, createdAt, updatedAt]
+        [id, practiceId, playerId, firstText(data.status), notes, raw, createdAt, updatedAt]
       );
 
-      // Cleanup legacy id format to prevent duplicate rows for the same practice/player.
-      if (legacyId !== id) {
-        await query(`delete from softball_attendance where id = $1`, [legacyId]);
-      }
-
-      const stored = await query(`select * from softball_attendance where id = $1 limit 1`, [id]);
+      const stored = await query(
+        `select * from softball_attendance where practice_id = $1 and player_id = $2 limit 1`,
+        [practiceId, playerId]
+      );
       const row = stored.rows && stored.rows.length ? stored.rows[0] : null;
       const attendance = row
         ? { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }
