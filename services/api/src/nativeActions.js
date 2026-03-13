@@ -709,6 +709,38 @@ function applicantHasFinanceRole_(record, financeRoles, studentIdByEmail = {}, t
   return actorHasFinanceRole_(financeRoles, applicantId, applicantEmail, targetRole);
 }
 
+function resolveWorkflowCreatedByRole_(record, financeRoles = []) {
+  const raw = record && record.raw && typeof record.raw === "object" ? record.raw : record || {};
+  const explicitRole = firstText(raw.workflowCreatedByRole);
+  if (explicitRole) {
+    return explicitRole.trim().toLowerCase();
+  }
+  const manualCreatedBy = firstText(raw.manualCreatedBy);
+  if (manualCreatedBy && actorHasFinanceRole_(financeRoles, manualCreatedBy, "", "accounting")) {
+    return "accounting";
+  }
+  if (manualCreatedBy && actorHasFinanceRole_(financeRoles, manualCreatedBy, "", "cashier")) {
+    return "cashier";
+  }
+  return "";
+}
+
+async function resolveFinanceWorkflowRoleForActor_(query, actorId) {
+  const studentId = String(actorId || "").trim();
+  if (!studentId) {
+    return "";
+  }
+  const result = await query(`select * from finance_roles where student_id = $1`, [studentId]);
+  const roles = result.rows.map((row) => mapFinanceRoleRow(row));
+  if (actorHasFinanceRole_(roles, studentId, "", "accounting")) {
+    return "accounting";
+  }
+  if (actorHasFinanceRole_(roles, studentId, "", "cashier")) {
+    return "cashier";
+  }
+  return "";
+}
+
 function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], studentIdByEmail = {}) {
   const role = String(actorRole || "")
     .trim()
@@ -721,6 +753,8 @@ function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], student
   const isPettyCash = isPettyCashRequest_(record);
   const isPurchase = isPurchaseRequest_(record);
   const applicantIsAccounting = applicantHasFinanceRole_(record, financeRoles, studentIdByEmail, "accounting");
+  const workflowCreatedByRole = resolveWorkflowCreatedByRole_(record, financeRoles);
+  const workflowCreatedByAccounting = workflowCreatedByRole === "accounting";
 
   if (role === "lead") {
     if (needsRep || needsCommittee) {
@@ -729,7 +763,7 @@ function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], student
     if (isPurchase) {
       return "closed";
     }
-    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || workflowCreatedByAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "rep") {
@@ -739,14 +773,14 @@ function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], student
     if (isPurchase) {
       return "closed";
     }
-    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || workflowCreatedByAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "committee") {
     if (isPurchase) {
       return "closed";
     }
-    return applicantIsAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
+    return applicantIsAccounting || workflowCreatedByAccounting || isPettyCash ? "pending_cashier" : "pending_accounting";
   }
 
   if (role === "accounting") {
@@ -2056,6 +2090,7 @@ export async function dispatchNativeAction({
 
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
+      const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
       if (!normalizedStatus || normalizedStatus === "pending_lead") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
@@ -2097,6 +2132,7 @@ export async function dispatchNativeAction({
         applicantDepartment: row.applicantDepartment,
         applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
         applicantEmail: applicantEmail,
+        workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
           row.status !== "draft"
             ? firstText(row.raw && row.raw.submittedAt, nowIso())
@@ -2187,6 +2223,7 @@ export async function dispatchNativeAction({
         body.manualCreatedByName,
         firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId)
       );
+      const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
 
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
@@ -2225,6 +2262,7 @@ export async function dispatchNativeAction({
         applicantDepartment: row.applicantDepartment,
         applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
         applicantEmail: applicantEmail,
+        workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
           row.status !== "draft"
             ? firstText(row.raw && row.raw.submittedAt, nowIso())
@@ -2441,9 +2479,8 @@ export async function dispatchNativeAction({
       const existing = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
       const existingRow = rowOrNull(existing);
       const existingRecord = existingRow ? mapFinanceRequestRow(existingRow) : null;
-      const manualCreatedBy = firstText(
-        existingRow && existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw.manualCreatedBy : ""
-      );
+      const existingRaw = existingRow && existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw : {};
+      const manualCreatedBy = firstText(existingRaw.manualCreatedBy);
       const isOwner =
         Boolean(existingRecord) &&
         (String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim() ||
@@ -2489,6 +2526,10 @@ export async function dispatchNativeAction({
           )
         )
       );
+      const workflowCreatedByRole = firstText(
+        existingRaw.workflowCreatedByRole,
+        await resolveFinanceWorkflowRoleForActor_(query, manualCreatedBy)
+      );
 
       row.raw = {
         ...((existingRow && existingRow.raw && typeof existingRow.raw === "object" && existingRow.raw) || {}),
@@ -2520,6 +2561,7 @@ export async function dispatchNativeAction({
           firstText(existingRecord && existingRecord.applicantRole ? existingRecord.applicantRole : "", applicantRole)
         ),
         applicantEmail: applicantEmail,
+        workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
           normalizedAction === "submit" || row.status !== "draft"
             ? firstText(
