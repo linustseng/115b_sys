@@ -2617,15 +2617,69 @@ function SoftballPage({ shared }) {
                 return acc;
               }, {});
 
-              const playersWithMembership = players.map((player) => {
-                const personId = String(player.id || "").trim();
-                const membership = membershipByPersonId[personId] || null;
-                return {
-                  ...player,
-                  membership,
-                  currentRole: membership ? String(membership.roleInGroup || "").trim().toLowerCase() : "none",
-                };
-              });
+              const studentByPersonId = students.reduce((acc, student) => {
+                const personId = String(student?.id || "").trim();
+                if (personId) {
+                  acc[personId] = student;
+                }
+                return acc;
+              }, {});
+
+              const playerByPersonId = players.reduce((acc, player) => {
+                const personId = String(player?.id || "").trim();
+                if (personId) {
+                  acc[personId] = player;
+                }
+                return acc;
+              }, {});
+
+              const managedPersonIds = Array.from(
+                new Set([
+                  ...players.map((player) => String(player?.id || "").trim()),
+                  ...memberships.map((item) => String(item?.personId || "").trim()),
+                ].filter((personId) => personId))
+              );
+
+              const playersWithMembership = managedPersonIds
+                .map((personId) => {
+                  const player = playerByPersonId[personId] || {};
+                  const student = studentByPersonId[personId] || null;
+                  const membership = membershipByPersonId[personId] || null;
+                  const chineseName = String(
+                    player.name ||
+                      student?.nameZh ||
+                      student?.name ||
+                      membership?.personName ||
+                      student?.preferredName ||
+                      student?.nameEn ||
+                      ""
+                  ).trim();
+                  const playerName = String(
+                    player.preferredName ||
+                      player.nickname ||
+                      player.nameEn ||
+                      student?.preferredName ||
+                      student?.nameEn ||
+                      ""
+                  ).trim();
+                  const email = String(player.email || student?.email || "").trim();
+
+                  return {
+                    ...player,
+                    id: personId,
+                    student,
+                    membership,
+                    chineseName,
+                    playerName,
+                    email,
+                    currentRole: membership ? String(membership.roleInGroup || "").trim().toLowerCase() : "none",
+                  };
+                })
+                .sort((a, b) => {
+                  const left = String(a.chineseName || a.playerName || a.email || a.id || "");
+                  const right = String(b.chineseName || b.playerName || b.email || b.id || "");
+                  return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+                });
 
               const handleSetRole = async (personId, role) => {
                 if (!personId) {
@@ -2664,7 +2718,7 @@ function SoftballPage({ shared }) {
                       <table className="w-full border-collapse text-sm">
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50/60 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                            <th className="px-4 py-3">球員</th>
+                            <th className="px-4 py-3">中文姓名 / 球員名稱</th>
                             <th className="px-4 py-3">Email</th>
                             <th className="px-4 py-3">目前角色</th>
                             <th className="px-4 py-3">操作</th>
@@ -2674,9 +2728,9 @@ function SoftballPage({ shared }) {
                           {playersWithMembership.length ? (
                             playersWithMembership.map((player) => {
                               const personId = String(player.id || "").trim();
-                              const displayName = String(
-                                player.preferredName || player.name || player.nameEn || player.email || personId
-                              ).trim();
+                              const chineseName = String(player.chineseName || "").trim();
+                              const playerName = String(player.playerName || "").trim();
+                              const displayName = chineseName || playerName || player.email || personId;
                               const email = String(player.email || "").trim();
                               const currentRole = player.currentRole;
                               const currentRoleLabel =
@@ -2684,7 +2738,12 @@ function SoftballPage({ shared }) {
 
                               return (
                                 <tr key={personId} className="border-b border-slate-100 hover:bg-slate-50/40">
-                                  <td className="px-4 py-3 font-semibold text-slate-900">{displayName}</td>
+                                  <td className="px-4 py-3 text-slate-900">
+                                    <div className="font-semibold">{displayName}</div>
+                                    {playerName && playerName !== chineseName ? (
+                                      <div className="mt-0.5 text-xs text-slate-500">球員名稱：{playerName}</div>
+                                    ) : null}
+                                  </td>
                                   <td className="px-4 py-3 text-xs text-slate-600">{email || "-"}</td>
                                   <td className="px-4 py-3">
                                     <span
