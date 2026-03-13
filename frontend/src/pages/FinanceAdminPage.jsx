@@ -1726,6 +1726,24 @@ function FinanceAdminPage({ shared }) {
                         selectedRequest.applicantDepartment ||
                         "-"}
                     </div>
+                    {selectedRequest.manualCreatedByName ? (
+                      <div>
+                        代申請人：{selectedRequest.manualCreatedByName}
+                        {selectedRequest.workflowCreatedByRole
+                          ? ` · ${
+                              FINANCE_ROLE_LABELS[selectedRequest.workflowCreatedByRole] ||
+                              selectedRequest.workflowCreatedByRole
+                            }`
+                          : ""}
+                      </div>
+                    ) : null}
+                    {selectedRequest.workflowCreatedByRole && !selectedRequest.manualCreatedByName ? (
+                      <div>
+                        流程建立角色：
+                        {FINANCE_ROLE_LABELS[selectedRequest.workflowCreatedByRole] ||
+                          selectedRequest.workflowCreatedByRole}
+                      </div>
+                    ) : null}
                     <div>
                       組別：
                       {CLASS_GROUPS.find((item) => item.id === selectedRequest.applicantDepartment)
