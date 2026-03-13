@@ -208,9 +208,28 @@ function SoftballPage({ shared }) {
       (student && (student.preferredName || student.nameZh || student.nameEn || student.name)) || ""
     ).trim();
 
-  const getPlayerDisplayName_ = (player) =>
+  const getStudentChineseName_ = (student) =>
+    String((student && (student.nameZh || student.name || student.preferredName || student.nameEn)) || "").trim();
+
+  const getResolvedPlayerChineseName_ = (player, student) =>
     String(
-      (player && (player.preferredName || player.name || player.nickname || player.email || player.id)) || ""
+      (player && player.name) || (student && (student.nameZh || student.name)) || ""
+    ).trim();
+
+  const getResolvedPlayerAlias_ = (player, student) =>
+    String(
+      (player && (player.preferredName || player.nickname || player.nameEn)) ||
+        (student && (student.preferredName || student.nameEn)) ||
+        ""
+    ).trim();
+
+  const getPlayerDisplayName_ = (player, student = null) =>
+    String(
+      getResolvedPlayerChineseName_(player, student) ||
+        getResolvedPlayerAlias_(player, student) ||
+        (player && (player.email || player.id)) ||
+        (student && (student.email || student.id)) ||
+        ""
     ).trim();
 
   const isTimeOnly_ = (value) => {
@@ -1178,7 +1197,16 @@ function SoftballPage({ shared }) {
     );
   };
 
+  const studentById = students.reduce((acc, student) => {
+    const studentId = normalizeId_(student && student.id);
+    if (studentId) {
+      acc[studentId] = student;
+    }
+    return acc;
+  }, {});
+
   const filteredPlayers = players.filter((player) => {
+    const matchedStudent = studentById[normalizeId_(player && player.id)] || null;
     if (!playerQuery) {
       return true;
     }
@@ -1193,6 +1221,10 @@ function SoftballPage({ shared }) {
       player.jerseyNumber,
       player.jerseySize,
       player.positions,
+      matchedStudent && matchedStudent.nameZh,
+      matchedStudent && matchedStudent.name,
+      matchedStudent && matchedStudent.preferredName,
+      matchedStudent && matchedStudent.nameEn,
     ]
       .map((value) => String(value || "").toLowerCase())
       .join(" ");
@@ -1600,6 +1632,10 @@ function SoftballPage({ shared }) {
             <div className="mt-6 space-y-3">
               {filteredPlayers.length ? (
                 filteredPlayers.map((player) => {
+                  const matchedStudent = studentById[normalizeId_(player.id)] || null;
+                  const displayName = getPlayerDisplayName_(player, matchedStudent) || "-";
+                  const aliasName = getResolvedPlayerAlias_(player, matchedStudent);
+                  const chineseName = getResolvedPlayerChineseName_(player, matchedStudent);
                   const record = attendanceByStudent[normalizeId_(player.id)] || {};
                   const currentStatus = String(record.status || "unknown").toLowerCase();
                   return (
@@ -1609,8 +1645,8 @@ function SoftballPage({ shared }) {
                     >
                       <div>
                         <p className="font-semibold text-slate-900">
-                          {player.name || player.id || "-"}
-                          {player.nickname ? ` · ${player.nickname}` : ""}
+                          {displayName}
+                          {aliasName && aliasName !== chineseName ? ` · ${aliasName}` : ""}
                           {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
                           {player.jerseySize ? ` · ${player.jerseySize}` : ""}
                         </p>
@@ -1682,37 +1718,43 @@ function SoftballPage({ shared }) {
                   <div className="alert alert-warning text-xs p-4">
                     <p className="font-semibold text-amber-900">待審核申請</p>
                     <div className="mt-2 space-y-2">
-                      {pendingRequests.map((player) => (
-                        <div
-                          key={`pending-${player.id}`}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white px-3 py-2"
-                        >
-                          <span className="font-semibold text-slate-800">
-                            {player.name || player.id || "-"}
-                            {player.nickname ? ` · ${player.nickname}` : ""}
-                            {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
-                            {player.jerseySize ? ` · ${player.jerseySize}` : ""}
-                          </span>
-                          <span className="text-amber-700">
-                            背號：{player.jerseyRequest || "-"} · 位置：
-                            {player.positionRequest || "-"}
-                          </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => handleReviewRequest(player, "approved")}
-                              className="badge-success hover:border-emerald-300"
-                            >
-                              核准
-                            </button>
-                            <button
-                              onClick={() => handleReviewRequest(player, "rejected")}
-                              className="badge-error hover:border-rose-300"
-                            >
-                              退回
-                            </button>
+                      {pendingRequests.map((player) => {
+                        const matchedStudent = studentById[normalizeId_(player.id)] || null;
+                        const displayName = getPlayerDisplayName_(player, matchedStudent) || "-";
+                        const aliasName = getResolvedPlayerAlias_(player, matchedStudent);
+                        const chineseName = getResolvedPlayerChineseName_(player, matchedStudent);
+                        return (
+                          <div
+                            key={`pending-${player.id}`}
+                            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/70 bg-white px-3 py-2"
+                          >
+                            <span className="font-semibold text-slate-800">
+                              {displayName}
+                              {aliasName && aliasName !== chineseName ? ` · ${aliasName}` : ""}
+                              {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                              {player.jerseySize ? ` · ${player.jerseySize}` : ""}
+                            </span>
+                            <span className="text-amber-700">
+                              背號：{player.jerseyRequest || "-"} · 位置：
+                              {player.positionRequest || "-"}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleReviewRequest(player, "approved")}
+                                className="badge-success hover:border-emerald-300"
+                              >
+                                核准
+                              </button>
+                              <button
+                                onClick={() => handleReviewRequest(player, "rejected")}
+                                className="badge-error hover:border-rose-300"
+                              >
+                                退回
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1738,52 +1780,58 @@ function SoftballPage({ shared }) {
                     截止日前號碼為暫時保留，截止後由隊務一次核准。
                   </p>
                 </div>
-                {filteredPlayers.map((player) => (
-                  <div
-                    key={player.id}
-                    className={`rounded-2xl border p-4 text-sm ${
-                      normalizeId_(playerForm.id) === normalizeId_(player.id)
-                        ? "border-slate-900 bg-white text-slate-700"
-                        : "border-slate-200/70 bg-slate-50/60 text-slate-600"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPlayerForm({
-                            ...player,
-                            jerseyChoices: player.jerseyChoices || "",
-                            jerseySize: player.jerseySize || "",
-                            requestStatus: player.requestStatus || "",
-                            jerseyRequest: player.jerseyRequest || "",
-                            positionRequest: player.positionRequest || "",
-                            phone: normalizePhoneInputValue_(player.phone),
-                          })
-                        }
-                        className="flex-1 text-left"
-                      >
-                        <p className="font-semibold text-slate-900">
-                          {player.name || player.id || "-"}
-                          {player.nickname ? ` · ${player.nickname}` : ""}
-                          {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
-                          {player.jerseySize ? ` · ${player.jerseySize}` : ""}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {player.positions || "-"} · {player.role || "球員"}
-                        </p>
-                      </button>
-                      <div className="flex items-center gap-2">
+                {filteredPlayers.map((player) => {
+                  const matchedStudent = studentById[normalizeId_(player.id)] || null;
+                  const displayName = getPlayerDisplayName_(player, matchedStudent) || "-";
+                  const aliasName = getResolvedPlayerAlias_(player, matchedStudent);
+                  const chineseName = getResolvedPlayerChineseName_(player, matchedStudent);
+                  return (
+                    <div
+                      key={player.id}
+                      className={`rounded-2xl border p-4 text-sm ${
+                        normalizeId_(playerForm.id) === normalizeId_(player.id)
+                          ? "border-slate-900 bg-white text-slate-700"
+                          : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
                         <button
-                          onClick={() => handleDeletePlayer(player.id)}
-                          className="badge-error hover:border-rose-300"
+                          type="button"
+                          onClick={() =>
+                            setPlayerForm({
+                              ...player,
+                              jerseyChoices: player.jerseyChoices || "",
+                              jerseySize: player.jerseySize || "",
+                              requestStatus: player.requestStatus || "",
+                              jerseyRequest: player.jerseyRequest || "",
+                              positionRequest: player.positionRequest || "",
+                              phone: normalizePhoneInputValue_(player.phone),
+                            })
+                          }
+                          className="flex-1 text-left"
                         >
-                          刪除
+                          <p className="font-semibold text-slate-900">
+                            {displayName}
+                            {aliasName && aliasName !== chineseName ? ` · ${aliasName}` : ""}
+                            {player.jerseyNumber ? ` · #${player.jerseyNumber}` : ""}
+                            {player.jerseySize ? ` · ${player.jerseySize}` : ""}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {player.positions || "-"} · {player.role || "球員"}
+                          </p>
                         </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handleDeletePlayer(player.id)}
+                            className="badge-error hover:border-rose-300"
+                          >
+                            刪除
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <form onSubmit={handleSavePlayer} className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
