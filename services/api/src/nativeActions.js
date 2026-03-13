@@ -364,6 +364,7 @@ function toSoftballSupplyCaseRow(input) {
   const updatedAt = nowIso();
   return {
     id,
+    title: firstText(raw.title),
     practiceId: firstText(raw.practiceId),
     angelRosterId: firstText(raw.angelRosterId),
     angelStudentId: firstText(raw.angelStudentId),
@@ -3620,7 +3621,7 @@ export async function dispatchNativeAction({
 
     case "listSoftballSupplyCases": {
       await requireSoftballAdminAccess();
-      const result = await query(`select * from softball_supply_cases order by coalesce(updated_at,'') desc, id desc`);
+      const result = await query(`select * from softball_supply_cases order by coalesce(practice_id,''), coalesce(updated_at,'') desc, id desc`);
       const supplyCases = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
       return { ok: true, data: { supplyCases }, error: null };
     }
@@ -3632,14 +3633,11 @@ export async function dispatchNativeAction({
       if (!row.practiceId) {
         return { ok: false, data: null, error: "Missing practiceId" };
       }
-      const existingByPractice = await query(`select * from softball_supply_cases where practice_id = $1 limit 1`, [row.practiceId]);
-      const existing = rowOrNull(existingByPractice);
-      const id = existing ? firstText(existing.id, row.id) : row.id;
-      const createdAt = existing ? firstText(existing.created_at, row.createdAt) : row.createdAt;
       await query(
-        `insert into softball_supply_cases (id, practice_id, angel_roster_id, angel_student_id, vendor_id, angel_status, order_status, planned_headcount, total_amount, ordered_at, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        `insert into softball_supply_cases (id, title, practice_id, angel_roster_id, angel_student_id, vendor_id, angel_status, order_status, planned_headcount, total_amount, ordered_at, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
          on conflict (id) do update set
+           title=excluded.title,
            practice_id=excluded.practice_id,
            angel_roster_id=excluded.angel_roster_id,
            angel_student_id=excluded.angel_student_id,
@@ -3653,9 +3651,9 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, row.practiceId, row.angelRosterId, row.angelStudentId, row.vendorId, row.angelStatus, row.orderStatus, row.plannedHeadcount, row.totalAmount, row.orderedAt, row.notes, { ...row.raw, id, practiceId: row.practiceId }, createdAt, row.updatedAt]
+        [row.id, row.title, row.practiceId, row.angelRosterId, row.angelStudentId, row.vendorId, row.angelStatus, row.orderStatus, row.plannedHeadcount, row.totalAmount, row.orderedAt, row.notes, { ...row.raw, id: row.id, title: row.title, practiceId: row.practiceId }, row.createdAt, row.updatedAt]
       );
-      return { ok: true, data: { id }, error: null };
+      return { ok: true, data: { id: row.id }, error: null };
     }
 
     case "deleteSoftballSupplyCase": {

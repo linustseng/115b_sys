@@ -151,6 +151,7 @@ function SoftballPage({ shared }) {
   });
   const [supplyCaseForm, setSupplyCaseForm] = useState({
     id: "",
+    title: "",
     practiceId: "",
     angelRosterId: "",
     angelStudentId: "",
@@ -190,6 +191,7 @@ function SoftballPage({ shared }) {
 
   const buildEmptySupplyCaseForm_ = (practiceId = "") => ({
     id: "",
+    title: "",
     practiceId,
     angelRosterId: "",
     angelStudentId: "",
@@ -789,13 +791,27 @@ function SoftballPage({ shared }) {
     ).trim();
   };
 
-  const supplyCaseByPracticeId = supplyCases.reduce((acc, item) => {
+  const supplyCasesByPracticeId = supplyCases.reduce((acc, item) => {
     const practiceId = normalizeId_(item && item.practiceId);
     if (practiceId) {
-      acc[practiceId] = item;
+      if (!acc[practiceId]) {
+        acc[practiceId] = [];
+      }
+      acc[practiceId].push(item);
     }
     return acc;
   }, {});
+
+  Object.values(supplyCasesByPracticeId).forEach((list) => {
+    list.sort((a, b) => {
+      const aOrdered = String(a && a.orderedAt ? a.orderedAt : "");
+      const bOrdered = String(b && b.orderedAt ? b.orderedAt : "");
+      if (aOrdered !== bOrdered) {
+        return bOrdered.localeCompare(aOrdered);
+      }
+      return String(b && b.updatedAt ? b.updatedAt : "").localeCompare(String(a && a.updatedAt ? a.updatedAt : ""));
+    });
+  });
 
   const angelStatsByStudentId = supplyCases.reduce((acc, item) => {
     const studentId = normalizeId_(item && item.angelStudentId);
@@ -1026,6 +1042,7 @@ function SoftballPage({ shared }) {
 
   const buildSupplyCaseFormFromCase_ = (item) => ({
     id: item && item.id ? item.id : "",
+    title: item && item.title ? item.title : "",
     practiceId: item && item.practiceId ? item.practiceId : "",
     angelRosterId: item && item.angelRosterId ? item.angelRosterId : "",
     angelStudentId: item && item.angelStudentId ? item.angelStudentId : "",
@@ -1050,12 +1067,14 @@ function SoftballPage({ shared }) {
         : [buildEmptySupplyItem_()],
   });
 
-  const selectSupplyPractice_ = (practiceId) => {
-    const existing = supplyCaseByPracticeId[normalizeId_(practiceId)];
-    if (existing) {
-      setSupplyCaseForm(buildSupplyCaseFormFromCase_(existing));
+  const selectSupplyCase_ = (item) => {
+    if (!item) {
       return;
     }
+    setSupplyCaseForm(buildSupplyCaseFormFromCase_(item));
+  };
+
+  const startNewSupplyCaseForPractice_ = (practiceId) => {
     resetSupplyCaseForm(practiceId);
   };
 
@@ -2760,22 +2779,15 @@ function SoftballPage({ shared }) {
                   {practiceListItems.length ? (
                     practiceListItems.map((practice) => {
                       const practiceId = normalizeId_(practice.id);
-                      const caseItem = supplyCaseByPracticeId[practiceId] || null;
+                      const cases = supplyCasesByPracticeId[practiceId] || [];
                       const selected = normalizeId_(supplyCaseForm.practiceId) === practiceId;
-                      const angelStudentId = caseItem
-                        ? normalizeId_(caseItem.angelStudentId || (angelById[normalizeId_(caseItem.angelRosterId)] || {}).studentId)
-                        : "";
-                      const angelName = angelStudentId ? getPersonDisplayName_(angelStudentId) : "未指定";
-                      const vendorName = caseItem && caseItem.vendorId ? (supplyVendorById[normalizeId_(caseItem.vendorId)] || {}).name || "-" : "未選擇";
                       return (
-                        <button
+                        <div
                           key={practiceId}
-                          type="button"
-                          onClick={() => selectSupplyPractice_(practiceId)}
-                          className={`w-full rounded-2xl border p-4 text-left text-sm transition ${
+                          className={`rounded-2xl border p-4 text-left text-sm transition ${
                             selected
                               ? "border-slate-900 bg-white text-slate-700"
-                              : "border-slate-200/70 bg-slate-50/60 text-slate-600 hover:border-slate-300"
+                              : "border-slate-200/70 bg-slate-50/60 text-slate-600"
                           }`}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2786,16 +2798,56 @@ function SoftballPage({ shared }) {
                                 {getPracticeListTimeLabel_(practice) ? ` · ${getPracticeListTimeLabel_(practice)}` : ""}
                               </p>
                             </div>
-                            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${caseItem ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-                              {caseItem ? (caseItem.orderStatus || "planning") : "尚未建立"}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                                {cases.length} 筆補給單
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => startNewSupplyCaseForPractice_(practiceId)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                              >
+                                新增本場補給單
+                              </button>
+                            </div>
                           </div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
-                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">天使：{angelName}</span>
-                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">店家：{vendorName}</span>
-                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">人數：{caseItem && caseItem.plannedHeadcount ? caseItem.plannedHeadcount : "-"}</span>
-                          </div>
-                        </button>
+
+                          {cases.length ? (
+                            <div className="mt-3 space-y-2">
+                              {cases.map((caseItem) => {
+                                const angelStudentId = normalizeId_(caseItem.angelStudentId || (angelById[normalizeId_(caseItem.angelRosterId)] || {}).studentId);
+                                const angelName = angelStudentId ? getPersonDisplayName_(angelStudentId) : "未指定";
+                                const vendorName = caseItem.vendorId ? (supplyVendorById[normalizeId_(caseItem.vendorId)] || {}).name || "-" : "未選擇";
+                                const caseSelected = normalizeId_(supplyCaseForm.id) === normalizeId_(caseItem.id);
+                                return (
+                                  <button
+                                    key={caseItem.id}
+                                    type="button"
+                                    onClick={() => selectSupplyCase_(caseItem)}
+                                    className={`w-full rounded-xl border px-3 py-3 text-left text-xs transition ${
+                                      caseSelected
+                                        ? "border-slate-900 bg-slate-900/5 text-slate-700"
+                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                                    }`}
+                                  >
+                                    <div className="flex flex-wrap items-start justify-between gap-3">
+                                      <div>
+                                        <p className="font-semibold text-slate-900">{caseItem.title || vendorName || "未命名補給單"}</p>
+                                        <p className="mt-1 text-[11px] text-slate-500">天使：{angelName} · 店家：{vendorName}</p>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
+                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{caseItem.orderStatus || "planning"}</span>
+                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{caseItem.plannedHeadcount || "-"} 人</span>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-xs text-slate-400">這場目前還沒有補給單。</p>
+                          )}
+                        </div>
                       );
                     })
                   ) : (
@@ -2808,7 +2860,7 @@ function SoftballPage({ shared }) {
                     <label className="text-sm font-medium text-slate-700">對應練習</label>
                     <select
                       value={supplyCaseForm.practiceId}
-                      onChange={(event) => selectSupplyPractice_(event.target.value)}
+                      onChange={(event) => startNewSupplyCaseForPractice_(event.target.value)}
                       className="input-sm"
                     >
                       <option value="">請選擇練習</option>
@@ -2818,6 +2870,15 @@ function SoftballPage({ shared }) {
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">補給單名稱</label>
+                    <input
+                      value={supplyCaseForm.title}
+                      onChange={(event) => handleSupplyCaseFormChange("title", event.target.value)}
+                      placeholder="例如：中場飲料、香蕉＋飯糰、午餐便當"
+                      className="input-sm"
+                    />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
