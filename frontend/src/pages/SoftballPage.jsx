@@ -156,6 +156,7 @@ function SoftballPage({ shared }) {
     angelRosterId: "",
     angelStudentId: "",
     vendorId: "",
+    vendorIds: ["", "", ""],
     angelStatus: "unassigned",
     orderStatus: "not_started",
     plannedHeadcount: "",
@@ -196,6 +197,7 @@ function SoftballPage({ shared }) {
     angelRosterId: "",
     angelStudentId: "",
     vendorId: "",
+    vendorIds: ["", "", ""],
     angelStatus: "unassigned",
     orderStatus: "not_started",
     plannedHeadcount: "",
@@ -791,27 +793,13 @@ function SoftballPage({ shared }) {
     ).trim();
   };
 
-  const supplyCasesByPracticeId = supplyCases.reduce((acc, item) => {
+  const supplyCaseByPracticeId = supplyCases.reduce((acc, item) => {
     const practiceId = normalizeId_(item && item.practiceId);
-    if (practiceId) {
-      if (!acc[practiceId]) {
-        acc[practiceId] = [];
-      }
-      acc[practiceId].push(item);
+    if (practiceId && !acc[practiceId]) {
+      acc[practiceId] = item;
     }
     return acc;
   }, {});
-
-  Object.values(supplyCasesByPracticeId).forEach((list) => {
-    list.sort((a, b) => {
-      const aOrdered = String(a && a.orderedAt ? a.orderedAt : "");
-      const bOrdered = String(b && b.orderedAt ? b.orderedAt : "");
-      if (aOrdered !== bOrdered) {
-        return bOrdered.localeCompare(aOrdered);
-      }
-      return String(b && b.updatedAt ? b.updatedAt : "").localeCompare(String(a && a.updatedAt ? a.updatedAt : ""));
-    });
-  });
 
   const angelStatsByStudentId = supplyCases.reduce((acc, item) => {
     const studentId = normalizeId_(item && item.angelStudentId);
@@ -903,6 +891,23 @@ function SoftballPage({ shared }) {
 
   const handleSupplyCaseFormChange = (key, value) => {
     setSupplyCaseForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSupplyVendorSlotChange = (index, value) => {
+    setSupplyCaseForm((prev) => {
+      const nextVendorIds = Array.isArray(prev.vendorIds) ? prev.vendorIds.slice(0, 3) : ["", "", ""];
+      while (nextVendorIds.length < 3) {
+        nextVendorIds.push("");
+      }
+      nextVendorIds[index] = value;
+      const normalized = nextVendorIds.filter((item, idx, list) => item && list.indexOf(item) === idx);
+      const padded = [normalized[0] || "", normalized[1] || "", normalized[2] || ""];
+      return {
+        ...prev,
+        vendorIds: padded,
+        vendorId: padded[0] || "",
+      };
+    });
   };
 
   const handleSupplyItemChange = (localId, key, value) => {
@@ -1040,41 +1045,47 @@ function SoftballPage({ shared }) {
     setSupplyCaseForm(buildEmptySupplyCaseForm_(practiceId));
   };
 
-  const buildSupplyCaseFormFromCase_ = (item) => ({
-    id: item && item.id ? item.id : "",
-    title: item && item.title ? item.title : "",
-    practiceId: item && item.practiceId ? item.practiceId : "",
-    angelRosterId: item && item.angelRosterId ? item.angelRosterId : "",
-    angelStudentId: item && item.angelStudentId ? item.angelStudentId : "",
-    vendorId: item && item.vendorId ? item.vendorId : "",
-    angelStatus: item && item.angelStatus ? item.angelStatus : "unassigned",
-    orderStatus: item && item.orderStatus ? item.orderStatus : "not_started",
-    plannedHeadcount: item && item.plannedHeadcount != null ? String(item.plannedHeadcount) : "",
-    totalAmount: item && item.totalAmount != null ? String(item.totalAmount) : "",
-    orderedAt: item && item.orderedAt ? item.orderedAt : "",
-    notes: item && item.notes ? item.notes : "",
-    items:
-      item && Array.isArray(item.items) && item.items.length
-        ? item.items.map((row, index) => ({
-            localId: `${item.id || "case"}-${index}`,
-            type: row.type || "飲料",
-            name: row.name || "",
-            qty: row.qty || "",
-            unit: row.unit || "份",
-            amount: row.amount || "",
-            notes: row.notes || "",
-          }))
-        : [buildEmptySupplyItem_()],
-  });
-
-  const selectSupplyCase_ = (item) => {
-    if (!item) {
-      return;
-    }
-    setSupplyCaseForm(buildSupplyCaseFormFromCase_(item));
+  const buildSupplyCaseFormFromCase_ = (item) => {
+    const rawVendorIds = Array.isArray(item && item.vendorIds)
+      ? item.vendorIds
+      : item && item.vendorId
+      ? [item.vendorId]
+      : [];
+    return {
+      id: item && item.id ? item.id : "",
+      title: item && item.title ? item.title : "",
+      practiceId: item && item.practiceId ? item.practiceId : "",
+      angelRosterId: item && item.angelRosterId ? item.angelRosterId : "",
+      angelStudentId: item && item.angelStudentId ? item.angelStudentId : "",
+      vendorId: rawVendorIds[0] || (item && item.vendorId ? item.vendorId : ""),
+      vendorIds: [rawVendorIds[0] || "", rawVendorIds[1] || "", rawVendorIds[2] || ""],
+      angelStatus: item && item.angelStatus ? item.angelStatus : "unassigned",
+      orderStatus: item && item.orderStatus ? item.orderStatus : "not_started",
+      plannedHeadcount: item && item.plannedHeadcount != null ? String(item.plannedHeadcount) : "",
+      totalAmount: item && item.totalAmount != null ? String(item.totalAmount) : "",
+      orderedAt: item && item.orderedAt ? item.orderedAt : "",
+      notes: item && item.notes ? item.notes : "",
+      items:
+        item && Array.isArray(item.items) && item.items.length
+          ? item.items.map((row, index) => ({
+              localId: `${item.id || "case"}-${index}`,
+              type: row.type || "飲料",
+              name: row.name || "",
+              qty: row.qty || "",
+              unit: row.unit || "份",
+              amount: row.amount || "",
+              notes: row.notes || "",
+            }))
+          : [buildEmptySupplyItem_()],
+    };
   };
 
-  const startNewSupplyCaseForPractice_ = (practiceId) => {
+  const selectSupplyPractice_ = (practiceId) => {
+    const existing = supplyCaseByPracticeId[normalizeId_(practiceId)];
+    if (existing) {
+      setSupplyCaseForm(buildSupplyCaseFormFromCase_(existing));
+      return;
+    }
     resetSupplyCaseForm(practiceId);
   };
 
@@ -1437,8 +1448,15 @@ function SoftballPage({ shared }) {
     setStatusMessage("");
     try {
       const selectedAngel = angelRoster.find((item) => normalizeId_(item.id) === normalizeId_(supplyCaseForm.angelRosterId));
+      const vendorIds = (Array.isArray(supplyCaseForm.vendorIds) ? supplyCaseForm.vendorIds : [])
+        .map((value) => String(value || "").trim())
+        .filter((value, index, list) => value && list.indexOf(value) === index)
+        .slice(0, 3);
       const payloadData = {
         ...supplyCaseForm,
+        title: "",
+        vendorIds,
+        vendorId: vendorIds[0] || "",
         angelStudentId: supplyCaseForm.angelStudentId || (selectedAngel ? selectedAngel.studentId || "" : ""),
         items: (supplyCaseForm.items || [])
           .map((item) => ({
@@ -2779,15 +2797,29 @@ function SoftballPage({ shared }) {
                   {practiceListItems.length ? (
                     practiceListItems.map((practice) => {
                       const practiceId = normalizeId_(practice.id);
-                      const cases = supplyCasesByPracticeId[practiceId] || [];
+                      const caseItem = supplyCaseByPracticeId[practiceId] || null;
                       const selected = normalizeId_(supplyCaseForm.practiceId) === practiceId;
+                      const angelStudentId = caseItem
+                        ? normalizeId_(caseItem.angelStudentId || (angelById[normalizeId_(caseItem.angelRosterId)] || {}).studentId)
+                        : "";
+                      const angelName = angelStudentId ? getPersonDisplayName_(angelStudentId) : "未指定";
+                      const vendorIds = caseItem && Array.isArray(caseItem.vendorIds) && caseItem.vendorIds.length
+                        ? caseItem.vendorIds
+                        : caseItem && caseItem.vendorId
+                        ? [caseItem.vendorId]
+                        : [];
+                      const vendorNames = vendorIds
+                        .map((vendorId) => (supplyVendorById[normalizeId_(vendorId)] || {}).name || "")
+                        .filter(Boolean);
                       return (
-                        <div
+                        <button
                           key={practiceId}
-                          className={`rounded-2xl border p-4 text-left text-sm transition ${
+                          type="button"
+                          onClick={() => selectSupplyPractice_(practiceId)}
+                          className={`w-full rounded-2xl border p-4 text-left text-sm transition ${
                             selected
                               ? "border-slate-900 bg-white text-slate-700"
-                              : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                              : "border-slate-200/70 bg-slate-50/60 text-slate-600 hover:border-slate-300"
                           }`}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2798,56 +2830,16 @@ function SoftballPage({ shared }) {
                                 {getPracticeListTimeLabel_(practice) ? ` · ${getPracticeListTimeLabel_(practice)}` : ""}
                               </p>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                                {cases.length} 筆補給單
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => startNewSupplyCaseForPractice_(practiceId)}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-                              >
-                                新增本場補給單
-                              </button>
-                            </div>
+                            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${caseItem ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                              {caseItem ? (caseItem.orderStatus || "planning") : "尚未建立"}
+                            </span>
                           </div>
-
-                          {cases.length ? (
-                            <div className="mt-3 space-y-2">
-                              {cases.map((caseItem) => {
-                                const angelStudentId = normalizeId_(caseItem.angelStudentId || (angelById[normalizeId_(caseItem.angelRosterId)] || {}).studentId);
-                                const angelName = angelStudentId ? getPersonDisplayName_(angelStudentId) : "未指定";
-                                const vendorName = caseItem.vendorId ? (supplyVendorById[normalizeId_(caseItem.vendorId)] || {}).name || "-" : "未選擇";
-                                const caseSelected = normalizeId_(supplyCaseForm.id) === normalizeId_(caseItem.id);
-                                return (
-                                  <button
-                                    key={caseItem.id}
-                                    type="button"
-                                    onClick={() => selectSupplyCase_(caseItem)}
-                                    className={`w-full rounded-xl border px-3 py-3 text-left text-xs transition ${
-                                      caseSelected
-                                        ? "border-slate-900 bg-slate-900/5 text-slate-700"
-                                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                                    }`}
-                                  >
-                                    <div className="flex flex-wrap items-start justify-between gap-3">
-                                      <div>
-                                        <p className="font-semibold text-slate-900">{caseItem.title || vendorName || "未命名補給單"}</p>
-                                        <p className="mt-1 text-[11px] text-slate-500">天使：{angelName} · 店家：{vendorName}</p>
-                                      </div>
-                                      <div className="flex flex-wrap gap-2 text-[11px] font-semibold">
-                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{caseItem.orderStatus || "planning"}</span>
-                                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{caseItem.plannedHeadcount || "-"} 人</span>
-                                      </div>
-                                    </div>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <p className="mt-3 text-xs text-slate-400">這場目前還沒有補給單。</p>
-                          )}
-                        </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">天使：{angelName}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">店家：{vendorNames.length ? vendorNames.join(" / ") : "未選擇"}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">人數：{caseItem && caseItem.plannedHeadcount ? caseItem.plannedHeadcount : "-"}</span>
+                          </div>
+                        </button>
                       );
                     })
                   ) : (
@@ -2860,7 +2852,7 @@ function SoftballPage({ shared }) {
                     <label className="text-sm font-medium text-slate-700">對應練習</label>
                     <select
                       value={supplyCaseForm.practiceId}
-                      onChange={(event) => startNewSupplyCaseForPractice_(event.target.value)}
+                      onChange={(event) => selectSupplyPractice_(event.target.value)}
                       className="input-sm"
                     >
                       <option value="">請選擇練習</option>
@@ -2870,15 +2862,6 @@ function SoftballPage({ shared }) {
                         </option>
                       ))}
                     </select>
-                  </div>
-                  <div className="grid gap-2">
-                    <label className="text-sm font-medium text-slate-700">補給單名稱</label>
-                    <input
-                      value={supplyCaseForm.title}
-                      onChange={(event) => handleSupplyCaseFormChange("title", event.target.value)}
-                      placeholder="例如：中場飲料、香蕉＋飯糰、午餐便當"
-                      className="input-sm"
-                    />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
@@ -2920,21 +2903,6 @@ function SoftballPage({ shared }) {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700">補給來源 / 店家</label>
-                      <select
-                        value={supplyCaseForm.vendorId}
-                        onChange={(event) => handleSupplyCaseFormChange("vendorId", event.target.value)}
-                        className="input-sm"
-                      >
-                        <option value="">未選擇</option>
-                        {sortedSupplyVendors.map((vendor) => (
-                          <option key={`vendor-option-${vendor.id}`} value={vendor.id}>
-                            {vendor.name} {vendor.category ? `· ${vendor.category}` : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="grid gap-2">
                       <label className="text-sm font-medium text-slate-700">補給狀態</label>
                       <select
                         value={supplyCaseForm.orderStatus}
@@ -2948,6 +2916,25 @@ function SoftballPage({ shared }) {
                         <option value="closed">已結案</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {[0, 1, 2].map((index) => (
+                      <div key={`supply-vendor-slot-${index}`} className="grid gap-2">
+                        <label className="text-sm font-medium text-slate-700">店家 {index + 1}</label>
+                        <select
+                          value={(supplyCaseForm.vendorIds && supplyCaseForm.vendorIds[index]) || ""}
+                          onChange={(event) => handleSupplyVendorSlotChange(index, event.target.value)}
+                          className="input-sm"
+                        >
+                          <option value="">未選擇</option>
+                          {sortedSupplyVendors.map((vendor) => (
+                            <option key={`vendor-option-${index}-${vendor.id}`} value={vendor.id}>
+                              {vendor.name} {vendor.category ? `· ${vendor.category}` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="grid gap-2">
