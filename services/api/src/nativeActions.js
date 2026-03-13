@@ -3889,7 +3889,24 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, row.title, row.practiceId, row.angelRosterId, row.angelStudentId, row.vendorId, row.vendorIds, row.angelStatus, row.orderStatus, row.plannedHeadcount, row.totalAmount, row.orderedAt, row.notes, { ...row.raw, id, title: row.title, practiceId: row.practiceId, vendorId: row.vendorId, vendorIds: row.vendorIds }, createdAt, row.updatedAt]
+        [
+          id,
+          row.title,
+          row.practiceId,
+          row.angelRosterId,
+          row.angelStudentId,
+          row.vendorId,
+          JSON.stringify(row.vendorIds || []),
+          row.angelStatus,
+          row.orderStatus,
+          row.plannedHeadcount,
+          row.totalAmount,
+          row.orderedAt,
+          row.notes,
+          { ...row.raw, id, title: row.title, practiceId: row.practiceId, vendorId: row.vendorId, vendorIds: row.vendorIds },
+          createdAt,
+          row.updatedAt,
+        ]
       );
       return { ok: true, data: { id }, error: null };
     }
