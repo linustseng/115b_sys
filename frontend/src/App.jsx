@@ -831,6 +831,9 @@ const API_V2_READ_ACTIONS = new Set([
   "listSoftballConfig",
   "listSoftballAttendance",
   "listSoftballMemberships",
+  "listSoftballAngels",
+  "listSoftballSupplyVendors",
+  "listSoftballSupplyCases",
 ]);
 
 const API_V2_WRITE_ACTIONS = new Set([
@@ -879,6 +882,15 @@ const API_V2_WRITE_ACTIONS = new Set([
   "createSoftballGear",
   "updateSoftballGear",
   "deleteSoftballGear",
+  "createSoftballAngel",
+  "updateSoftballAngel",
+  "deleteSoftballAngel",
+  "createSoftballSupplyVendor",
+  "updateSoftballSupplyVendor",
+  "deleteSoftballSupplyVendor",
+  "createSoftballSupplyCase",
+  "updateSoftballSupplyCase",
+  "deleteSoftballSupplyCase",
   "updateSoftballConfig",
   "submitSoftballAttendance",
   "setSoftballMembershipRole",

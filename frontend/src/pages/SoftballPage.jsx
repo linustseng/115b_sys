@@ -63,6 +63,9 @@ function SoftballPage({ shared }) {
   const [practices, setPractices] = useState([]);
   const [fields, setFields] = useState([]);
   const [gear, setGear] = useState([]);
+  const [angelRoster, setAngelRoster] = useState([]);
+  const [supplyVendors, setSupplyVendors] = useState([]);
+  const [supplyCases, setSupplyCases] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [statsAttendance, setStatsAttendance] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -76,6 +79,7 @@ function SoftballPage({ shared }) {
   const [softballConfig, setSoftballConfig] = useState({});
   const [jerseyDeadline, setJerseyDeadline] = useState("");
   const [activePracticeId, setActivePracticeId] = useState("");
+  const [supplySubtab, setSupplySubtab] = useState("cases");
   const [playerForm, setPlayerForm] = useState({
     id: "",
     name: "",
@@ -127,6 +131,38 @@ function SoftballPage({ shared }) {
     status: "available",
     notes: "",
   });
+  const [angelForm, setAngelForm] = useState({
+    id: "",
+    studentId: "",
+    status: "active",
+    joinedAt: "",
+    notes: "",
+  });
+  const [vendorForm, setVendorForm] = useState({
+    id: "",
+    name: "",
+    category: "",
+    phone: "",
+    contact: "",
+    deliveryNote: "",
+    minOrderAmount: "",
+    status: "active",
+    notes: "",
+  });
+  const [supplyCaseForm, setSupplyCaseForm] = useState({
+    id: "",
+    practiceId: "",
+    angelRosterId: "",
+    angelStudentId: "",
+    vendorId: "",
+    angelStatus: "unassigned",
+    orderStatus: "not_started",
+    plannedHeadcount: "",
+    totalAmount: "",
+    orderedAt: "",
+    notes: "",
+    items: [],
+  });
   const [playerQuery, setPlayerQuery] = useState("");
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
   const [practicesUpdatedAt, setPracticesUpdatedAt] = useState(null);
@@ -139,6 +175,33 @@ function SoftballPage({ shared }) {
   const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
   const ROLE_OPTIONS = ["隊長", "副隊長", "器材", "出勤", "後勤", "教練"];
   const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
+  const SUPPLY_ITEM_TYPE_OPTIONS = ["飲料", "點心", "水果", "輕食", "冰品", "其他"];
+  const SUPPLY_ITEM_UNIT_OPTIONS = ["份", "杯", "瓶", "箱", "包", "個", "串"];
+
+  const buildEmptySupplyItem_ = () => ({
+    localId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    type: "飲料",
+    name: "",
+    qty: "",
+    unit: "份",
+    amount: "",
+    notes: "",
+  });
+
+  const buildEmptySupplyCaseForm_ = (practiceId = "") => ({
+    id: "",
+    practiceId,
+    angelRosterId: "",
+    angelStudentId: "",
+    vendorId: "",
+    angelStatus: "unassigned",
+    orderStatus: "not_started",
+    plannedHeadcount: "",
+    totalAmount: "",
+    orderedAt: "",
+    notes: "",
+    items: [buildEmptySupplyItem_()],
+  });
 
   const normalizeId_ = (value) => String(value || "").trim();
 
@@ -425,6 +488,25 @@ function SoftballPage({ shared }) {
     return formatDisplayDate_(value) || "-";
   };
 
+  const loadSoftballBootstrap = async () => {
+    const { result } = await effectiveApiRequest({ action: "listSoftballBootstrap" });
+    if (!result.ok) {
+      throw new Error(result.error || "載入失敗");
+    }
+    const data = result.data || {};
+    const practicesList = data.practices ? data.practices.slice().sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b)) : [];
+    const config = data.config || {};
+    setSoftballConfig(config);
+    setJerseyDeadline(config.jerseyDeadline || "");
+    setPlayers(data.players || []);
+    setPractices(practicesList);
+    setFields(data.fields || []);
+    setGear(data.gear || []);
+    setAngelRoster(data.angels || []);
+    setSupplyVendors(data.vendors || []);
+    setSupplyCases(data.supplyCases || []);
+  };
+
   const loadPlayers = async () => {
     try {
       const { result } = await effectiveApiRequest({ action: "listSoftballPlayers" });
@@ -575,18 +657,16 @@ function SoftballPage({ shared }) {
       setInitialLoading(true);
       setError("");
       try {
-        await Promise.all([loadPractices(), loadSoftballConfig()]);
+        await loadSoftballBootstrap();
+      } catch (err) {
+        if (!ignore) {
+          setError(err.message || "壘球後台資料載入失敗");
+        }
       } finally {
         if (!ignore) {
           setInitialLoading(false);
         }
       }
-      setTimeout(() => {
-        if (ignore) {
-          return;
-        }
-        Promise.allSettled([loadPlayers(), loadFields(), loadGear()]);
-      }, 0);
     };
     loadAll();
     return () => {
@@ -595,7 +675,7 @@ function SoftballPage({ shared }) {
   }, []);
 
   useEffect(() => {
-    const needsStudents = activeTab === "players" || activeTab === "stats" || activeTab === "roles";
+    const needsStudents = activeTab === "players" || activeTab === "stats" || activeTab === "roles" || activeTab === "supply";
     if (!needsStudents || studentsLoaded || studentsLoading) {
       return;
     }
@@ -621,6 +701,12 @@ function SoftballPage({ shared }) {
       loadStatsAttendance();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "supply" && (!supplyCaseForm.items || !supplyCaseForm.items.length)) {
+      setSupplyCaseForm((prev) => ({ ...prev, items: [buildEmptySupplyItem_()] }));
+    }
+  }, [activeTab, supplyCaseForm.items]);
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -651,6 +737,104 @@ function SoftballPage({ shared }) {
   const selectedPractice =
     practices.find((practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)) ||
     null;
+
+  const studentById = students.reduce((acc, student) => {
+    const id = normalizeId_(student && student.id);
+    if (id) {
+      acc[id] = student;
+    }
+    return acc;
+  }, {});
+
+  const playerById = players.reduce((acc, player) => {
+    const id = normalizeId_(player && player.id);
+    if (id) {
+      acc[id] = player;
+    }
+    return acc;
+  }, {});
+
+  const practiceById = practices.reduce((acc, practice) => {
+    const id = normalizeId_(practice && practice.id);
+    if (id) {
+      acc[id] = practice;
+    }
+    return acc;
+  }, {});
+
+  const supplyVendorById = supplyVendors.reduce((acc, vendor) => {
+    const id = normalizeId_(vendor && vendor.id);
+    if (id) {
+      acc[id] = vendor;
+    }
+    return acc;
+  }, {});
+
+  const angelById = angelRoster.reduce((acc, angel) => {
+    const id = normalizeId_(angel && angel.id);
+    if (id) {
+      acc[id] = angel;
+    }
+    return acc;
+  }, {});
+
+  const getPersonDisplayName_ = (personId) => {
+    const id = normalizeId_(personId);
+    const student = studentById[id];
+    const player = playerById[id];
+    return String(
+      (player && (player.name || player.preferredName || player.nickname)) ||
+        (student && (student.nameZh || student.name || student.preferredName || student.nameEn)) ||
+        id
+    ).trim();
+  };
+
+  const supplyCaseByPracticeId = supplyCases.reduce((acc, item) => {
+    const practiceId = normalizeId_(item && item.practiceId);
+    if (practiceId) {
+      acc[practiceId] = item;
+    }
+    return acc;
+  }, {});
+
+  const angelStatsByStudentId = supplyCases.reduce((acc, item) => {
+    const studentId = normalizeId_(item && item.angelStudentId);
+    const practice = practiceById[normalizeId_(item && item.practiceId)] || null;
+    const practiceKey = practice ? getPracticeSortKey_(practice) : 0;
+    if (!studentId) {
+      return acc;
+    }
+    if (!acc[studentId]) {
+      acc[studentId] = { count: 0, lastPracticeKey: 0, lastPracticeLabel: "" };
+    }
+    acc[studentId].count += 1;
+    if (practiceKey >= acc[studentId].lastPracticeKey) {
+      acc[studentId].lastPracticeKey = practiceKey;
+      acc[studentId].lastPracticeLabel = practice ? formatPracticeDate_(practice.date || practice.startAt) : "";
+    }
+    return acc;
+  }, {});
+
+  const activeAngelOptions = angelRoster
+    .filter((item) => String(item.status || "active").trim() !== "retired")
+    .slice()
+    .sort((a, b) => {
+      const left = getPersonDisplayName_(a.studentId);
+      const right = getPersonDisplayName_(b.studentId);
+      return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+    });
+
+  const sortedAngelRoster = angelRoster.slice().sort((a, b) => {
+    const left = getPersonDisplayName_(a.studentId);
+    const right = getPersonDisplayName_(b.studentId);
+    return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+  });
+
+  const sortedSupplyVendors = supplyVendors.slice().sort((a, b) => {
+    const left = String(a.name || "");
+    const right = String(b.name || "");
+    return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+  });
 
   useEffect(() => {
     if (!activePracticeId && practices.length) {
@@ -691,6 +875,38 @@ function SoftballPage({ shared }) {
 
   const handleGearFormChange = (key, value) => {
     setGearForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleAngelFormChange = (key, value) => {
+    setAngelForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleVendorFormChange = (key, value) => {
+    setVendorForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSupplyCaseFormChange = (key, value) => {
+    setSupplyCaseForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSupplyItemChange = (localId, key, value) => {
+    setSupplyCaseForm((prev) => ({
+      ...prev,
+      items: (prev.items || []).map((item) =>
+        item.localId === localId ? { ...item, [key]: value } : item
+      ),
+    }));
+  };
+
+  const addSupplyItem = () => {
+    setSupplyCaseForm((prev) => ({ ...prev, items: [...(prev.items || []), buildEmptySupplyItem_()] }));
+  };
+
+  const removeSupplyItem = (localId) => {
+    setSupplyCaseForm((prev) => {
+      const nextItems = (prev.items || []).filter((item) => item.localId !== localId);
+      return { ...prev, items: nextItems.length ? nextItems : [buildEmptySupplyItem_()] };
+    });
   };
 
   const resetPlayerForm = () => {
@@ -778,6 +994,69 @@ function SoftballPage({ shared }) {
       status: "available",
       notes: "",
     });
+  };
+
+  const resetAngelForm = () => {
+    setAngelForm({
+      id: "",
+      studentId: "",
+      status: "active",
+      joinedAt: "",
+      notes: "",
+    });
+  };
+
+  const resetVendorForm = () => {
+    setVendorForm({
+      id: "",
+      name: "",
+      category: "",
+      phone: "",
+      contact: "",
+      deliveryNote: "",
+      minOrderAmount: "",
+      status: "active",
+      notes: "",
+    });
+  };
+
+  const resetSupplyCaseForm = (practiceId = "") => {
+    setSupplyCaseForm(buildEmptySupplyCaseForm_(practiceId));
+  };
+
+  const buildSupplyCaseFormFromCase_ = (item) => ({
+    id: item && item.id ? item.id : "",
+    practiceId: item && item.practiceId ? item.practiceId : "",
+    angelRosterId: item && item.angelRosterId ? item.angelRosterId : "",
+    angelStudentId: item && item.angelStudentId ? item.angelStudentId : "",
+    vendorId: item && item.vendorId ? item.vendorId : "",
+    angelStatus: item && item.angelStatus ? item.angelStatus : "unassigned",
+    orderStatus: item && item.orderStatus ? item.orderStatus : "not_started",
+    plannedHeadcount: item && item.plannedHeadcount != null ? String(item.plannedHeadcount) : "",
+    totalAmount: item && item.totalAmount != null ? String(item.totalAmount) : "",
+    orderedAt: item && item.orderedAt ? item.orderedAt : "",
+    notes: item && item.notes ? item.notes : "",
+    items:
+      item && Array.isArray(item.items) && item.items.length
+        ? item.items.map((row, index) => ({
+            localId: `${item.id || "case"}-${index}`,
+            type: row.type || "飲料",
+            name: row.name || "",
+            qty: row.qty || "",
+            unit: row.unit || "份",
+            amount: row.amount || "",
+            notes: row.notes || "",
+          }))
+        : [buildEmptySupplyItem_()],
+  });
+
+  const selectSupplyPractice_ = (practiceId) => {
+    const existing = supplyCaseByPracticeId[normalizeId_(practiceId)];
+    if (existing) {
+      setSupplyCaseForm(buildSupplyCaseFormFromCase_(existing));
+      return;
+    }
+    resetSupplyCaseForm(practiceId);
   };
 
   const handleReviewRequest = async (player, decision) => {
@@ -1030,6 +1309,174 @@ function SoftballPage({ shared }) {
     }
   };
 
+  const handleSaveAngel = async (event) => {
+    event.preventDefault();
+    if (!angelForm.studentId) {
+      setStatusMessage("請先選擇天使同學");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = angelForm.id ? "updateSoftballAngel" : "createSoftballAngel";
+      const payload = angelForm.id ? { action, id: angelForm.id, data: angelForm } : { action, data: angelForm };
+      const { result } = await effectiveApiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadSoftballBootstrap();
+      resetAngelForm();
+      setStatusMessage("已更新天使名單");
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteAngel = async (id) => {
+    if (!id) {
+      return;
+    }
+    if (!confirmDelete_("確定要將這位同學移出天使名單嗎？")) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballAngel", id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadSoftballBootstrap();
+      resetAngelForm();
+      setStatusMessage("已更新天使名單");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveVendor = async (event) => {
+    event.preventDefault();
+    if (!vendorForm.name) {
+      setStatusMessage("請先填店家名稱");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const action = vendorForm.id ? "updateSoftballSupplyVendor" : "createSoftballSupplyVendor";
+      const payload = vendorForm.id ? { action, id: vendorForm.id, data: vendorForm } : { action, data: vendorForm };
+      const { result } = await effectiveApiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadSoftballBootstrap();
+      resetVendorForm();
+      setStatusMessage("已更新補給店家");
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteVendor = async (id) => {
+    if (!id) {
+      return;
+    }
+    const vendorLabel = supplyVendors.find((item) => normalizeId_(item.id) === normalizeId_(id))?.name || id;
+    if (!confirmDelete_(`確定要刪除店家「${vendorLabel}」嗎？`)) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballSupplyVendor", id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadSoftballBootstrap();
+      resetVendorForm();
+      setStatusMessage("已刪除店家");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveSupplyCase = async (event) => {
+    event.preventDefault();
+    if (!supplyCaseForm.practiceId) {
+      setStatusMessage("請先選擇練習");
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const selectedAngel = angelRoster.find((item) => normalizeId_(item.id) === normalizeId_(supplyCaseForm.angelRosterId));
+      const payloadData = {
+        ...supplyCaseForm,
+        angelStudentId: supplyCaseForm.angelStudentId || (selectedAngel ? selectedAngel.studentId || "" : ""),
+        items: (supplyCaseForm.items || [])
+          .map((item) => ({
+            type: item.type || "",
+            name: item.name || "",
+            qty: item.qty || "",
+            unit: item.unit || "",
+            amount: item.amount || "",
+            notes: item.notes || "",
+          }))
+          .filter((item) => item.name || item.qty || item.amount || item.notes),
+      };
+      const action = supplyCaseForm.id ? "updateSoftballSupplyCase" : "createSoftballSupplyCase";
+      const payload = supplyCaseForm.id ? { action, id: supplyCaseForm.id, data: payloadData } : { action, data: payloadData };
+      const { result } = await effectiveApiRequest(payload);
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadSoftballBootstrap();
+      setSupplyCaseForm(
+        buildSupplyCaseFormFromCase_({
+          ...payloadData,
+          id: result.data && result.data.id ? result.data.id : supplyCaseForm.id,
+        })
+      );
+      setStatusMessage("已更新補給案件");
+    } catch (err) {
+      setStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteSupplyCase = async (id) => {
+    if (!id) {
+      return;
+    }
+    if (!confirmDelete_("確定要刪除這筆補給案件嗎？")) {
+      return;
+    }
+    setSaving(true);
+    setStatusMessage("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "deleteSoftballSupplyCase", id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadSoftballBootstrap();
+      resetSupplyCaseForm();
+      setStatusMessage("已刪除補給案件");
+    } catch (err) {
+      setStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAttendanceStatus = async (studentId, status) => {
     if (!activePracticeId) {
       return;
@@ -1197,14 +1644,6 @@ function SoftballPage({ shared }) {
     );
   };
 
-  const studentById = students.reduce((acc, student) => {
-    const studentId = normalizeId_(student && student.id);
-    if (studentId) {
-      acc[studentId] = student;
-    }
-    return acc;
-  }, {});
-
   const filteredPlayers = players.filter((player) => {
     const matchedStudent = studentById[normalizeId_(player && player.id)] || null;
     if (!playerQuery) {
@@ -1336,6 +1775,7 @@ function SoftballPage({ shared }) {
               { id: "players", label: "球員" },
               { id: "fields", label: "球場" },
               { id: "gear", label: "器材" },
+              { id: "supply", label: "天使補給" },
               { id: "stats", label: "統計" },
               { id: "roles", label: "角色權限" },
             ].map((item) => (
@@ -2282,6 +2722,494 @@ function SoftballPage({ shared }) {
                 </div>
               </form>
             </div>
+          </section>
+        ) : null}
+
+        {activeTab === "supply" ? (
+          <section className="card p-7 sm:p-10">
+            <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">天使補給管理</h2>
+                <p className="mt-1 text-sm text-slate-600">管理天使名單、常用補給店家，以及每場練習的補給案件。</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "cases", label: "補給案件" },
+                  { id: "angels", label: "天使名單" },
+                  { id: "vendors", label: "店家" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSupplySubtab(item.id)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold ${
+                      supplySubtab === item.id
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {supplySubtab === "cases" ? (
+              <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+                <div className="space-y-3">
+                  {practiceListItems.length ? (
+                    practiceListItems.map((practice) => {
+                      const practiceId = normalizeId_(practice.id);
+                      const caseItem = supplyCaseByPracticeId[practiceId] || null;
+                      const selected = normalizeId_(supplyCaseForm.practiceId) === practiceId;
+                      const angelStudentId = caseItem
+                        ? normalizeId_(caseItem.angelStudentId || (angelById[normalizeId_(caseItem.angelRosterId)] || {}).studentId)
+                        : "";
+                      const angelName = angelStudentId ? getPersonDisplayName_(angelStudentId) : "未指定";
+                      const vendorName = caseItem && caseItem.vendorId ? (supplyVendorById[normalizeId_(caseItem.vendorId)] || {}).name || "-" : "未選擇";
+                      return (
+                        <button
+                          key={practiceId}
+                          type="button"
+                          onClick={() => selectSupplyPractice_(practiceId)}
+                          className={`w-full rounded-2xl border p-4 text-left text-sm transition ${
+                            selected
+                              ? "border-slate-900 bg-white text-slate-700"
+                              : "border-slate-200/70 bg-slate-50/60 text-slate-600 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-slate-900">{practice.title || "練習"}</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {formatPracticeDate_(practice.date || practice.startAt)}
+                                {getPracticeListTimeLabel_(practice) ? ` · ${getPracticeListTimeLabel_(practice)}` : ""}
+                              </p>
+                            </div>
+                            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${caseItem ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                              {caseItem ? (caseItem.orderStatus || "planning") : "尚未建立"}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold">
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">天使：{angelName}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">店家：{vendorName}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-slate-600">人數：{caseItem && caseItem.plannedHeadcount ? caseItem.plannedHeadcount : "-"}</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-slate-500">尚無練習資料。</p>
+                  )}
+                </div>
+
+                <form onSubmit={handleSaveSupplyCase} className="space-y-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">對應練習</label>
+                    <select
+                      value={supplyCaseForm.practiceId}
+                      onChange={(event) => selectSupplyPractice_(event.target.value)}
+                      className="input-sm"
+                    >
+                      <option value="">請選擇練習</option>
+                      {practiceListItems.map((practice) => (
+                        <option key={`supply-practice-${practice.id}`} value={practice.id}>
+                          {formatPracticeDate_(practice.date || practice.startAt)} · {practice.title || practice.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">天使同學</label>
+                      <select
+                        value={supplyCaseForm.angelRosterId}
+                        onChange={(event) => {
+                          const angel = angelById[normalizeId_(event.target.value)] || null;
+                          setSupplyCaseForm((prev) => ({
+                            ...prev,
+                            angelRosterId: event.target.value,
+                            angelStudentId: angel ? angel.studentId || "" : "",
+                            angelStatus: event.target.value ? (prev.angelStatus === "unassigned" ? "assigned" : prev.angelStatus) : "unassigned",
+                          }));
+                        }}
+                        className="input-sm"
+                      >
+                        <option value="">未指定</option>
+                        {activeAngelOptions.map((item) => (
+                          <option key={`angel-option-${item.id}`} value={item.id}>
+                            {getPersonDisplayName_(item.studentId)} · {item.status || "active"}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">天使狀態</label>
+                      <select
+                        value={supplyCaseForm.angelStatus}
+                        onChange={(event) => handleSupplyCaseFormChange("angelStatus", event.target.value)}
+                        className="input-sm"
+                      >
+                        <option value="unassigned">未指定</option>
+                        <option value="assigned">已指定</option>
+                        <option value="confirmed">已確認</option>
+                        <option value="done">已完成</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">補給來源 / 店家</label>
+                      <select
+                        value={supplyCaseForm.vendorId}
+                        onChange={(event) => handleSupplyCaseFormChange("vendorId", event.target.value)}
+                        className="input-sm"
+                      >
+                        <option value="">未選擇</option>
+                        {sortedSupplyVendors.map((vendor) => (
+                          <option key={`vendor-option-${vendor.id}`} value={vendor.id}>
+                            {vendor.name} {vendor.category ? `· ${vendor.category}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">補給狀態</label>
+                      <select
+                        value={supplyCaseForm.orderStatus}
+                        onChange={(event) => handleSupplyCaseFormChange("orderStatus", event.target.value)}
+                        className="input-sm"
+                      >
+                        <option value="not_started">未開始</option>
+                        <option value="planning">規劃中</option>
+                        <option value="ordered">已採買 / 已訂</option>
+                        <option value="delivered">已送達</option>
+                        <option value="closed">已結案</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">預估人數</label>
+                      <input
+                        value={supplyCaseForm.plannedHeadcount}
+                        onChange={(event) => handleSupplyCaseFormChange("plannedHeadcount", event.target.value)}
+                        className="input-sm"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">總金額</label>
+                      <input
+                        value={supplyCaseForm.totalAmount}
+                        onChange={(event) => handleSupplyCaseFormChange("totalAmount", event.target.value)}
+                        className="input-sm"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">下單 / 採買時間</label>
+                      <input
+                        type="datetime-local"
+                        value={supplyCaseForm.orderedAt}
+                        onChange={(event) => handleSupplyCaseFormChange("orderedAt", event.target.value)}
+                        className="input-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-sm font-medium text-slate-700">補給明細</label>
+                      <button
+                        type="button"
+                        onClick={addSupplyItem}
+                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        新增明細
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {(supplyCaseForm.items && supplyCaseForm.items.length ? supplyCaseForm.items : [buildEmptySupplyItem_()]).map((item) => (
+                        <div key={item.localId} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                            <select
+                              value={item.type}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "type", event.target.value)}
+                              className="input-sm"
+                            >
+                              {SUPPLY_ITEM_TYPE_OPTIONS.map((option) => (
+                                <option key={`${item.localId}-type-${option}`} value={option}>{option}</option>
+                              ))}
+                            </select>
+                            <input
+                              value={item.name}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "name", event.target.value)}
+                              placeholder="品項"
+                              className="input-sm lg:col-span-2"
+                            />
+                            <input
+                              value={item.qty}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "qty", event.target.value)}
+                              placeholder="數量"
+                              className="input-sm"
+                            />
+                            <select
+                              value={item.unit}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "unit", event.target.value)}
+                              className="input-sm"
+                            >
+                              {SUPPLY_ITEM_UNIT_OPTIONS.map((option) => (
+                                <option key={`${item.localId}-unit-${option}`} value={option}>{option}</option>
+                              ))}
+                            </select>
+                            <input
+                              value={item.amount}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "amount", event.target.value)}
+                              placeholder="金額"
+                              className="input-sm"
+                            />
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-3">
+                            <input
+                              value={item.notes}
+                              onChange={(event) => handleSupplyItemChange(item.localId, "notes", event.target.value)}
+                              placeholder="備註（例如：練習中場吃、冰飲、少糖）"
+                              className="input-sm flex-1"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeSupplyItem(item.localId)}
+                              className="badge-error hover:border-rose-300"
+                            >
+                              移除
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <textarea
+                      value={supplyCaseForm.notes}
+                      onChange={(event) => handleSupplyCaseFormChange("notes", event.target.value)}
+                      rows="3"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="submit" disabled={saving} className="btn-primary">
+                      {saving ? "儲存中..." : "儲存補給案件"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => resetSupplyCaseForm(supplyCaseForm.practiceId)}
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      清空
+                    </button>
+                    {supplyCaseForm.id ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSupplyCase(supplyCaseForm.id)}
+                        className="badge-error hover:border-rose-300"
+                      >
+                        刪除案件
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+            ) : null}
+
+            {supplySubtab === "angels" ? (
+              <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+                <div className="space-y-3">
+                  {sortedAngelRoster.length ? (
+                    sortedAngelRoster.map((item) => {
+                      const stats = angelStatsByStudentId[normalizeId_(item.studentId)] || { count: 0, lastPracticeLabel: "" };
+                      const displayName = getPersonDisplayName_(item.studentId);
+                      const selected = normalizeId_(angelForm.id) === normalizeId_(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setAngelForm({
+                            id: item.id || "",
+                            studentId: item.studentId || "",
+                            status: item.status || "active",
+                            joinedAt: item.joinedAt || "",
+                            notes: item.notes || "",
+                          })}
+                          className={`cursor-pointer rounded-2xl border p-4 text-sm ${
+                            selected ? "border-slate-900 bg-white text-slate-700" : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-slate-900">{displayName}</p>
+                              <p className="mt-1 text-xs text-slate-500">{item.studentId || "-"}</p>
+                            </div>
+                            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                              item.status === "active" ? "bg-emerald-100 text-emerald-700" : item.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500"
+                            }`}>{item.status || "active"}</span>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1">已輪到 {stats.count} 次</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1">上次：{stats.lastPracticeLabel || "尚未輪到"}</span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-slate-500">目前尚無天使名單。</p>
+                  )}
+                </div>
+                <form onSubmit={handleSaveAngel} className="space-y-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">同學</label>
+                    <select
+                      value={angelForm.studentId}
+                      onChange={(event) => handleAngelFormChange("studentId", event.target.value)}
+                      disabled={Boolean(angelForm.id)}
+                      className="input-sm"
+                    >
+                      <option value="">請選擇同學</option>
+                      {students
+                        .slice()
+                        .sort((a, b) => getPersonDisplayName_(a.id).localeCompare(getPersonDisplayName_(b.id), "zh-Hant", { numeric: true, sensitivity: "base" }))
+                        .map((student) => (
+                          <option key={`angel-student-${student.id}`} value={student.id}>
+                            {getPersonDisplayName_(student.id)} · {student.id}
+                          </option>
+                        ))}
+                    </select>
+                    {angelForm.id ? <p className="text-[11px] text-slate-400">已存在的天使名單成員不提供直接換人，避免覆蓋到別人的輪值歷史。</p> : null}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">狀態</label>
+                      <select value={angelForm.status} onChange={(event) => handleAngelFormChange("status", event.target.value)} className="input-sm">
+                        <option value="active">啟用中</option>
+                        <option value="paused">暫停</option>
+                        <option value="retired">退出</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">加入日期</label>
+                      <input type="date" value={angelForm.joinedAt} onChange={(event) => handleAngelFormChange("joinedAt", event.target.value)} className="input-sm" />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <textarea value={angelForm.notes} onChange={(event) => handleAngelFormChange("notes", event.target.value)} rows="3" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="submit" disabled={saving} className="btn-primary">{saving ? "儲存中..." : "儲存天使名單"}</button>
+                    <button type="button" onClick={resetAngelForm} className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300">清空</button>
+                    {angelForm.id ? <button type="button" onClick={() => handleDeleteAngel(angelForm.id)} className="badge-error hover:border-rose-300">移出名單</button> : null}
+                  </div>
+                </form>
+              </div>
+            ) : null}
+
+            {supplySubtab === "vendors" ? (
+              <div className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+                <div className="space-y-3">
+                  {sortedSupplyVendors.length ? (
+                    sortedSupplyVendors.map((item) => {
+                      const selected = normalizeId_(vendorForm.id) === normalizeId_(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={() => setVendorForm({
+                            id: item.id || "",
+                            name: item.name || "",
+                            category: item.category || "",
+                            phone: item.phone || "",
+                            contact: item.contact || "",
+                            deliveryNote: item.deliveryNote || "",
+                            minOrderAmount: item.minOrderAmount != null ? String(item.minOrderAmount) : "",
+                            status: item.status || "active",
+                            notes: item.notes || "",
+                          })}
+                          className={`cursor-pointer rounded-2xl border p-4 text-sm ${
+                            selected ? "border-slate-900 bg-white text-slate-700" : "border-slate-200/70 bg-slate-50/60 text-slate-600"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-slate-900">{item.name}</p>
+                              <p className="mt-1 text-xs text-slate-500">{item.category || "-"} · {item.phone || item.contact || "無聯絡方式"}</p>
+                            </div>
+                            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                              item.status === "favorite" ? "bg-emerald-100 text-emerald-700" : item.status === "paused" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-600"
+                            }`}>{item.status || "active"}</span>
+                          </div>
+                          <p className="mt-3 text-xs text-slate-500">{item.deliveryNote || item.notes || "尚未填寫備註"}</p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-slate-500">目前尚無店家資料。</p>
+                  )}
+                </div>
+                <form onSubmit={handleSaveVendor} className="space-y-4">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">店家名稱</label>
+                    <input value={vendorForm.name} onChange={(event) => handleVendorFormChange("name", event.target.value)} className="input-sm" />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">分類</label>
+                      <select value={vendorForm.category} onChange={(event) => handleVendorFormChange("category", event.target.value)} className="input-sm">
+                        <option value="">未分類</option>
+                        <option value="飲料">飲料</option>
+                        <option value="點心">點心</option>
+                        <option value="水果">水果</option>
+                        <option value="輕食">輕食</option>
+                        <option value="綜合補給">綜合補給</option>
+                        <option value="其他">其他</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">狀態</label>
+                      <select value={vendorForm.status} onChange={(event) => handleVendorFormChange("status", event.target.value)} className="input-sm">
+                        <option value="active">可用</option>
+                        <option value="favorite">常用</option>
+                        <option value="paused">暫停</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">電話</label>
+                      <input value={vendorForm.phone} onChange={(event) => handleVendorFormChange("phone", event.target.value)} className="input-sm" />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">聯絡方式</label>
+                      <input value={vendorForm.contact} onChange={(event) => handleVendorFormChange("contact", event.target.value)} placeholder="Line / 訂購網址 / 聯絡人" className="input-sm" />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">最低金額</label>
+                      <input value={vendorForm.minOrderAmount} onChange={(event) => handleVendorFormChange("minOrderAmount", event.target.value)} className="input-sm" />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">外送 / 備註摘要</label>
+                      <input value={vendorForm.deliveryNote} onChange={(event) => handleVendorFormChange("deliveryNote", event.target.value)} placeholder="例如：可送到球場、晚間可外送" className="input-sm" />
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">補充備註</label>
+                    <textarea value={vendorForm.notes} onChange={(event) => handleVendorFormChange("notes", event.target.value)} rows="3" className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button type="submit" disabled={saving} className="btn-primary">{saving ? "儲存中..." : "儲存店家"}</button>
+                    <button type="button" onClick={resetVendorForm} className="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300">清空</button>
+                    {vendorForm.id ? <button type="button" onClick={() => handleDeleteVendor(vendorForm.id)} className="badge-error hover:border-rose-300">刪除店家</button> : null}
+                  </div>
+                </form>
+              </div>
+            ) : null}
           </section>
         ) : null}
 

@@ -318,6 +318,73 @@ function toSoftballPracticeRow(input) {
   };
 }
 
+function toSoftballAngelRosterRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    studentId: firstText(raw.studentId, raw.personId),
+    status: firstText(raw.status, "active"),
+    notes: firstText(raw.notes),
+    joinedAt: firstText(raw.joinedAt, createdAt),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toSoftballSupplyVendorRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    name: firstText(raw.name),
+    category: firstText(raw.category),
+    phone: firstText(raw.phone),
+    contact: firstText(raw.contact),
+    deliveryNote: firstText(raw.deliveryNote),
+    minOrderAmount:
+      raw.minOrderAmount == null || raw.minOrderAmount === "" ? null : Number(String(raw.minOrderAmount).replace(/,/g, "")),
+    status: firstText(raw.status, "active"),
+    notes: firstText(raw.notes),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
+function toSoftballSupplyCaseRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    practiceId: firstText(raw.practiceId),
+    angelRosterId: firstText(raw.angelRosterId),
+    angelStudentId: firstText(raw.angelStudentId),
+    vendorId: firstText(raw.vendorId),
+    angelStatus: firstText(raw.angelStatus, "unassigned"),
+    orderStatus: firstText(raw.orderStatus, "not_started"),
+    plannedHeadcount:
+      raw.plannedHeadcount == null || raw.plannedHeadcount === "" ? null : Number(raw.plannedHeadcount),
+    totalAmount:
+      raw.totalAmount == null || raw.totalAmount === "" ? null : Number(String(raw.totalAmount).replace(/,/g, "")),
+    orderedAt: firstText(raw.orderedAt),
+    notes: firstText(raw.notes),
+    raw: {
+      ...raw,
+      items: Array.isArray(raw.items) ? raw.items : safeJsonArray(raw.items),
+    },
+    createdAt,
+    updatedAt,
+  };
+}
+
 function rowOrNull(result) {
   return result && result.rows && result.rows.length ? result.rows[0] : null;
 }
@@ -3136,12 +3203,15 @@ export async function dispatchNativeAction({
 
     case "listSoftballBootstrap": {
       await requireSoftballAdminAccess();
-      const [configResult, playersResult, practicesResult, fieldsResult, gearResult] = await Promise.all([
+      const [configResult, playersResult, practicesResult, fieldsResult, gearResult, angelsResult, vendorsResult, supplyCasesResult] = await Promise.all([
         query(`select * from softball_config where id = 'singleton' limit 1`),
         query(`select * from softball_players order by coalesce(name,''), id`),
         query(`select * from softball_practices order by coalesce(date,'') desc, id desc`),
         query(`select * from softball_fields order by coalesce(name,''), id`),
         query(`select * from softball_gear order by coalesce(name,''), id`),
+        query(`select * from softball_angel_roster order by coalesce(joined_at,''), coalesce(student_id,''), id`),
+        query(`select * from softball_supply_vendors order by coalesce(name,''), id`),
+        query(`select * from softball_supply_cases order by coalesce(updated_at,'') desc, id desc`),
       ]);
       const configRow = rowOrNull(configResult);
       return {
@@ -3152,6 +3222,9 @@ export async function dispatchNativeAction({
           practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           gear: gearResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          angels: angelsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          vendors: vendorsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          supplyCases: supplyCasesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
         },
         error: null,
       };
@@ -3275,6 +3348,7 @@ export async function dispatchNativeAction({
       }
       await query(`delete from softball_practices where id = $1`, [id]);
       await query(`delete from softball_attendance where practice_id = $1`, [id]);
+      await query(`delete from softball_supply_cases where practice_id = $1`, [id]);
       return { ok: true, data: { id }, error: null };
     }
 
@@ -3456,6 +3530,141 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Missing id" };
       }
       await query(`delete from softball_gear where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballAngels": {
+      await requireSoftballAdminAccess();
+      const result = await query(`select * from softball_angel_roster order by coalesce(joined_at,''), coalesce(student_id,''), id`);
+      const angels = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { angels }, error: null };
+    }
+
+    case "createSoftballAngel":
+    case "updateSoftballAngel": {
+      await requireSoftballAdminAccess();
+      const row = toSoftballAngelRosterRow(body.data || body.angel || body);
+      if (!row.studentId) {
+        return { ok: false, data: null, error: "Missing studentId" };
+      }
+      const existingByStudent = await query(`select * from softball_angel_roster where student_id = $1 limit 1`, [row.studentId]);
+      const existing = rowOrNull(existingByStudent);
+      const id = existing ? firstText(existing.id, row.id) : row.id;
+      const createdAt = existing ? firstText(existing.created_at, row.createdAt) : row.createdAt;
+      await query(
+        `insert into softball_angel_roster (id, student_id, status, notes, joined_at, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         on conflict (id) do update set
+           student_id=excluded.student_id,
+           status=excluded.status,
+           notes=excluded.notes,
+           joined_at=excluded.joined_at,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, row.studentId, row.status, row.notes, row.joinedAt, { ...row.raw, id, studentId: row.studentId }, createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteSoftballAngel": {
+      await requireSoftballAdminAccess();
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_angel_roster where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballSupplyVendors": {
+      await requireSoftballAdminAccess();
+      const result = await query(`select * from softball_supply_vendors order by coalesce(name,''), id`);
+      const vendors = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { vendors }, error: null };
+    }
+
+    case "createSoftballSupplyVendor":
+    case "updateSoftballSupplyVendor": {
+      await requireSoftballAdminAccess();
+      const row = toSoftballSupplyVendorRow(body.data || body.vendor || body);
+      await query(
+        `insert into softball_supply_vendors (id, name, category, phone, contact, delivery_note, min_order_amount, status, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         on conflict (id) do update set
+           name=excluded.name,
+           category=excluded.category,
+           phone=excluded.phone,
+           contact=excluded.contact,
+           delivery_note=excluded.delivery_note,
+           min_order_amount=excluded.min_order_amount,
+           status=excluded.status,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [row.id, row.name, row.category, row.phone, row.contact, row.deliveryNote, row.minOrderAmount, row.status, row.notes, row.raw, row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id }, error: null };
+    }
+
+    case "deleteSoftballSupplyVendor": {
+      await requireSoftballAdminAccess();
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_supply_vendors where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "listSoftballSupplyCases": {
+      await requireSoftballAdminAccess();
+      const result = await query(`select * from softball_supply_cases order by coalesce(updated_at,'') desc, id desc`);
+      const supplyCases = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      return { ok: true, data: { supplyCases }, error: null };
+    }
+
+    case "createSoftballSupplyCase":
+    case "updateSoftballSupplyCase": {
+      await requireSoftballAdminAccess();
+      const row = toSoftballSupplyCaseRow(body.data || body.supplyCase || body);
+      if (!row.practiceId) {
+        return { ok: false, data: null, error: "Missing practiceId" };
+      }
+      const existingByPractice = await query(`select * from softball_supply_cases where practice_id = $1 limit 1`, [row.practiceId]);
+      const existing = rowOrNull(existingByPractice);
+      const id = existing ? firstText(existing.id, row.id) : row.id;
+      const createdAt = existing ? firstText(existing.created_at, row.createdAt) : row.createdAt;
+      await query(
+        `insert into softball_supply_cases (id, practice_id, angel_roster_id, angel_student_id, vendor_id, angel_status, order_status, planned_headcount, total_amount, ordered_at, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+         on conflict (id) do update set
+           practice_id=excluded.practice_id,
+           angel_roster_id=excluded.angel_roster_id,
+           angel_student_id=excluded.angel_student_id,
+           vendor_id=excluded.vendor_id,
+           angel_status=excluded.angel_status,
+           order_status=excluded.order_status,
+           planned_headcount=excluded.planned_headcount,
+           total_amount=excluded.total_amount,
+           ordered_at=excluded.ordered_at,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, row.practiceId, row.angelRosterId, row.angelStudentId, row.vendorId, row.angelStatus, row.orderStatus, row.plannedHeadcount, row.totalAmount, row.orderedAt, row.notes, { ...row.raw, id, practiceId: row.practiceId }, createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteSoftballSupplyCase": {
+      await requireSoftballAdminAccess();
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from softball_supply_cases where id = $1`, [id]);
       return { ok: true, data: { id }, error: null };
     }
 
