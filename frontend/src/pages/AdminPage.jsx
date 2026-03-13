@@ -96,6 +96,13 @@ export default function AdminPage({
     status: "open",
     notes: "",
   });
+  const [proxyOrderForm, setProxyOrderForm] = useState({
+    id: "",
+    displayName: "",
+    sourceLabel: "外部修課同學",
+    choice: "A",
+    comment: "",
+  });
   const [studentsQuery, setStudentsQuery] = useState("");
   const [studentsGroupFilter, setStudentsGroupFilter] = useState("all");
   const [studentsSortKey, setStudentsSortKey] = useState("nameZh");
@@ -432,6 +439,14 @@ export default function AdminPage({
     };
   };
 
+  const buildDefaultProxyOrderForm = () => ({
+    id: "",
+    displayName: "",
+    sourceLabel: "外部修課同學",
+    choice: "A",
+    comment: "",
+  });
+
   const buildDefaultForm = (items) => {
     const baseDate = addDays_(new Date(), 10);
     const startAt = toLocalInput_(baseDate, 19, 0);
@@ -657,6 +672,7 @@ export default function AdminPage({
     if (orderActiveId) {
       const normalizedId = normalizeOrderId_(orderActiveId);
       loadOrderResponses(normalizedId);
+      setProxyOrderForm(buildDefaultProxyOrderForm());
       const selected = orderPlans.find(
         (plan) => normalizeOrderId_(plan.id) === normalizedId
       );
@@ -1144,6 +1160,7 @@ export default function AdminPage({
     setOrderActiveId("");
     setOrderForm(buildDefaultOrderForm());
     setOrderResponses([]);
+    setProxyOrderForm(buildDefaultProxyOrderForm());
     setOrderStatusMessage("");
   };
 
@@ -1190,6 +1207,80 @@ export default function AdminPage({
       setOrderStatusMessage("已更新訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleProxyOrderSubmit = async (event) => {
+    event.preventDefault();
+    if (!orderActiveId) {
+      setOrderStatusMessage("請先選擇訂餐日期。");
+      return;
+    }
+    if (!String(proxyOrderForm.displayName || "").trim()) {
+      setOrderStatusMessage("請先輸入代訂姓名。");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "adminUpsertOrderProxyResponse",
+        data: {
+          ...proxyOrderForm,
+          orderId: normalizeOrderId_(orderActiveId),
+          displayName: String(proxyOrderForm.displayName || "").trim(),
+          sourceLabel: String(proxyOrderForm.sourceLabel || "").trim() || "外部修課同學",
+          comment: String(proxyOrderForm.comment || "").trim(),
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      await loadOrderResponses(normalizeOrderId_(orderActiveId));
+      setProxyOrderForm(buildDefaultProxyOrderForm());
+      setOrderStatusMessage("已更新代訂餐");
+    } catch (err) {
+      setOrderStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditProxyOrder = (item) => {
+    setProxyOrderForm({
+      id: item.id || "",
+      displayName: item.displayName || item.studentName || "",
+      sourceLabel: item.sourceLabel || "外部修課同學",
+      choice: String(item.choice || "A").toUpperCase() || "A",
+      comment: item.comment || "",
+    });
+  };
+
+  const handleDeleteProxyOrder = async (id) => {
+    if (!id) {
+      return;
+    }
+    if (!confirmDelete_("確定要刪除這筆代訂餐嗎？")) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteOrderProxyResponse", id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      await loadOrderResponses(normalizeOrderId_(orderActiveId));
+      if (normalizeOrderId_(proxyOrderForm.id) === normalizeOrderId_(id)) {
+        setProxyOrderForm(buildDefaultProxyOrderForm());
+      }
+      setOrderStatusMessage("已刪除代訂餐");
+    } catch (err) {
+      setOrderStatusMessage(err.message || "刪除失敗");
     } finally {
       setSaving(false);
     }
@@ -2160,6 +2251,9 @@ export default function AdminPage({
     return acc;
   }, {});
 
+  const proxyOrderResponses = orderResponses.filter(
+    (item) => String(item.sourceType || "").trim() === "proxy_external"
+  );
   const orderStats = orderResponses.reduce(
     (acc, item) => {
       const choice = String(item.choice || "").toUpperCase();
@@ -2170,10 +2264,13 @@ export default function AdminPage({
       } else {
         acc.NONE += 1;
       }
+      if (String(item.sourceType || "").trim() === "proxy_external") {
+        acc.proxy += 1;
+      }
       acc.total += 1;
       return acc;
     },
-    { A: 0, B: 0, NONE: 0, total: 0 }
+    { A: 0, B: 0, NONE: 0, total: 0, proxy: 0 }
   );
 
   const orderComments = orderResponses
@@ -2727,6 +2824,79 @@ export default function AdminPage({
                 </form>
               </div>
 
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">手動代訂</p>
+                    <p className="mt-1 text-xs text-slate-500">給不在班級正式名單內、但需要一起訂餐的人使用。</p>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {orderActiveId ? `目前套用 ${orderActiveId}` : "請先選擇訂餐日期"}
+                  </span>
+                </div>
+                <form onSubmit={handleProxyOrderSubmit} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px]">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">姓名</label>
+                    <input
+                      value={proxyOrderForm.displayName}
+                      onChange={(event) =>
+                        setProxyOrderForm((prev) => ({ ...prev, displayName: event.target.value }))
+                      }
+                      placeholder="例如：王小美"
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">來源 / 身份</label>
+                    <input
+                      value={proxyOrderForm.sourceLabel}
+                      onChange={(event) =>
+                        setProxyOrderForm((prev) => ({ ...prev, sourceLabel: event.target.value }))
+                      }
+                      placeholder="例如：他班修課同學"
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">餐點</label>
+                    <select
+                      value={proxyOrderForm.choice}
+                      onChange={(event) =>
+                        setProxyOrderForm((prev) => ({ ...prev, choice: event.target.value }))
+                      }
+                      className="input-sm"
+                    >
+                      <option value="A">A 餐</option>
+                      <option value="B">B 餐</option>
+                      <option value="NONE">不吃</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">備註</label>
+                    <input
+                      value={proxyOrderForm.comment}
+                      onChange={(event) =>
+                        setProxyOrderForm((prev) => ({ ...prev, comment: event.target.value }))
+                      }
+                      placeholder="例如：幫外部修課同學代訂、會後現場付"
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="flex items-end gap-2">
+                    <button type="submit" disabled={saving || !orderActiveId} className="btn-primary flex-1">
+                      {saving ? "儲存中..." : proxyOrderForm.id ? "更新代訂" : "新增代訂"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setProxyOrderForm(buildDefaultProxyOrderForm())}
+                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      清空
+                    </button>
+                  </div>
+                </form>
+              </div>
+
               <div className="card-muted p-5 text-sm text-slate-600">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="font-semibold text-slate-900">訂餐統計</p>
@@ -2734,7 +2904,7 @@ export default function AdminPage({
                     {orderActiveId ? `訂餐編號 ${orderActiveId}` : "尚未選擇訂餐日期"}
                   </span>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <div className="mt-4 grid gap-3 sm:grid-cols-5">
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">總數</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
@@ -2751,28 +2921,70 @@ export default function AdminPage({
                     <p className="text-xs text-slate-400">不吃</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.NONE}</p>
                   </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">代訂</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.proxy}</p>
+                  </div>
                 </div>
 
 
                 <div className="mt-4 grid gap-4 lg:grid-cols-2">
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold text-slate-600">訂餐名單</p>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold text-slate-600">訂餐名單</p>
+                      <span className="text-[11px] text-slate-400">代訂 {proxyOrderResponses.length} 筆</span>
+                    </div>
                     <div className="mt-3 space-y-2 text-xs text-slate-600">
                       {orderResponses.length ? (
-                        orderResponses.map((item) => (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
-                          >
-                            <span
-                              className="font-semibold text-slate-800"
-                              title={item.studentId ? `學號 ${item.studentId}` : ""}
+                        orderResponses.map((item) => {
+                          const isProxy = String(item.sourceType || "").trim() === "proxy_external";
+                          return (
+                            <div
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
                             >
-                              {item.studentName || "未命名"}
-                            </span>
-                            <span className="text-xs text-slate-500">{item.choice}</span>
-                          </div>
-                        ))
+                              <div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span
+                                    className="font-semibold text-slate-800"
+                                    title={item.studentId ? `學號 ${item.studentId}` : ""}
+                                  >
+                                    {item.studentName || item.displayName || "未命名"}
+                                  </span>
+                                  {isProxy ? (
+                                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                      代訂
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {isProxy && item.sourceLabel ? (
+                                  <div className="mt-0.5 text-[11px] text-slate-500">{item.sourceLabel}</div>
+                                ) : null}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-slate-500">{item.choice}</span>
+                                {isProxy ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditProxyOrder(item)}
+                                      className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                                    >
+                                      編輯
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteProxyOrder(item.id)}
+                                      className="badge-error hover:border-rose-300"
+                                    >
+                                      刪除
+                                    </button>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })
                       ) : (
                         <p className="text-xs text-slate-400">目前尚無訂餐資料。</p>
                       )}

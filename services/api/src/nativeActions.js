@@ -1882,6 +1882,76 @@ export async function dispatchNativeAction({
       return { ok: true, data: { id }, error: null };
     }
 
+    case "adminUpsertOrderProxyResponse": {
+      await requireGroupAccess(["I", "E"]);
+      const data = safeJsonObject(body.data || body.response || body);
+      const orderId = firstText(data.orderId || body.orderId);
+      const displayName = firstText(data.displayName, data.studentName);
+      const choice = firstText(data.choice).toUpperCase();
+      if (!orderId) {
+        return { ok: false, data: null, error: "Missing orderId" };
+      }
+      if (!displayName) {
+        return { ok: false, data: null, error: "Missing displayName" };
+      }
+      if (!["A", "B", "NONE"].includes(choice)) {
+        return { ok: false, data: null, error: "Invalid choice" };
+      }
+      const requestedId = firstText(data.id);
+      let existing = null;
+      if (requestedId) {
+        existing = rowOrNull(await query(`select * from order_responses where id = $1 limit 1`, [requestedId]));
+      }
+      const id = requestedId || `proxy:${crypto.randomUUID()}`;
+      const createdAt = existing ? firstText(existing.created_at, data.createdAt, nowIso()) : firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      const raw = {
+        ...data,
+        id,
+        orderId,
+        studentId: "",
+        studentName: displayName,
+        studentEmail: "",
+        displayName,
+        choice,
+        comment: firstText(data.comment),
+        sourceType: "proxy_external",
+        sourceLabel: firstText(data.sourceLabel, "外部代訂"),
+        createdBy: auth && auth.studentId ? auth.studentId : "",
+      };
+      await query(
+        `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         on conflict (id) do update set
+           order_id = excluded.order_id,
+           student_name = excluded.student_name,
+           response = excluded.response,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [id, orderId, "", displayName, "", raw, null, createdAt, updatedAt, raw]
+      );
+      return { ok: true, data: { id, response: raw }, error: null };
+    }
+
+    case "deleteOrderProxyResponse": {
+      await requireGroupAccess(["I", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from order_responses where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: true, data: { id }, error: null };
+      }
+      const raw = safeJsonObject(existing.raw);
+      if (firstText(raw.sourceType) !== "proxy_external") {
+        return { ok: false, data: null, error: "Only proxy responses can be deleted here" };
+      }
+      await query(`delete from order_responses where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
     case "listOrderResponses": {
       await requireGroupAccess(["I", "E"]);
       const orderId = firstText(body.orderId);

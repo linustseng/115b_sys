@@ -868,6 +868,8 @@ const API_V2_WRITE_ACTIONS = new Set([
   "createOrderPlan",
   "updateOrderPlan",
   "submitOrderResponse",
+  "adminUpsertOrderProxyResponse",
+  "deleteOrderProxyResponse",
   // Softball
   "createSoftballPlayer",
   "updateSoftballPlayer",
