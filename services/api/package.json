@@ -7,7 +7,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node scripts/migrate.js",
-    "bench:reads": "node scripts/benchReadPaths.js"
+    "bench:reads": "node scripts/benchReadPaths.js",
+    "test": "node --test"
   },
   "dependencies": {
     "cors": "^2.8.6",

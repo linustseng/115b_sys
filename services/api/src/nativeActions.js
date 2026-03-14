@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { jsonbParam } from "./jsonb.js";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -776,14 +777,14 @@ async function autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles = []) {
     `update finance_requests
         set status = 'pending_cashier',
             updated_at = $2,
-            raw = $3,
+            raw = $3::jsonb,
             synced_at = now()
       where id = $1`,
-    [row.id, now, raw]
+    [row.id, now, jsonbParam(raw, {})]
   );
   await query(
     `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
      on conflict (id) do nothing`,
     [
       `sys-fix-finance-workflow-runtime-${row.id}`,
@@ -795,16 +796,19 @@ async function autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles = []) {
       "pending_cashier",
       "Auto-fix accounting-created request routed to cashier on read",
       now,
-      {
-        id: `sys-fix-finance-workflow-runtime-${row.id}`,
-        requestId: row.id,
-        actorName: "system",
-        actionType: "system_fix",
-        fromStatus: "pending_accounting",
-        toStatus: "pending_cashier",
-        notes: "Auto-fix accounting-created request routed to cashier on read",
-        createdAt: now,
-      },
+      jsonbParam(
+        {
+          id: `sys-fix-finance-workflow-runtime-${row.id}`,
+          requestId: row.id,
+          actorName: "system",
+          actionType: "system_fix",
+          fromStatus: "pending_accounting",
+          toStatus: "pending_cashier",
+          notes: "Auto-fix accounting-created request routed to cashier on read",
+          createdAt: now,
+        },
+        {}
+      ),
     ]
   );
   const refreshed = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
@@ -1244,8 +1248,8 @@ export async function dispatchNativeAction({
       const nextRaw = { ...existingRaw, status, updatedAt };
 
       await query(
-        `update registrations set status=$2, updated_at=$3, raw=$4, synced_at=now() where id=$1`,
-        [registrationId, status, updatedAt, nextRaw]
+        `update registrations set status=$2, updated_at=$3, raw=$4::jsonb, synced_at=now() where id=$1`,
+        [registrationId, status, updatedAt, jsonbParam(nextRaw, {})]
       );
       return { ok: true, data: { id: registrationId }, error: null };
     }
@@ -1586,7 +1590,7 @@ export async function dispatchNativeAction({
                  target_student_id = excluded.target_student_id,
                  -- Don't bump updated_at on every page load; only bump when transitioning from closed -> open.
                  updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
-              [todoId, todoId, studentId, title, body, url, createdAtText, JSON.stringify(raw)]
+              [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
             );
           } else {
             await query(
@@ -1718,7 +1722,7 @@ export async function dispatchNativeAction({
                  raw = excluded.raw,
                  target_student_id = excluded.target_student_id,
                  updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
-              [todoId, todoId, studentId, title, body, url, createdAtText, JSON.stringify(raw)]
+              [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
             );
           } else {
             await query(
@@ -1909,7 +1913,7 @@ export async function dispatchNativeAction({
       const row = toOrderPlanRow(body.data || body.plan || body);
       await query(
         `insert into order_plans (id, date, title, description, close_at, vendor, items, status, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11)
          on conflict (id) do update set
            date = excluded.date,
            title = excluded.title,
@@ -1928,9 +1932,9 @@ export async function dispatchNativeAction({
           row.description,
           row.closeAt,
           row.vendor,
-          row.items,
+          jsonbParam(row.items, []),
           row.status,
-          row.raw,
+          jsonbParam(row.raw, {}),
           row.createdAt,
           row.updatedAt,
         ]
@@ -1943,9 +1947,9 @@ export async function dispatchNativeAction({
       const row = toOrderPlanRow(body.data || body.plan || body);
       await query(
         `update order_plans set
-           date=$2,title=$3,description=$4,close_at=$5,vendor=$6,items=$7,status=$8,raw=$9,updated_at=$10,synced_at=now()
+           date=$2,title=$3,description=$4,close_at=$5,vendor=$6,items=$7::jsonb,status=$8,raw=$9::jsonb,updated_at=$10,synced_at=now()
          where id=$1`,
-        [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, row.items, row.status, row.raw, row.updatedAt]
+        [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, jsonbParam(row.items, []), row.status, jsonbParam(row.raw, {}), row.updatedAt]
       );
       return { ok: true, data: { id: row.id }, error: null };
     }
@@ -1963,7 +1967,7 @@ export async function dispatchNativeAction({
       const updatedAt = nowIso();
       await query(
         `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb)
          on conflict (id) do update set
            response = excluded.response,
            total_amount = excluded.total_amount,
@@ -1976,11 +1980,11 @@ export async function dispatchNativeAction({
           auth.studentId,
           firstText(data.studentName, student && student.name ? student.name : ""),
           normalizeEmail(firstText(data.studentEmail, student && student.email ? student.email : "")),
-          data,
+          jsonbParam(data, {}),
           data.totalAmount == null || data.totalAmount === "" ? null : Number(String(data.totalAmount).replace(/,/g, "")),
           createdAt,
           updatedAt,
-          data,
+          jsonbParam(data, {}),
         ]
       );
       return { ok: true, data: { id }, error: null };
@@ -2025,7 +2029,7 @@ export async function dispatchNativeAction({
       };
       await query(
         `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb)
          on conflict (id) do update set
            order_id = excluded.order_id,
            student_name = excluded.student_name,
@@ -2033,7 +2037,7 @@ export async function dispatchNativeAction({
            updated_at = excluded.updated_at,
            raw = excluded.raw,
            synced_at = now()`,
-        [id, orderId, "", displayName, "", raw, null, createdAt, updatedAt, raw]
+        [id, orderId, "", displayName, "", jsonbParam(raw, {}), null, createdAt, updatedAt, jsonbParam(raw, {})]
       );
       return { ok: true, data: { id, response: raw }, error: null };
     }
@@ -2093,9 +2097,9 @@ export async function dispatchNativeAction({
       const id = firstText(data.id, crypto.randomUUID());
       await query(
         `insert into finance_category_types (id, label, notes, raw)
-         values ($1,$2,$3,$4)
+         values ($1,$2,$3,$4::jsonb)
          on conflict (id) do update set label=excluded.label, notes=excluded.notes, raw=excluded.raw, synced_at=now()`,
-        [id, firstText(data.label), firstText(data.notes), data]
+        [id, firstText(data.label), firstText(data.notes), jsonbParam(data, {})]
       );
       return { ok: true, data: { id }, error: null };
     }
@@ -2123,7 +2127,7 @@ export async function dispatchNativeAction({
       const id = firstText(data.id, crypto.randomUUID());
       await query(
         `insert into finance_roles (id, role, student_id, student_name, group_ids, raw)
-         values ($1,$2,$3,$4,$5,$6)
+         values ($1,$2,$3,$4,$5::jsonb,$6::jsonb)
          on conflict (id) do update set
           role=excluded.role,
           student_id=excluded.student_id,
@@ -2131,7 +2135,7 @@ export async function dispatchNativeAction({
           group_ids=excluded.group_ids,
           raw=excluded.raw,
           synced_at=now()`,
-        [id, firstText(data.role), firstText(data.studentId), firstText(data.studentName), safeJsonArray(data.groupIds), data]
+        [id, firstText(data.role), firstText(data.studentId), firstText(data.studentName), jsonbParam(safeJsonArray(data.groupIds), []), jsonbParam(data, {})]
       );
       return { ok: true, data: { id }, error: null };
     }
@@ -2261,14 +2265,14 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          JSON.stringify(row.attachments || []),
+          jsonbParam(row.attachments, []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.createdAt,
           row.updatedAt,
-          JSON.stringify(row.raw || {}),
+          jsonbParam(row.raw, {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
@@ -2394,14 +2398,14 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          JSON.stringify(row.attachments || []),
+          jsonbParam(row.attachments, []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.createdAt,
           row.updatedAt,
-          JSON.stringify(row.raw || {}),
+          jsonbParam(row.raw, {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
@@ -2494,7 +2498,7 @@ export async function dispatchNativeAction({
 
         await query(
           `update finance_requests set status=$2, updated_at=$3, raw=$4::jsonb, synced_at=now() where id=$1`,
-          [requestId, toStatus, now, JSON.stringify(nextRaw || {})]
+          [requestId, toStatus, now, jsonbParam(nextRaw, {})]
         );
 
         // Record workflow action for approvals UI.
@@ -2520,7 +2524,7 @@ export async function dispatchNativeAction({
         };
         await query(
           `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
            on conflict (id) do nothing`,
           [
             actionId,
@@ -2532,7 +2536,7 @@ export async function dispatchNativeAction({
             toStatus,
             notes,
             now,
-            actionRaw,
+            jsonbParam(actionRaw, {}),
           ]
         );
 
@@ -2669,13 +2673,13 @@ export async function dispatchNativeAction({
           row.relatedPurchaseId,
           row.noPurchaseReason,
           row.expectedClearDate,
-          JSON.stringify(row.attachments || []),
+          jsonbParam(row.attachments, []),
           row.status,
           row.applicantId,
           row.applicantName,
           row.applicantDepartment,
           row.updatedAt,
-          JSON.stringify(row.raw || {}),
+          jsonbParam(row.raw, {}),
         ]
       );
       return { ok: true, data: { id: row.id }, error: null };
@@ -3467,7 +3471,7 @@ export async function dispatchNativeAction({
       const row = toSoftballPlayerRow(body.data || body.player || body);
       await query(
         `insert into softball_players (id, name, email, phone, jersey_no, jersey_size, positions, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10)
          on conflict (id) do update set
            name=excluded.name,
            email=excluded.email,
@@ -3478,7 +3482,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, row.positions, row.raw, row.createdAt, row.updatedAt]
+        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, jsonbParam(row.positions, []), jsonbParam(row.raw, {}), row.createdAt, row.updatedAt]
       );
       return { ok: true, data: { id: row.id }, error: null };
     }
@@ -3491,7 +3495,7 @@ export async function dispatchNativeAction({
       const row = toSoftballPlayerRow(data);
       await query(
         `insert into softball_players (id, name, email, phone, jersey_no, jersey_size, positions, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10)
          on conflict (id) do update set
            name=excluded.name,
            email=excluded.email,
@@ -3502,7 +3506,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, row.positions, row.raw, row.createdAt, row.updatedAt]
+        [row.id, row.name, row.email, row.phone, row.jerseyNo, row.jerseySize, jsonbParam(row.positions, []), jsonbParam(row.raw, {}), row.createdAt, row.updatedAt]
       );
       return { ok: true, data: { id: row.id }, error: null };
     }
@@ -3896,7 +3900,7 @@ export async function dispatchNativeAction({
           row.angelRosterId,
           row.angelStudentId,
           row.vendorId,
-          JSON.stringify(row.vendorIds || []),
+          jsonbParam(row.vendorIds, []),
           row.angelStatus,
           row.orderStatus,
           row.plannedHeadcount,

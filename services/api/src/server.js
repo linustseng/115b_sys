@@ -6,6 +6,7 @@ import cors from "cors";
 import { google } from "googleapis";
 import { getConfig } from "./config.js";
 import { query, withTransaction } from "./db.js";
+import { jsonbParam } from "./jsonb.js";
 import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
 import { dispatchNativeAction } from "./nativeActions.js";
@@ -1111,14 +1112,14 @@ app.post("/v1/register", async (req, res) => {
           registrationPayload.userEmail,
           registrationPayload.userPhone,
           registrationPayload.classYear,
-          JSON.stringify(registrationPayload.customFields || {}),
+          jsonbParam(registrationPayload.customFields, {}),
           registrationPayload.status,
           registrationPayload.createdAt,
           registrationPayload.updatedAt,
           registrationPayload.manualCreatedBy,
           registrationPayload.manualCreatedByName,
           registrationPayload.manualCreatedAt,
-          JSON.stringify(rawPayload),
+          jsonbParam(rawPayload, {}),
         ]
       );
 
@@ -1210,9 +1211,9 @@ app.post("/v1/update-registration", async (req, res) => {
           nextPayload.studentId || null,
           nextPayload.userName,
           nextPayload.userPhone,
-          JSON.stringify(nextPayload.customFields || {}),
+          jsonbParam(nextPayload.customFields, {}),
           nextPayload.updatedAt,
-          JSON.stringify(nextPayload),
+          jsonbParam(nextPayload, {}),
         ]
       );
 
@@ -1295,13 +1296,16 @@ app.post("/v1/checkin", async (req, res) => {
           checkinPayload.registrationId,
           checkinPayload.checkinAt,
           checkinPayload.checkinMethod,
-          JSON.stringify({
-            id: checkinPayload.id,
-            eventId: checkinPayload.eventId,
-            registrationId: checkinPayload.registrationId,
-            checkinAt: checkinPayload.checkinAt,
-            checkinMethod: checkinPayload.checkinMethod,
-          }),
+          jsonbParam(
+            {
+              id: checkinPayload.id,
+              eventId: checkinPayload.eventId,
+              registrationId: checkinPayload.registrationId,
+              checkinAt: checkinPayload.checkinAt,
+              checkinMethod: checkinPayload.checkinMethod,
+            },
+            {}
+          ),
         ]
       );
 
