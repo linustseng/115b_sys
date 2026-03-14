@@ -56,6 +56,11 @@ npm run dev
 BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=10 npm run bench:reads
 ```
 
+## Local docs / guardrails
+
+- `JSONB_WRITE_RULES.md` — JSON / JSONB 寫入規範
+- `MIGRATION_SAFETY_TEMPLATE.md` — 既有資料先清洗、再加 constraint 的 migration 模板
+
 ## Security note
 
 - Keep `SESSION_SECRET` and `DATABASE_URL` in server-side env only.

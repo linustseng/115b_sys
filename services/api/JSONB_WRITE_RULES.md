@@ -36,3 +36,16 @@
 3. 更新成多值 array
 4. 重新整理/重新查詢確認資料仍一致
 5. 檢查 server log 無 JSON / SQL error
+
+## Constraint / migration safety
+
+如果你不是在新增全新空表，而是要對**既有 production 資料**補上 shape constraint，
+不要直接 `add constraint`。
+
+請改照：
+- `MIGRATION_SAFETY_TEMPLATE.md`
+
+核心做法：
+1. 先 normalize / backfill 舊資料
+2. 再加 constraint
+3. 最後才在 app code 內依賴這個新保證
