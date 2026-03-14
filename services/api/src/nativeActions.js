@@ -1159,7 +1159,7 @@ export async function dispatchNativeAction({
           id, title, description, start_at, end_at, location, address,
           registration_open_at, registration_close_at, checkin_open_at, checkin_close_at,
           register_url, checkin_url, capacity, status, category, form_schema, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::jsonb)
         on conflict (id) do update set
           title=excluded.title,
           description=excluded.description,
@@ -1196,8 +1196,8 @@ export async function dispatchNativeAction({
           normalized.capacity == null || normalized.capacity === "" ? null : Number(normalized.capacity),
           firstText(normalized.status),
           firstText(normalized.category),
-          safeJsonObject(normalized.formSchema || normalized.form_schema),
-          normalized,
+          jsonbParam(safeJsonObject(normalized.formSchema || normalized.form_schema), {}),
+          jsonbParam(normalized, {}),
         ]
       );
       const result = await query(`select * from events where id = $1 limit 1`, [id]);
@@ -1288,7 +1288,7 @@ export async function dispatchNativeAction({
         `insert into registrations (
           id, event_id, student_id, user_name, user_email, user_phone, class_year, custom_fields,
           status, created_at, updated_at, manual_created_by, manual_created_by_name, manual_created_at, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,'registered',$9,$9,$10,$11,$9,$12)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,'registered',$9,$9,$10,$11,$9,$12::jsonb)
         on conflict (id) do update set
           event_id = excluded.event_id,
           student_id = excluded.student_id,
@@ -1312,14 +1312,14 @@ export async function dispatchNativeAction({
           normalizedEmail,
           userPhone,
           classYear,
-          customFields,
+          jsonbParam(customFields, {}),
           createdAt,
           auth.studentId,
           (() => {
             const me = memberships.find((m) => String(m.personId || "").trim() === String(auth.studentId || "").trim());
             return me ? String(me.personName || "").trim() : "";
           })(),
-          data,
+          jsonbParam(data, {}),
         ]
       );
       const row = await query(`select * from registrations where id = $1 limit 1`, [id]);
@@ -1361,7 +1361,7 @@ export async function dispatchNativeAction({
           await client.query(
             `insert into group_memberships (
               id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at, raw
-            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
             [
               id,
               firstText(raw.personId),
@@ -1371,7 +1371,7 @@ export async function dispatchNativeAction({
               firstText(raw.notes),
               firstText(raw.createdAt, nowIso()),
               firstText(raw.updatedAt, nowIso()),
-              raw,
+              jsonbParam(raw, {}),
             ]
           );
         }
@@ -1418,7 +1418,7 @@ export async function dispatchNativeAction({
           id, group_id, email, name_zh, name_en, preferred_name, company, title, mobile,
           backup_phone, emergency_contact, emergency_phone, dietary_restrictions, photo_url,
           birthday_month, birthday_day, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)
         on conflict (id) do update set
           group_id = excluded.group_id,
           email = excluded.email,
@@ -1454,7 +1454,7 @@ export async function dispatchNativeAction({
           firstText(data.photoUrl, existing.photo_url || ""),
           firstText(data.birthdayMonth, existing.birthday_month || ""),
           firstText(data.birthdayDay, existing.birthday_day || ""),
-          mergedRaw,
+          jsonbParam(mergedRaw, {}),
         ]
       );
       const result = await query(`select * from directories where id = $1 limit 1`, [studentId]);
@@ -3143,7 +3143,7 @@ export async function dispatchNativeAction({
       const row = toFundEventRow(body.data || body.event || body);
       await query(
         `insert into fund_events (id, title, description, due_date, amount_general, amount_sponsor, expected_general_count, expected_sponsor_count, status, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13)
          on conflict (id) do update set
            title=excluded.title,
            description=excluded.description,
@@ -3168,7 +3168,7 @@ export async function dispatchNativeAction({
           row.expectedSponsorCount,
           row.status,
           row.notes,
-          row.raw,
+          jsonbParam(row.raw, {}),
           row.createdAt,
           row.updatedAt,
         ]
@@ -3242,7 +3242,7 @@ export async function dispatchNativeAction({
 
       await query(
         `insert into fund_payments (id, event_id, payer_id, payer_name, payer_email, payer_type, amount, method, transfer_last5, received_at, accounted_at, confirmed_at, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16)
          on conflict (id) do update set
            event_id=excluded.event_id,
            payer_id=excluded.payer_id,
@@ -3273,7 +3273,7 @@ export async function dispatchNativeAction({
           row.accountedAt,
           row.confirmedAt,
           row.notes,
-          row.raw,
+          jsonbParam(row.raw, {}),
           row.createdAt,
           row.updatedAt,
         ]
@@ -3451,9 +3451,9 @@ export async function dispatchNativeAction({
       await requireSoftballAdminAccess();
       const data = safeJsonObject(body.data || body.config || body);
       await query(
-        `insert into softball_config (id, raw, updated_at) values ('singleton',$1,$2)
+        `insert into softball_config (id, raw, updated_at) values ('singleton',$1::jsonb,$2)
          on conflict (id) do update set raw=excluded.raw, updated_at=excluded.updated_at, synced_at=now()`,
-        [data, nowIso()]
+        [jsonbParam(data, {}), nowIso()]
       );
       return { ok: true, data: { config: data }, error: null };
     }
@@ -3534,7 +3534,7 @@ export async function dispatchNativeAction({
       const row = toSoftballPracticeRow(body.data || body.practice || body);
       await query(
         `insert into softball_practices (id, date, title, location, start_at, end_at, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
          on conflict (id) do update set
            date=excluded.date,
            title=excluded.title,
@@ -3545,7 +3545,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [row.id, row.date, row.title, row.location, row.startAt, row.endAt, row.notes, row.raw, row.createdAt, row.updatedAt]
+        [row.id, row.date, row.title, row.location, row.startAt, row.endAt, row.notes, jsonbParam(row.raw, {}), row.createdAt, row.updatedAt]
       );
       return {
         ok: true,
@@ -3661,7 +3661,7 @@ export async function dispatchNativeAction({
       };
       await query(
         `insert into softball_attendance (id, practice_id, player_id, status, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
          on conflict (practice_id, player_id) do update set
            id=excluded.id,
            status=excluded.status,
@@ -3669,7 +3669,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, practiceId, playerId, firstText(data.status), notes, raw, createdAt, updatedAt]
+        [id, practiceId, playerId, firstText(data.status), notes, jsonbParam(raw, {}), createdAt, updatedAt]
       );
 
       const stored = await query(
@@ -3700,7 +3700,7 @@ export async function dispatchNativeAction({
       const updatedAt = nowIso();
       await query(
         `insert into softball_fields (id, name, address, map_url, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7)
+         values ($1,$2,$3,$4,$5::jsonb,$6,$7)
          on conflict (id) do update set
            name=excluded.name,
            address=excluded.address,
@@ -3708,7 +3708,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, firstText(data.name), firstText(data.address), firstText(data.mapUrl || data.map_url), data, createdAt, updatedAt]
+        [id, firstText(data.name), firstText(data.address), firstText(data.mapUrl || data.map_url), jsonbParam(data, {}), createdAt, updatedAt]
       );
       return { ok: true, data: { id }, error: null };
     }
@@ -3739,14 +3739,14 @@ export async function dispatchNativeAction({
       const updatedAt = nowIso();
       await query(
         `insert into softball_gear (id, name, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6)
+         values ($1,$2,$3,$4::jsonb,$5,$6)
          on conflict (id) do update set
            name=excluded.name,
            notes=excluded.notes,
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, firstText(data.name), firstText(data.notes), data, createdAt, updatedAt]
+        [id, firstText(data.name), firstText(data.notes), jsonbParam(data, {}), createdAt, updatedAt]
       );
       return { ok: true, data: { id }, error: null };
     }
@@ -3781,7 +3781,7 @@ export async function dispatchNativeAction({
       const createdAt = existing ? firstText(existing.created_at, row.createdAt) : row.createdAt;
       await query(
         `insert into softball_angel_roster (id, student_id, status, notes, joined_at, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
          on conflict (id) do update set
            student_id=excluded.student_id,
            status=excluded.status,
@@ -3790,7 +3790,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, row.studentId, row.status, row.notes, row.joinedAt, { ...row.raw, id, studentId: row.studentId }, createdAt, row.updatedAt]
+        [id, row.studentId, row.status, row.notes, row.joinedAt, jsonbParam({ ...row.raw, id, studentId: row.studentId }, {}), createdAt, row.updatedAt]
       );
       return { ok: true, data: { id }, error: null };
     }
@@ -3818,7 +3818,7 @@ export async function dispatchNativeAction({
       const row = toSoftballSupplyVendorRow(body.data || body.vendor || body);
       await query(
         `insert into softball_supply_vendors (id, name, category, phone, contact, delivery_note, min_order_amount, status, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)
          on conflict (id) do update set
            name=excluded.name,
            category=excluded.category,
@@ -3831,7 +3831,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [row.id, row.name, row.category, row.phone, row.contact, row.deliveryNote, row.minOrderAmount, row.status, row.notes, row.raw, row.createdAt, row.updatedAt]
+        [row.id, row.name, row.category, row.phone, row.contact, row.deliveryNote, row.minOrderAmount, row.status, row.notes, jsonbParam(row.raw, {}), row.createdAt, row.updatedAt]
       );
       return { ok: true, data: { id: row.id }, error: null };
     }
@@ -3876,7 +3876,7 @@ export async function dispatchNativeAction({
       const createdAt = existing ? firstText(existing.created_at, row.createdAt) : row.createdAt;
       await query(
         `insert into softball_supply_cases (id, title, practice_id, angel_roster_id, angel_student_id, vendor_id, vendor_ids, angel_status, order_status, planned_headcount, total_amount, ordered_at, notes, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16)
          on conflict (id) do update set
            title=excluded.title,
            practice_id=excluded.practice_id,
@@ -3907,7 +3907,7 @@ export async function dispatchNativeAction({
           row.totalAmount,
           row.orderedAt,
           row.notes,
-          { ...row.raw, id, title: row.title, practiceId: row.practiceId, vendorId: row.vendorId, vendorIds: row.vendorIds },
+          jsonbParam({ ...row.raw, id, title: row.title, practiceId: row.practiceId, vendorId: row.vendorId, vendorIds: row.vendorIds }, {}),
           createdAt,
           row.updatedAt,
         ]
