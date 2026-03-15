@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 function BirthdayPage({ shared }) {
-  const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_ } = shared;
+  const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_, clearStoredAuth_ } = shared;
   const cacheKey = "birthdays_page_cache_v4";
   const cacheTtlMs = 6 * 60 * 60 * 1000;
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -84,7 +84,14 @@ function BirthdayPage({ shared }) {
         }
       } catch (requestError) {
         if (!ignore) {
-          setError(requestError.message || "載入壽星資料失敗");
+          const message = requestError.message || "載入壽星資料失敗";
+          if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
+            clearStoredAuth_();
+            setGoogleLinkedStudent(null);
+            setError("");
+          } else {
+            setError(message);
+          }
         }
       } finally {
         if (!ignore) {

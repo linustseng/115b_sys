@@ -742,7 +742,7 @@ const STORAGE_KEYS = {
   apiEndpoint: "emba115b.apiEndpoint",
 };
 
-const ADMIN_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const ADMIN_SESSION_MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
 const API_ENDPOINT_MAX_AGE_MS = 30 * 60 * 1000;
 
 const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS || 15000);
@@ -1718,22 +1718,24 @@ function loadStoredAdminSession_() {
     }
     const parsed = JSON.parse(raw);
     const savedAt = Number(parsed && parsed.savedAt ? parsed.savedAt : 0);
-    if (savedAt && Date.now() - savedAt > ADMIN_SESSION_MAX_AGE_MS) {
-      window.localStorage.removeItem(STORAGE_KEYS.adminSession);
-      return empty;
-    }
     const token = String((parsed && parsed.token) || "").trim();
     const refreshToken = String((parsed && parsed.refreshToken) || "").trim();
     const studentId = String((parsed && parsed.studentId) || "").trim();
     const memberships = Array.isArray(parsed && parsed.memberships) ? parsed.memberships : [];
-    if (!token) {
+
+    if (savedAt && Date.now() - savedAt > ADMIN_SESSION_MAX_AGE_MS && !refreshToken) {
+      window.localStorage.removeItem(STORAGE_KEYS.adminSession);
+      return empty;
+    }
+
+    if (!token && !refreshToken) {
       return empty;
     }
     return {
-      token: token,
-      refreshToken: refreshToken,
-      studentId: studentId,
-      memberships: memberships,
+      token,
+      refreshToken,
+      studentId,
+      memberships,
     };
   } catch (error) {
     return empty;
@@ -1742,28 +1744,46 @@ function loadStoredAdminSession_() {
 
 function storeAdminSession_(session) {
   try {
-    if (!session || !session.token) {
+    if (!session) {
       window.localStorage.removeItem(STORAGE_KEYS.adminSession);
       return;
     }
     const token = String(session.token || "").trim();
-    if (!token) {
+    const refreshToken = String(session.refreshToken || "").trim();
+    if (!token && !refreshToken) {
       window.localStorage.removeItem(STORAGE_KEYS.adminSession);
       return;
     }
-    const refreshToken = String(session.refreshToken || "").trim();
     const studentId = String(session.studentId || "").trim();
     const memberships = Array.isArray(session.memberships) ? session.memberships : [];
     window.localStorage.setItem(
       STORAGE_KEYS.adminSession,
       JSON.stringify({
-        token: token,
-        refreshToken: refreshToken,
-        studentId: studentId,
-        memberships: memberships,
+        token,
+        refreshToken,
+        studentId,
+        memberships,
         savedAt: Date.now(),
       })
     );
+  } catch (error) {
+    // Ignore storage failures.
+  }
+}
+
+function clearStoredAuth_() {
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.googleStudent);
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEYS.googleIdToken);
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.adminSession);
   } catch (error) {
     // Ignore storage failures.
   }
@@ -2677,6 +2697,8 @@ function AppShell() {
     loadStoredGoogleIdToken_,
     storeGoogleIdToken_,
     storeGoogleStudent_,
+    storeAdminSession_,
+    clearStoredAuth_,
     hasDrinkSelection_,
     normalizeCustomFieldsForSubmit_,
     mapRegistrationError,

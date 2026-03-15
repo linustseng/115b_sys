@@ -6,6 +6,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
+    clearStoredAuth_,
     normalizeGroupId_,
     isFinanceRequestRelevantToRole_,
     parseFinanceAmount_,
@@ -317,7 +318,14 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       })
       .catch((err) => {
         if (!ignore) {
-          setError(err.message || "載入失敗");
+          const message = err.message || "載入失敗";
+          if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
+            clearStoredAuth_();
+            setGoogleLinkedStudent(null);
+            setError("");
+          } else {
+            setError(message);
+          }
         }
       })
       .finally(() => {
