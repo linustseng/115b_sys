@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v3";
+const CACHE_VERSION = "v4-auth";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const API_CACHE_TTL_MS = 60 * 1000;
@@ -83,6 +83,57 @@ function buildApiCacheKeys_(payload) {
   return { current, previous };
 }
 
+function hasAuthContext_(request, payload) {
+  const hasAuthHeader = Boolean(
+    request.headers.get("Authorization") ||
+      request.headers.get("x-id-token") ||
+      request.headers.get("x-goog-id-token")
+  );
+  const body = payload && typeof payload === "object" ? payload : {};
+  const hasAuthPayload = Boolean(body.sessionToken || body.idToken || body.refreshToken);
+  return hasAuthHeader || hasAuthPayload;
+}
+
+function isUserScopedReadAction_(action) {
+  return new Set([
+    "listLandingBootstrap",
+    "listHomeBootstrap",
+    "listMyMemberships",
+    "listApprovalsOverview",
+    "listFinanceBootstrap",
+    "listFinanceApplicantBootstrap",
+    "listFinanceAdminBootstrap",
+    "listFinanceRequests",
+    "listFinanceActions",
+    "listFinanceActionsByActor",
+    "listFinanceActionsSummary",
+    "listFundEvents",
+    "listFundPayments",
+    "getFundSummary",
+    "listOrderPlans",
+    "listOrderResponses",
+    "listOrderResponsesByStudent",
+    "listSoftballBootstrap",
+    "listSoftballPlayerBootstrap",
+    "listSoftballPlayers",
+    "listSoftballPractices",
+    "listSoftballFields",
+    "listSoftballGear",
+    "listSoftballConfig",
+    "listSoftballAttendance",
+    "listSoftballMemberships",
+    "listSoftballAngels",
+    "listSoftballSupplyVendors",
+    "listSoftballSupplyCases",
+    "listGroupMemberships",
+    "listStudents",
+    "lookupStudent",
+    "searchStudents",
+    "verifyGoogle",
+    "refreshSession",
+  ]).has(String(action || "").trim());
+}
+
 async function handleApiPostRequest_(event, request) {
   const cloned = request.clone();
   let payload;
@@ -99,6 +150,10 @@ async function handleApiPostRequest_(event, request) {
   const apiCache = await caches.open(API_CACHE);
 
   if (isReadAction_(action)) {
+    if (hasAuthContext_(request, payload) || isUserScopedReadAction_(action)) {
+      return fetch(request);
+    }
+
     const keys = buildApiCacheKeys_(payload);
     const cached = (await apiCache.match(keys.current)) || (await apiCache.match(keys.previous));
     const revalidatePromise = fetch(request.clone())
