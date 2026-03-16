@@ -1175,6 +1175,49 @@ export default function AdminPage({
     setOrderStatusMessage("");
   };
 
+  const handleDeleteOrderPlan = async () => {
+    if (!orderForm.id) {
+      handleOrderReset();
+      setOrderStatusMessage("已取消新增訂餐日期");
+      return;
+    }
+
+    const responseCount = normalizeOrderId_(orderForm.id) === normalizeOrderId_(orderActiveId)
+      ? orderResponses.length
+      : 0;
+    const planLabel = activeOrderLabel || formatOrderDateLabel_(orderForm.date) || orderForm.title || "這筆訂餐日期";
+    const warning = responseCount
+      ? `「${planLabel}」目前已有 ${responseCount} 筆訂餐名單。刪除後會連同訂餐回覆一起刪除，確定要刪除嗎？`
+      : `確定要刪除「${planLabel}」嗎？`;
+    if (!confirmDelete_(warning)) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "deleteOrderPlan", id: orderForm.id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      setIsCreatingOrder(false);
+      setOrderActiveId("");
+      setOrderForm(buildDefaultOrderForm());
+      setOrderResponses([]);
+      setProxyOrderForm(buildDefaultProxyOrderForm());
+      await loadOrderPlans();
+      const deletedResponses = Number((result.data && result.data.deletedResponses) || 0);
+      setOrderStatusMessage(
+        deletedResponses > 0 ? `已刪除訂餐日期，並移除 ${deletedResponses} 筆訂餐回覆` : "已刪除訂餐日期"
+      );
+    } catch (err) {
+      setOrderStatusMessage(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleOrderSave = async (event) => {
     event.preventDefault();
     if (!orderForm.date) {
@@ -2271,9 +2314,19 @@ export default function AdminPage({
   const proxyOrderResponses = orderResponses.filter(
     (item) => String(item.sourceType || "").trim() === "proxy_external"
   );
-  const activeOrderPlan = orderPlans.find(
-    (plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId)
-  );
+  const draftOrderPlan = isCreatingOrder
+    ? {
+        id: "__draft__",
+        date: orderForm.date,
+        title: orderForm.title || "新的訂餐日期",
+        status: "draft",
+        isDraft: true,
+      }
+    : null;
+  const displayOrderPlans = draftOrderPlan ? [draftOrderPlan, ...orderPlans] : orderPlans;
+  const activeOrderPlan = isCreatingOrder
+    ? draftOrderPlan
+    : orderPlans.find((plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId));
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
@@ -2706,28 +2759,40 @@ export default function AdminPage({
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {orderPlans.length ? (
-                      orderPlans.map((plan) => (
-                        <button
-                          key={plan.id}
-                          onClick={() => {
-                            setIsCreatingOrder(false);
-                            setOrderActiveId(normalizeOrderId_(plan.id));
-                          }}
-                          className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                            normalizeOrderId_(orderActiveId) === normalizeOrderId_(plan.id)
-                              ? "border-slate-900 bg-slate-900 text-white"
-                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                          }`}
-                        >
-                          <div>
-                            <p className="font-semibold">{formatOrderDateLabel_(plan.date)}</p>
-                            <p className="text-xs opacity-70">
-                              {plan.title || "訂餐"} · {plan.status || "open"}
-                            </p>
-                          </div>
-                        </button>
-                      ))
+                    {displayOrderPlans.length ? (
+                      displayOrderPlans.map((plan) => {
+                        const isDraft = Boolean(plan.isDraft);
+                        const isActive = isDraft
+                          ? isCreatingOrder && !orderForm.id
+                          : normalizeOrderId_(orderActiveId) === normalizeOrderId_(plan.id);
+                        return (
+                          <button
+                            key={plan.id}
+                            onClick={() => {
+                              if (isDraft) {
+                                handleOrderReset();
+                                return;
+                              }
+                              setIsCreatingOrder(false);
+                              setOrderActiveId(normalizeOrderId_(plan.id));
+                            }}
+                            className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                              isActive
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : isDraft
+                                  ? "border-dashed border-slate-300 bg-slate-50 text-slate-700 hover:border-slate-400"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                            }`}
+                          >
+                            <div>
+                              <p className="font-semibold">{isDraft ? "＋ 未儲存的新訂餐" : formatOrderDateLabel_(plan.date)}</p>
+                              <p className="text-xs opacity-70">
+                                {isDraft ? "先填日期與餐點後儲存" : `${plan.title || "訂餐"} · ${plan.status || "open"}`}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })
                     ) : (
                       <p className="text-xs text-slate-400">尚未建立訂餐日期。</p>
                     )}
@@ -2890,6 +2955,14 @@ export default function AdminPage({
                       className="btn-primary"
                     >
                       {saving ? "儲存中..." : orderForm.id ? "更新訂餐" : "新增訂餐"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleDeleteOrderPlan}
+                      className="rounded-xl border border-rose-200 px-4 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300 disabled:opacity-60"
+                    >
+                      {orderForm.id ? "刪除訂餐日期" : "取消新增"}
                     </button>
                     {orderStatusMessage ? (
                       <span className="text-xs font-semibold text-amber-600">

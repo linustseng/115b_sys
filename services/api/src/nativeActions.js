@@ -2002,7 +2002,7 @@ export async function dispatchNativeAction({
       if (!displayName) {
         return { ok: false, data: null, error: "Missing displayName" };
       }
-      if (!["A", "B", "NONE"].includes(choice)) {
+      if (!["A", "B", "C", "NONE"].includes(choice)) {
         return { ok: false, data: null, error: "Invalid choice" };
       }
       const requestedId = firstText(data.id);
@@ -2058,6 +2058,23 @@ export async function dispatchNativeAction({
       }
       await query(`delete from order_responses where id = $1`, [id]);
       return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteOrderPlan": {
+      await requireGroupAccess(["I", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from order_plans where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: true, data: { id, deletedResponses: 0 }, error: null };
+      }
+      const responseCountResult = await query(`select count(*)::int as count from order_responses where order_id = $1`, [id]);
+      const deletedResponses = Number((responseCountResult.rows[0] && responseCountResult.rows[0].count) || 0);
+      await query(`delete from order_responses where order_id = $1`, [id]);
+      await query(`delete from order_plans where id = $1`, [id]);
+      return { ok: true, data: { id, deletedResponses }, error: null };
     }
 
     case "listOrderResponses": {
