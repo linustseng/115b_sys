@@ -387,7 +387,6 @@ function OrderingPage({ shared }) {
                             </div>
                             <div className="min-w-0 text-[11px] leading-4 text-slate-400">
                               <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
-                              <div className="mt-0.5">未提供圖片也可以直接選擇</div>
                             </div>
                           </div>
                         )}
