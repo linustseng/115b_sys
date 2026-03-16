@@ -239,6 +239,13 @@ function OrderingPage({ shared }) {
     setCommentDrafts((prev) => ({ ...prev, [planId]: value }));
   };
 
+  const collapsePlanEditor_ = (planId, savedChoice = "", savedComment = "") => {
+    setExpandedPlans((prev) => ({ ...prev, [planId]: false }));
+    setChoiceDrafts((prev) => ({ ...prev, [planId]: savedChoice || "" }));
+    setCommentDrafts((prev) => ({ ...prev, [planId]: savedComment || "" }));
+    setSubmitMessage((prev) => ({ ...prev, [planId]: "" }));
+  };
+
   const handleSubmitOrder = async (plan) => {
     const planId = normalizeOrderId_(plan.id);
     if (!planId) {
@@ -398,28 +405,26 @@ function OrderingPage({ shared }) {
                   </p>
 
                   {choice && !isExpanded ? (
-                    <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <button
+                      type="button"
+                      disabled={closed || !googleLinkedStudent}
+                      onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: true }))}
+                      className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left disabled:opacity-60"
+                    >
                       <div>
-                        <p className="text-xs text-slate-400">目前選擇</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-900">{selectedLabel}</p>
+                        <p className="text-sm font-semibold text-slate-900">已選 {selectedLabel}</p>
                         <p className="mt-1 text-[11px] text-slate-400">
                           {response && response.updatedAt
-                            ? `已更新：${formatDisplayDate_(response.updatedAt, { withTime: true })}`
-                            : isDirty
-                              ? "尚未送出最新變更"
-                              : "已選擇"}
+                            ? `更新於 ${formatDisplayDate_(response.updatedAt, { withTime: true })}`
+                            : "點一下可修改"}
                         </p>
                       </div>
                       {!closed && googleLinkedStudent ? (
-                        <button
-                          type="button"
-                          onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: true }))}
-                          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                        >
+                        <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600">
                           修改
-                        </button>
+                        </span>
                       ) : null}
-                    </div>
+                    </button>
                   ) : null}
 
                   {(!choice || isExpanded) ? (
@@ -473,31 +478,29 @@ function OrderingPage({ shared }) {
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-slate-400">
-                      {choice
-                        ? isDirty
-                          ? `已選擇：${selectedLabel}（尚未送出）`
-                          : `已選擇：${selectedLabel}`
-                        : "尚未選擇"}
+                      {choice ? (isDirty ? `已選 ${selectedLabel} · 尚未儲存` : `已選 ${selectedLabel}`) : "請選擇餐點"}
                     </span>
-                    <div className="flex items-center gap-2">
-                      {choice && isExpanded && !closed && googleLinkedStudent ? (
+                    {isExpanded ? (
+                      <div className="flex items-center gap-2">
+                        {googleLinkedStudent ? (
+                          <button
+                            type="button"
+                            onClick={() => collapsePlanEditor_(planId, savedChoice, savedComment)}
+                            className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                          >
+                            取消
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: false }))}
-                          className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                          disabled={closed || !googleLinkedStudent || saving[planId] || !choice}
+                          onClick={() => handleSubmitOrder(plan)}
+                          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          收合
+                          {saving[planId] ? "送出中..." : "儲存"}
                         </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={closed || !googleLinkedStudent || saving[planId]}
-                        onClick={() => handleSubmitOrder(plan)}
-                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {saving[planId] ? "送出中..." : "更新選擇"}
-                      </button>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                   {submitMessage[planId] ? (
                     <p className="mt-3 text-xs font-semibold text-amber-600">
