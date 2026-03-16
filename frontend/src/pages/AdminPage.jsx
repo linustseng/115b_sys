@@ -42,6 +42,7 @@ export default function AdminPage({
   const [expandedPickedGroups, setExpandedPickedGroups] = useState({});
   const [orderRosterQuery, setOrderRosterQuery] = useState("");
   const [orderOnlyUnpicked, setOrderOnlyUnpicked] = useState(false);
+  const [orderMealFocus, setOrderMealFocus] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2490,6 +2491,10 @@ export default function AdminPage({
     };
   });
 
+  const visibleGroupedOrderResponses = groupedOrderResponses.filter(
+    (group) => orderMealFocus === "ALL" || group.key === orderMealFocus
+  );
+
   const displayStudentById = new Map(
     displayStudents
       .map((student) => [String(student.id || "").trim(), student])
@@ -3213,6 +3218,28 @@ export default function AdminPage({
                     <p className="text-sm font-semibold text-slate-900">依餐別查看名單</p>
                     <span className="text-[11px] text-slate-400">代訂 {proxyOrderResponses.length} 筆</span>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {[
+                      { key: "ALL", label: "全部" },
+                      { key: "A", label: orderForm.optionA || "A 餐" },
+                      { key: "B", label: orderForm.optionB || "B 餐" },
+                      { key: "C", label: orderForm.optionC || "素食餐" },
+                      { key: "NONE", label: "不吃" },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => setOrderMealFocus(item.key)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                          orderMealFocus === item.key
+                            ? "bg-slate-900 text-white"
+                            : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex flex-wrap items-center gap-3">
                     <input
                       value={orderRosterQuery}
@@ -3230,8 +3257,8 @@ export default function AdminPage({
                       只顯示未取餐
                     </label>
                   </div>
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {groupedOrderResponses.map((group) => (
+                  <div className={`grid gap-4 ${orderMealFocus === "ALL" ? "xl:grid-cols-2" : "grid-cols-1"}`}>
+                    {visibleGroupedOrderResponses.map((group) => (
                       <div key={group.key} className="rounded-2xl border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -3266,8 +3293,8 @@ export default function AdminPage({
                                     key={item.id}
                                     className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
                                   >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <div className="min-w-0 flex-1">
                                         <div className="flex flex-wrap items-center gap-2">
                                           <span
                                             className="font-semibold text-slate-800"
@@ -3281,14 +3308,12 @@ export default function AdminPage({
                                             </span>
                                           ) : null}
                                         </div>
-                                        {isProxy && item.sourceLabel ? (
-                                          <div className="mt-0.5 text-[11px] text-slate-500">{item.sourceLabel}</div>
-                                        ) : null}
-                                        {note ? (
-                                          <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div>
-                                        ) : null}
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                                          {isProxy && item.sourceLabel ? <span>{item.sourceLabel}</span> : null}
+                                          {note ? <span>備註：{note}</span> : null}
+                                        </div>
                                       </div>
-                                      <div className="flex shrink-0 items-center gap-2">
+                                      <div className="flex shrink-0 items-center gap-1.5">
                                         {isProxy ? (
                                           <button
                                             type="button"
@@ -3354,8 +3379,8 @@ export default function AdminPage({
                                         key={item.id}
                                         className="rounded-xl border border-emerald-200/70 bg-white px-3 py-2"
                                       >
-                                        <div className="flex items-start justify-between gap-3">
-                                          <div className="min-w-0">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="min-w-0 flex-1">
                                             <div className="flex flex-wrap items-center gap-2">
                                               <span className="font-semibold text-slate-800">{attendeeLabel}</span>
                                               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
@@ -3367,13 +3392,15 @@ export default function AdminPage({
                                                 </span>
                                               ) : null}
                                             </div>
-                                            {note ? <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div> : null}
-                                            {item.pickedUpAt ? (
-                                              <div className="mt-1 text-[11px] text-slate-500">
-                                                {formatDisplayDate_(item.pickedUpAt, { withTime: true })}
-                                                {item.pickedUpByName ? ` · ${item.pickedUpByName}` : item.pickedUpBy ? ` · ${item.pickedUpBy}` : ""}
-                                              </div>
-                                            ) : null}
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                                              {note ? <span>備註：{note}</span> : null}
+                                              {item.pickedUpAt ? (
+                                                <span>
+                                                  {formatDisplayDate_(item.pickedUpAt, { withTime: true })}
+                                                  {item.pickedUpByName ? ` · ${item.pickedUpByName}` : item.pickedUpBy ? ` · ${item.pickedUpBy}` : ""}
+                                                </span>
+                                              ) : null}
+                                            </div>
                                           </div>
                                           <button
                                             type="button"
