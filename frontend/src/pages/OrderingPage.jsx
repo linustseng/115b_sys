@@ -62,6 +62,7 @@ function OrderingPage({ shared }) {
   const [choiceDrafts, setChoiceDrafts] = useState({});
   const [commentDrafts, setCommentDrafts] = useState({});
   const [expandedPlans, setExpandedPlans] = useState({});
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
 
@@ -92,6 +93,16 @@ function OrderingPage({ shared }) {
     return cutoff;
   };
 
+  const getOrderMealEndAt_ = (plan) => {
+    const baseDate = parseOrderDate_(plan && plan.date);
+    if (!baseDate) {
+      return null;
+    }
+    const mealEnd = new Date(baseDate);
+    mealEnd.setHours(14, 0, 0, 0);
+    return mealEnd;
+  };
+
   const isPlanClosed_ = (plan) => {
     if (!plan) {
       return true;
@@ -104,6 +115,14 @@ function OrderingPage({ shared }) {
       return true;
     }
     return false;
+  };
+
+  const isPlanHistorical_ = (plan) => {
+    const mealEnd = getOrderMealEndAt_(plan);
+    if (!mealEnd) {
+      return false;
+    }
+    return new Date() > mealEnd;
   };
 
   const getPlanChoices_ = (plan) => [
@@ -303,6 +322,174 @@ function OrderingPage({ shared }) {
     }
   };
 
+  const sortedPlans = useMemo(() => {
+    const score = (plan) => {
+      const parsed = parseOrderDate_(plan && plan.date);
+      return parsed ? parsed.getTime() : Number.MAX_SAFE_INTEGER;
+    };
+    return plans.slice().sort((a, b) => {
+      const diff = score(a) - score(b);
+      if (diff !== 0) {
+        return diff;
+      }
+      return String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant");
+    });
+  }, [plans]);
+
+  const currentPlans = useMemo(
+    () => sortedPlans.filter((plan) => !isPlanHistorical_(plan)),
+    [sortedPlans]
+  );
+
+  const historicalPlans = useMemo(
+    () => sortedPlans.filter((plan) => isPlanHistorical_(plan)),
+    [sortedPlans]
+  );
+
+  const renderPlanCard = (plan) => {
+    const planId = normalizeOrderId_(plan.id);
+    const cutoff = getOrderCutoffAt_(plan);
+    const closed = isPlanClosed_(plan);
+    const historical = isPlanHistorical_(plan);
+    const response = responsesByOrderId[planId];
+    const savedChoice = response ? String(response.choice || "").toUpperCase() : "";
+    const savedComment = response ? String(response.comment || "") : "";
+    const choice = choiceDrafts[planId] || savedChoice || "";
+    const currentComment = commentDrafts[planId] !== undefined ? commentDrafts[planId] : savedComment;
+    const isDirty = choice !== savedChoice || currentComment !== savedComment;
+    const isExpanded = expandedPlans[planId] !== undefined ? expandedPlans[planId] : !savedChoice || isDirty;
+    const selectedLabel = getChoiceLabel_(plan, choice);
+    const choiceItems = getPlanChoices_(plan);
+
+    return (
+      <div
+        key={planId}
+        className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm"
+      >
+        <div className="flex items-center justify-between text-xs text-slate-500">
+          <span>{formatOrderDateLabel_(plan.date)}</span>
+          <span>{historical ? "歷史訂餐" : closed ? "已截止" : "開放中"}</span>
+        </div>
+        <h3 className="mt-3 text-lg font-semibold text-slate-900">
+          {plan.title || "午餐訂購"}
+        </h3>
+        <p className="mt-2 text-xs text-slate-400">
+          截止時間：{cutoff ? formatDisplayDate_(cutoff, { withTime: true }) : "前一日 23:59"}
+        </p>
+
+        {choice && !isExpanded ? (
+          <button
+            type="button"
+            disabled={closed || !googleLinkedStudent}
+            onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: true }))}
+            className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left disabled:opacity-60"
+          >
+            <div>
+              <p className="text-sm font-semibold text-slate-900">已選 {selectedLabel}</p>
+              <p className="mt-1 text-[11px] text-slate-400">
+                {response && response.updatedAt
+                  ? `更新於 ${formatDisplayDate_(response.updatedAt, { withTime: true })}`
+                  : "點一下可修改"}
+              </p>
+            </div>
+            {!closed && googleLinkedStudent ? (
+              <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600">
+                修改
+              </span>
+            ) : null}
+          </button>
+        ) : null}
+
+        {(!choice || isExpanded) ? (
+          <>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {choiceItems.map((item) => (
+                <button
+                  key={`${planId}-${item.value}`}
+                  type="button"
+                  disabled={closed || !googleLinkedStudent}
+                  onClick={() => handleChoiceChange(planId, item.value)}
+                  className={`overflow-hidden rounded-2xl border text-left text-xs font-semibold transition ${
+                    choice === item.value
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                  } ${closed || !googleLinkedStudent ? "opacity-60" : ""}`}
+                >
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.label}
+                      className="h-20 w-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="flex items-center gap-3 px-3 pt-3 pb-1">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg">
+                        {item.placeholderIcon}
+                      </div>
+                      <div className="min-w-0 text-[11px] leading-4 text-slate-400">
+                        <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="px-3 py-2">
+                    <span className="block">{item.label}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={currentComment}
+              onChange={(event) => handleCommentChange(planId, event.target.value)}
+              placeholder="匿名意見（可選）"
+              rows="2"
+              disabled={closed || !googleLinkedStudent}
+              className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
+            />
+          </>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          {isExpanded ? (
+            <span className="text-xs text-slate-400">
+              {choice ? (isDirty ? `已選 ${selectedLabel} · 尚未儲存` : `已選 ${selectedLabel}`) : "請選擇餐點"}
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">
+              {submitMessage[planId] ? submitMessage[planId] : ""}
+            </span>
+          )}
+          {isExpanded ? (
+            <div className="flex items-center gap-2">
+              {googleLinkedStudent ? (
+                <button
+                  type="button"
+                  onClick={() => collapsePlanEditor_(planId, savedChoice, savedComment)}
+                  className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  取消
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={closed || !googleLinkedStudent || saving[planId] || !choice}
+                onClick={() => handleSubmitOrder(plan)}
+                className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving[planId] ? "送出中..." : "儲存"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {submitMessage[planId] && isExpanded ? (
+          <p className="mt-3 text-xs font-semibold text-amber-600">
+            {submitMessage[planId]}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen">
       <header className="px-6 pt-8 sm:px-12">
@@ -370,153 +557,42 @@ function OrderingPage({ shared }) {
             </div>
           ) : null}
 
-          {!loading && !plans.length && !error ? (
+          {!loading && !currentPlans.length && !historicalPlans.length && !error ? (
             <p className="mt-6 text-sm text-slate-500">目前沒有開放訂餐的日期。</p>
           ) : null}
 
-          <div className="mt-6 grid gap-5 lg:grid-cols-2">
-            {plans.map((plan) => {
-              const planId = normalizeOrderId_(plan.id);
-              const cutoff = getOrderCutoffAt_(plan);
-              const closed = isPlanClosed_(plan);
-              const response = responsesByOrderId[planId];
-              const savedChoice = response ? String(response.choice || "").toUpperCase() : "";
-              const savedComment = response ? String(response.comment || "") : "";
-              const choice = choiceDrafts[planId] || savedChoice || "";
-              const currentComment = commentDrafts[planId] !== undefined ? commentDrafts[planId] : savedComment;
-              const isDirty = choice !== savedChoice || currentComment !== savedComment;
-              const isExpanded = expandedPlans[planId] !== undefined ? expandedPlans[planId] : !savedChoice || isDirty;
-              const selectedLabel = getChoiceLabel_(plan, choice);
-              const choiceItems = getPlanChoices_(plan);
-              return (
-                <div
-                  key={planId}
-                  className="rounded-2xl border border-slate-200/70 bg-white p-5 shadow-sm"
-                >
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>{formatOrderDateLabel_(plan.date)}</span>
-                    <span>{closed ? "已截止" : "開放中"}</span>
-                  </div>
-                  <h3 className="mt-3 text-lg font-semibold text-slate-900">
-                    {plan.title || "午餐訂購"}
-                  </h3>
-                  <p className="mt-2 text-xs text-slate-400">
-                    截止時間：{cutoff ? formatDisplayDate_(cutoff, { withTime: true }) : "前一日 23:59"}
-                  </p>
+          {currentPlans.length ? (
+            <div className="mt-6 grid gap-5 lg:grid-cols-2">
+              {currentPlans.map(renderPlanCard)}
+            </div>
+          ) : !loading && !error ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+              目前沒有可操作的訂餐，較早的紀錄已收進下方歷史訂餐。
+            </div>
+          ) : null}
 
-                  {choice && !isExpanded ? (
-                    <button
-                      type="button"
-                      disabled={closed || !googleLinkedStudent}
-                      onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: true }))}
-                      className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left disabled:opacity-60"
-                    >
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">已選 {selectedLabel}</p>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {response && response.updatedAt
-                            ? `更新於 ${formatDisplayDate_(response.updatedAt, { withTime: true })}`
-                            : "點一下可修改"}
-                        </p>
-                      </div>
-                      {!closed && googleLinkedStudent ? (
-                        <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600">
-                          修改
-                        </span>
-                      ) : null}
-                    </button>
-                  ) : null}
-
-                  {(!choice || isExpanded) ? (
-                    <>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        {choiceItems.map((item) => (
-                          <button
-                            key={`${planId}-${item.value}`}
-                            type="button"
-                            disabled={closed || !googleLinkedStudent}
-                            onClick={() => handleChoiceChange(planId, item.value)}
-                            className={`overflow-hidden rounded-2xl border text-left text-xs font-semibold transition ${
-                              choice === item.value
-                                ? "border-slate-900 bg-slate-900 text-white"
-                                : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
-                            } ${closed || !googleLinkedStudent ? "opacity-60" : ""}`}
-                          >
-                            {item.image ? (
-                              <img
-                                src={item.image}
-                                alt={item.label}
-                                className="h-20 w-full object-cover"
-                                loading="lazy"
-                              />
-                            ) : (
-                              <div className="flex items-center gap-3 px-3 pt-3 pb-1">
-                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg">
-                                  {item.placeholderIcon}
-                                </div>
-                                <div className="min-w-0 text-[11px] leading-4 text-slate-400">
-                                  <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
-                                </div>
-                              </div>
-                            )}
-                            <div className="px-3 py-2">
-                              <span className="block">{item.label}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                      <textarea
-                        value={currentComment}
-                        onChange={(event) => handleCommentChange(planId, event.target.value)}
-                        placeholder="匿名意見（可選）"
-                        rows="2"
-                        disabled={closed || !googleLinkedStudent}
-                        className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
-                      />
-                    </>
-                  ) : null}
-
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    {isExpanded ? (
-                      <span className="text-xs text-slate-400">
-                        {choice ? (isDirty ? `已選 ${selectedLabel} · 尚未儲存` : `已選 ${selectedLabel}`) : "請選擇餐點"}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-slate-400">
-                        {submitMessage[planId] ? submitMessage[planId] : ""}
-                      </span>
-                    )}
-                    {isExpanded ? (
-                      <div className="flex items-center gap-2">
-                        {googleLinkedStudent ? (
-                          <button
-                            type="button"
-                            onClick={() => collapsePlanEditor_(planId, savedChoice, savedComment)}
-                            className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                          >
-                            取消
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={closed || !googleLinkedStudent || saving[planId] || !choice}
-                          onClick={() => handleSubmitOrder(plan)}
-                          className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {saving[planId] ? "送出中..." : "儲存"}
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-                  {submitMessage[planId] && isExpanded ? (
-                    <p className="mt-3 text-xs font-semibold text-amber-600">
-                      {submitMessage[planId]}
-                    </p>
-                  ) : null}
+          {historicalPlans.length ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
+              <button
+                type="button"
+                onClick={() => setHistoryExpanded((prev) => !prev)}
+                className="flex w-full items-center justify-between text-left"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">歷史訂餐</p>
+                  <p className="mt-1 text-xs text-slate-500">已超過用餐時間的日期會收在這裡，共 {historicalPlans.length} 筆。</p>
                 </div>
-              );
-            })}
-          </div>
+                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                  {historyExpanded ? "收合" : "展開"}
+                </span>
+              </button>
+              {historyExpanded ? (
+                <div className="mt-4 grid gap-5 lg:grid-cols-2">
+                  {historicalPlans.map(renderPlanCard)}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <a
