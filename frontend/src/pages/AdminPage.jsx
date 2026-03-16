@@ -2382,9 +2382,26 @@ export default function AdminPage({
     return normalized || "-";
   };
 
+  const getOrderAttendeeLabel_ = (item) => {
+    const isProxy = String(item && item.sourceType || "").trim() === "proxy_external";
+    const studentId = String((item && item.studentId) || "").trim();
+    return (
+      (!isProxy && studentId && studentLabelByStudentId.get(studentId)) ||
+      String((item && item.studentName) || "").trim() ||
+      String((item && item.displayName) || "").trim() ||
+      "未命名"
+    );
+  };
+
   const orderComments = orderResponses
-    .map((item) => String(item.comment || "").trim())
-    .filter((value) => value);
+    .map((item) => ({
+      id: String(item.id || "").trim(),
+      label: getOrderAttendeeLabel_(item),
+      comment: String(item.comment || "").trim(),
+      isProxy: String(item.sourceType || "").trim() === "proxy_external",
+      sourceLabel: String(item.sourceLabel || "").trim(),
+    }))
+    .filter((item) => item.comment);
 
   const displayStudentById = new Map(
     displayStudents
@@ -3106,12 +3123,7 @@ export default function AdminPage({
                       {orderResponses.length ? (
                         orderResponses.map((item) => {
                           const isProxy = String(item.sourceType || "").trim() === "proxy_external";
-                          const studentId = String(item.studentId || "").trim();
-                          const attendeeLabel =
-                            (!isProxy && studentId && studentLabelByStudentId.get(studentId)) ||
-                            item.studentName ||
-                            item.displayName ||
-                            "未命名";
+                          const attendeeLabel = getOrderAttendeeLabel_(item);
                           return (
                             <div
                               key={item.id}
@@ -3165,19 +3177,23 @@ export default function AdminPage({
                     </div>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-xs font-semibold text-slate-600">匿名意見</p>
+                    <p className="text-xs font-semibold text-slate-600">用餐需求 / 備註</p>
                     <div className="mt-3 space-y-2 text-xs text-slate-600">
                       {orderComments.length ? (
-                        orderComments.map((comment, index) => (
+                        orderComments.map((item) => (
                           <div
-                            key={`${comment}-${index}`}
+                            key={item.id || `${item.label}-${item.comment}`}
                             className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
                           >
-                            {comment}
+                            <div className="font-semibold text-slate-800">{item.label}</div>
+                            {item.isProxy && item.sourceLabel ? (
+                              <div className="mt-0.5 text-[11px] text-slate-500">{item.sourceLabel}</div>
+                            ) : null}
+                            <div className="mt-1">{item.comment}</div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-xs text-slate-400">目前沒有留言。</p>
+                        <p className="text-xs text-slate-400">目前沒有備註。</p>
                       )}
                     </div>
                   </div>

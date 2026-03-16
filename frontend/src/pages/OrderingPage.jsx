@@ -444,7 +444,7 @@ function OrderingPage({ shared }) {
             <textarea
               value={currentComment}
               onChange={(event) => handleCommentChange(planId, event.target.value)}
-              placeholder="匿名意見（可選）"
+              placeholder="備註（可選，例如飯少、不要辣）"
               rows="2"
               disabled={closed || !googleLinkedStudent}
               className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
