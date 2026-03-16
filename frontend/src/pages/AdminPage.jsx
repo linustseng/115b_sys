@@ -1925,6 +1925,20 @@ export default function AdminPage({
       .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
       .filter(([studentId]) => studentId)
   );
+  const studentLabelByStudentId = new Map(
+    displayStudents
+      .map((student) => {
+        const studentId = String(student.id || "").trim();
+        const chineseName = getChineseName_(student);
+        const displayName = getDisplayName_(student);
+        const label =
+          chineseName && displayName && chineseName !== displayName
+            ? `${chineseName} (${displayName})`
+            : chineseName || displayName || "未命名";
+        return [studentId, label];
+      })
+      .filter(([studentId]) => studentId)
+  );
   const activeRegistrationList = registrationList.filter(
     (item) => item && String(item.status || "").toLowerCase() !== "cancelled"
   );
@@ -3092,6 +3106,12 @@ export default function AdminPage({
                       {orderResponses.length ? (
                         orderResponses.map((item) => {
                           const isProxy = String(item.sourceType || "").trim() === "proxy_external";
+                          const studentId = String(item.studentId || "").trim();
+                          const attendeeLabel =
+                            (!isProxy && studentId && studentLabelByStudentId.get(studentId)) ||
+                            item.studentName ||
+                            item.displayName ||
+                            "未命名";
                           return (
                             <div
                               key={item.id}
@@ -3103,7 +3123,7 @@ export default function AdminPage({
                                     className="font-semibold text-slate-800"
                                     title={item.studentId ? `學號 ${item.studentId}` : ""}
                                   >
-                                    {item.studentName || item.displayName || "未命名"}
+                                    {attendeeLabel}
                                   </span>
                                   {isProxy ? (
                                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
