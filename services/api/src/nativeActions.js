@@ -2097,6 +2097,84 @@ export async function dispatchNativeAction({
       return { ok: true, data: { id, deletedResponses }, error: null };
     }
 
+    case "markOrderResponsePickedUp": {
+      await requireGroupAccess(["I", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from order_responses where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: false, data: null, error: "Response not found" };
+      }
+      const updatedAt = nowIso();
+      const raw = safeJsonObject(existing.raw);
+      raw.pickedUpAt = updatedAt;
+      raw.pickedUpBy = auth && auth.studentId ? auth.studentId : "";
+      await query(
+        `update order_responses
+            set response = $2::jsonb,
+                raw = $3::jsonb,
+                updated_at = $4,
+                synced_at = now()
+          where id = $1`,
+        [id, jsonbParam(raw, {}), jsonbParam(raw, {}), updatedAt]
+      );
+      return {
+        ok: true,
+        data: {
+          id,
+          response: {
+            ...raw,
+            id,
+            studentId: firstText(raw.studentId, existing.student_id || ""),
+            studentName: firstText(raw.studentName, existing.student_name || ""),
+            studentEmail: normalizeEmail(firstText(raw.studentEmail, existing.student_email || "")),
+          },
+        },
+        error: null,
+      };
+    }
+
+    case "unmarkOrderResponsePickedUp": {
+      await requireGroupAccess(["I", "E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from order_responses where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: false, data: null, error: "Response not found" };
+      }
+      const updatedAt = nowIso();
+      const raw = safeJsonObject(existing.raw);
+      delete raw.pickedUpAt;
+      delete raw.pickedUpBy;
+      await query(
+        `update order_responses
+            set response = $2::jsonb,
+                raw = $3::jsonb,
+                updated_at = $4,
+                synced_at = now()
+          where id = $1`,
+        [id, jsonbParam(raw, {}), jsonbParam(raw, {}), updatedAt]
+      );
+      return {
+        ok: true,
+        data: {
+          id,
+          response: {
+            ...raw,
+            id,
+            studentId: firstText(raw.studentId, existing.student_id || ""),
+            studentName: firstText(raw.studentName, existing.student_name || ""),
+            studentEmail: normalizeEmail(firstText(raw.studentEmail, existing.student_email || "")),
+          },
+        },
+        error: null,
+      };
+    }
+
     case "listOrderResponses": {
       await requireGroupAccess(["I", "E"]);
       const orderId = firstText(body.orderId);

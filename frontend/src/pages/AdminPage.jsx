@@ -39,6 +39,7 @@ export default function AdminPage({
   const [orderResponses, setOrderResponses] = useState([]);
   const [orderActiveId, setOrderActiveId] = useState("");
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [expandedPickedGroups, setExpandedPickedGroups] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1346,6 +1347,31 @@ export default function AdminPage({
     }
   };
 
+  const handleSetOrderPickedUp = async (item, pickedUp) => {
+    const responseId = normalizeOrderId_(item && item.id);
+    if (!responseId) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: pickedUp ? "markOrderResponsePickedUp" : "unmarkOrderResponsePickedUp",
+        id: responseId,
+      });
+      if (!result.ok) {
+        throw new Error(result.error || "更新失敗");
+      }
+      await loadOrderResponses(normalizeOrderId_(orderActiveId));
+      setOrderStatusMessage(pickedUp ? "已標記取餐" : "已取消取餐標記");
+    } catch (err) {
+      setOrderStatusMessage(err.message || "更新失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const applyMembershipDraft_ = (payload) => {
     const personId = String(payload.personId || "").trim();
     const groupId = String(payload.groupId || "").trim();
@@ -2344,9 +2370,11 @@ export default function AdminPage({
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
+  const isOrderPickedUp_ = (item) => Boolean(String((item && item.pickedUpAt) || "").trim());
   const orderStats = orderResponses.reduce(
     (acc, item) => {
       const choice = String(item.choice || "").toUpperCase();
+      const pickedUp = isOrderPickedUp_(item);
       if (choice === "A") {
         acc.A += 1;
       } else if (choice === "B") {
@@ -2356,13 +2384,18 @@ export default function AdminPage({
       } else {
         acc.NONE += 1;
       }
+      if (pickedUp) {
+        acc.picked += 1;
+      } else if (choice !== "NONE") {
+        acc.unpicked += 1;
+      }
       if (String(item.sourceType || "").trim() === "proxy_external") {
         acc.proxy += 1;
       }
       acc.total += 1;
       return acc;
     },
-    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0 }
+    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0, picked: 0, unpicked: 0 }
   );
 
   const getOrderChoiceLabel_ = (choice) => {
@@ -2427,7 +2460,11 @@ export default function AdminPage({
     { key: "B", label: orderForm.optionB || "B 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "B")) },
     { key: "C", label: orderForm.optionC || "素食餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "C")) },
     { key: "NONE", label: "不吃", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "NONE")) },
-  ];
+  ].map((group) => ({
+    ...group,
+    unpickedItems: group.items.filter((item) => !isOrderPickedUp_(item)),
+    pickedItems: group.items.filter((item) => isOrderPickedUp_(item)),
+  }));
 
   const displayStudentById = new Map(
     displayStudents
@@ -3111,7 +3148,7 @@ export default function AdminPage({
                     {activeOrderLabel || "尚未選擇訂餐日期"}
                   </span>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-6">
+                <div className="mt-4 grid gap-3 sm:grid-cols-8">
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">總數</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
@@ -3133,6 +3170,14 @@ export default function AdminPage({
                     <p className="text-lg font-semibold text-slate-900">{orderStats.NONE}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">已取餐</p>
+                    <p className="text-lg font-semibold text-emerald-700">{orderStats.picked}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">未取餐</p>
+                    <p className="text-lg font-semibold text-amber-700">{orderStats.unpicked}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">代訂</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.proxy}</p>
                   </div>
@@ -3151,72 +3196,159 @@ export default function AdminPage({
                           <div>
                             <p className="text-sm font-semibold text-slate-900">{group.label}</p>
                             <p className="mt-1 text-[11px] text-slate-500">
-                              {group.items.length ? `${group.items.length} 人` : "目前沒有人選這個餐別"}
+                              {group.items.length
+                                ? `未取餐 ${group.unpickedItems.length} 人 · 已取餐 ${group.pickedItems.length} 人`
+                                : "目前沒有人選這個餐別"}
                             </p>
                           </div>
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
                             {group.items.length}
                           </span>
                         </div>
-                        <div className="mt-3 space-y-2 text-xs text-slate-600">
-                          {group.items.length ? (
-                            group.items.map((item) => {
-                              const isProxy = String(item.sourceType || "").trim() === "proxy_external";
-                              const attendeeLabel = getOrderAttendeeLabel_(item);
-                              const note = String(item.comment || "").trim();
-                              return (
-                                <div
-                                  key={item.id}
-                                  className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
-                                >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <div className="flex flex-wrap items-center gap-2">
-                                        <span
-                                          className="font-semibold text-slate-800"
-                                          title={item.studentId ? `學號 ${item.studentId}` : ""}
-                                        >
-                                          {attendeeLabel}
-                                        </span>
-                                        {isProxy ? (
-                                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                                            代訂
+
+                        <div className="mt-3">
+                          <div className="mb-2 flex items-center justify-between gap-2">
+                            <p className="text-[11px] font-semibold text-slate-500">未取餐</p>
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                              {group.unpickedItems.length}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-xs text-slate-600">
+                            {group.unpickedItems.length ? (
+                              group.unpickedItems.map((item) => {
+                                const isProxy = String(item.sourceType || "").trim() === "proxy_external";
+                                const attendeeLabel = getOrderAttendeeLabel_(item);
+                                const note = String(item.comment || "").trim();
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="rounded-xl border border-slate-200/70 bg-slate-50 px-3 py-2"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          <span
+                                            className="font-semibold text-slate-800"
+                                            title={item.studentId ? `學號 ${item.studentId}` : ""}
+                                          >
+                                            {attendeeLabel}
                                           </span>
+                                          {isProxy ? (
+                                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                              代訂
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {isProxy && item.sourceLabel ? (
+                                          <div className="mt-0.5 text-[11px] text-slate-500">{item.sourceLabel}</div>
+                                        ) : null}
+                                        {note ? (
+                                          <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div>
                                         ) : null}
                                       </div>
-                                      {isProxy && item.sourceLabel ? (
-                                        <div className="mt-0.5 text-[11px] text-slate-500">{item.sourceLabel}</div>
-                                      ) : null}
-                                      {note ? (
-                                        <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div>
-                                      ) : null}
-                                    </div>
-                                    {isProxy ? (
                                       <div className="flex shrink-0 items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => handleEditProxyOrder(item)}
-                                          className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-                                        >
-                                          編輯
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteProxyOrder(item.id)}
-                                          className="badge-error hover:border-rose-300"
-                                        >
-                                          刪除
-                                        </button>
+                                        {isProxy ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleEditProxyOrder(item)}
+                                            className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                                          >
+                                            編輯
+                                          </button>
+                                        ) : null}
+                                        {isProxy ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteProxyOrder(item.id)}
+                                            className="badge-error hover:border-rose-300"
+                                          >
+                                            刪除
+                                          </button>
+                                        ) : null}
+                                        {group.key !== "NONE" ? (
+                                          <button
+                                            type="button"
+                                            disabled={saving}
+                                            onClick={() => handleSetOrderPickedUp(item, true)}
+                                            className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                                          >
+                                            標記已取餐
+                                          </button>
+                                        ) : null}
                                       </div>
-                                    ) : null}
+                                    </div>
                                   </div>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <p className="text-xs text-slate-400">目前沒有名單。</p>
-                          )}
+                                );
+                              })
+                            ) : (
+                              <p className="text-xs text-slate-400">目前沒有未取餐名單。</p>
+                            )}
+                          </div>
                         </div>
+
+                        {group.key !== "NONE" ? (
+                          <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedPickedGroups((prev) => ({ ...prev, [group.key]: !prev[group.key] }))
+                              }
+                              className="flex w-full items-center justify-between gap-2 text-left"
+                            >
+                              <span className="text-[11px] font-semibold text-slate-500">已取餐</span>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                {group.pickedItems.length}
+                              </span>
+                            </button>
+                            {expandedPickedGroups[group.key] ? (
+                              <div className="mt-3 space-y-2 text-xs text-slate-600">
+                                {group.pickedItems.length ? (
+                                  group.pickedItems.map((item) => {
+                                    const isProxy = String(item.sourceType || "").trim() === "proxy_external";
+                                    const attendeeLabel = getOrderAttendeeLabel_(item);
+                                    const note = String(item.comment || "").trim();
+                                    return (
+                                      <div
+                                        key={item.id}
+                                        className="rounded-xl border border-emerald-200/70 bg-white px-3 py-2"
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                              <span className="font-semibold text-slate-800">{attendeeLabel}</span>
+                                              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                                已取餐
+                                              </span>
+                                              {isProxy ? (
+                                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                                                  代訂
+                                                </span>
+                                              ) : null}
+                                            </div>
+                                            {note ? <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div> : null}
+                                            {item.pickedUpAt ? (
+                                              <div className="mt-1 text-[11px] text-slate-500">{formatDisplayDate_(item.pickedUpAt, { withTime: true })}</div>
+                                            ) : null}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            disabled={saving}
+                                            onClick={() => handleSetOrderPickedUp(item, false)}
+                                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                                          >
+                                            取消取餐
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="text-xs text-slate-400">目前沒有已取餐名單。</p>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
