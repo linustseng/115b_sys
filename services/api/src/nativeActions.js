@@ -2111,6 +2111,7 @@ export async function dispatchNativeAction({
       const raw = safeJsonObject(existing.raw);
       raw.pickedUpAt = updatedAt;
       raw.pickedUpBy = auth && auth.studentId ? auth.studentId : "";
+      raw.pickedUpByName = firstText(auth && auth.profile && auth.profile.name, auth && auth.studentId ? auth.studentId : "");
       await query(
         `update order_responses
             set response = $2::jsonb,
@@ -2150,6 +2151,7 @@ export async function dispatchNativeAction({
       const raw = safeJsonObject(existing.raw);
       delete raw.pickedUpAt;
       delete raw.pickedUpBy;
+      delete raw.pickedUpByName;
       await query(
         `update order_responses
             set response = $2::jsonb,

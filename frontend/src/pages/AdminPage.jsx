@@ -3369,7 +3369,10 @@ export default function AdminPage({
                                             </div>
                                             {note ? <div className="mt-1 text-[11px] text-slate-600">備註：{note}</div> : null}
                                             {item.pickedUpAt ? (
-                                              <div className="mt-1 text-[11px] text-slate-500">{formatDisplayDate_(item.pickedUpAt, { withTime: true })}</div>
+                                              <div className="mt-1 text-[11px] text-slate-500">
+                                                {formatDisplayDate_(item.pickedUpAt, { withTime: true })}
+                                                {item.pickedUpByName ? ` · ${item.pickedUpByName}` : item.pickedUpBy ? ` · ${item.pickedUpBy}` : ""}
+                                              </div>
                                             ) : null}
                                           </div>
                                           <button
