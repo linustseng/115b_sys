@@ -61,6 +61,7 @@ function OrderingPage({ shared }) {
   const [responsesByOrderId, setResponsesByOrderId] = useState({});
   const [choiceDrafts, setChoiceDrafts] = useState({});
   const [commentDrafts, setCommentDrafts] = useState({});
+  const [expandedPlans, setExpandedPlans] = useState({});
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loginExpanded, setLoginExpanded] = useState(false);
 
@@ -103,6 +104,37 @@ function OrderingPage({ shared }) {
       return true;
     }
     return false;
+  };
+
+  const getPlanChoices_ = (plan) => [
+    {
+      value: "A",
+      label: plan.optionA || "A 餐",
+      image: plan.optionAImage,
+      placeholderIcon: "🍱",
+      placeholderHint: "店家圖片待補",
+    },
+    {
+      value: "B",
+      label: plan.optionB || "B 餐",
+      image: plan.optionBImage,
+      placeholderIcon: "🥡",
+      placeholderHint: "店家圖片待補",
+    },
+    {
+      value: "C",
+      label: plan.optionC || "素食餐",
+      image: plan.optionCImage,
+      placeholderIcon: "🥗",
+      placeholderHint: "素食餐圖片待補",
+    },
+    { value: "NONE", label: "不吃", image: "", placeholderIcon: "🙅", placeholderHint: "本次不訂餐" },
+  ];
+
+  const getChoiceLabel_ = (plan, choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    const matched = getPlanChoices_(plan).find((item) => item.value === normalized);
+    return matched ? matched.label : "";
   };
 
   const loadPlans = async () => {
@@ -183,10 +215,23 @@ function OrderingPage({ shared }) {
       });
       return next;
     });
+    setExpandedPlans((prev) => {
+      const next = { ...prev };
+      plans.forEach((plan) => {
+        const planId = normalizeOrderId_(plan.id);
+        if (!planId || next[planId] !== undefined) {
+          return;
+        }
+        const existing = responsesByOrderId[planId];
+        next[planId] = !Boolean(existing && String(existing.choice || "").trim());
+      });
+      return next;
+    });
   }, [plans, responsesByOrderId]);
 
   const handleChoiceChange = (planId, choice) => {
     setChoiceDrafts((prev) => ({ ...prev, [planId]: choice }));
+    setExpandedPlans((prev) => ({ ...prev, [planId]: true }));
     setSubmitMessage((prev) => ({ ...prev, [planId]: "" }));
   };
 
@@ -230,12 +275,19 @@ function OrderingPage({ shared }) {
       if (!result.ok) {
         throw new Error(result.error || "送出失敗");
       }
-      if (result.data && result.data.response) {
-        setResponsesByOrderId((prev) => ({
-          ...prev,
-          [planId]: result.data.response,
-        }));
-      }
+      const savedResponse = result.data && result.data.response
+        ? result.data.response
+        : {
+            orderId: planId,
+            choice: choice,
+            comment: String(commentDrafts[planId] || "").trim(),
+            updatedAt: new Date().toISOString(),
+          };
+      setResponsesByOrderId((prev) => ({
+        ...prev,
+        [planId]: savedResponse,
+      }));
+      setExpandedPlans((prev) => ({ ...prev, [planId]: false }));
       setSubmitMessage((prev) => ({ ...prev, [planId]: "已更新訂餐選擇" }));
     } catch (err) {
       setSubmitMessage((prev) => ({ ...prev, [planId]: err.message || "送出失敗" }));
@@ -320,8 +372,15 @@ function OrderingPage({ shared }) {
               const planId = normalizeOrderId_(plan.id);
               const cutoff = getOrderCutoffAt_(plan);
               const closed = isPlanClosed_(plan);
-              const choice = choiceDrafts[planId] || "";
               const response = responsesByOrderId[planId];
+              const savedChoice = response ? String(response.choice || "").toUpperCase() : "";
+              const savedComment = response ? String(response.comment || "") : "";
+              const choice = choiceDrafts[planId] || savedChoice || "";
+              const currentComment = commentDrafts[planId] !== undefined ? commentDrafts[planId] : savedComment;
+              const isDirty = choice !== savedChoice || currentComment !== savedComment;
+              const isExpanded = expandedPlans[planId] !== undefined ? expandedPlans[planId] : !savedChoice || isDirty;
+              const selectedLabel = getChoiceLabel_(plan, choice);
+              const choiceItems = getPlanChoices_(plan);
               return (
                 <div
                   key={planId}
@@ -337,87 +396,108 @@ function OrderingPage({ shared }) {
                   <p className="mt-2 text-xs text-slate-400">
                     截止時間：{cutoff ? formatDisplayDate_(cutoff, { withTime: true }) : "前一日 23:59"}
                   </p>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                    {[
-                      {
-                        value: "A",
-                        label: plan.optionA || "A 餐",
-                        image: plan.optionAImage,
-                        placeholderIcon: "🍱",
-                        placeholderHint: "店家圖片待補",
-                      },
-                      {
-                        value: "B",
-                        label: plan.optionB || "B 餐",
-                        image: plan.optionBImage,
-                        placeholderIcon: "🥡",
-                        placeholderHint: "店家圖片待補",
-                      },
-                      {
-                        value: "C",
-                        label: plan.optionC || "素食餐",
-                        image: plan.optionCImage,
-                        placeholderIcon: "🥗",
-                        placeholderHint: "素食餐圖片待補",
-                      },
-                      { value: "NONE", label: "不吃", image: "", placeholderIcon: "🙅", placeholderHint: "本次不訂餐" },
-                    ].map((item) => (
-                      <button
-                        key={`${planId}-${item.value}`}
-                        type="button"
+
+                  {choice && !isExpanded ? (
+                    <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div>
+                        <p className="text-xs text-slate-400">目前選擇</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">{selectedLabel}</p>
+                        <p className="mt-1 text-[11px] text-slate-400">
+                          {response && response.updatedAt
+                            ? `已更新：${formatDisplayDate_(response.updatedAt, { withTime: true })}`
+                            : isDirty
+                              ? "尚未送出最新變更"
+                              : "已選擇"}
+                        </p>
+                      </div>
+                      {!closed && googleLinkedStudent ? (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: true }))}
+                          className="rounded-full border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          修改
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {(!choice || isExpanded) ? (
+                    <>
+                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                        {choiceItems.map((item) => (
+                          <button
+                            key={`${planId}-${item.value}`}
+                            type="button"
+                            disabled={closed || !googleLinkedStudent}
+                            onClick={() => handleChoiceChange(planId, item.value)}
+                            className={`overflow-hidden rounded-2xl border text-left text-xs font-semibold transition ${
+                              choice === item.value
+                                ? "border-slate-900 bg-slate-900 text-white"
+                                : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                            } ${closed || !googleLinkedStudent ? "opacity-60" : ""}`}
+                          >
+                            {item.image ? (
+                              <img
+                                src={item.image}
+                                alt={item.label}
+                                className="h-20 w-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="flex items-center gap-3 px-3 pt-3 pb-1">
+                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg">
+                                  {item.placeholderIcon}
+                                </div>
+                                <div className="min-w-0 text-[11px] leading-4 text-slate-400">
+                                  <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
+                                </div>
+                              </div>
+                            )}
+                            <div className="px-3 py-2">
+                              <span className="block">{item.label}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={currentComment}
+                        onChange={(event) => handleCommentChange(planId, event.target.value)}
+                        placeholder="匿名意見（可選）"
+                        rows="2"
                         disabled={closed || !googleLinkedStudent}
-                        onClick={() => handleChoiceChange(planId, item.value)}
-                        className={`overflow-hidden rounded-2xl border text-left text-xs font-semibold transition ${
-                          choice === item.value
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
-                        } ${closed || !googleLinkedStudent ? "opacity-60" : ""}`}
-                      >
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.label}
-                            className="h-20 w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex items-center gap-3 px-3 pt-3 pb-1">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg">
-                              {item.placeholderIcon}
-                            </div>
-                            <div className="min-w-0 text-[11px] leading-4 text-slate-400">
-                              <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
-                            </div>
-                          </div>
-                        )}
-                        <div className="px-3 py-2">
-                          <span className="block">{item.label}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  <textarea
-                    value={commentDrafts[planId] || ""}
-                    onChange={(event) => handleCommentChange(planId, event.target.value)}
-                    placeholder="匿名意見（可選）"
-                    rows="2"
-                    disabled={closed || !googleLinkedStudent}
-                    className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
-                  />
+                        className="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400 disabled:bg-slate-100"
+                      />
+                    </>
+                  ) : null}
+
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-xs text-slate-400">
-                      {response && response.updatedAt
-                        ? `已更新：${formatDisplayDate_(response.updatedAt, { withTime: true })}`
+                      {choice
+                        ? isDirty
+                          ? `已選擇：${selectedLabel}（尚未送出）`
+                          : `已選擇：${selectedLabel}`
                         : "尚未選擇"}
                     </span>
-                    <button
-                      type="button"
-                      disabled={closed || !googleLinkedStudent || saving[planId]}
-                      onClick={() => handleSubmitOrder(plan)}
-                      className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {saving[planId] ? "送出中..." : "更新選擇"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {choice && isExpanded && !closed && googleLinkedStudent ? (
+                        <button
+                          type="button"
+                          onClick={() => setExpandedPlans((prev) => ({ ...prev, [planId]: false }))}
+                          className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          收合
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        disabled={closed || !googleLinkedStudent || saving[planId]}
+                        onClick={() => handleSubmitOrder(plan)}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {saving[planId] ? "送出中..." : "更新選擇"}
+                      </button>
+                    </div>
                   </div>
                   {submitMessage[planId] ? (
                     <p className="mt-3 text-xs font-semibold text-amber-600">
