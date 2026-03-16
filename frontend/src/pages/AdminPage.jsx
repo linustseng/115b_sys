@@ -40,6 +40,8 @@ export default function AdminPage({
   const [orderActiveId, setOrderActiveId] = useState("");
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [expandedPickedGroups, setExpandedPickedGroups] = useState({});
+  const [orderRosterQuery, setOrderRosterQuery] = useState("");
+  const [orderOnlyUnpicked, setOrderOnlyUnpicked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2455,16 +2457,38 @@ export default function AdminPage({
       });
     });
 
+  const orderRosterNeedle = String(orderRosterQuery || "").trim().toLowerCase();
+  const matchesOrderRosterFilter_ = (item) => {
+    if (!orderRosterNeedle) {
+      return true;
+    }
+    const haystack = [
+      getOrderAttendeeLabel_(item),
+      String((item && item.studentId) || ""),
+      String((item && item.sourceLabel) || ""),
+      String((item && item.comment) || ""),
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(orderRosterNeedle);
+  };
+
   const groupedOrderResponses = [
     { key: "A", label: orderForm.optionA || "A 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "A")) },
     { key: "B", label: orderForm.optionB || "B 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "B")) },
     { key: "C", label: orderForm.optionC || "素食餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "C")) },
     { key: "NONE", label: "不吃", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "NONE")) },
-  ].map((group) => ({
-    ...group,
-    unpickedItems: group.items.filter((item) => !isOrderPickedUp_(item)),
-    pickedItems: group.items.filter((item) => isOrderPickedUp_(item)),
-  }));
+  ].map((group) => {
+    const filteredItems = group.items.filter((item) => matchesOrderRosterFilter_(item));
+    const unpickedItems = filteredItems.filter((item) => !isOrderPickedUp_(item));
+    const pickedItems = filteredItems.filter((item) => isOrderPickedUp_(item));
+    return {
+      ...group,
+      filteredItems,
+      unpickedItems,
+      pickedItems,
+    };
+  });
 
   const displayStudentById = new Map(
     displayStudents
@@ -3189,6 +3213,23 @@ export default function AdminPage({
                     <p className="text-sm font-semibold text-slate-900">依餐別查看名單</p>
                     <span className="text-[11px] text-slate-400">代訂 {proxyOrderResponses.length} 筆</span>
                   </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <input
+                      value={orderRosterQuery}
+                      onChange={(event) => setOrderRosterQuery(event.target.value)}
+                      placeholder="搜尋姓名、學號、備註..."
+                      className="h-9 w-full max-w-xs rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 shadow-sm outline-none focus:border-slate-400"
+                    />
+                    <label className="flex items-center gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        checked={orderOnlyUnpicked}
+                        onChange={(event) => setOrderOnlyUnpicked(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300"
+                      />
+                      只顯示未取餐
+                    </label>
+                  </div>
                   <div className="grid gap-4 xl:grid-cols-2">
                     {groupedOrderResponses.map((group) => (
                       <div key={group.key} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -3199,6 +3240,7 @@ export default function AdminPage({
                               {group.items.length
                                 ? `未取餐 ${group.unpickedItems.length} 人 · 已取餐 ${group.pickedItems.length} 人`
                                 : "目前沒有人選這個餐別"}
+                              {group.filteredItems.length !== group.items.length ? ` · 已篩選顯示 ${group.filteredItems.length} 人` : ""}
                             </p>
                           </div>
                           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
@@ -3286,7 +3328,7 @@ export default function AdminPage({
                           </div>
                         </div>
 
-                        {group.key !== "NONE" ? (
+                        {!orderOnlyUnpicked && group.key !== "NONE" ? (
                           <div className="mt-4 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-3">
                             <button
                               type="button"
