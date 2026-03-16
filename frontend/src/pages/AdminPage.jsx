@@ -38,6 +38,7 @@ export default function AdminPage({
   const [orderPlansLoaded, setOrderPlansLoaded] = useState(false);
   const [orderResponses, setOrderResponses] = useState([]);
   const [orderActiveId, setOrderActiveId] = useState("");
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -660,6 +661,9 @@ export default function AdminPage({
     if (activeTab !== "ordering") {
       return;
     }
+    if (isCreatingOrder) {
+      return;
+    }
     if (!orderActiveId && orderPlans.length) {
       setOrderActiveId(normalizeOrderId_(orderPlans[0].id));
       return;
@@ -667,7 +671,7 @@ export default function AdminPage({
     if (!orderActiveId && !orderPlans.length) {
       setOrderForm(buildDefaultOrderForm());
     }
-  }, [activeTab, orderActiveId, orderPlans]);
+  }, [activeTab, orderActiveId, orderPlans, isCreatingOrder]);
 
   useEffect(() => {
     if (activeTab !== "ordering") {
@@ -1163,6 +1167,7 @@ export default function AdminPage({
   };
 
   const handleOrderReset = () => {
+    setIsCreatingOrder(true);
     setOrderActiveId("");
     setOrderForm(buildDefaultOrderForm());
     setOrderResponses([]);
@@ -1215,6 +1220,7 @@ export default function AdminPage({
       if (returnedId) {
         setOrderActiveId(normalizeOrderId_(returnedId));
       }
+      setIsCreatingOrder(false);
       setOrderStatusMessage(isCreate ? "已新增訂餐日期" : "已更新訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
@@ -2704,7 +2710,10 @@ export default function AdminPage({
                       orderPlans.map((plan) => (
                         <button
                           key={plan.id}
-                          onClick={() => setOrderActiveId(normalizeOrderId_(plan.id))}
+                          onClick={() => {
+                            setIsCreatingOrder(false);
+                            setOrderActiveId(normalizeOrderId_(plan.id));
+                          }}
                           className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm transition ${
                             normalizeOrderId_(orderActiveId) === normalizeOrderId_(plan.id)
                               ? "border-slate-900 bg-slate-900 text-white"
