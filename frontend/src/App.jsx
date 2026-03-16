@@ -2539,6 +2539,19 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
 
   const hasEffectiveAccess = hasAccess || extraAllowed;
 
+  const handleLogout_ = () => {
+    clearStoredAuth_();
+    setGoogleLinkedStudent(null);
+    setGoogleIdToken("");
+    setAdminSession({ token: "", refreshToken: "", studentId: "", memberships: [] });
+    setMemberships([]);
+    setError("");
+    setExtraAllowed(false);
+    setExtraChecked(false);
+    setExtraLoading(false);
+    window.location.assign("/");
+  };
+
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
       <div className="min-h-screen">
@@ -2624,6 +2637,15 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
             {error || "您目前沒有權限存取此後台。"}
             <div className="mt-2 text-xs text-rose-600">
               允許群組：班代、副班代{allowedLabel ? `、${allowedLabel}` : ""}
+            </div>
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleLogout_}
+                className="rounded-full border border-rose-200 bg-white px-4 py-2 text-xs font-semibold text-rose-700 hover:border-rose-300"
+              >
+                登出後重新登入
+              </button>
             </div>
           </div>
         </main>

@@ -3,7 +3,7 @@ import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
-  const { apiRequest, storeAdminSession_ } = shared;
+  const { apiRequest, storeAdminSession_, clearStoredAuth_ } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
@@ -149,6 +149,24 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }));
   const [birthdaySummaryLoaded, setBirthdaySummaryLoaded] = useState(false);
   const [birthdaySummaryError, setBirthdaySummaryError] = useState("");
+  const handleLogout_ = () => {
+    clearStoredAuth_();
+    setGoogleLinkedStudent(null);
+    setMemberships([]);
+    setMembershipsLoaded(false);
+    setSoftballAdminAllowed(false);
+    setNotifications([]);
+    setNotificationUnread(0);
+    setNotificationError("");
+    setApprovalsOverview({ pending: 0, inProgress: 0, completed: 0, returned: 0, total: 0 });
+    setApprovalsOverviewLoaded(false);
+    setApprovalsOverviewError("");
+    setBirthdaySummaryLoaded(false);
+    setBirthdaySummaryError("");
+    setShowApprovalsCenter(false);
+    setMountApprovalsCenter(false);
+    setLoginCollapsed(false);
+  };
   const calendarEmbedUrl =
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
@@ -896,6 +914,15 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                         ) : null}
                       </p>
                     ) : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleLogout_}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                      >
+                        登出
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
