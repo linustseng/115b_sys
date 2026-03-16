@@ -3,7 +3,7 @@ import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
-  const { apiRequest } = shared;
+  const { apiRequest, storeAdminSession_ } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
@@ -929,7 +929,22 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                         ? "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
                         : "請先完成綁定，才能使用活動、訂餐與壘球功能。"
                     }
-                    onLinkedStudent={(student) => setGoogleLinkedStudent(student)}
+                    onLinkedStudent={(student, _profile, _idToken, authContext) => {
+                      setGoogleLinkedStudent(student);
+                      const linkedStudentId = String((student && student.id) || "").trim();
+                      const sessionToken = String((authContext && authContext.sessionToken) || "").trim();
+                      const refreshToken = String((authContext && authContext.refreshToken) || "").trim();
+                      const memberships =
+                        authContext && Array.isArray(authContext.memberships) ? authContext.memberships : [];
+                      if (sessionToken && linkedStudentId) {
+                        storeAdminSession_({
+                          token: sessionToken,
+                          refreshToken,
+                          studentId: linkedStudentId,
+                          memberships,
+                        });
+                      }
+                    }}
                   />
                 </div>
                 <p className="mt-3 text-[11px] text-slate-500">

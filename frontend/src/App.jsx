@@ -1597,6 +1597,25 @@ async function requestWithReadRetry_(payload) {
           return requestWithApiV2Read_(payload);
         }
       }
+
+      const idToken = String(loadStoredGoogleIdToken_() || "").trim();
+      if (idToken && shouldUseApiV2Read_({ action: "verifyGoogle", idToken })) {
+        const verifyResponse = await requestWithApiV2Read_({ action: "verifyGoogle", idToken });
+        const verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+        if (verifyResult && verifyResult.ok && verifyResult.data && verifyResult.data.sessionToken) {
+          const verifyData = verifyResult.data || {};
+          const linkedStudentId = String(
+            (verifyData.student && verifyData.student.id) || (storedSession && storedSession.studentId) || ""
+          ).trim();
+          storeAdminSession_({
+            token: verifyData.sessionToken,
+            refreshToken: verifyData.refreshToken || "",
+            studentId: linkedStudentId,
+            memberships: Array.isArray(verifyData.memberships) ? verifyData.memberships : [],
+          });
+          return requestWithApiV2Read_(payload);
+        }
+      }
     }
 
     return response;
@@ -1944,6 +1963,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
                   response.credential,
                   {
                     sessionToken: String(payload.sessionToken || "").trim(),
+                    refreshToken: String(payload.refreshToken || "").trim(),
                     memberships: Array.isArray(payload.memberships) ? payload.memberships : [],
                   }
                 );
@@ -2039,6 +2059,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       if (student) {
         onLinkedRef.current(student, profile, idToken, {
           sessionToken: String((result.data && result.data.sessionToken) || "").trim(),
+          refreshToken: String((result.data && result.data.refreshToken) || "").trim(),
           memberships: Array.isArray(result.data && result.data.memberships)
             ? result.data.memberships
             : [],
@@ -2541,6 +2562,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
                 const linkedStudentId = String((student && student.id) || "").trim();
                 const token = String(idToken || "").trim();
                 const sessionToken = String((authContext && authContext.sessionToken) || "").trim();
+                const refreshToken = String((authContext && authContext.refreshToken) || "").trim();
                 const sessionMemberships =
                   authContext && Array.isArray(authContext.memberships) ? authContext.memberships : [];
 
@@ -2550,7 +2572,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
                 storeGoogleIdToken_(token);
 
                 if (sessionToken && linkedStudentId) {
-                  syncAdminSession_(sessionToken, linkedStudentId, sessionMemberships);
+                  syncAdminSession_(sessionToken, linkedStudentId, sessionMemberships, refreshToken);
                 } else {
                   syncAdminSession_("", "", []);
                 }
