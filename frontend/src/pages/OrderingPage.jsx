@@ -477,9 +477,15 @@ function OrderingPage({ shared }) {
                   ) : null}
 
                   <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-xs text-slate-400">
-                      {choice ? (isDirty ? `已選 ${selectedLabel} · 尚未儲存` : `已選 ${selectedLabel}`) : "請選擇餐點"}
-                    </span>
+                    {isExpanded ? (
+                      <span className="text-xs text-slate-400">
+                        {choice ? (isDirty ? `已選 ${selectedLabel} · 尚未儲存` : `已選 ${selectedLabel}`) : "請選擇餐點"}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">
+                        {submitMessage[planId] ? submitMessage[planId] : ""}
+                      </span>
+                    )}
                     {isExpanded ? (
                       <div className="flex items-center gap-2">
                         {googleLinkedStudent ? (
@@ -502,7 +508,7 @@ function OrderingPage({ shared }) {
                       </div>
                     ) : null}
                   </div>
-                  {submitMessage[planId] ? (
+                  {submitMessage[planId] && isExpanded ? (
                     <p className="mt-3 text-xs font-semibold text-amber-600">
                       {submitMessage[planId]}
                     </p>
