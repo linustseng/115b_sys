@@ -349,6 +349,11 @@ function OrderingPage({ shared }) {
                         label: plan.optionB || "B 餐",
                         image: plan.optionBImage,
                       },
+                      {
+                        value: "C",
+                        label: plan.optionC || "素食餐",
+                        image: plan.optionCImage,
+                      },
                       { value: "NONE", label: "不吃", image: "" },
                     ].map((item) => (
                       <button

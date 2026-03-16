@@ -90,8 +90,10 @@ export default function AdminPage({
     title: "",
     optionA: "A 餐",
     optionB: "B 餐",
+    optionC: "素食餐",
     optionAImage: "",
     optionBImage: "",
+    optionCImage: "",
     cutoffAt: "",
     status: "open",
     notes: "",
@@ -431,8 +433,10 @@ export default function AdminPage({
       title: dateValue ? `訂餐 ${dateValue}` : "",
       optionA: "A 餐",
       optionB: "B 餐",
+      optionC: "素食餐",
       optionAImage: "",
       optionBImage: "",
+      optionCImage: "",
       cutoffAt: cutoffAt,
       status: "open",
       notes: "",
@@ -683,8 +687,10 @@ export default function AdminPage({
           title: selected.title || "",
           optionA: selected.optionA || "A 餐",
           optionB: selected.optionB || "B 餐",
+          optionC: selected.optionC || "素食餐",
           optionAImage: selected.optionAImage || "",
           optionBImage: selected.optionBImage || "",
+          optionCImage: selected.optionCImage || "",
           cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
           status: selected.status || "open",
           notes: selected.notes || "",
@@ -1117,7 +1123,7 @@ export default function AdminPage({
   };
 
   const handleOrderFormChange = (key, value) => {
-    if ((key === "optionAImage" || key === "optionBImage") && String(value || "").startsWith("data:")) {
+    if ((key === "optionAImage" || key === "optionBImage" || key === "optionCImage") && String(value || "").startsWith("data:")) {
       setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
       return;
     }
@@ -1172,7 +1178,8 @@ export default function AdminPage({
     }
     if (
       String(orderForm.optionAImage || "").startsWith("data:") ||
-      String(orderForm.optionBImage || "").startsWith("data:")
+      String(orderForm.optionBImage || "").startsWith("data:") ||
+      String(orderForm.optionCImage || "").startsWith("data:")
     ) {
       setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
       return;
@@ -2261,6 +2268,8 @@ export default function AdminPage({
         acc.A += 1;
       } else if (choice === "B") {
         acc.B += 1;
+      } else if (choice === "C") {
+        acc.C += 1;
       } else {
         acc.NONE += 1;
       }
@@ -2270,8 +2279,25 @@ export default function AdminPage({
       acc.total += 1;
       return acc;
     },
-    { A: 0, B: 0, NONE: 0, total: 0, proxy: 0 }
+    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0 }
   );
+
+  const getOrderChoiceLabel_ = (choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    if (normalized === "A") {
+      return orderForm.optionA || "A 餐";
+    }
+    if (normalized === "B") {
+      return orderForm.optionB || "B 餐";
+    }
+    if (normalized === "C") {
+      return orderForm.optionC || "素食餐";
+    }
+    if (normalized === "NONE") {
+      return "不吃";
+    }
+    return normalized || "-";
+  };
 
   const orderComments = orderResponses
     .map((item) => String(item.comment || "").trim())
@@ -2708,7 +2734,7 @@ export default function AdminPage({
                       className="input-sm"
                     />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium text-slate-700">選項 A</label>
                       <input
@@ -2725,8 +2751,16 @@ export default function AdminPage({
                         className="input-sm"
                       />
                     </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">選項 C</label>
+                      <input
+                        value={orderForm.optionC}
+                        onChange={(event) => handleOrderFormChange("optionC", event.target.value)}
+                        className="input-sm"
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3 sm:grid-cols-3">
                     <div
                       className="grid gap-2"
                       onDragOver={(event) => event.preventDefault()}
@@ -2770,6 +2804,30 @@ export default function AdminPage({
                         <img
                           src={orderForm.optionBImage}
                           alt="B 餐"
+                          className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+                    <div
+                      className="grid gap-2"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => handleOrderImageDrop("optionCImage", event)}
+                    >
+                      <label className="text-sm font-medium text-slate-700">素食餐圖片</label>
+                      <input
+                        value={orderForm.optionCImage}
+                        onChange={(event) =>
+                          handleOrderFormChange("optionCImage", event.target.value)
+                        }
+                        placeholder="貼上圖片網址或拖曳圖片"
+                        className="input-sm"
+                      />
+                      <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
+                      {orderForm.optionCImage ? (
+                        <img
+                          src={orderForm.optionCImage}
+                          alt="素食餐"
                           className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
                           loading="lazy"
                         />
@@ -2866,8 +2924,9 @@ export default function AdminPage({
                       }
                       className="input-sm"
                     >
-                      <option value="A">A 餐</option>
-                      <option value="B">B 餐</option>
+                      <option value="A">{orderForm.optionA || "A 餐"}</option>
+                      <option value="B">{orderForm.optionB || "B 餐"}</option>
+                      <option value="C">{orderForm.optionC || "素食餐"}</option>
                       <option value="NONE">不吃</option>
                     </select>
                   </div>
@@ -2904,7 +2963,7 @@ export default function AdminPage({
                     {orderActiveId ? `訂餐編號 ${orderActiveId}` : "尚未選擇訂餐日期"}
                   </span>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-5">
+                <div className="mt-4 grid gap-3 sm:grid-cols-6">
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">總數</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
@@ -2916,6 +2975,10 @@ export default function AdminPage({
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">B 餐</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.B}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">素食餐</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.C}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">不吃</p>
@@ -2962,7 +3025,7 @@ export default function AdminPage({
                                 ) : null}
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className="text-xs text-slate-500">{item.choice}</span>
+                                <span className="text-xs text-slate-500">{getOrderChoiceLabel_(item.choice)}</span>
                                 {isProxy ? (
                                   <>
                                     <button
