@@ -1206,12 +1206,16 @@ export default function AdminPage({
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
-      const plan = result.data && result.data.plan ? result.data.plan : null;
+      const returnedPlan = result.data && result.data.plan ? result.data.plan : null;
+      const returnedId = String(
+        (result.data && (result.data.id || result.data.planId)) || (returnedPlan && returnedPlan.id) || orderForm.id || ""
+      ).trim();
+      const isCreate = !orderForm.id;
       await loadOrderPlans();
-      if (plan && plan.id) {
-        setOrderActiveId(normalizeOrderId_(plan.id));
+      if (returnedId) {
+        setOrderActiveId(normalizeOrderId_(returnedId));
       }
-      setOrderStatusMessage("已更新訂餐設定");
+      setOrderStatusMessage(isCreate ? "已新增訂餐日期" : "已更新訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
     } finally {

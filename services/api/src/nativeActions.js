@@ -1939,7 +1939,7 @@ export async function dispatchNativeAction({
           row.updatedAt,
         ]
       );
-      return { ok: true, data: { id: row.id }, error: null };
+      return { ok: true, data: { id: row.id, plan: row }, error: null };
     }
 
     case "updateOrderPlan": {
@@ -1951,7 +1951,7 @@ export async function dispatchNativeAction({
          where id=$1`,
         [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, jsonbParam(row.items, []), row.status, jsonbParam(row.raw, {}), row.updatedAt]
       );
-      return { ok: true, data: { id: row.id }, error: null };
+      return { ok: true, data: { id: row.id, plan: row }, error: null };
     }
 
     case "submitOrderResponse": {
