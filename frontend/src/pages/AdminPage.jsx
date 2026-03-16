@@ -2265,6 +2265,12 @@ export default function AdminPage({
   const proxyOrderResponses = orderResponses.filter(
     (item) => String(item.sourceType || "").trim() === "proxy_external"
   );
+  const activeOrderPlan = orderPlans.find(
+    (plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId)
+  );
+  const activeOrderLabel = activeOrderPlan
+    ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
+    : "";
   const orderStats = orderResponses.reduce(
     (acc, item) => {
       const choice = String(item.choice || "").toUpperCase();
@@ -2711,7 +2717,6 @@ export default function AdminPage({
                               {plan.title || "訂餐"} · {plan.status || "open"}
                             </p>
                           </div>
-                          <span className="text-xs opacity-70">{plan.id}</span>
                         </button>
                       ))
                     ) : (
@@ -2893,7 +2898,7 @@ export default function AdminPage({
                     <p className="mt-1 text-xs text-slate-500">給不在班級正式名單內、但需要一起訂餐的人使用。</p>
                   </div>
                   <span className="text-xs text-slate-400">
-                    {orderActiveId ? `目前套用 ${orderActiveId}` : "請先選擇訂餐日期"}
+                    {activeOrderLabel ? `目前套用 ${activeOrderLabel}` : "請先選擇訂餐日期"}
                   </span>
                 </div>
                 <form onSubmit={handleProxyOrderSubmit} className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_120px]">
@@ -2964,7 +2969,7 @@ export default function AdminPage({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="font-semibold text-slate-900">訂餐統計</p>
                   <span className="text-xs text-slate-400">
-                    {orderActiveId ? `訂餐編號 ${orderActiveId}` : "尚未選擇訂餐日期"}
+                    {activeOrderLabel || "尚未選擇訂餐日期"}
                   </span>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-6">
