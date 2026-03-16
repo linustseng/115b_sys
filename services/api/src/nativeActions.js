@@ -1965,6 +1965,10 @@ export async function dispatchNativeAction({
       const id = firstText(data.id, `${orderId}:${auth.studentId}`);
       const createdAt = firstText(data.createdAt, nowIso());
       const updatedAt = nowIso();
+      const studentName = firstText(data.studentName, student && student.name ? student.name : "");
+      const studentEmail = normalizeEmail(firstText(data.studentEmail, student && student.email ? student.email : ""));
+      const choice = firstText(data.choice).toUpperCase();
+      const comment = firstText(data.comment);
       await query(
         `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
          values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb)
@@ -1978,8 +1982,8 @@ export async function dispatchNativeAction({
           id,
           orderId,
           auth.studentId,
-          firstText(data.studentName, student && student.name ? student.name : ""),
-          normalizeEmail(firstText(data.studentEmail, student && student.email ? student.email : "")),
+          studentName,
+          studentEmail,
           jsonbParam(data, {}),
           data.totalAmount == null || data.totalAmount === "" ? null : Number(String(data.totalAmount).replace(/,/g, "")),
           createdAt,
@@ -1987,7 +1991,23 @@ export async function dispatchNativeAction({
           jsonbParam(data, {}),
         ]
       );
-      return { ok: true, data: { id }, error: null };
+      return {
+        ok: true,
+        data: {
+          id,
+          response: {
+            id,
+            orderId,
+            studentId: auth.studentId,
+            studentName,
+            studentEmail,
+            choice,
+            comment,
+            updatedAt,
+          },
+        },
+        error: null,
+      };
     }
 
     case "adminUpsertOrderProxyResponse": {

@@ -226,11 +226,14 @@ function OrderingPage({ shared }) {
       const next = { ...prev };
       plans.forEach((plan) => {
         const planId = normalizeOrderId_(plan.id);
-        if (!planId || next[planId] !== undefined) {
+        if (!planId) {
           return;
         }
         const existing = responsesByOrderId[planId];
-        next[planId] = existing ? String(existing.comment || "") : "";
+        const existingComment = existing ? String(existing.comment || "") : "";
+        if (next[planId] === undefined || next[planId] === "") {
+          next[planId] = existingComment;
+        }
       });
       return next;
     });
