@@ -343,18 +343,24 @@ function OrderingPage({ shared }) {
                         value: "A",
                         label: plan.optionA || "A 餐",
                         image: plan.optionAImage,
+                        placeholderIcon: "🍱",
+                        placeholderHint: "店家圖片待補",
                       },
                       {
                         value: "B",
                         label: plan.optionB || "B 餐",
                         image: plan.optionBImage,
+                        placeholderIcon: "🥡",
+                        placeholderHint: "店家圖片待補",
                       },
                       {
                         value: "C",
                         label: plan.optionC || "素食餐",
                         image: plan.optionCImage,
+                        placeholderIcon: "🥗",
+                        placeholderHint: "素食餐圖片待補",
                       },
-                      { value: "NONE", label: "不吃", image: "" },
+                      { value: "NONE", label: "不吃", image: "", placeholderIcon: "🙅", placeholderHint: "本次不訂餐" },
                     ].map((item) => (
                       <button
                         key={`${planId}-${item.value}`}
@@ -375,8 +381,14 @@ function OrderingPage({ shared }) {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-20 items-center justify-center bg-slate-100 text-[11px] text-slate-400">
-                            無圖片
+                          <div className="flex items-center gap-3 px-3 pt-3 pb-1">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-lg">
+                              {item.placeholderIcon}
+                            </div>
+                            <div className="min-w-0 text-[11px] leading-4 text-slate-400">
+                              <div className="font-semibold text-slate-500">{item.placeholderHint}</div>
+                              <div className="mt-0.5">未提供圖片也可以直接選擇</div>
+                            </div>
                           </div>
                         )}
                         <div className="px-3 py-2">
