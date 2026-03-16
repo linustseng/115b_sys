@@ -2104,20 +2104,50 @@ export async function dispatchNativeAction({
         return { ok: true, data: { responses: [] }, error: null };
       }
       const result = await query(
-        `select * from order_responses where order_id = $1 order by coalesce(created_at,''), id`,
+        `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
+           from order_responses r
+           left join directories d on d.id = r.student_id
+          where r.order_id = $1
+          order by coalesce(r.created_at,''), r.id`,
         [orderId]
       );
-      const responses = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const responses = result.rows.map((row) => {
+        const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+        return {
+          ...raw,
+          id: row.id,
+          studentId: firstText(raw.studentId, row && row.student_id ? row.student_id : ""),
+          studentName: firstText(raw.studentName, row && row.student_name ? row.student_name : ""),
+          studentEmail: normalizeEmail(firstText(raw.studentEmail, row && row.student_email ? row.student_email : "")),
+          nameZh: String(row.canonical_name_zh || "").trim(),
+          displayName: firstText(raw.displayName, String(row.canonical_preferred_name || "").trim()),
+        };
+      });
       return { ok: true, data: { responses }, error: null };
     }
 
     case "listOrderResponsesByStudent": {
       requireAuth();
       const result = await query(
-        `select * from order_responses where student_id = $1 order by coalesce(created_at,'') desc, id desc`,
+        `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
+           from order_responses r
+           left join directories d on d.id = r.student_id
+          where r.student_id = $1
+          order by coalesce(r.created_at,'') desc, r.id desc`,
         [auth.studentId]
       );
-      const responses = result.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id }));
+      const responses = result.rows.map((row) => {
+        const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+        return {
+          ...raw,
+          id: row.id,
+          studentId: firstText(raw.studentId, row && row.student_id ? row.student_id : ""),
+          studentName: firstText(raw.studentName, row && row.student_name ? row.student_name : ""),
+          studentEmail: normalizeEmail(firstText(raw.studentEmail, row && row.student_email ? row.student_email : "")),
+          nameZh: String(row.canonical_name_zh || "").trim(),
+          displayName: firstText(raw.displayName, String(row.canonical_preferred_name || "").trim()),
+        };
+      });
       return { ok: true, data: { responses }, error: null };
     }
 

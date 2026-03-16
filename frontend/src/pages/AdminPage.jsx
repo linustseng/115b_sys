@@ -2383,12 +2383,18 @@ export default function AdminPage({
   };
 
   const getOrderAttendeeLabel_ = (item) => {
-    const isProxy = String(item && item.sourceType || "").trim() === "proxy_external";
+    const isProxy = String((item && item.sourceType) || "").trim() === "proxy_external";
     const studentId = String((item && item.studentId) || "").trim();
+    const canonicalZh = String((item && item.nameZh) || "").trim();
+    const canonicalDisplay = String((item && item.displayName) || "").trim();
+    const canonicalLabel =
+      canonicalZh && canonicalDisplay && canonicalZh !== canonicalDisplay
+        ? `${canonicalZh} (${canonicalDisplay})`
+        : canonicalZh || canonicalDisplay || "";
     return (
       (!isProxy && studentId && studentLabelByStudentId.get(studentId)) ||
+      canonicalLabel ||
       String((item && item.studentName) || "").trim() ||
-      String((item && item.displayName) || "").trim() ||
       "未命名"
     );
   };
