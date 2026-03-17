@@ -1792,6 +1792,85 @@ export async function dispatchNativeAction({
           return true;
         };
 
+        const weekdayShortFormatter = new Intl.DateTimeFormat("zh-TW", {
+          timeZone: "Asia/Taipei",
+          weekday: "short",
+        });
+        const monthDayFormatter = new Intl.DateTimeFormat("zh-TW", {
+          timeZone: "Asia/Taipei",
+          month: "numeric",
+          day: "numeric",
+        });
+        const timeFormatter = new Intl.DateTimeFormat("zh-TW", {
+          timeZone: "Asia/Taipei",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+        const dateKeyFormatter = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Taipei",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        });
+        const getDateKey_ = (date) => {
+          if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+            return "";
+          }
+          return dateKeyFormatter.format(date);
+        };
+        const getWeekStartKey_ = (date) => {
+          if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+            return "";
+          }
+          const copy = new Date(date.getTime());
+          const localDay = copy.getDay();
+          const diff = localDay === 0 ? -6 : 1 - localDay;
+          copy.setDate(copy.getDate() + diff);
+          return getDateKey_(copy);
+        };
+        const describeMealDay_ = (date) => {
+          if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+            return "這份";
+          }
+          const now = new Date();
+          const today = getDateKey_(now);
+          const tomorrowDate = new Date(now.getTime());
+          tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+          const tomorrow = getDateKey_(tomorrowDate);
+          const targetKey = getDateKey_(date);
+          if (targetKey === today) {
+            return "今天";
+          }
+          if (targetKey === tomorrow) {
+            return "明天";
+          }
+          const weekday = weekdayShortFormatter.format(date).replace("週", "");
+          if (getWeekStartKey_(date) === getWeekStartKey_(now)) {
+            return `本週${weekday}`;
+          }
+          return `${monthDayFormatter.format(date)}（${weekdayShortFormatter.format(date)}）`;
+        };
+        const describeCutoff_ = (cutoffAt) => {
+          if (!(cutoffAt instanceof Date) || Number.isNaN(cutoffAt.getTime())) {
+            return "請盡快回覆";
+          }
+          const now = new Date();
+          const today = getDateKey_(now);
+          const tomorrowDate = new Date(now.getTime());
+          tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+          const tomorrow = getDateKey_(tomorrowDate);
+          const targetKey = getDateKey_(cutoffAt);
+          const timeText = timeFormatter.format(cutoffAt);
+          if (targetKey === today) {
+            return `請在今晚 ${timeText} 前回覆`;
+          }
+          if (targetKey === tomorrow) {
+            return `請在明晚 ${timeText} 前回覆`;
+          }
+          return `請在 ${monthDayFormatter.format(cutoffAt)} ${weekdayShortFormatter.format(cutoffAt)} ${timeText} 前回覆`;
+        };
+
         const plansResult = await query(`select * from order_plans order by coalesce(date,''), id`);
         const responsesResult = await query(
           `select order_id
@@ -1818,18 +1897,9 @@ export async function dispatchNativeAction({
           if (isOpen && !hasResponse) {
             const createdAtText = nowIso();
             const cutoffAt = getOrderCutoffAt_(planRow);
-            const cutoffText = firstText(
-              rawPlan.cutoffAt,
-              firstText(rawPlan.closeAt, planRow && planRow.close_at ? planRow.close_at : "")
-            );
-            const titleSuffix = firstText(planRow && planRow.title ? planRow.title : "", rawPlan.title || "");
-            const title = `訂餐｜請回覆${titleSuffix ? `：${titleSuffix}` : ""}`;
-            const body = [
-              firstText(planRow && planRow.date ? planRow.date : "", rawPlan.date || ""),
-              cutoffText ? `截止 ${cutoffText}` : cutoffAt ? `截止 ${cutoffAt.toISOString()}` : "",
-            ]
-              .filter(Boolean)
-              .join(" · ");
+            const mealDate = parseOrderDateValue_(firstText(planRow && planRow.date ? planRow.date : "", rawPlan.date || ""));
+            const title = `${describeMealDay_(mealDate)}便當還沒選`;
+            const body = describeCutoff_(cutoffAt);
             const url = "/ordering";
             const raw = {
               kind: "todo",
