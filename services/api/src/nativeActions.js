@@ -1736,6 +1736,141 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Todo notification: pending meal order before cutoff.
+      try {
+        const parseOrderDateValue_ = (value) => {
+          if (!value) {
+            return null;
+          }
+          if (value instanceof Date) {
+            return Number.isNaN(value.getTime()) ? null : value;
+          }
+          if (typeof value === "number") {
+            const parsedNumber = new Date(value);
+            return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+          }
+          const raw = String(value || "").trim();
+          if (!raw) {
+            return null;
+          }
+          const normalized =
+            /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+              ? raw.replace(/\//g, "-").replace(" ", "T")
+              : raw;
+          const parsed = new Date(normalized);
+          return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+
+        const getOrderCutoffAt_ = (planRow) => {
+          const raw = safeJsonObject(planRow && planRow.raw);
+          const explicitCutoff = parseOrderDateValue_(
+            firstText(raw.cutoffAt, firstText(raw.closeAt, planRow && planRow.close_at ? planRow.close_at : ""))
+          );
+          if (explicitCutoff) {
+            return explicitCutoff;
+          }
+          const mealDate = parseOrderDateValue_(firstText(planRow && planRow.date ? planRow.date : "", raw.date || ""));
+          if (!mealDate) {
+            return null;
+          }
+          const cutoff = new Date(mealDate);
+          cutoff.setDate(cutoff.getDate() - 1);
+          cutoff.setHours(23, 59, 0, 0);
+          return cutoff;
+        };
+
+        const isOrderPlanOpen_ = (planRow) => {
+          const raw = safeJsonObject(planRow && planRow.raw);
+          const status = String(firstText(raw.status, planRow && planRow.status ? planRow.status : "")).trim().toLowerCase();
+          if (status && status !== "open") {
+            return false;
+          }
+          const cutoffAt = getOrderCutoffAt_(planRow);
+          if (cutoffAt && Date.now() > cutoffAt.getTime()) {
+            return false;
+          }
+          return true;
+        };
+
+        const plansResult = await query(`select * from order_plans order by coalesce(date,''), id`);
+        const responsesResult = await query(
+          `select order_id
+             from order_responses
+            where student_id = $1`,
+          [studentId]
+        );
+        const respondedOrderIds = new Set(
+          responsesResult.rows
+            .map((row) => String(row.order_id || "").trim())
+            .filter(Boolean)
+        );
+
+        for (const planRow of plansResult.rows) {
+          const orderId = String(planRow && planRow.id ? planRow.id : "").trim();
+          if (!orderId) {
+            continue;
+          }
+          const todoId = `todo:ordering:${orderId}:${studentId}`;
+          const rawPlan = safeJsonObject(planRow && planRow.raw);
+          const isOpen = isOrderPlanOpen_(planRow);
+          const hasResponse = respondedOrderIds.has(orderId);
+
+          if (isOpen && !hasResponse) {
+            const createdAtText = nowIso();
+            const cutoffAt = getOrderCutoffAt_(planRow);
+            const cutoffText = firstText(
+              rawPlan.cutoffAt,
+              firstText(rawPlan.closeAt, planRow && planRow.close_at ? planRow.close_at : "")
+            );
+            const titleSuffix = firstText(planRow && planRow.title ? planRow.title : "", rawPlan.title || "");
+            const title = `訂餐｜請回覆${titleSuffix ? `：${titleSuffix}` : ""}`;
+            const body = [
+              firstText(planRow && planRow.date ? planRow.date : "", rawPlan.date || ""),
+              cutoffText ? `截止 ${cutoffText}` : cutoffAt ? `截止 ${cutoffAt.toISOString()}` : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            const url = "/ordering";
+            const raw = {
+              kind: "todo",
+              todoKey: todoId,
+              category: "ordering",
+              orderId,
+              rule: "order_response_pending",
+              title,
+              message: body,
+              url,
+            };
+
+            await query(
+              `insert into notifications (
+                 id, dedupe_key, kind, status,
+                 target_student_id, target_group_id,
+                 title, body, url,
+                 created_at, updated_at, raw
+               ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+               on conflict (id) do update set
+                 status = 'open',
+                 title = excluded.title,
+                 body = excluded.body,
+                 url = excluded.url,
+                 raw = excluded.raw,
+                 target_student_id = excluded.target_student_id,
+                 updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
+              [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+            );
+          } else {
+            await query(
+              `update notifications set status = 'closed', updated_at = now()
+               where id = $1 and coalesce(status,'open') <> 'closed'`,
+              [todoId]
+            );
+          }
+        }
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
         `select n.*, r.read_at, r.seen_updated_at
          from notifications n
