@@ -779,6 +779,7 @@ const API_POST_ACTIONS = new Set([
   "listFundEvents",
   "listFundPayments",
   "listBirthdays",
+  "refreshSession",
 ]);
 
 const API_V2_READ_ACTIONS = new Set([
@@ -844,6 +845,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "deleteRegistration",
   "deleteCheckin",
   "linkGoogleStudent",
+  "refreshSession",
   "updateDirectoryProfile",
   "batchUpdateGroupMemberships",
   "markNotificationRead",
