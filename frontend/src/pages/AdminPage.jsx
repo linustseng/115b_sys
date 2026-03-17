@@ -595,6 +595,12 @@ export default function AdminPage({
       if (!orderPlansLoaded) {
         loadOrderPlans();
       }
+      if (!students.length) {
+        loadStudents();
+      }
+      if (shouldLoadDirectory()) {
+        loadDirectoryAdmin();
+      }
     }
     if (activeTab === "dietary") {
       if (!students.length) {
