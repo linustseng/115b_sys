@@ -88,6 +88,7 @@ export default function AdminPage({
   const [registrationEventId, setRegistrationEventId] = useState("");
   const [checkinEventId, setCheckinEventId] = useState("");
   const [orderStatusMessage, setOrderStatusMessage] = useState("");
+  const [unsubmittedOrderCopyStatus, setUnsubmittedOrderCopyStatus] = useState("");
   const [dietaryQuery, setDietaryQuery] = useState("");
   const [orderForm, setOrderForm] = useState({
     id: "",
@@ -1764,6 +1765,54 @@ export default function AdminPage({
       setRegisterCopyStatus("複製失敗");
     } finally {
       setTimeout(() => setRegisterCopyStatus(""), 1800);
+    }
+  };
+
+  const handleCopyUnsubmittedOrderMentions = async () => {
+    if (!activeSavedOrderId) {
+      setUnsubmittedOrderCopyStatus("請先選擇已儲存的訂餐日期");
+      setTimeout(() => setUnsubmittedOrderCopyStatus(""), 1800);
+      return;
+    }
+    if (!unsubmittedOrderStudents.length) {
+      setUnsubmittedOrderCopyStatus("目前沒有未訂餐名單");
+      setTimeout(() => setUnsubmittedOrderCopyStatus(""), 1800);
+      return;
+    }
+    const mentionLines = unsubmittedOrderStudents
+      .map((student) => {
+        const studentId = String((student && student.id) || "").trim();
+        const mentionName =
+          getChineseName_(student) ||
+          getDisplayName_(student) ||
+          studentLabelByStudentId.get(studentId) ||
+          studentId ||
+          "未命名";
+        return `@${mentionName}`;
+      })
+      .filter(Boolean);
+    const text = [activeOrderLabel ? `未訂餐提醒｜${activeOrderLabel}` : "未訂餐提醒", mentionLines.join(" ")]
+      .filter(Boolean)
+      .join("\n");
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setUnsubmittedOrderCopyStatus("已複製 @名單");
+    } catch (err) {
+      setUnsubmittedOrderCopyStatus("複製失敗");
+    } finally {
+      setTimeout(() => setUnsubmittedOrderCopyStatus(""), 1800);
     }
   };
 
@@ -3469,9 +3518,21 @@ export default function AdminPage({
                         <p className="text-xs font-semibold text-slate-600">未訂餐名單</p>
                         <p className="mt-1 text-[11px] text-slate-400">比對學生主檔，列出這個訂餐日期尚未送出回覆的同學。</p>
                       </div>
-                      <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
-                        {unsubmittedOrderStudents.length} 人
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {unsubmittedOrderCopyStatus ? (
+                          <span className="text-[11px] text-slate-400">{unsubmittedOrderCopyStatus}</span>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={handleCopyUnsubmittedOrderMentions}
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                        >
+                          複製 @名單
+                        </button>
+                        <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                          {unsubmittedOrderStudents.length} 人
+                        </span>
+                      </div>
                     </div>
                     <div className="mt-3 space-y-2 text-xs text-slate-600">
                       {activeSavedOrderId ? (
