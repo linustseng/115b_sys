@@ -2473,6 +2473,42 @@ export default function AdminPage({
       .join(" ");
     return haystack.includes(orderRosterNeedle);
   };
+  const matchesStudentRosterFilter_ = (student) => {
+    if (!orderRosterNeedle) {
+      return true;
+    }
+    const studentId = String((student && student.id) || "").trim();
+    const haystack = [
+      studentLabelByStudentId.get(studentId),
+      getChineseName_(student),
+      getDisplayName_(student),
+      studentId,
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    return haystack.includes(orderRosterNeedle);
+  };
+  const activeSavedOrderId = normalizeOrderId_(orderForm.id || orderActiveId);
+  const submittedOrderStudentIds = new Set(
+    orderResponses
+      .filter((item) => String((item && item.sourceType) || "").trim() !== "proxy_external")
+      .map((item) => String((item && item.studentId) || "").trim())
+      .filter(Boolean)
+  );
+  const unsubmittedOrderStudents = activeSavedOrderId
+    ? sortOrderRosterItems_(
+        displayStudents.filter((student) => {
+          const studentId = String((student && student.id) || "").trim();
+          if (!studentId) {
+            return false;
+          }
+          if (submittedOrderStudentIds.has(studentId)) {
+            return false;
+          }
+          return matchesStudentRosterFilter_(student);
+        })
+      )
+    : [];
 
   const groupedOrderResponses = [
     { key: "A", label: orderForm.optionA || "A 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "A")) },
@@ -3216,7 +3252,10 @@ export default function AdminPage({
                 <div className="mt-4 space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">依餐別查看名單</p>
-                    <span className="text-[11px] text-slate-400">代訂 {proxyOrderResponses.length} 筆</span>
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <span>代訂 {proxyOrderResponses.length} 筆</span>
+                      <span>未訂餐 {unsubmittedOrderStudents.length} 人</span>
+                    </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {[
@@ -3423,6 +3462,49 @@ export default function AdminPage({
                         ) : null}
                       </div>
                     ))}
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-600">未訂餐名單</p>
+                        <p className="mt-1 text-[11px] text-slate-400">比對學生主檔，列出這個訂餐日期尚未送出回覆的同學。</p>
+                      </div>
+                      <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                        {unsubmittedOrderStudents.length} 人
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2 text-xs text-slate-600">
+                      {activeSavedOrderId ? (
+                        unsubmittedOrderStudents.length ? (
+                          unsubmittedOrderStudents.map((student) => {
+                            const studentId = String((student && student.id) || "").trim();
+                            const studentLabel =
+                              studentLabelByStudentId.get(studentId) ||
+                              getChineseName_(student) ||
+                              getDisplayName_(student) ||
+                              studentId ||
+                              "未命名";
+                            return (
+                              <div
+                                key={studentId || studentLabel}
+                                className="rounded-xl border border-rose-100 bg-rose-50/60 px-3 py-2"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="font-semibold text-slate-800">{studentLabel}</span>
+                                  {studentId ? (
+                                    <span className="text-[11px] text-slate-500">{studentId}</span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-xs text-slate-400">目前所有學生都已完成這個訂餐日期的回覆。</p>
+                        )
+                      ) : (
+                        <p className="text-xs text-slate-400">請先選擇已儲存的訂餐日期，才能比對未訂餐名單。</p>
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-2xl border border-slate-200 bg-white p-4">
                     <p className="text-xs font-semibold text-slate-600">用餐需求 / 備註總覽</p>
