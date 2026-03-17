@@ -800,7 +800,6 @@ const API_V2_READ_ACTIONS = new Set([
   "getSoftballAdminAccess",
   "searchStudents",
   "verifyGoogle",
-  "refreshSession",
   // Registrations & Checkins
   "listRegistrations",
   "listCheckins",

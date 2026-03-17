@@ -197,7 +197,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [showCalendarMobile]);
 
   useEffect(() => {
-    if (!hasGoogleLogin) {
+    if (!hasGoogleLogin || needsReauth) {
       setMemberships([]);
       setMembershipsLoaded(false);
       setSoftballAdminAllowed(false);
@@ -306,7 +306,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     return () => {
       ignore = true;
     };
-  }, [apiRequest, hasGoogleLogin, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
+  }, [apiRequest, hasGoogleLogin, needsReauth, googleLinkedStudent && googleLinkedStudent.id, googleLinkedStudent && googleLinkedStudent.email]);
 
   useEffect(() => {
     if (!hasGoogleLogin || needsReauth) {
