@@ -3421,7 +3421,8 @@ function SoftballPage({ shared }) {
                   }
                   const record = attMap.get(`${nextPracticeId}:${playerId}`);
                   const status = normalizeAttendanceStatus_(record && record.status);
-                  const displayName = getPlayerDisplayName_(player) || playerId;
+                  const matchedStudent = studentById[playerId] || null;
+                  const displayName = getPlayerDisplayName_(player, matchedStudent) || playerId;
 
                   if (status === "absent") {
                     nextAbsentNames.push(displayName);
