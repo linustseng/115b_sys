@@ -3,7 +3,7 @@ import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
-  const { apiRequest, storeAdminSession_, clearStoredAuth_ } = shared;
+  const { apiRequest, storeGoogleIdToken_, storeAdminSession_, clearStoredAuth_ } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
@@ -149,6 +149,25 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }));
   const [birthdaySummaryLoaded, setBirthdaySummaryLoaded] = useState(false);
   const [birthdaySummaryError, setBirthdaySummaryError] = useState("");
+  const downgradeToReauthState_ = () => {
+    storeGoogleIdToken_("");
+    storeAdminSession_(null);
+    setMemberships([]);
+    setMembershipsLoaded(false);
+    setSoftballAdminAllowed(false);
+    setNotifications([]);
+    setNotificationUnread(0);
+    setNotificationError("");
+    setApprovalsOverview({ pending: 0, inProgress: 0, completed: 0, returned: 0, total: 0 });
+    setApprovalsOverviewLoaded(false);
+    setApprovalsOverviewError("");
+    setBirthdaySummaryLoaded(false);
+    setBirthdaySummaryError("");
+    setShowApprovalsCenter(false);
+    setMountApprovalsCenter(false);
+    setLoginCollapsed(false);
+  };
+
   const handleLogout_ = () => {
     clearStoredAuth_();
     setGoogleLinkedStudent(null);
@@ -243,7 +262,13 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       if (!hasValidCachedMemberships) {
         apiRequest({ action: "listGroupMemberships" })
           .then(({ result }) => {
-            if (ignore || !result || !result.ok) {
+            if (ignore) {
+              return;
+            }
+            if (!result || !result.ok) {
+              if (String((result && result.error) || "") === "Unauthorized") {
+                downgradeToReauthState_();
+              }
               return;
             }
             const all = result.data && Array.isArray(result.data.memberships) ? result.data.memberships : [];
@@ -289,7 +314,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         if (ignore) {
           return;
         }
-        setNotificationError(error.message || "通知載入失敗");
+        const message = String((error && error.message) || "通知載入失敗");
+        if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
+          downgradeToReauthState_();
+          return;
+        }
+        setNotificationError(message || "通知載入失敗");
         setNotifications([]);
         setNotificationUnread(0);
         if (!hasValidCachedMemberships) {
@@ -322,6 +352,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         if (result && result.ok) {
           setSoftballAdminAllowed(Boolean(result.data && result.data.allowed));
         } else {
+          if (String((result && result.error) || "") === "Unauthorized") {
+            downgradeToReauthState_();
+            return;
+          }
           setSoftballAdminAllowed(false);
         }
       })
