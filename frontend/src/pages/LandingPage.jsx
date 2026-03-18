@@ -3,7 +3,14 @@ import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
-  const { apiRequest, storeGoogleIdToken_, storeAdminSession_, clearStoredAuth_ } = shared;
+  const {
+    apiRequest,
+    getGoogleIdTokenSilently_,
+    storeGoogleStudent_,
+    storeGoogleIdToken_,
+    storeAdminSession_,
+    clearStoredAuth_,
+  } = shared;
   const membershipsCacheTtlMs = 90 * 1000;
   const membershipsCachePrefix = "landing_memberships_cache_v1";
   const birthdaysCacheTtlMs = 6 * 60 * 60 * 1000;
@@ -91,6 +98,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   });
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState(false);
+  const [authRecovering, setAuthRecovering] = useState(false);
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
@@ -206,6 +214,77 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setLoginCollapsed(false);
     }
   }, [needsReauth]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin || !needsReauth || authRecovering) {
+      return;
+    }
+    if (typeof getGoogleIdTokenSilently_ !== "function") {
+      return;
+    }
+
+    let ignore = false;
+    const recoverAuth_ = async () => {
+      setAuthRecovering(true);
+      try {
+        const silentToken = await getGoogleIdTokenSilently_();
+        const normalizedToken = String(silentToken || "").trim();
+        if (!normalizedToken) {
+          return;
+        }
+        storeGoogleIdToken_(normalizedToken);
+        const { result } = await apiRequest({ action: "verifyGoogle", idToken: normalizedToken });
+        if (!result || !result.ok) {
+          throw new Error((result && result.error) || "Google 驗證失敗");
+        }
+        if (ignore) {
+          return;
+        }
+        const data = result.data || {};
+        const student = data.student || googleLinkedStudent || null;
+        const linkedStudentId = String((student && student.id) || "").trim();
+        const sessionToken = String(data.sessionToken || "").trim();
+        const refreshToken = String(data.refreshToken || "").trim();
+        const memberships = Array.isArray(data.memberships) ? data.memberships : [];
+
+        if (student) {
+          storeGoogleStudent_(student);
+          setGoogleLinkedStudent(student);
+        }
+        if (sessionToken && linkedStudentId) {
+          storeAdminSession_({
+            token: sessionToken,
+            refreshToken,
+            studentId: linkedStudentId,
+            memberships,
+          });
+          setMemberships(memberships);
+          setMembershipsLoaded(true);
+        }
+      } catch (error) {
+        // Silent recovery is best-effort; keep the explicit re-login UI visible.
+      } finally {
+        if (!ignore) {
+          setAuthRecovering(false);
+        }
+      }
+    };
+
+    recoverAuth_();
+    return () => {
+      ignore = true;
+    };
+  }, [
+    apiRequest,
+    authRecovering,
+    getGoogleIdTokenSilently_,
+    hasGoogleLogin,
+    needsReauth,
+    googleLinkedStudent,
+    storeAdminSession_,
+    storeGoogleIdToken_,
+    storeGoogleStudent_,
+  ]);
 
   useEffect(() => {
     try {
@@ -987,7 +1066,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                     title={needsReauth ? "重新登入" : "Google 登入"}
                     helperText={
                       needsReauth
-                        ? "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
+                        ? authRecovering
+                          ? "正在嘗試自動恢復登入狀態；若稍後仍未恢復，再手動重新登入。"
+                          : "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
                         : "請先完成綁定，才能使用活動、訂餐與壘球功能。"
                     }
                     onLinkedStudent={(student, _profile, _idToken, authContext) => {
