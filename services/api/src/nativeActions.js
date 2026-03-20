@@ -621,6 +621,7 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       sourceCount: null,
       dbCount: await getAcademicRegularCount_(query),
       syncedByReconcile: false,
+      sourcePreview: [],
       error: null,
     };
   }
@@ -630,6 +631,11 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       rangeStart: addDaysDateText_(todayDateText_(), -120),
       rangeEnd: addDaysDateText_(todayDateText_(), 365),
     });
+    const sourcePreview = parsedRows.slice(0, 8).map((row) => ({
+      sessionDate: firstText(row && row.sessionDate),
+      title: firstText(row && row.title),
+      startsAt: firstText(row && row.startsAt),
+    }));
     const sourceCount = parsedRows.length;
     const dbCountBefore = await getAcademicRegularCount_(query);
     if (sourceCount > 0 && dbCountBefore !== sourceCount) {
@@ -640,6 +646,7 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
         sourceCount,
         dbCount: dbCountAfter,
         syncedByReconcile: true,
+        sourcePreview,
         error: null,
       };
     }
@@ -648,6 +655,7 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       sourceCount,
       dbCount: dbCountBefore,
       syncedByReconcile: false,
+      sourcePreview,
       error: null,
     };
   } catch (error) {
@@ -656,6 +664,7 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       sourceCount: null,
       dbCount: await getAcademicRegularCount_(query),
       syncedByReconcile: false,
+      sourcePreview: [],
       error: String((error && error.message) || error || "unknown error"),
     };
   }
@@ -2158,6 +2167,7 @@ export async function dispatchNativeAction({
             sourceCount: reconcile.sourceCount,
             dbCount: reconcile.dbCount,
             syncedByReconcile: reconcile.syncedByReconcile,
+            sourcePreview: Array.isArray(reconcile.sourcePreview) ? reconcile.sourcePreview : [],
             reconcileError: reconcile.error,
           },
         },

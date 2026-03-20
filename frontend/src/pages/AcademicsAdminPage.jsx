@@ -515,6 +515,14 @@ export default function AcademicsAdminPage({ shared }) {
               {bootstrap.diagnostics.reconcileError ? (
                 <p className="mt-1 text-rose-600">診斷錯誤：{bootstrap.diagnostics.reconcileError}</p>
               ) : null}
+              {Array.isArray(bootstrap.diagnostics.sourcePreview) && bootstrap.diagnostics.sourcePreview.length ? (
+                <div className="mt-2 text-[11px] leading-5 text-slate-500">
+                  <p className="font-semibold text-slate-600">來源預覽：</p>
+                  {bootstrap.diagnostics.sourcePreview.map((item, idx) => (
+                    <p key={`${item.sessionDate}-${item.title}-${idx}`}>{item.sessionDate}｜{item.title}｜{item.startsAt || '-'}</p>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : (
             <p>課程同步診斷：尚未取得（可能是舊版部署或首次載入中）。</p>
