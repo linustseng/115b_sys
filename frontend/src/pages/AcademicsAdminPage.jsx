@@ -505,17 +505,21 @@ export default function AcademicsAdminPage({ shared }) {
           </div>
         </section>
 
-        {bootstrap.diagnostics ? (
-          <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-            <p>
-              課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB {bootstrap.diagnostics.dbCount ?? "-"} 堂
-              {bootstrap.diagnostics.syncedByReconcile ? "（已自動重同步）" : ""}
-            </p>
-            {bootstrap.diagnostics.reconcileError ? (
-              <p className="mt-1 text-rose-600">診斷錯誤：{bootstrap.diagnostics.reconcileError}</p>
-            ) : null}
-          </section>
-        ) : null}
+        <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+          {bootstrap.diagnostics ? (
+            <>
+              <p>
+                課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB {bootstrap.diagnostics.dbCount ?? "-"} 堂
+                {bootstrap.diagnostics.syncedByReconcile ? "（已自動重同步）" : ""}
+              </p>
+              {bootstrap.diagnostics.reconcileError ? (
+                <p className="mt-1 text-rose-600">診斷錯誤：{bootstrap.diagnostics.reconcileError}</p>
+              ) : null}
+            </>
+          ) : (
+            <p>課程同步診斷：尚未取得（可能是舊版部署或首次載入中）。</p>
+          )}
+        </section>
 
         {adminTab === "courses" && !bootstrap.hasConfiguredIcsUrl ? (
           <section className="mt-6 card p-6 sm:p-7">

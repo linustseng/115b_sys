@@ -800,6 +800,53 @@ function makeupRequestToDbRow_(input, actor) {
   };
 }
 
+function normalizeRegularSessionsByDayCourse_(sessions = []) {
+  const groups = new Map();
+  (Array.isArray(sessions) ? sessions : []).forEach((session) => {
+    const classKind = firstText(session && session.classKind);
+    if (classKind !== 'regular') {
+      return;
+    }
+    const sessionDate = firstText(session && session.sessionDate);
+    const courseGroupKey = firstText(
+      session && session.courseGroupKey,
+      firstText(session && session.courseGroupTitle, firstText(session && session.title))
+    );
+    if (!sessionDate || !courseGroupKey) {
+      return;
+    }
+    const key = `${sessionDate}__${courseGroupKey}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        ...session,
+        courseGroupKey,
+        courseGroupTitle: firstText(session && session.courseGroupTitle, firstText(session && session.title)),
+        slotCount: Number((session && session.raw && session.raw.slotCount) || 1),
+      });
+      return;
+    }
+    const item = groups.get(key);
+    const startsAt = firstText(session && session.startsAt);
+    const endsAt = firstText(session && session.endsAt);
+    if (!item.startsAt || (startsAt && startsAt < item.startsAt)) {
+      item.startsAt = startsAt;
+    }
+    if (!item.endsAt || (endsAt && endsAt > item.endsAt)) {
+      item.endsAt = endsAt;
+    }
+    if (!item.location) {
+      item.location = firstText(session && session.location);
+    }
+    item.slotCount = Number(item.slotCount || 0) + Number((session && session.raw && session.raw.slotCount) || 1);
+  });
+
+  return Array.from(groups.values()).sort((a, b) => {
+    const left = `${firstText(a.sessionDate)} ${firstText(a.startsAt)} ${firstText(a.courseGroupTitle)}`;
+    const right = `${firstText(b.sessionDate)} ${firstText(b.startsAt)} ${firstText(b.courseGroupTitle)}`;
+    return left.localeCompare(right, 'zh-Hant', { numeric: true, sensitivity: 'base' });
+  });
+}
+
 function buildMakeupSummaryByTarget_(requests = []) {
   const map = new Map();
   requests.forEach((item) => {
@@ -2040,7 +2087,7 @@ export async function dispatchNativeAction({
         ok: true,
         data: {
           sessions,
-          regularSessions: sessions.filter((item) => item.classKind === "regular"),
+          regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
           makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
           notes,
           myRequests,
@@ -2100,7 +2147,7 @@ export async function dispatchNativeAction({
         ok: true,
         data: {
           sessions,
-          regularSessions: sessions.filter((item) => item.classKind === "regular"),
+          regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
           makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
           requests,
           notes,
