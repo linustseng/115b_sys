@@ -4,7 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
-const ACADEMICS_PARSER_VERSION = "2026-03-20-v2";
+const ACADEMICS_PARSER_VERSION = "2026-03-20-v3";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
