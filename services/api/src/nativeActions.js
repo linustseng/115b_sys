@@ -622,14 +622,22 @@ async function ensureAcademicSessionsFresh_(query, withTransaction, { force = fa
       return syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
     }
 
-    const latest = rowOrNull(
+    const healthCheck = rowOrNull(
       await query(
-        `select max(synced_at) as latest_synced_at
+        `select
+           count(*)::int as total_count,
+           max(synced_at) as latest_synced_at
          from academic_sessions
-         where coalesce(source_type,'') = 'calendar_ics'`
+         where coalesce(source_type,'') = 'calendar_ics'
+           and coalesce(is_visible, true) = true`
       )
     );
-    const latestSyncedAt = firstText(latest && latest.latest_synced_at ? latest.latest_synced_at : "");
+    const totalCount = Number(healthCheck && healthCheck.total_count ? healthCheck.total_count : 0);
+    if (totalCount > 0 && totalCount <= 3) {
+      return syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
+    }
+
+    const latestSyncedAt = firstText(healthCheck && healthCheck.latest_synced_at ? healthCheck.latest_synced_at : "");
     if (latestSyncedAt) {
       const latestMs = Date.parse(latestSyncedAt);
       if (!Number.isNaN(latestMs) && Date.now() - latestMs < 6 * 60 * 60 * 1000) {
