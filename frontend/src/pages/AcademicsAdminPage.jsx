@@ -529,13 +529,13 @@ export default function AcademicsAdminPage({ shared }) {
           )}
         </section>
 
-        {adminTab === "courses" && !bootstrap.hasConfiguredIcsUrl ? (
+        {adminTab === "courses" ? (
           <section className="mt-6 card p-6 sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
                 <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
-                <p className="mt-2 text-sm text-slate-500">正式環境請在 Render service env 設定 <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">ACADEMICS_ICS_URL</code>；未設定時，可臨時貼入 ICS URL 進行同步。</p>
+                <p className="mt-2 text-sm text-slate-500">可直接同步目前後端來源；若要除錯來源是否正確，也可臨時貼入 ICS URL 覆蓋本次同步。</p>
               </div>
               <button
                 type="button"
