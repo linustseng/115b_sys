@@ -1129,7 +1129,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             <div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐管理</h3>
               <p className="mt-3 text-sm text-amber-900/80">
-                週末與特別課程訂餐，前一日 23:59 截止。
+                週末與特別課程訂餐，注意有訂餐截止時間。
               </p>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -1180,7 +1180,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--violet">
             <div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">學藝專區</h3>
-              <p className="mt-3 text-sm text-violet-900/80">補課登記、課程摘要與 NotebookLM 筆記入口。</p>
+              <p className="mt-3 text-sm text-violet-900/80">補課登記、課程摘要與筆記入口。</p>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <a
