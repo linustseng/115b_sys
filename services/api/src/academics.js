@@ -4,7 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
-const ACADEMICS_PARSER_VERSION = "2026-03-20-v3";
+const ACADEMICS_PARSER_VERSION = "2026-03-20-v4";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
@@ -389,7 +389,7 @@ function buildStandaloneAcademicSession(event) {
   }
   return buildCalendarSessionRecord({
     uid: event.uid,
-    recurrenceKey: sessionDate,
+    recurrenceKey: startsAt || sessionDate,
     title,
     teacher: "",
     location: firstText(event.location),
@@ -412,9 +412,9 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
   const occurrenceDates = event.rrule.between(rangeStart, rangeEnd, true);
 
   for (const occurrence of occurrenceDates) {
-    const recurrenceKey = toDateOnlyTextFromUtcParts(occurrence);
-    const overrideEvent = recurrenceOverrides[recurrenceKey];
-    if (exdates[recurrenceKey] && !overrideEvent) {
+    const occurrenceDateKey = toDateOnlyTextFromUtcParts(occurrence);
+    const overrideEvent = recurrenceOverrides[occurrenceDateKey];
+    if (exdates[occurrenceDateKey] && !overrideEvent) {
       continue;
     }
 
@@ -429,7 +429,7 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
       results.push(
         buildCalendarSessionRecord({
           uid: event.uid,
-          recurrenceKey,
+          recurrenceKey: startsAt || occurrenceDateKey,
           title,
           teacher: "",
           location: firstText(overrideEvent.location, event.location),
@@ -444,7 +444,7 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
       continue;
     }
 
-    const sessionDate = recurrenceKey;
+    const sessionDate = occurrenceDateKey;
     const syntheticEnd = new Date(occurrence.getTime() + durationMs);
     const startsAt = toDateTimeTextFromUtcParts(occurrence);
     const endsAt = toDateTimeTextFromUtcParts(syntheticEnd);
@@ -454,7 +454,7 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
     results.push(
       buildCalendarSessionRecord({
         uid: event.uid,
-        recurrenceKey,
+        recurrenceKey: startsAt || occurrenceDateKey,
         title,
         teacher: "",
         location: firstText(event.location),
