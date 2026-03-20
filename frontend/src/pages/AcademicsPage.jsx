@@ -223,7 +223,11 @@ export default function AcademicsPage({ shared }) {
       return "";
     }
     if (session.startsAt || session.endsAt) {
-      return formatEventSchedule_(session.startsAt || session.sessionDate, session.endsAt || session.startsAt || session.sessionDate);
+      const schedule = formatEventSchedule_(
+        session.startsAt || session.sessionDate,
+        session.endsAt || session.startsAt || session.sessionDate
+      );
+      return [schedule && schedule.dateLabel, schedule && schedule.timeLabel].filter(Boolean).join(" · ");
     }
     if (session.sessionDate) {
       return formatDisplayDate_(session.sessionDate, { withTime: false });
