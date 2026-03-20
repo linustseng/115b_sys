@@ -606,6 +606,21 @@ async function ensureAcademicSessionsFresh_({ force = false } = {}) {
     return { configured: false, didSync: false, count: 0 };
   }
   if (!force) {
+    const legacyCheck = rowOrNull(
+      await query(
+        `select count(*)::int as count
+         from academic_sessions
+         where coalesce(source_type,'') = 'calendar_ics'
+           and (
+             coalesce(raw->>'courseGroupTitle','') = ''
+             or coalesce(raw->>'courseGroupKey','') = ''
+           )`
+      )
+    );
+    if (Number(legacyCheck && legacyCheck.count ? legacyCheck.count : 0) > 0) {
+      return syncAcademicSessionsFromIcs_(configuredUrl);
+    }
+
     const latest = rowOrNull(
       await query(
         `select max(synced_at) as latest_synced_at
