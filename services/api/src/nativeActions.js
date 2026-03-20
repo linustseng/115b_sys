@@ -614,6 +614,7 @@ async function ensureAcademicSessionsFresh_(query, withTransaction, { force = fa
            and (
              coalesce(raw->>'courseGroupTitle','') = ''
              or coalesce(raw->>'courseGroupKey','') = ''
+             or coalesce(raw->>'parserVersion','') <> '2026-03-20-v2'
            )`
       )
     );

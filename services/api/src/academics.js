@@ -4,6 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
+const ACADEMICS_PARSER_VERSION = "2026-03-20-v2";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
@@ -336,6 +337,7 @@ function buildCalendarSessionRecord(base) {
     status: firstText(base.status, "published"),
     isVisible: true,
     calendarTimeZone: firstText(base.timeZone, DEFAULT_CALENDAR_TIMEZONE),
+    parserVersion: ACADEMICS_PARSER_VERSION,
   };
   return {
     id,
