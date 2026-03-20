@@ -175,10 +175,19 @@ export default function AcademicsPage({ shared }) {
   const recentCourseSessions = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = regularSessions.filter((session) => String(session.sessionDate || "") >= today);
-    if (upcoming.length) {
-      return upcoming.slice(0, 3);
-    }
-    return regularSessions.slice(-3);
+    const source = upcoming.length ? upcoming : regularSessions;
+    const selectedDates = [];
+    source.forEach((session) => {
+      const date = String(session.sessionDate || "").trim();
+      if (!date || selectedDates.includes(date)) {
+        return;
+      }
+      if (selectedDates.length < 3) {
+        selectedDates.push(date);
+      }
+    });
+    const dateSet = new Set(selectedDates);
+    return source.filter((session) => dateSet.has(String(session.sessionDate || "").trim()));
   }, [regularSessions]);
 
   const courseCatalog = useMemo(() => {
@@ -571,7 +580,7 @@ export default function AcademicsPage({ shared }) {
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
               <p className="mt-2 text-sm text-slate-500">依課程名稱分組，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
-            <span className="text-xs text-slate-400">最近 {recentCourseSessions.length} 堂</span>
+            <span className="text-xs text-slate-400">最近 3 個上課日</span>
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
