@@ -51,6 +51,7 @@ export default function AcademicsAdminPage({ shared }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [adminTab, setAdminTab] = useState("courses");
   const [syncing, setSyncing] = useState(false);
   const [icsUrlInput, setIcsUrlInput] = useState("");
   const [bootstrap, setBootstrap] = useState({
@@ -464,6 +465,26 @@ export default function AcademicsAdminPage({ shared }) {
         {error ? <div className="mb-4 alert alert-error">{error}</div> : null}
         {status ? <div className="mb-4 alert alert-success">{status}</div> : null}
 
+        <section className="mb-6 card p-3 sm:p-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: "courses", label: "課程管理" },
+              { id: "makeup", label: "補課管理" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setAdminTab(item.id)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                  adminTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
         <section className="grid gap-4 md:grid-cols-3">
           <div className="card p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Regular</p>
@@ -482,7 +503,7 @@ export default function AcademicsAdminPage({ shared }) {
           </div>
         </section>
 
-        {!bootstrap.hasConfiguredIcsUrl ? (
+        {adminTab === "courses" && !bootstrap.hasConfiguredIcsUrl ? (
           <section className="mt-6 card p-6 sm:p-7">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -508,6 +529,7 @@ export default function AcademicsAdminPage({ shared }) {
           </section>
         ) : null}
 
+        {adminTab === "makeup" ? (
         <section className="mt-6 card p-6 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -603,9 +625,11 @@ export default function AcademicsAdminPage({ shared }) {
             </div>
           </form>
         </section>
+        ) : null}
 
-        <section className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
+        <section className="mt-6 grid gap-6 xl:grid-cols-1">
+          {adminTab === "makeup" ? (
+            <div className="space-y-6">
             <section className="card p-6 sm:p-7">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -731,8 +755,10 @@ export default function AcademicsAdminPage({ shared }) {
               </div>
             </section>
           </div>
+          ) : null}
 
-          <section className="card p-6 sm:p-7">
+          {adminTab === "courses" ? (
+            <section className="card p-6 sm:p-7">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Notes</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程摘要 / 筆記管理</h2>
@@ -847,7 +873,8 @@ export default function AcademicsAdminPage({ shared }) {
                 </button>
               </div>
             </form>
-          </section>
+            </section>
+          ) : null}
         </section>
       </main>
     </div>
