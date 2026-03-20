@@ -600,6 +600,67 @@ async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
   return { configured: true, didSync: true, count: sessions.length };
 }
 
+async function getAcademicRegularCount_(query) {
+  const row = rowOrNull(
+    await query(
+      `select count(*)::int as count
+       from academic_sessions
+       where coalesce(source_type,'') = 'calendar_ics'
+         and coalesce(class_kind,'') = 'regular'
+         and coalesce(is_visible, true) = true`
+    )
+  );
+  return Number(row && row.count ? row.count : 0);
+}
+
+async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
+  const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
+  if (!configuredUrl) {
+    return {
+      configured: false,
+      sourceCount: null,
+      dbCount: await getAcademicRegularCount_(query),
+      syncedByReconcile: false,
+      error: null,
+    };
+  }
+
+  try {
+    const parsedRows = await loadAcademicSessionsFromIcs(configuredUrl, {
+      rangeStart: addDaysDateText_(todayDateText_(), -120),
+      rangeEnd: addDaysDateText_(todayDateText_(), 365),
+    });
+    const sourceCount = parsedRows.length;
+    const dbCountBefore = await getAcademicRegularCount_(query);
+    if (sourceCount > 0 && dbCountBefore !== sourceCount) {
+      await syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
+      const dbCountAfter = await getAcademicRegularCount_(query);
+      return {
+        configured: true,
+        sourceCount,
+        dbCount: dbCountAfter,
+        syncedByReconcile: true,
+        error: null,
+      };
+    }
+    return {
+      configured: true,
+      sourceCount,
+      dbCount: dbCountBefore,
+      syncedByReconcile: false,
+      error: null,
+    };
+  } catch (error) {
+    return {
+      configured: true,
+      sourceCount: null,
+      dbCount: await getAcademicRegularCount_(query),
+      syncedByReconcile: false,
+      error: String((error && error.message) || error || "unknown error"),
+    };
+  }
+}
+
 async function ensureAcademicSessionsFresh_(query, withTransaction, { force = false } = {}) {
   const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
   if (!configuredUrl) {
@@ -1995,6 +2056,7 @@ export async function dispatchNativeAction({
       requireAuth();
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
       await ensureAcademicSessionsFresh_(query, withTransaction);
+      const reconcile = await reconcileAcademicSessionsWithSource_(query, withTransaction);
       const fromDate = addDaysDateText_(todayDateText_(), -180);
       const toDate = addDaysDateText_(todayDateText_(), 365);
 
@@ -2045,6 +2107,12 @@ export async function dispatchNativeAction({
           summaryByTarget,
           students: studentOptions,
           hasConfiguredIcsUrl: Boolean(firstText(process.env.ACADEMICS_ICS_URL || "")),
+          diagnostics: {
+            sourceCount: reconcile.sourceCount,
+            dbCount: reconcile.dbCount,
+            syncedByReconcile: reconcile.syncedByReconcile,
+            reconcileError: reconcile.error,
+          },
         },
         error: null,
       };

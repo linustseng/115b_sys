@@ -63,6 +63,7 @@ export default function AcademicsAdminPage({ shared }) {
     summaryByTarget: [],
     students: [],
     hasConfiguredIcsUrl: false,
+    diagnostics: null,
   });
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [noteForm, setNoteForm] = useState(() => buildNoteForm(null, ""));
@@ -94,6 +95,7 @@ export default function AcademicsAdminPage({ shared }) {
         summaryByTarget: Array.isArray(data.summaryByTarget) ? data.summaryByTarget : [],
         students: Array.isArray(data.students) ? data.students : [],
         hasConfiguredIcsUrl: Boolean(data.hasConfiguredIcsUrl),
+        diagnostics: data.diagnostics || null,
       });
       setRequestDrafts((prev) => {
         const next = { ...prev };
@@ -502,6 +504,18 @@ export default function AcademicsAdminPage({ shared }) {
             <p className="mt-2 text-sm text-slate-500">已發布摘要</p>
           </div>
         </section>
+
+        {bootstrap.diagnostics ? (
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+            <p>
+              課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB {bootstrap.diagnostics.dbCount ?? "-"} 堂
+              {bootstrap.diagnostics.syncedByReconcile ? "（已自動重同步）" : ""}
+            </p>
+            {bootstrap.diagnostics.reconcileError ? (
+              <p className="mt-1 text-rose-600">診斷錯誤：{bootstrap.diagnostics.reconcileError}</p>
+            ) : null}
+          </section>
+        ) : null}
 
         {adminTab === "courses" && !bootstrap.hasConfiguredIcsUrl ? (
           <section className="mt-6 card p-6 sm:p-7">
