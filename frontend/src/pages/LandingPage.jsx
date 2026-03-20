@@ -740,6 +740,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeEventAdmin = membershipsLoaded && hasGroupAccess_(["C", "E"]);
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
+  const canSeeAcademicsAdmin = membershipsLoaded && hasGroupAccess_(["E", "F"]);
   const canSeeSoftballAdmin = membershipsLoaded && (hasGroupAccess_(["E", "H"]) || softballAdminAllowed);
   const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
@@ -1097,7 +1098,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </section>
         ) : null}
 
-        <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-5">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
             <div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理</h3>
@@ -1169,6 +1170,30 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 <a
                   href="/admin/finance"
                   className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-800"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--violet">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">學藝專區</h3>
+              <p className="mt-3 text-sm text-violet-900/80">補課登記、課程摘要與 NotebookLM 筆記入口。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/academics"
+                className="inline-flex items-center rounded-full border border-violet-300 bg-white px-4 py-1.5 text-sm font-semibold text-violet-700 shadow-sm hover:border-violet-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeAcademicsAdmin ? (
+                <a
+                  href="/admin/academics"
+                  className="text-xs font-semibold text-violet-700 underline decoration-violet-300 underline-offset-4 hover:text-violet-800"
                 >
                   管理入口
                 </a>

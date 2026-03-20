@@ -1,4 +1,12 @@
 import crypto from "node:crypto";
+import {
+  buildGeneratedThursdaySessionFromId,
+  buildGeneratedThursdaySessions,
+  loadAcademicSessionsFromIcs,
+  mapAcademicSessionRow,
+  mapMakeupRequestRow,
+  mapSessionNoteRow,
+} from "./academics.js";
 import { jsonbParam } from "./jsonb.js";
 
 function normalizeEmail(value) {
@@ -397,6 +405,297 @@ function toSoftballSupplyCaseRow(input) {
 
 function rowOrNull(result) {
   return result && result.rows && result.rows.length ? result.rows[0] : null;
+}
+
+const ACADEMICS_ALLOWED_GROUPS = ["E", "F"];
+
+function todayDateText_() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysDateText_(dateText, days) {
+  const base = new Date(`${String(dateText || "").trim()}T00:00:00Z`);
+  if (Number.isNaN(base.getTime())) {
+    return "";
+  }
+  base.setUTCDate(base.getUTCDate() + Number(days || 0));
+  return base.toISOString().slice(0, 10);
+}
+
+function academicSessionToDbRow_(input) {
+  const row = input || {};
+  const raw = row.raw && typeof row.raw === "object" ? row.raw : { ...row };
+  const now = nowIso();
+  return {
+    id: firstText(row.id),
+    sourceType: firstText(row.sourceType),
+    sourceUid: firstText(row.sourceUid),
+    sourceRecurrenceId: firstText(row.sourceRecurrenceId),
+    classKind: firstText(row.classKind),
+    classGroup: firstText(row.classGroup),
+    title: firstText(row.title),
+    teacher: firstText(row.teacher),
+    location: firstText(row.location),
+    sessionDate: firstText(row.sessionDate),
+    startsAt: firstText(row.startsAt),
+    endsAt: firstText(row.endsAt),
+    registrationDeadline: firstText(row.registrationDeadline),
+    status: firstText(row.status, "published"),
+    isVisible: Object.prototype.hasOwnProperty.call(row, "isVisible") ? Boolean(row.isVisible) : true,
+    raw: {
+      ...raw,
+      id: firstText(raw.id, row.id),
+      sourceType: firstText(raw.sourceType, row.sourceType),
+      sourceUid: firstText(raw.sourceUid, row.sourceUid),
+      sourceRecurrenceId: firstText(raw.sourceRecurrenceId, row.sourceRecurrenceId),
+      classKind: firstText(raw.classKind, row.classKind),
+      classGroup: firstText(raw.classGroup, row.classGroup),
+      title: firstText(raw.title, row.title),
+      teacher: firstText(raw.teacher, row.teacher),
+      location: firstText(raw.location, row.location),
+      sessionDate: firstText(raw.sessionDate, row.sessionDate),
+      startsAt: firstText(raw.startsAt, row.startsAt),
+      endsAt: firstText(raw.endsAt, row.endsAt),
+      registrationDeadline: firstText(raw.registrationDeadline, row.registrationDeadline),
+      status: firstText(raw.status, row.status || "published"),
+      isVisible: Object.prototype.hasOwnProperty.call(raw, "isVisible") ? Boolean(raw.isVisible) : Object.prototype.hasOwnProperty.call(row, "isVisible") ? Boolean(row.isVisible) : true,
+    },
+    createdAt: firstText(row.createdAt, now),
+    updatedAt: firstText(row.updatedAt, now),
+  };
+}
+
+async function upsertAcademicSession_(query, input) {
+  const row = academicSessionToDbRow_(input);
+  await query(
+    `insert into academic_sessions (
+       id, source_type, source_uid, source_recurrence_id,
+       class_kind, class_group, title, teacher, location,
+       session_date, starts_at, ends_at, registration_deadline,
+       status, is_visible, raw, created_at, updated_at
+     ) values (
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18
+     )
+     on conflict (id) do update set
+       source_type = excluded.source_type,
+       source_uid = excluded.source_uid,
+       source_recurrence_id = excluded.source_recurrence_id,
+       class_kind = excluded.class_kind,
+       class_group = excluded.class_group,
+       title = excluded.title,
+       teacher = excluded.teacher,
+       location = excluded.location,
+       session_date = excluded.session_date,
+       starts_at = excluded.starts_at,
+       ends_at = excluded.ends_at,
+       registration_deadline = excluded.registration_deadline,
+       status = excluded.status,
+       is_visible = excluded.is_visible,
+       raw = excluded.raw,
+       updated_at = excluded.updated_at,
+       synced_at = now()`,
+    [
+      row.id,
+      row.sourceType,
+      row.sourceUid,
+      row.sourceRecurrenceId,
+      row.classKind,
+      row.classGroup,
+      row.title,
+      row.teacher,
+      row.location,
+      row.sessionDate,
+      row.startsAt,
+      row.endsAt,
+      row.registrationDeadline,
+      row.status,
+      row.isVisible,
+      jsonbParam(row.raw, {}),
+      row.createdAt,
+      row.updatedAt,
+    ]
+  );
+  return row;
+}
+
+async function loadAcademicSessionsInRange_(query, { fromDate, toDate } = {}) {
+  const conditions = [`coalesce(is_visible, true) = true`];
+  const values = [];
+  if (fromDate) {
+    values.push(String(fromDate));
+    conditions.push(`coalesce(session_date, '') >= $${values.length}`);
+  }
+  if (toDate) {
+    values.push(String(toDate));
+    conditions.push(`coalesce(session_date, '') <= $${values.length}`);
+  }
+  const result = await query(
+    `select * from academic_sessions
+     where ${conditions.join(" and ")}
+     order by coalesce(session_date,''), coalesce(starts_at,''), id`,
+    values
+  );
+  return result.rows.map((row) => mapAcademicSessionRow(row));
+}
+
+async function loadAcademicSessionsByIds_(query, ids = []) {
+  const normalizedIds = Array.from(
+    new Set((Array.isArray(ids) ? ids : []).map((value) => firstText(value)).filter(Boolean))
+  );
+  if (!normalizedIds.length) {
+    return [];
+  }
+  const result = await query(
+    `select * from academic_sessions where id = any($1::text[]) order by coalesce(session_date,''), coalesce(starts_at,''), id`,
+    [normalizedIds]
+  );
+  const rows = result.rows.map((row) => mapAcademicSessionRow(row));
+  const rowIds = new Set(rows.map((item) => item.id));
+  normalizedIds.forEach((id) => {
+    if (rowIds.has(id)) {
+      return;
+    }
+    const generated = buildGeneratedThursdaySessionFromId(id);
+    if (generated) {
+      rows.push(generated);
+    }
+  });
+  return rows;
+}
+
+async function ensureGeneratedMakeupTargetSession_(query, sessionId) {
+  const generated = buildGeneratedThursdaySessionFromId(sessionId);
+  if (!generated) {
+    return null;
+  }
+  await upsertAcademicSession_(query, generated);
+  const result = await query(`select * from academic_sessions where id = $1 limit 1`, [generated.id]);
+  return rowOrNull(result);
+}
+
+function sessionNoteToDbRow_(input, actor = null) {
+  const raw = safeJsonObject(input);
+  const linkedActor = actor && typeof actor === "object" ? actor : {};
+  const id = firstText(raw.id, crypto.randomUUID());
+  const updatedAt = nowIso();
+  const createdBy = firstText(raw.createdBy, linkedActor.id || "");
+  const createdByName = firstText(
+    raw.createdByName,
+    linkedActor.preferredName || linkedActor.nameZh || linkedActor.name || ""
+  );
+  const normalizedStatus = firstText(raw.status, "draft").toLowerCase() === "published" ? "published" : "draft";
+  const publishedAt = normalizedStatus === "published" ? firstText(raw.publishedAt, updatedAt) : "";
+  return {
+    id,
+    sessionId: firstText(raw.sessionId),
+    title: firstText(raw.title),
+    summary: firstText(raw.summary),
+    linkUrl: firstText(raw.linkUrl),
+    linkLabel: firstText(raw.linkLabel, raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+    status: normalizedStatus,
+    publishedAt,
+    createdBy,
+    createdByName,
+    updatedAt,
+    raw: {
+      ...raw,
+      id,
+      sessionId: firstText(raw.sessionId),
+      title: firstText(raw.title),
+      summary: firstText(raw.summary),
+      linkUrl: firstText(raw.linkUrl),
+      linkLabel: firstText(raw.linkLabel, raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+      status: normalizedStatus,
+      publishedAt,
+      createdBy,
+      createdByName,
+      updatedAt,
+    },
+  };
+}
+
+function makeupRequestToDbRow_(input, actor) {
+  const raw = safeJsonObject(input);
+  const student = actor && typeof actor === "object" ? actor : {};
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  const studentName = firstText(student.preferredName, firstText(student.nameZh, student.name || ""));
+  return {
+    id,
+    studentId: firstText(student.id),
+    studentName,
+    studentEmail: normalizeEmail(firstText(student.email)),
+    missedSessionId: firstText(raw.missedSessionId),
+    targetSessionId: firstText(raw.targetSessionId),
+    needMeal: Boolean(raw.needMeal),
+    needHandout: Object.prototype.hasOwnProperty.call(raw, "needHandout") ? Boolean(raw.needHandout) : true,
+    reason: firstText(raw.reason),
+    note: firstText(raw.note),
+    adminNote: firstText(raw.adminNote),
+    status: firstText(raw.status, "submitted"),
+    createdAt,
+    updatedAt,
+    cancelledAt: firstText(raw.cancelledAt),
+    raw: {
+      ...raw,
+      id,
+      studentId: firstText(student.id),
+      studentName,
+      studentEmail: normalizeEmail(firstText(student.email)),
+      missedSessionId: firstText(raw.missedSessionId),
+      targetSessionId: firstText(raw.targetSessionId),
+      needMeal: Boolean(raw.needMeal),
+      needHandout: Object.prototype.hasOwnProperty.call(raw, "needHandout") ? Boolean(raw.needHandout) : true,
+      reason: firstText(raw.reason),
+      note: firstText(raw.note),
+      adminNote: firstText(raw.adminNote),
+      status: firstText(raw.status, "submitted"),
+      createdAt,
+      updatedAt,
+      cancelledAt: firstText(raw.cancelledAt),
+    },
+  };
+}
+
+function buildMakeupSummaryByTarget_(requests = []) {
+  const map = new Map();
+  requests.forEach((item) => {
+    const targetId = firstText(item && item.targetSessionId);
+    if (!targetId) {
+      return;
+    }
+    if (!map.has(targetId)) {
+      map.set(targetId, {
+        targetSessionId: targetId,
+        targetSession: item.targetSession || null,
+        total: 0,
+        active: 0,
+        needMeal: 0,
+        needHandout: 0,
+        statuses: {},
+      });
+    }
+    const bucket = map.get(targetId);
+    const status = firstText(item && item.status, "submitted");
+    const active = status !== "cancelled";
+    bucket.total += 1;
+    if (active) {
+      bucket.active += 1;
+      if (item && item.needMeal) {
+        bucket.needMeal += 1;
+      }
+      if (item && item.needHandout) {
+        bucket.needHandout += 1;
+      }
+    }
+    bucket.statuses[status] = Number(bucket.statuses[status] || 0) + 1;
+  });
+  return Array.from(map.values()).sort((left, right) => {
+    const a = `${firstText(left.targetSession && left.targetSession.sessionDate)} ${firstText(left.targetSessionId)}`;
+    const b = `${firstText(right.targetSession && right.targetSession.sessionDate)} ${firstText(right.targetSessionId)}`;
+    return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+  });
 }
 
 function normalizeGroupId_(value) {
@@ -1517,6 +1816,387 @@ export async function dispatchNativeAction({
       const currentMonth = new Date().getMonth() + 1;
       const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
       return { ok: true, data: { months, currentMonth, nextMonth }, error: null };
+    }
+
+    case "listAcademicsBootstrap": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
+      const fromDate = addDaysDateText_(todayDateText_(), -120);
+      const toDate = addDaysDateText_(todayDateText_(), 210);
+
+      const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
+      const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 20 });
+      const sessionsById = new Map();
+      persistedSessions.forEach((item) => sessionsById.set(item.id, item));
+      generatedTargets.forEach((item) => {
+        if (!sessionsById.has(item.id)) {
+          sessionsById.set(item.id, item);
+        }
+      });
+
+      const notesResult = await query(
+        `select * from session_notes
+         where coalesce(status,'draft') = 'published'
+         order by coalesce(published_at,'' ) desc, coalesce(updated_at,'' ) desc, id desc`
+      );
+      const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
+
+      const requestResult = await query(
+        `select * from makeup_requests
+         where student_id = $1
+         order by coalesce(created_at,'' ) desc, id desc`,
+        [auth.studentId]
+      );
+      const requestSessionIds = new Set();
+      requestResult.rows.forEach((row) => {
+        requestSessionIds.add(firstText(row.missed_session_id));
+        requestSessionIds.add(firstText(row.target_session_id));
+      });
+      const missingSessions = await loadAcademicSessionsByIds_(query, Array.from(requestSessionIds));
+      missingSessions.forEach((item) => sessionsById.set(item.id, item));
+
+      const sessions = Array.from(sessionsById.values()).sort((left, right) => {
+        const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.id)}`;
+        const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
+        return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+      const myRequests = requestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+
+      return {
+        ok: true,
+        data: {
+          sessions,
+          regularSessions: sessions.filter((item) => item.classKind === "regular"),
+          makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
+          notes,
+          myRequests,
+          canManage,
+        },
+        error: null,
+      };
+    }
+
+    case "listAcademicsAdminBootstrap": {
+      requireAuth();
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const fromDate = addDaysDateText_(todayDateText_(), -180);
+      const toDate = addDaysDateText_(todayDateText_(), 365);
+
+      const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
+      const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 26 });
+      const sessionsById = new Map();
+      persistedSessions.forEach((item) => sessionsById.set(item.id, item));
+      generatedTargets.forEach((item) => {
+        if (!sessionsById.has(item.id)) {
+          sessionsById.set(item.id, item);
+        }
+      });
+
+      const requestsResult = await query(
+        `select * from makeup_requests
+         order by coalesce(status,''), coalesce(created_at,'' ) desc, id desc`
+      );
+      const requestSessionIds = new Set();
+      requestsResult.rows.forEach((row) => {
+        requestSessionIds.add(firstText(row.missed_session_id));
+        requestSessionIds.add(firstText(row.target_session_id));
+      });
+      const missingSessions = await loadAcademicSessionsByIds_(query, Array.from(requestSessionIds));
+      missingSessions.forEach((item) => sessionsById.set(item.id, item));
+
+      const notesResult = await query(
+        `select * from session_notes
+         order by coalesce(status,'' ) desc, coalesce(published_at,'' ) desc, coalesce(updated_at,'' ) desc, id desc`
+      );
+      const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
+      const requests = requestsResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+      const summaryByTarget = buildMakeupSummaryByTarget_(requests);
+      const sessions = Array.from(sessionsById.values()).sort((left, right) => {
+        const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.id)}`;
+        const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
+        return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+
+      return {
+        ok: true,
+        data: {
+          sessions,
+          regularSessions: sessions.filter((item) => item.classKind === "regular"),
+          makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
+          requests,
+          notes,
+          summaryByTarget,
+        },
+        error: null,
+      };
+    }
+
+    case "syncAcademicSessionsFromIcs": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const icsUrl = firstText(body.icsUrl, process.env.ACADEMICS_ICS_URL || "");
+      if (!icsUrl) {
+        return { ok: false, data: null, error: "Missing icsUrl or ACADEMICS_ICS_URL" };
+      }
+
+      const sessions = await loadAcademicSessionsFromIcs(icsUrl, {
+        rangeStart: addDaysDateText_(todayDateText_(), -120),
+        rangeEnd: addDaysDateText_(todayDateText_(), 365),
+      });
+
+      await withTransaction(async (client) => {
+        for (const item of sessions) {
+          await upsertAcademicSession_(client.query.bind(client), item);
+        }
+      });
+
+      return {
+        ok: true,
+        data: {
+          count: sessions.length,
+          sessions: sessions.slice(0, 20),
+        },
+        error: null,
+      };
+    }
+
+    case "submitMakeupRequest": {
+      requireAuth();
+      const student = await findStudentProfileById(auth.studentId);
+      if (!student || !student.id) {
+        return { ok: false, data: null, error: "Student profile not found" };
+      }
+
+      const payload = safeJsonObject(body.data || body.request || body);
+      const missedSessionId = firstText(payload.missedSessionId);
+      const targetSessionId = firstText(payload.targetSessionId);
+      if (!missedSessionId || !targetSessionId) {
+        return { ok: false, data: null, error: "Missing missedSessionId or targetSessionId" };
+      }
+
+      const missedSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [missedSessionId]));
+      if (!missedSessionRow) {
+        return { ok: false, data: null, error: "原課程不存在" };
+      }
+      const missedSession = mapAcademicSessionRow(missedSessionRow);
+      if (missedSession.classKind !== "regular") {
+        return { ok: false, data: null, error: "原課程類型不正確" };
+      }
+
+      let targetSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [targetSessionId]));
+      if (!targetSessionRow) {
+        targetSessionRow = await ensureGeneratedMakeupTargetSession_(query, targetSessionId);
+      }
+      if (!targetSessionRow) {
+        return { ok: false, data: null, error: "補課場次不存在" };
+      }
+      const targetSession = mapAcademicSessionRow(targetSessionRow);
+      if (targetSession.classKind !== "makeup_target") {
+        return { ok: false, data: null, error: "補課場次類型不正確" };
+      }
+
+      const existingActive = await query(
+        `select * from makeup_requests
+         where student_id = $1
+           and missed_session_id = $2
+           and coalesce(status,'submitted') <> 'cancelled'
+         order by coalesce(updated_at,'' ) desc, id desc
+         limit 1`,
+        [auth.studentId, missedSessionId]
+      );
+      if (rowOrNull(existingActive)) {
+        return { ok: false, data: null, error: "這堂課已經有補課登記，若要重填請先撤銷。" };
+      }
+
+      const row = makeupRequestToDbRow_(payload, {
+        ...student,
+        email: firstText(student.email, auth && auth.profile ? auth.profile.email : ""),
+      });
+      await query(
+        `insert into makeup_requests (
+           id, student_id, student_name, student_email,
+           missed_session_id, target_session_id,
+           need_meal, need_handout,
+           reason, note, admin_note, status,
+           created_at, updated_at, cancelled_at, raw
+         ) values (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
+         )`,
+        [
+          row.id,
+          row.studentId,
+          row.studentName,
+          row.studentEmail,
+          row.missedSessionId,
+          row.targetSessionId,
+          row.needMeal,
+          row.needHandout,
+          row.reason,
+          row.note,
+          row.adminNote,
+          row.status,
+          row.createdAt,
+          row.updatedAt,
+          row.cancelledAt,
+          jsonbParam(row.raw, {}),
+        ]
+      );
+      const created = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [row.id]));
+      const sessionsById = new Map([
+        [missedSession.id, missedSession],
+        [targetSession.id, targetSession],
+      ]);
+      return { ok: true, data: { request: mapMakeupRequestRow(created, sessionsById) }, error: null };
+    }
+
+    case "cancelMakeupRequest": {
+      requireAuth();
+      const id = firstText(body.id || (body.data && body.data.id));
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: false, data: null, error: "Request not found" };
+      }
+      if (firstText(existing.student_id) !== firstText(auth.studentId)) {
+        throw new Error("Unauthorized");
+      }
+      if (firstText(existing.status).toLowerCase() === "completed") {
+        return { ok: false, data: null, error: "已完成的補課不可撤銷" };
+      }
+      const updatedAt = nowIso();
+      const cancelledAt = updatedAt;
+      const mergedRaw = {
+        ...safeJsonObject(existing.raw),
+        status: "cancelled",
+        updatedAt,
+        cancelledAt,
+      };
+      await query(
+        `update makeup_requests
+         set status = 'cancelled',
+             cancelled_at = $2,
+             updated_at = $3,
+             raw = $4::jsonb,
+             synced_at = now()
+         where id = $1`,
+        [id, cancelledAt, updatedAt, jsonbParam(mergedRaw, {})]
+      );
+      const refreshed = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [id]));
+      const sessions = await loadAcademicSessionsByIds_(query, [
+        firstText(refreshed && refreshed.missed_session_id),
+        firstText(refreshed && refreshed.target_session_id),
+      ]);
+      const sessionsById = new Map(sessions.map((item) => [item.id, item]));
+      return { ok: true, data: { request: mapMakeupRequestRow(refreshed, sessionsById) }, error: null };
+    }
+
+    case "updateMakeupRequest": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const payload = safeJsonObject(body.data || body.request || body);
+      const id = firstText(payload.id, body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      const existing = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: false, data: null, error: "Request not found" };
+      }
+      const nextStatus = firstText(payload.status, existing.status || "submitted").toLowerCase();
+      const allowedStatuses = new Set(["submitted", "notified", "completed", "cancelled"]);
+      if (!allowedStatuses.has(nextStatus)) {
+        return { ok: false, data: null, error: "Invalid status" };
+      }
+      const updatedAt = nowIso();
+      const cancelledAt = nextStatus === "cancelled" ? firstText(existing.cancelled_at, updatedAt) : firstText(existing.cancelled_at);
+      const mergedRaw = {
+        ...safeJsonObject(existing.raw),
+        status: nextStatus,
+        adminNote: firstText(payload.adminNote, existing.admin_note || ""),
+        updatedAt,
+        cancelledAt,
+      };
+      await query(
+        `update makeup_requests
+         set status = $2,
+             admin_note = $3,
+             updated_at = $4,
+             cancelled_at = $5,
+             raw = $6::jsonb,
+             synced_at = now()
+         where id = $1`,
+        [id, nextStatus, firstText(payload.adminNote, existing.admin_note || ""), updatedAt, cancelledAt, jsonbParam(mergedRaw, {})]
+      );
+      const refreshed = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [id]));
+      const sessions = await loadAcademicSessionsByIds_(query, [
+        firstText(refreshed && refreshed.missed_session_id),
+        firstText(refreshed && refreshed.target_session_id),
+      ]);
+      const sessionsById = new Map(sessions.map((item) => [item.id, item]));
+      return { ok: true, data: { request: mapMakeupRequestRow(refreshed, sessionsById) }, error: null };
+    }
+
+    case "upsertSessionNote": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const payload = safeJsonObject(body.data || body.note || body);
+      const sessionId = firstText(payload.sessionId);
+      if (!sessionId) {
+        return { ok: false, data: null, error: "Missing sessionId" };
+      }
+      const sessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [sessionId]));
+      if (!sessionRow) {
+        return { ok: false, data: null, error: "Session not found" };
+      }
+      const actor = await findStudentProfileById(auth.studentId);
+      const existing = rowOrNull(await query(`select * from session_notes where session_id = $1 limit 1`, [sessionId]));
+      const row = sessionNoteToDbRow_({
+        ...safeJsonObject(existing && existing.raw),
+        ...payload,
+        id: firstText(payload.id, existing && existing.id ? existing.id : ""),
+        sessionId,
+        publishedAt:
+          firstText(payload.status, existing && existing.status ? existing.status : "draft").toLowerCase() === "published"
+            ? firstText(payload.publishedAt, existing && existing.published_at ? existing.published_at : nowIso())
+            : "",
+      }, actor || null);
+      await query(
+        `insert into session_notes (
+           id, session_id, title, summary, link_url, link_label,
+           status, published_at, created_by, created_by_name, updated_at, raw
+         ) values (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb
+         )
+         on conflict (session_id) do update set
+           id = excluded.id,
+           title = excluded.title,
+           summary = excluded.summary,
+           link_url = excluded.link_url,
+           link_label = excluded.link_label,
+           status = excluded.status,
+           published_at = excluded.published_at,
+           created_by = excluded.created_by,
+           created_by_name = excluded.created_by_name,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [
+          row.id,
+          row.sessionId,
+          row.title,
+          row.summary,
+          row.linkUrl,
+          row.linkLabel,
+          row.status,
+          row.publishedAt,
+          row.createdBy,
+          row.createdByName,
+          row.updatedAt,
+          jsonbParam(row.raw, {}),
+        ]
+      );
+      const refreshed = rowOrNull(await query(`select * from session_notes where session_id = $1 limit 1`, [sessionId]));
+      return { ok: true, data: { note: mapSessionNoteRow(refreshed) }, error: null };
     }
 
     case "listLandingBootstrap": {

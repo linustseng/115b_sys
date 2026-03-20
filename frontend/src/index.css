@@ -170,6 +170,10 @@ button:disabled {
     @apply border-sky-200/70 bg-sky-50/70;
   }
 
+  .card-system--violet {
+    @apply border-violet-200/70 bg-violet-50/70;
+  }
+
   .card-system--emerald {
     @apply border-emerald-200/70 bg-emerald-50/70;
   }

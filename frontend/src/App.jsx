@@ -59,6 +59,8 @@ const OrderingPage = lazyImportWithRetry_(() => import("./pages/OrderingPage"), 
 const FinancePage = lazyImportWithRetry_(() => import("./pages/FinancePage"), "FinancePage");
 const ApprovalsPage = lazyImportWithRetry_(() => import("./pages/ApprovalsPage"), "ApprovalsPage");
 const FinanceAdminPage = lazyImportWithRetry_(() => import("./pages/FinanceAdminPage"), "FinanceAdminPage");
+const AcademicsPage = lazyImportWithRetry_(() => import("./pages/AcademicsPage"), "AcademicsPage");
+const AcademicsAdminPage = lazyImportWithRetry_(() => import("./pages/AcademicsAdminPage"), "AcademicsAdminPage");
 const SoftballPage = lazyImportWithRetry_(() => import("./pages/SoftballPage"), "SoftballPage");
 const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPlayerPage"), "SoftballPlayerPage");
 import {
@@ -780,6 +782,8 @@ const API_POST_ACTIONS = new Set([
   "listFundPayments",
   "listBirthdays",
   "refreshSession",
+  "listAcademicsBootstrap",
+  "listAcademicsAdminBootstrap",
 ]);
 
 const API_V2_READ_ACTIONS = new Set([
@@ -797,6 +801,8 @@ const API_V2_READ_ACTIONS = new Set([
   "listDirectory",
   "getDirectoryProfile",
   "listBirthdays",
+  "listAcademicsBootstrap",
+  "listAcademicsAdminBootstrap",
   "getSoftballAdminAccess",
   "searchStudents",
   "verifyGoogle",
@@ -871,6 +877,12 @@ const API_V2_WRITE_ACTIONS = new Set([
   "submitOrderResponse",
   "adminUpsertOrderProxyResponse",
   "deleteOrderProxyResponse",
+  // Academics
+  "submitMakeupRequest",
+  "cancelMakeupRequest",
+  "updateMakeupRequest",
+  "upsertSessionNote",
+  "syncAcademicSessionsFromIcs",
   // Softball
   "createSoftballPlayer",
   "updateSoftballPlayer",
@@ -2696,10 +2708,12 @@ function AppShell() {
   const isAdminEventsPage = pathname.includes("admin/events");
   const isAdminOrderingPage = pathname.includes("admin/ordering");
   const isAdminFinancePage = pathname.includes("admin/finance");
+  const isAdminAcademicsPage = pathname.includes("admin/academics");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
   const isProfilePage = pathname.includes("profile");
   const isEventsPage = pathname.includes("events");
+  const isAcademicsPage = pathname.includes("academics");
   const isOrderingPage = pathname.includes("ordering");
   const isFinancePage = pathname.includes("finance");
   const isBirthdayPage = pathname.includes("birthdays");
@@ -3030,6 +3044,16 @@ function AppShell() {
         <FinanceAdminPage shared={shared} />
       </AdminAccessGuard>
     );
+  } else if (isAdminAcademicsPage) {
+    content = (
+      <AdminAccessGuard
+        title="學藝專區 · 後台"
+        helperText="僅限班代、副班代、學藝組、資管組成員。"
+        allowedGroupIds={["E", "F"]}
+      >
+        <AcademicsAdminPage shared={shared} />
+      </AdminAccessGuard>
+    );
   } else if (isAdminPage) {
     content = (
       <AdminAccessGuard
@@ -3098,6 +3122,8 @@ function AppShell() {
         GoogleSigninPanel={GoogleSigninPanel}
       />
     );
+  } else if (isAcademicsPage) {
+    content = <AcademicsPage shared={shared} />;
   } else if (isOrderingPage) {
     content = <OrderingPage shared={shared} />;
   } else if (isFinancePage) {
