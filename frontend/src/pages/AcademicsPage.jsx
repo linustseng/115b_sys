@@ -279,9 +279,28 @@ export default function AcademicsPage({ shared }) {
               <GoogleSigninPanel
                 title="Google 登入"
                 helperText="登入後會自動帶入你的身分與班級權限。"
-                onLinkedStudent={(student) => {
-                  setGoogleLinkedStudent(student || null);
-                  storeGoogleStudent_(student || null);
+                onLinkedStudent={(student, _profile, idToken, authContext) => {
+                  const linkedStudent = student || null;
+                  const token = String(idToken || "").trim();
+                  const sessionToken = String((authContext && authContext.sessionToken) || "").trim();
+                  const refreshToken = String((authContext && authContext.refreshToken) || "").trim();
+                  const memberships =
+                    authContext && Array.isArray(authContext.memberships) ? authContext.memberships : [];
+                  const linkedStudentId = String((linkedStudent && linkedStudent.id) || "").trim();
+
+                  setGoogleLinkedStudent(linkedStudent);
+                  storeGoogleStudent_(linkedStudent);
+                  if (token) {
+                    storeGoogleIdToken_(token);
+                  }
+                  if (sessionToken && linkedStudentId) {
+                    storeAdminSession_({
+                      token: sessionToken,
+                      refreshToken,
+                      studentId: linkedStudentId,
+                      memberships,
+                    });
+                  }
                 }}
               />
             </div>
