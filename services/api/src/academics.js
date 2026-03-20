@@ -4,7 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
-const ACADEMICS_PARSER_VERSION = "2026-03-20-v5";
+export const ACADEMICS_PARSER_VERSION = "2026-03-20-v6";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
@@ -141,6 +141,43 @@ function isAcademicDaytimeRange(startsAt, endsAt) {
     return false;
   }
   return startMinutes >= 8 * 60 && startMinutes <= 17 * 60 + 30 && endMinutes <= 18 * 60 + 30;
+}
+
+function dateOnlyFromDateTimeText(dateTimeText) {
+  const match = String(dateTimeText || "").trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : "";
+}
+
+function buildBestAcademicDateTimeRange(startDate, endDate, timeZone = DEFAULT_CALENDAR_TIMEZONE) {
+  if (!(startDate instanceof Date) || Number.isNaN(startDate.getTime()) || !(endDate instanceof Date) || Number.isNaN(endDate.getTime())) {
+    return {
+      startsAt: "",
+      endsAt: "",
+      sessionDate: "",
+    };
+  }
+
+  const utcStartsAt = toDateTimeTextFromUtcParts(startDate);
+  const utcEndsAt = toDateTimeTextFromUtcParts(endDate);
+  const zonedStartsAt = toDateTimeTextFromZonedDate(startDate, timeZone);
+  const zonedEndsAt = toDateTimeTextFromZonedDate(endDate, timeZone);
+
+  const utcScore = isAcademicDaytimeRange(utcStartsAt, utcEndsAt) ? 1 : 0;
+  const zonedScore = isAcademicDaytimeRange(zonedStartsAt, zonedEndsAt) ? 1 : 0;
+
+  if (zonedScore > utcScore) {
+    return {
+      startsAt: zonedStartsAt,
+      endsAt: zonedEndsAt,
+      sessionDate: dateOnlyFromDateTimeText(zonedStartsAt),
+    };
+  }
+
+  return {
+    startsAt: utcStartsAt,
+    endsAt: utcEndsAt,
+    sessionDate: dateOnlyFromDateTimeText(utcStartsAt),
+  };
 }
 
 function isAcademicTitle(summary) {
@@ -379,11 +416,12 @@ function shouldIncludeAcademicEvent(event, { dateText, title, isDateOnly, locati
 
 function buildStandaloneAcademicSession(event) {
   const timeZone = DEFAULT_CALENDAR_TIMEZONE;
-  const sessionDate = toDateOnlyTextFromZonedDate(event.start, timeZone);
   const title = firstText(event.summary);
   const isDateOnly = Boolean(event && event.start && event.start.dateOnly);
-  const startsAt = toDateTimeTextFromZonedDate(event.start, timeZone);
-  const endsAt = toDateTimeTextFromZonedDate(event.end, timeZone);
+  const dateTime = buildBestAcademicDateTimeRange(event.start, event.end, timeZone);
+  const sessionDate = firstText(dateTime.sessionDate, toDateOnlyTextFromZonedDate(event.start, timeZone));
+  const startsAt = firstText(dateTime.startsAt);
+  const endsAt = firstText(dateTime.endsAt);
   if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly, location: firstText(event.location), startsAt, endsAt })) {
     return null;
   }
@@ -412,24 +450,27 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
   const occurrenceDates = event.rrule.between(rangeStart, rangeEnd, true);
 
   for (const occurrence of occurrenceDates) {
-    const occurrenceDateKey = toDateOnlyTextFromUtcParts(occurrence);
-    const overrideEvent = recurrenceOverrides[occurrenceDateKey];
-    if (exdates[occurrenceDateKey] && !overrideEvent) {
+    const timeZone = DEFAULT_CALENDAR_TIMEZONE;
+    const occurrenceDateKeyUtc = toDateOnlyTextFromUtcParts(occurrence);
+    const occurrenceDateKeyLocal = toDateOnlyTextFromZonedDate(occurrence, timeZone);
+    const overrideEvent = recurrenceOverrides[occurrenceDateKeyUtc] || recurrenceOverrides[occurrenceDateKeyLocal];
+    const hasExdate = Boolean(exdates[occurrenceDateKeyUtc] || exdates[occurrenceDateKeyLocal]);
+    if (hasExdate && !overrideEvent) {
       continue;
     }
 
     if (overrideEvent) {
-      const timeZone = DEFAULT_CALENDAR_TIMEZONE;
-      const sessionDate = toDateOnlyTextFromZonedDate(overrideEvent.start, timeZone);
-      const startsAt = toDateTimeTextFromZonedDate(overrideEvent.start, timeZone);
-      const endsAt = toDateTimeTextFromZonedDate(overrideEvent.end, timeZone);
+      const dateTime = buildBestAcademicDateTimeRange(overrideEvent.start, overrideEvent.end, timeZone);
+      const sessionDate = firstText(dateTime.sessionDate, firstText(occurrenceDateKeyLocal, occurrenceDateKeyUtc));
+      const startsAt = firstText(dateTime.startsAt);
+      const endsAt = firstText(dateTime.endsAt);
       if (!shouldIncludeAcademicEvent(overrideEvent, { dateText: sessionDate, title, isDateOnly, location: firstText(overrideEvent.location, event.location), startsAt, endsAt })) {
         continue;
       }
       results.push(
         buildCalendarSessionRecord({
           uid: event.uid,
-          recurrenceKey: startsAt || occurrenceDateKey,
+          recurrenceKey: startsAt || occurrenceDateKeyLocal || occurrenceDateKeyUtc,
           title,
           teacher: "",
           location: firstText(overrideEvent.location, event.location),
@@ -444,17 +485,18 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
       continue;
     }
 
-    const sessionDate = occurrenceDateKey;
     const syntheticEnd = new Date(occurrence.getTime() + durationMs);
-    const startsAt = toDateTimeTextFromUtcParts(occurrence);
-    const endsAt = toDateTimeTextFromUtcParts(syntheticEnd);
+    const dateTime = buildBestAcademicDateTimeRange(occurrence, syntheticEnd, timeZone);
+    const sessionDate = firstText(dateTime.sessionDate, firstText(occurrenceDateKeyLocal, occurrenceDateKeyUtc));
+    const startsAt = firstText(dateTime.startsAt);
+    const endsAt = firstText(dateTime.endsAt);
     if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly, location: firstText(event.location), startsAt, endsAt })) {
       continue;
     }
     results.push(
       buildCalendarSessionRecord({
         uid: event.uid,
-        recurrenceKey: startsAt || occurrenceDateKey,
+        recurrenceKey: startsAt || occurrenceDateKeyLocal || occurrenceDateKeyUtc,
         title,
         teacher: "",
         location: firstText(event.location),
@@ -462,7 +504,7 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
         startsAt,
         endsAt,
         registrationDeadline: "",
-        timeZone: DEFAULT_CALENDAR_TIMEZONE,
+        timeZone,
         status: "published",
       })
     );

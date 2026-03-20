@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import {
+  ACADEMICS_PARSER_VERSION,
   buildGeneratedThursdaySessionFromId,
   buildGeneratedThursdaySessions,
   loadAcademicSessionsFromIcs,
@@ -691,8 +692,9 @@ async function ensureAcademicSessionsFresh_(query, withTransaction, { force = fa
            and (
              coalesce(raw->>'courseGroupTitle','') = ''
              or coalesce(raw->>'courseGroupKey','') = ''
-             or coalesce(raw->>'parserVersion','') <> '2026-03-20-v2'
-           )`
+             or coalesce(raw->>'parserVersion','') <> $1
+           )`,
+        [ACADEMICS_PARSER_VERSION]
       )
     );
     if (Number(legacyCheck && legacyCheck.count ? legacyCheck.count : 0) > 0) {
