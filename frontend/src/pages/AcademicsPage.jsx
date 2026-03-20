@@ -29,6 +29,7 @@ export default function AcademicsPage({ shared }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState("courses");
+  const [courseScope, setCourseScope] = useState("recent");
   const [form, setForm] = useState(() => defaultForm());
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
@@ -191,14 +192,14 @@ export default function AcademicsPage({ shared }) {
     return source.filter((session) => dateSet.has(String(session.sessionDate || "").trim()));
   }, [regularSessions]);
 
-  const courseCatalog = useMemo(() => {
+  const buildCourseCatalog_ = (sourceSessions) => {
     const parseMinutes = (value) => {
       const match = String(value || "").match(/(?:T| )(\d{2}):(\d{2})$/);
       return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
     };
 
     const units = new Map();
-    recentCourseSessions.forEach((session) => {
+    (sourceSessions || []).forEach((session) => {
       const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim() || "未分類課程";
       const courseGroupKey = String(session.courseGroupKey || courseGroupTitle || session.id || "").trim();
       const sessionDate = String(session.sessionDate || "").trim();
@@ -266,7 +267,11 @@ export default function AcademicsPage({ shared }) {
         const right = `${b.sessionDate} ${b.courseGroupTitle}`;
         return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
-  }, [recentCourseSessions, notesBySessionId]);
+  };
+
+  const recentCourseCatalog = useMemo(() => buildCourseCatalog_(recentCourseSessions), [recentCourseSessions, notesBySessionId]);
+  const allCourseCatalog = useMemo(() => buildCourseCatalog_(regularSessions), [regularSessions, notesBySessionId]);
+  const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -641,7 +646,26 @@ export default function AcademicsPage({ shared }) {
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
               <p className="mt-2 text-sm text-slate-500">以「天 × 課程」彙整，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
-            <span className="text-xs text-slate-400">最近 3 個上課日</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCourseScope("recent")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  courseScope === "recent" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                最近 3 個上課日
+              </button>
+              <button
+                type="button"
+                onClick={() => setCourseScope("all")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  courseScope === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                全部課程（22）
+              </button>
+            </div>
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
