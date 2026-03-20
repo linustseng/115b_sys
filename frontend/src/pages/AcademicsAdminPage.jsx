@@ -111,7 +111,6 @@ export default function AcademicsAdminPage({ shared }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [adminTab, setAdminTab] = useState("courses");
-  const [syncing, setSyncing] = useState(false);
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
     regularSessions: [],
@@ -374,24 +373,6 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
-  const handleSync_ = async () => {
-    setSyncing(true);
-    setStatus("");
-    setError("");
-    try {
-      const { result } = await apiRequest({ action: "syncAcademicSessionsFromIcs" });
-      if (!result || !result.ok) {
-        throw new Error((result && result.error) || "同步失敗");
-      }
-      setStatus(`課程同步完成，匯入 ${Number((result.data && result.data.count) || 0)} 筆。`);
-      await loadBootstrap_();
-    } catch (err) {
-      setError(String((err && err.message) || "同步失敗"));
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   const updateRequestDraft_ = (id, patch) => {
     setRequestDrafts((prev) => ({
       ...prev,
@@ -574,27 +555,6 @@ export default function AcademicsAdminPage({ shared }) {
           </div>
         </section>
 
-
-        {adminTab === "courses" ? (
-          <section className="mt-6 card p-6 sm:p-7">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
-                <p className="mt-2 text-sm text-slate-500">直接以系統設定來源同步 Google Calendar 正式課程。</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleSync_}
-                disabled={syncing}
-                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {syncing ? "同步中..." : "立即同步"}
-              </button>
-            </div>
-
-          </section>
-        ) : null}
 
         {adminTab === "makeup" ? (
         <section className="mt-6 card p-6 sm:p-7">

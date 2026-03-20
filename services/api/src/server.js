@@ -9,10 +9,41 @@ import { query, withTransaction } from "./db.js";
 import { jsonbParam } from "./jsonb.js";
 import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
-import { dispatchNativeAction } from "./nativeActions.js";
+import { dispatchNativeAction, runAcademicAutoSync } from "./nativeActions.js";
 
 const config = getConfig();
 const app = express();
+
+const ACADEMICS_AUTO_SYNC_INTERVAL_MS = Math.max(
+  30 * 60 * 1000,
+  Number(process.env.ACADEMICS_AUTO_SYNC_INTERVAL_MINUTES || 180) * 60 * 1000
+);
+let academicsAutoSyncRunning_ = false;
+
+async function runAcademicAutoSyncTask_(reason = "interval") {
+  if (academicsAutoSyncRunning_) {
+    return;
+  }
+  academicsAutoSyncRunning_ = true;
+  try {
+    const result = await runAcademicAutoSync({ query, withTransaction, force: false });
+    if (!result || !result.configured) {
+      if (reason === "startup") {
+        console.log("[academics] auto-sync skipped (ACADEMICS_ICS_URL not configured)");
+      }
+      return;
+    }
+    if (result.didSync) {
+      console.log(`[academics] auto-sync completed (${reason}), imported ${Number(result.count || 0)} sessions`);
+    } else if (reason === "startup") {
+      console.log("[academics] auto-sync check completed (already fresh)");
+    }
+  } catch (error) {
+    console.error(`[academics] auto-sync failed (${reason}):`, (error && error.message) || error);
+  } finally {
+    academicsAutoSyncRunning_ = false;
+  }
+}
 
 if (!config.sessionSecret) {
   throw new Error("Missing required env: SESSION_SECRET");
@@ -1513,4 +1544,16 @@ app.use((_req, res) => {
 
 app.listen(config.port, () => {
   console.log(`115b-sys-api listening on :${config.port}`);
+
+  // 定期背景同步正式課程，避免完全依賴人工按鈕。
+  setTimeout(() => {
+    runAcademicAutoSyncTask_("startup");
+  }, 20 * 1000);
+
+  const timer = setInterval(() => {
+    runAcademicAutoSyncTask_("interval");
+  }, ACADEMICS_AUTO_SYNC_INTERVAL_MS);
+  if (timer && typeof timer.unref === "function") {
+    timer.unref();
+  }
 });

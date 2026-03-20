@@ -727,6 +727,13 @@ async function ensureAcademicSessionsFresh_(query, withTransaction, { force = fa
   return syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
 }
 
+export async function runAcademicAutoSync({ query, withTransaction, force = false } = {}) {
+  if (typeof query !== "function" || typeof withTransaction !== "function") {
+    throw new Error("runAcademicAutoSync requires query and withTransaction functions");
+  }
+  return ensureAcademicSessionsFresh_(query, withTransaction, { force: Boolean(force) });
+}
+
 function sessionNoteToDbRow_(input, actor = null) {
   const raw = safeJsonObject(input);
   const linkedActor = actor && typeof actor === "object" ? actor : {};
