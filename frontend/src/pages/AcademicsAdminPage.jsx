@@ -1,14 +1,73 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+function parseMultilineItems_(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function toMultilineText_(items = [], fallbackText = "") {
+  if (Array.isArray(items) && items.length) {
+    return items
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+  return String(fallbackText || "").trim();
+}
+
+function parseLinkItemsText_(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => String(line || "").trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^([^|｜]+)\s*[|｜]\s*(https?:\/\/\S+)$/i);
+      if (match) {
+        return {
+          label: String(match[1] || "").trim(),
+          url: String(match[2] || "").trim(),
+        };
+      }
+      return {
+        label: "",
+        url: line,
+      };
+    })
+    .filter((item) => /^https?:\/\//i.test(String(item.url || "")));
+}
+
+function toLinkItemsText_(items = [], fallbackUrl = "", fallbackLabel = "") {
+  const normalizedItems = (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      label: String(item && item.label ? item.label : "").trim(),
+      url: String(item && item.url ? item.url : "").trim(),
+    }))
+    .filter((item) => /^https?:\/\//i.test(item.url));
+
+  if (normalizedItems.length) {
+    return normalizedItems
+      .map((item) => (item.label ? `${item.label} | ${item.url}` : item.url))
+      .join("\n");
+  }
+
+  const url = String(fallbackUrl || "").trim();
+  if (!/^https?:\/\//i.test(url)) {
+    return "";
+  }
+  const label = String(fallbackLabel || "").trim();
+  return label ? `${label} | ${url}` : url;
+}
+
 function buildNoteForm(note, sessionId = "") {
   return {
     sessionId: sessionId || (note && note.sessionId) || "",
     title: (note && note.title) || "",
-    summary: (note && note.summary) || "",
-    linkUrl: (note && note.linkUrl) || "",
-    linkLabel: (note && note.linkLabel) || "",
-    homeworkNotice: (note && note.homeworkNotice) || "",
-    quizNotice: (note && note.quizNotice) || "",
+    summary: toMultilineText_(note && note.summaryItems, (note && note.summary) || ""),
+    linkItemsText: toLinkItemsText_(note && note.linkItems, (note && note.linkUrl) || "", (note && note.linkLabel) || ""),
+    homeworkNotice: toMultilineText_(note && note.homeworkItems, (note && note.homeworkNotice) || ""),
+    quizNotice: toMultilineText_(note && note.quizItems, (note && note.quizNotice) || ""),
     status: (note && note.status) || "draft",
   };
 }
@@ -53,7 +112,6 @@ export default function AcademicsAdminPage({ shared }) {
   const [status, setStatus] = useState("");
   const [adminTab, setAdminTab] = useState("courses");
   const [syncing, setSyncing] = useState(false);
-  const [icsUrlInput, setIcsUrlInput] = useState("");
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
     regularSessions: [],
@@ -62,8 +120,6 @@ export default function AcademicsAdminPage({ shared }) {
     notes: [],
     summaryByTarget: [],
     students: [],
-    hasConfiguredIcsUrl: false,
-    diagnostics: null,
   });
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [noteForm, setNoteForm] = useState(() => buildNoteForm(null, ""));
@@ -94,8 +150,6 @@ export default function AcademicsAdminPage({ shared }) {
         notes: Array.isArray(data.notes) ? data.notes : [],
         summaryByTarget: Array.isArray(data.summaryByTarget) ? data.summaryByTarget : [],
         students: Array.isArray(data.students) ? data.students : [],
-        hasConfiguredIcsUrl: Boolean(data.hasConfiguredIcsUrl),
-        diagnostics: data.diagnostics || null,
       });
       setRequestDrafts((prev) => {
         const next = { ...prev };
@@ -325,11 +379,7 @@ export default function AcademicsAdminPage({ shared }) {
     setStatus("");
     setError("");
     try {
-      const payload = { action: "syncAcademicSessionsFromIcs" };
-      if (String(icsUrlInput || "").trim()) {
-        payload.icsUrl = String(icsUrlInput || "").trim();
-      }
-      const { result } = await apiRequest(payload);
+      const { result } = await apiRequest({ action: "syncAcademicSessionsFromIcs" });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "同步失敗");
       }
@@ -420,7 +470,26 @@ export default function AcademicsAdminPage({ shared }) {
     setStatus("");
     setError("");
     try {
-      const { result } = await apiRequest({ action: "upsertSessionNote", data: noteForm });
+      const summaryItems = parseMultilineItems_(noteForm.summary);
+      const homeworkItems = parseMultilineItems_(noteForm.homeworkNotice);
+      const quizItems = parseMultilineItems_(noteForm.quizNotice);
+      const linkItems = parseLinkItemsText_(noteForm.linkItemsText);
+      const firstLink = linkItems[0] || null;
+
+      const payload = {
+        ...noteForm,
+        summary: summaryItems.join("\n"),
+        homeworkNotice: homeworkItems.join("\n"),
+        quizNotice: quizItems.join("\n"),
+        linkUrl: firstLink ? firstLink.url : "",
+        linkLabel: firstLink ? firstLink.label : "",
+        summaryItems,
+        homeworkItems,
+        quizItems,
+        linkItems,
+      };
+
+      const { result } = await apiRequest({ action: "upsertSessionNote", data: payload });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
       }
@@ -505,29 +574,6 @@ export default function AcademicsAdminPage({ shared }) {
           </div>
         </section>
 
-        <section className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-          {bootstrap.diagnostics ? (
-            <>
-              <p>
-                課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB 可見 {bootstrap.diagnostics.dbCount ?? "-"} 堂 ／ DB 全量 {bootstrap.diagnostics.dbRawCount ?? "-"} 筆
-                {bootstrap.diagnostics.syncedByReconcile ? "（已自動重同步）" : ""}
-              </p>
-              {bootstrap.diagnostics.reconcileError ? (
-                <p className="mt-1 text-rose-600">診斷錯誤：{bootstrap.diagnostics.reconcileError}</p>
-              ) : null}
-              {Array.isArray(bootstrap.diagnostics.sourcePreview) && bootstrap.diagnostics.sourcePreview.length ? (
-                <div className="mt-2 text-[11px] leading-5 text-slate-500">
-                  <p className="font-semibold text-slate-600">來源預覽：</p>
-                  {bootstrap.diagnostics.sourcePreview.map((item, idx) => (
-                    <p key={`${item.sessionDate}-${item.title}-${idx}`}>{item.sessionDate}｜{item.title}｜{item.startsAt || '-'}</p>
-                  ))}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <p>課程同步診斷：尚未取得（可能是舊版部署或首次載入中）。</p>
-          )}
-        </section>
 
         {adminTab === "courses" ? (
           <section className="mt-6 card p-6 sm:p-7">
@@ -535,7 +581,7 @@ export default function AcademicsAdminPage({ shared }) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
                 <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
-                <p className="mt-2 text-sm text-slate-500">可直接同步目前後端來源；若要除錯來源是否正確，也可臨時貼入 ICS URL 覆蓋本次同步。</p>
+                <p className="mt-2 text-sm text-slate-500">直接以系統設定來源同步 Google Calendar 正式課程。</p>
               </div>
               <button
                 type="button"
@@ -546,12 +592,7 @@ export default function AcademicsAdminPage({ shared }) {
                 {syncing ? "同步中..." : "立即同步"}
               </button>
             </div>
-            <input
-              value={icsUrlInput}
-              onChange={(event) => setIcsUrlInput(event.target.value)}
-              placeholder="可選：臨時 ICS URL（未填則走後端環境變數）"
-              className="mt-4 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-            />
+
           </section>
         ) : null}
 
@@ -826,54 +867,45 @@ export default function AcademicsAdminPage({ shared }) {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">外部連結</label>
-                <input
-                  value={noteForm.linkUrl}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, linkUrl: event.target.value, sessionId: selectedSessionId }))}
-                  placeholder="https://notebooklm.google.com/..."
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                <label className="mb-2 block text-sm font-medium text-slate-700">外部連結（可多筆）</label>
+                <textarea
+                  value={noteForm.linkItemsText}
+                  onChange={(event) => setNoteForm((prev) => ({ ...prev, linkItemsText: event.target.value, sessionId: selectedSessionId }))}
+                  rows={4}
+                  placeholder={"每行一筆\n範例：NotebookLM 摘要 | https://notebooklm.google.com/...\n或只填 URL 也可"}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">連結文字</label>
-                <input
-                  value={noteForm.linkLabel}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, linkLabel: event.target.value, sessionId: selectedSessionId }))}
-                  placeholder="NotebookLM / 摘要連結"
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">摘要</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">摘要（可多筆）</label>
                 <textarea
                   value={noteForm.summary}
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, summary: event.target.value, sessionId: selectedSessionId }))}
                   rows={5}
-                  placeholder="課堂重點、提醒事項、講師提到的重要概念..."
+                  placeholder={"每行一筆\n例如：課堂重點、提醒事項、講師提到的重要概念..."}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知（可多筆）</label>
                 <textarea
                   value={noteForm.homeworkNotice}
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, homeworkNotice: event.target.value, sessionId: selectedSessionId }))}
                   rows={3}
-                  placeholder="例如：下週前提交個案分析 / 閱讀指定章節"
+                  placeholder={"每行一筆\n例如：下週前提交個案分析\n例如：閱讀指定章節"}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知（可多筆）</label>
                 <textarea
                   value={noteForm.quizNotice}
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, quizNotice: event.target.value, sessionId: selectedSessionId }))}
                   rows={3}
-                  placeholder="例如：下次上課前 10 分鐘小考 / 範圍第 3-4 章"
+                  placeholder={"每行一筆\n例如：下次上課前 10 分鐘小考\n例如：範圍第 3-4 章"}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>

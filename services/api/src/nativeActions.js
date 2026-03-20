@@ -2121,7 +2121,6 @@ export async function dispatchNativeAction({
       requireAuth();
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
       await ensureAcademicSessionsFresh_(query, withTransaction);
-      const reconcile = await reconcileAcademicSessionsWithSource_(query, withTransaction);
       const fromDate = addDaysDateText_(todayDateText_(), -180);
       const toDate = addDaysDateText_(todayDateText_(), 365);
 
@@ -2171,15 +2170,6 @@ export async function dispatchNativeAction({
           notes,
           summaryByTarget,
           students: studentOptions,
-          hasConfiguredIcsUrl: Boolean(firstText(process.env.ACADEMICS_ICS_URL || "")),
-          diagnostics: {
-            sourceCount: reconcile.sourceCount,
-            dbCount: reconcile.dbCount,
-            dbRawCount: reconcile.dbRawCount,
-            syncedByReconcile: reconcile.syncedByReconcile,
-            sourcePreview: Array.isArray(reconcile.sourcePreview) ? reconcile.sourcePreview : [],
-            reconcileError: reconcile.error,
-          },
         },
         error: null,
       };

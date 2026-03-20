@@ -9,6 +9,59 @@ function defaultForm() {
   };
 }
 
+function parseMultilineItems_(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeLinkItems_(note) {
+  const rawItems = Array.isArray(note && note.linkItems) ? note.linkItems : [];
+  const parsedItems = rawItems
+    .map((item) => ({
+      label: String(item && item.label ? item.label : "").trim(),
+      url: String(item && item.url ? item.url : "").trim(),
+    }))
+    .filter((item) => /^https?:\/\//i.test(item.url));
+
+  if (parsedItems.length) {
+    return parsedItems;
+  }
+
+  const fallbackUrl = String(note && note.linkUrl ? note.linkUrl : "").trim();
+  if (!/^https?:\/\//i.test(fallbackUrl)) {
+    return [];
+  }
+
+  return [
+    {
+      label: String(note && note.linkLabel ? note.linkLabel : "").trim(),
+      url: fallbackUrl,
+    },
+  ];
+}
+
+function normalizeNoteItems_(note) {
+  const summaryItems = Array.isArray(note && note.summaryItems)
+    ? note.summaryItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.summary);
+  const homeworkItems = Array.isArray(note && note.homeworkItems)
+    ? note.homeworkItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.homeworkNotice);
+  const quizItems = Array.isArray(note && note.quizItems)
+    ? note.quizItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.quizNotice);
+  const linkItems = normalizeLinkItems_(note);
+
+  return {
+    summaryItems,
+    homeworkItems,
+    quizItems,
+    linkItems,
+  };
+}
+
 export default function AcademicsPage({ shared }) {
   const {
     apiRequest,
@@ -166,8 +219,10 @@ export default function AcademicsPage({ shared }) {
   const notesBySessionId = useMemo(() => {
     const map = new Map();
     (bootstrap.notes || []).forEach((note) => {
+      const items = normalizeNoteItems_(note);
       map.set(note.sessionId, {
         ...note,
+        ...items,
         session: sessionsById.get(note.sessionId) || null,
       });
     });
@@ -272,8 +327,8 @@ export default function AcademicsPage({ shared }) {
         };
       })
       .sort((a, b) => {
-        const left = `${a.sessionDate} ${a.courseGroupTitle}`;
-        const right = `${b.sessionDate} ${b.courseGroupTitle}`;
+        const left = `${a.sessionDate} ${a.mergedSchedule || ""} ${a.courseGroupTitle}`;
+        const right = `${b.sessionDate} ${b.mergedSchedule || ""} ${b.courseGroupTitle}`;
         return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
   };
@@ -695,26 +750,56 @@ export default function AcademicsPage({ shared }) {
                   <div className="mt-4 grid gap-3 lg:grid-cols-2">
                     <div className="rounded-2xl bg-white px-4 py-3">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">摘要</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.summary || "尚未提供"}</p>
-                      {unit.note.linkUrl ? (
-                        <a
-                          href={unit.note.linkUrl}
-                          target="_blank"
-                          rel="noopener"
-                          className="mt-3 inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                        >
-                          {unit.note.linkLabel || "開啟筆記連結"}
-                        </a>
+                      {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                          {unit.note.summaryItems.map((item, index) => (
+                            <li key={`summary-${index}`}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
+                      )}
+
+                      {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
+                        <div className="mt-3 flex flex-col gap-2">
+                          {unit.note.linkItems.map((item, index) => (
+                            <a
+                              key={`link-${index}`}
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener"
+                              className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                            >
+                              {item.label || "開啟筆記連結"}
+                            </a>
+                          ))}
+                        </div>
                       ) : null}
                     </div>
                     <div className="grid gap-3">
                       <div className="rounded-2xl bg-white px-4 py-3">
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.homeworkNotice || "目前尚無作業通知"}</p>
+                        {Array.isArray(unit.note.homeworkItems) && unit.note.homeworkItems.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                            {unit.note.homeworkItems.map((item, index) => (
+                              <li key={`homework-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無作業通知</p>
+                        )}
                       </div>
                       <div className="rounded-2xl bg-white px-4 py-3">
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.quizNotice || "目前尚無小考通知"}</p>
+                        {Array.isArray(unit.note.quizItems) && unit.note.quizItems.length ? (
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                            {unit.note.quizItems.map((item, index) => (
+                              <li key={`quiz-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無小考通知</p>
+                        )}
                       </div>
                     </div>
                   </div>
