@@ -175,21 +175,30 @@ export default function AcademicsPage({ shared }) {
   }, [bootstrap.notes, sessionsById]);
 
   const recentCourseSessions = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const upcoming = regularSessions.filter((session) => String(session.sessionDate || "") >= today);
-    const source = upcoming.length ? upcoming : regularSessions;
-    const selectedDates = [];
-    source.forEach((session) => {
+    const today = new Date();
+    const todayText = today.toISOString().slice(0, 10);
+    const startOfToday = new Date(`${todayText}T00:00:00Z`);
+
+    const upcoming = regularSessions.filter((session) => String(session.sessionDate || "") >= todayText);
+
+    // 優先顯示「接下來兩週」；若目前沒有未來課程，再回退顯示「過去兩週」。
+    if (upcoming.length) {
+      const endDate = new Date(startOfToday.getTime());
+      endDate.setUTCDate(endDate.getUTCDate() + 13);
+      const endText = endDate.toISOString().slice(0, 10);
+      return regularSessions.filter((session) => {
+        const date = String(session.sessionDate || "").trim();
+        return date >= todayText && date <= endText;
+      });
+    }
+
+    const startDate = new Date(startOfToday.getTime());
+    startDate.setUTCDate(startDate.getUTCDate() - 13);
+    const startText = startDate.toISOString().slice(0, 10);
+    return regularSessions.filter((session) => {
       const date = String(session.sessionDate || "").trim();
-      if (!date || selectedDates.includes(date)) {
-        return;
-      }
-      if (selectedDates.length < 3) {
-        selectedDates.push(date);
-      }
+      return date >= startText && date <= todayText;
     });
-    const dateSet = new Set(selectedDates);
-    return source.filter((session) => dateSet.has(String(session.sessionDate || "").trim()));
   }, [regularSessions]);
 
   const buildCourseCatalog_ = (sourceSessions) => {
@@ -654,7 +663,7 @@ export default function AcademicsPage({ shared }) {
                   courseScope === "recent" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
                 }`}
               >
-                最近 3 個上課日
+                最近 2 週
               </button>
               <button
                 type="button"
