@@ -8,3 +8,6 @@ services:
     preDeployCommand: npm run migrate
     startCommand: npm start
     healthCheckPath: /health
+    envVars:
+      - key: ACADEMICS_ICS_URL
+        sync: false

@@ -11,6 +11,34 @@ function buildNoteForm(note, sessionId = "") {
   };
 }
 
+function toCsvCell_(value) {
+  const text = String(value == null ? "" : value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function buildCsvText_(rows) {
+  return `\ufeff${rows.map((row) => row.map((value) => toCsvCell_(value)).join(",")).join("\n")}`;
+}
+
+function downloadTextFile_(filename, content, mimeType = "text/plain;charset=utf-8") {
+  if (typeof document === "undefined" || typeof window === "undefined") {
+    return false;
+  }
+  const blob = new Blob([content], { type: mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+  return true;
+}
+
 export default function AcademicsAdminPage({ shared }) {
   const {
     apiRequest,
@@ -85,6 +113,26 @@ export default function AcademicsAdminPage({ shared }) {
     return map;
   }, [bootstrap.notes]);
 
+  const activeRequests = useMemo(
+    () => (bootstrap.requests || []).filter((item) => String(item.status || "") !== "cancelled"),
+    [bootstrap.requests]
+  );
+
+  const requestsByTarget = useMemo(() => {
+    const map = new Map();
+    activeRequests.forEach((item) => {
+      const key = String(item.targetSessionId || "").trim();
+      if (!key) {
+        return;
+      }
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push(item);
+    });
+    return map;
+  }, [activeRequests]);
+
   useEffect(() => {
     if (!selectedSessionId) {
       const firstSessionId = String(((bootstrap.regularSessions || [])[0] && (bootstrap.regularSessions || [])[0].id) || "");
@@ -112,6 +160,109 @@ export default function AcademicsAdminPage({ shared }) {
       return formatDisplayDate_(session.sessionDate, { withTime: false });
     }
     return "";
+  };
+
+  const getRequestsForTarget_ = (targetSessionId) => requestsByTarget.get(String(targetSessionId || "").trim()) || [];
+
+  const buildStaffSummaryText_ = (summaryItem) => {
+    const targetRequests = getRequestsForTarget_(summaryItem && summaryItem.targetSessionId);
+    const targetSession = (summaryItem && summaryItem.targetSession) || null;
+    const targetLabel = targetSession ? formatSessionSchedule_(targetSession) : String((summaryItem && summaryItem.targetSessionId) || "");
+    const lines = [
+      "【115B 補課名單】",
+      `補課場次：${targetLabel || "-"}`,
+      `有效名單：${Number((summaryItem && summaryItem.active) || 0)} 人`,
+      `餐食：${Number((summaryItem && summaryItem.needMeal) || 0)} 份`,
+      `講義：${Number((summaryItem && summaryItem.needHandout) || 0)} 份`,
+      "名單：",
+    ];
+
+    if (!targetRequests.length) {
+      lines.push("（目前無）");
+      return lines.join("\n");
+    }
+
+    targetRequests.forEach((item, index) => {
+      const bits = [`${index + 1}. ${item.studentName || item.studentEmail || item.studentId || "未命名"}`];
+      if (item.missedSession && item.missedSession.title) {
+        bits.push(`原課：${item.missedSession.title}`);
+      }
+      if (item.missedSession && item.missedSession.sessionDate) {
+        bits.push(`原課日期：${item.missedSession.sessionDate}`);
+      }
+      bits.push(`餐食：${item.needMeal ? "要" : "免"}`);
+      bits.push(`講義：${item.needHandout ? "要" : "免"}`);
+      if (item.reason) {
+        bits.push(`原因：${item.reason}`);
+      }
+      if (item.note) {
+        bits.push(`備註：${item.note}`);
+      }
+      if (item.adminNote) {
+        bits.push(`管理備註：${item.adminNote}`);
+      }
+      lines.push(bits.join("｜"));
+    });
+
+    return lines.join("\n");
+  };
+
+  const handleCopyStaffSummary_ = async (summaryItem) => {
+    const text = buildStaffSummaryText_(summaryItem);
+    try {
+      if (typeof navigator === "undefined" || !navigator.clipboard || !navigator.clipboard.writeText) {
+        throw new Error("此瀏覽器不支援剪貼簿寫入");
+      }
+      await navigator.clipboard.writeText(text);
+      setStatus("已複製給對班幹部的文字。");
+      setError("");
+    } catch (err) {
+      setError(String((err && err.message) || "複製失敗"));
+    }
+  };
+
+  const handleExportTargetCsv_ = (summaryItem) => {
+    const targetRequests = getRequestsForTarget_(summaryItem && summaryItem.targetSessionId);
+    const targetSession = (summaryItem && summaryItem.targetSession) || null;
+    const targetLabel = targetSession ? formatSessionSchedule_(targetSession) : String((summaryItem && summaryItem.targetSessionId) || "");
+    const rows = [
+      [
+        "補課場次",
+        "補課日期",
+        "學生姓名",
+        "學生Email",
+        "原課程",
+        "原課日期",
+        "餐食",
+        "講義",
+        "狀態",
+        "原因",
+        "備註",
+        "管理備註",
+      ],
+      ...targetRequests.map((item) => [
+        targetLabel,
+        (targetSession && targetSession.sessionDate) || "",
+        item.studentName || item.studentId || "",
+        item.studentEmail || "",
+        (item.missedSession && item.missedSession.title) || item.missedSessionId || "",
+        (item.missedSession && item.missedSession.sessionDate) || "",
+        item.needMeal ? "是" : "否",
+        item.needHandout ? "是" : "否",
+        item.status || "",
+        item.reason || "",
+        item.note || "",
+        item.adminNote || "",
+      ]),
+    ];
+    const sessionDate = String((targetSession && targetSession.sessionDate) || "makeup").replace(/[^0-9-]/g, "");
+    const ok = downloadTextFile_(`makeup-${sessionDate || 'list'}.csv`, buildCsvText_(rows), "text/csv;charset=utf-8");
+    if (ok) {
+      setStatus("補課名單 CSV 已下載。");
+      setError("");
+    } else {
+      setError("CSV 匯出失敗");
+    }
   };
 
   const handleSync_ = async () => {
@@ -189,7 +340,7 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
-  const totalActiveRequests = (bootstrap.requests || []).filter((item) => item.status !== "cancelled").length;
+  const totalActiveRequests = activeRequests.length;
   const totalPublishedNotes = (bootstrap.notes || []).filter((item) => item.status === "published").length;
 
   return (
@@ -248,7 +399,7 @@ export default function AcademicsAdminPage({ shared }) {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
-              <p className="mt-2 text-sm text-slate-500">未設定環境變數時，可臨時貼入 ICS URL 進行同步。</p>
+              <p className="mt-2 text-sm text-slate-500">正式環境請在 Render service env 設定 <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">ACADEMICS_ICS_URL</code>；未設定時，可臨時貼入 ICS URL 進行同步。</p>
             </div>
             <button
               type="button"
@@ -281,27 +432,54 @@ export default function AcademicsAdminPage({ shared }) {
                 {!(bootstrap.summaryByTarget || []).length ? (
                   <div className="alert alert-info text-xs">目前還沒有補課登記。</div>
                 ) : null}
-                {(bootstrap.summaryByTarget || []).map((item) => (
-                  <div key={item.targetSessionId} className="rounded-2xl border border-slate-200 bg-white p-4">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
-                    </p>
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                      <div className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-600">
-                        <div className="font-semibold text-slate-900">{item.active}</div>
-                        <div>有效名單</div>
+                {(bootstrap.summaryByTarget || []).map((item) => {
+                  const targetRequests = getRequestsForTarget_(item.targetSessionId);
+                  return (
+                    <div key={item.targetSessionId} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
+                      </p>
+                      <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="rounded-2xl bg-slate-50 px-3 py-2 text-slate-600">
+                          <div className="font-semibold text-slate-900">{item.active}</div>
+                          <div>有效名單</div>
+                        </div>
+                        <div className="rounded-2xl bg-amber-50 px-3 py-2 text-amber-700">
+                          <div className="font-semibold text-amber-900">{item.needMeal}</div>
+                          <div>餐食</div>
+                        </div>
+                        <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-700">
+                          <div className="font-semibold text-emerald-900">{item.needHandout}</div>
+                          <div>講義</div>
+                        </div>
                       </div>
-                      <div className="rounded-2xl bg-amber-50 px-3 py-2 text-amber-700">
-                        <div className="font-semibold text-amber-900">{item.needMeal}</div>
-                        <div>餐食</div>
+                      <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-3 text-xs text-slate-600">
+                        <p className="font-semibold text-slate-700">名單預覽</p>
+                        <p className="mt-1 leading-6">
+                          {targetRequests.length
+                            ? targetRequests.map((request) => request.studentName || request.studentEmail || request.studentId).join("、")
+                            : "目前沒有有效補課名單"}
+                        </p>
                       </div>
-                      <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-700">
-                        <div className="font-semibold text-emerald-900">{item.needHandout}</div>
-                        <div>講義</div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyStaffSummary_(item)}
+                          className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:border-violet-300"
+                        >
+                          複製給對班幹部文字
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExportTargetCsv_(item)}
+                          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+                        >
+                          匯出 CSV
+                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
 
