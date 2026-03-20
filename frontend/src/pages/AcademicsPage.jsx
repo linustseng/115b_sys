@@ -28,7 +28,7 @@ export default function AcademicsPage({ shared }) {
   const [authRecovering, setAuthRecovering] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
-  const [activeTab, setActiveTab] = useState("makeup");
+  const [activeTab, setActiveTab] = useState("courses");
   const [form, setForm] = useState(() => defaultForm());
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
@@ -433,8 +433,8 @@ export default function AcademicsPage({ shared }) {
         <section className="mb-6 card p-3 sm:p-4">
           <div className="flex flex-wrap gap-2">
             {[
-              { id: "makeup", label: "補課登記" },
               { id: "courses", label: "課程索引" },
+              { id: "makeup", label: "補課登記" },
             ].map((item) => (
               <button
                 key={item.id}
