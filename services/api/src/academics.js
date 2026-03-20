@@ -4,7 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
-const ACADEMICS_PARSER_VERSION = "2026-03-20-v4";
+const ACADEMICS_PARSER_VERSION = "2026-03-20-v5";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
@@ -471,6 +471,109 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
   return results;
 }
 
+function aggregateAcademicRowsByDayCourse(rows = []) {
+  const units = new Map();
+  rows.forEach((row) => {
+    const sessionDate = firstText(row && row.sessionDate);
+    const courseGroupTitle = firstText(row && row.courseGroupTitle, getCourseGroupTitle(firstText(row && row.title)));
+    const courseGroupKey = firstText(row && row.courseGroupKey, normalizeKeywordText(courseGroupTitle));
+    if (!sessionDate || !courseGroupKey) {
+      return;
+    }
+    const key = `${sessionDate}__${courseGroupKey}`;
+    if (!units.has(key)) {
+      units.set(key, {
+        key,
+        sessionDate,
+        courseGroupTitle,
+        courseGroupKey,
+        startsAt: firstText(row && row.startsAt),
+        endsAt: firstText(row && row.endsAt),
+        location: firstText(row && row.location),
+        teacher: firstText(row && row.teacher),
+        sourceUids: new Set([firstText(row && row.sourceUid)]),
+        slotCount: 1,
+      });
+      return;
+    }
+    const unit = units.get(key);
+    unit.slotCount += 1;
+    unit.sourceUids.add(firstText(row && row.sourceUid));
+    const startsAt = firstText(row && row.startsAt);
+    const endsAt = firstText(row && row.endsAt);
+    if (!unit.startsAt || (startsAt && startsAt < unit.startsAt)) {
+      unit.startsAt = startsAt;
+    }
+    if (!unit.endsAt || (endsAt && endsAt > unit.endsAt)) {
+      unit.endsAt = endsAt;
+    }
+    if (!unit.location) {
+      unit.location = firstText(row && row.location);
+    }
+    if (!unit.teacher) {
+      unit.teacher = firstText(row && row.teacher);
+    }
+  });
+
+  const mergedRows = Array.from(units.values()).map((unit) => {
+    const sourceUid = `daycourse:${unit.courseGroupKey}`;
+    const sourceRecurrenceId = unit.sessionDate;
+    const id = buildCalendarSessionId(sourceUid, sourceRecurrenceId);
+    const raw = {
+      id,
+      sourceType: "calendar_ics",
+      sourceUid,
+      sourceRecurrenceId,
+      classKind: "regular",
+      classGroup: "115B",
+      title: unit.courseGroupTitle,
+      courseGroupTitle: unit.courseGroupTitle,
+      courseGroupKey: unit.courseGroupKey,
+      teacher: unit.teacher,
+      location: unit.location,
+      sessionDate: unit.sessionDate,
+      startsAt: unit.startsAt,
+      endsAt: unit.endsAt,
+      registrationDeadline: "",
+      status: "published",
+      isVisible: true,
+      calendarTimeZone: DEFAULT_CALENDAR_TIMEZONE,
+      parserVersion: ACADEMICS_PARSER_VERSION,
+      slotCount: unit.slotCount,
+      sourceUids: Array.from(unit.sourceUids).filter(Boolean),
+      aggregateMode: "day-course",
+    };
+    return {
+      id,
+      sourceType: "calendar_ics",
+      sourceUid,
+      sourceRecurrenceId,
+      classKind: "regular",
+      classGroup: "115B",
+      title: raw.title,
+      courseGroupTitle: raw.courseGroupTitle,
+      courseGroupKey: raw.courseGroupKey,
+      teacher: raw.teacher,
+      location: raw.location,
+      sessionDate: raw.sessionDate,
+      startsAt: raw.startsAt,
+      endsAt: raw.endsAt,
+      registrationDeadline: "",
+      status: "published",
+      isVisible: true,
+      raw,
+    };
+  });
+
+  mergedRows.sort((left, right) => {
+    const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.title)}`;
+    const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.title)}`;
+    return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+  });
+
+  return mergedRows;
+}
+
 export async function loadAcademicSessionsFromIcs(icsUrl, options = {}) {
   const url = firstText(icsUrl);
   if (!url) {
@@ -510,5 +613,5 @@ export async function loadAcademicSessionsFromIcs(icsUrl, options = {}) {
     return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
   });
 
-  return rows;
+  return aggregateAcademicRowsByDayCourse(rows);
 }
