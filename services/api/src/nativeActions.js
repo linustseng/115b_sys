@@ -582,17 +582,8 @@ async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
     rangeStart: addDaysDateText_(todayDateText_(), -120),
     rangeEnd: addDaysDateText_(todayDateText_(), 365),
   });
-  const hiddenPatch = JSON.stringify({ isVisible: false });
   await withTransaction(async (client) => {
-    await client.query(
-      `update academic_sessions
-       set is_visible = false,
-           updated_at = $1,
-           raw = coalesce(raw, '{}'::jsonb) || $2::jsonb,
-           synced_at = now()
-       where coalesce(source_type,'') = 'calendar_ics'`,
-      [nowIso(), hiddenPatch]
-    );
+    await client.query(`delete from academic_sessions where coalesce(source_type,'') = 'calendar_ics'`);
     for (const item of sessions) {
       await upsertAcademicSession_(client.query.bind(client), item);
     }
@@ -600,26 +591,37 @@ async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
   return { configured: true, didSync: true, count: sessions.length };
 }
 
-async function getAcademicRegularCount_(query) {
+async function getAcademicRegularStats_(query) {
   const row = rowOrNull(
     await query(
-      `select count(*)::int as count
+      `select
+         count(*)::int as total_count,
+         count(*) filter (where coalesce(is_visible, true) = true)::int as visible_count
        from academic_sessions
        where coalesce(source_type,'') = 'calendar_ics'
-         and coalesce(class_kind,'') = 'regular'
-         and coalesce(is_visible, true) = true`
+         and coalesce(class_kind,'') = 'regular'`
     )
   );
-  return Number(row && row.count ? row.count : 0);
+  return {
+    totalCount: Number(row && row.total_count ? row.total_count : 0),
+    visibleCount: Number(row && row.visible_count ? row.visible_count : 0),
+  };
+}
+
+async function getAcademicRegularCount_(query) {
+  const stats = await getAcademicRegularStats_(query);
+  return stats.visibleCount;
 }
 
 async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
   const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
   if (!configuredUrl) {
+    const stats = await getAcademicRegularStats_(query);
     return {
       configured: false,
       sourceCount: null,
-      dbCount: await getAcademicRegularCount_(query),
+      dbCount: stats.visibleCount,
+      dbRawCount: stats.totalCount,
       syncedByReconcile: false,
       sourcePreview: [],
       error: null,
@@ -637,14 +639,16 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       startsAt: firstText(row && row.startsAt),
     }));
     const sourceCount = parsedRows.length;
-    const dbCountBefore = await getAcademicRegularCount_(query);
+    const dbStatsBefore = await getAcademicRegularStats_(query);
+    const dbCountBefore = dbStatsBefore.visibleCount;
     if (sourceCount > 0 && dbCountBefore !== sourceCount) {
       await syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
-      const dbCountAfter = await getAcademicRegularCount_(query);
+      const dbStatsAfter = await getAcademicRegularStats_(query);
       return {
         configured: true,
         sourceCount,
-        dbCount: dbCountAfter,
+        dbCount: dbStatsAfter.visibleCount,
+        dbRawCount: dbStatsAfter.totalCount,
         syncedByReconcile: true,
         sourcePreview,
         error: null,
@@ -654,15 +658,18 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
       configured: true,
       sourceCount,
       dbCount: dbCountBefore,
+      dbRawCount: dbStatsBefore.totalCount,
       syncedByReconcile: false,
       sourcePreview,
       error: null,
     };
   } catch (error) {
+    const stats = await getAcademicRegularStats_(query);
     return {
       configured: true,
       sourceCount: null,
-      dbCount: await getAcademicRegularCount_(query),
+      dbCount: stats.visibleCount,
+      dbRawCount: stats.totalCount,
       syncedByReconcile: false,
       sourcePreview: [],
       error: String((error && error.message) || error || "unknown error"),
@@ -2166,6 +2173,7 @@ export async function dispatchNativeAction({
           diagnostics: {
             sourceCount: reconcile.sourceCount,
             dbCount: reconcile.dbCount,
+            dbRawCount: reconcile.dbRawCount,
             syncedByReconcile: reconcile.syncedByReconcile,
             sourcePreview: Array.isArray(reconcile.sourcePreview) ? reconcile.sourcePreview : [],
             reconcileError: reconcile.error,

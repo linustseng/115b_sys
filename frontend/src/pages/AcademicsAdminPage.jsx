@@ -509,7 +509,7 @@ export default function AcademicsAdminPage({ shared }) {
           {bootstrap.diagnostics ? (
             <>
               <p>
-                課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB {bootstrap.diagnostics.dbCount ?? "-"} 堂
+                課程同步診斷：來源 {bootstrap.diagnostics.sourceCount ?? "-"} 堂 ／ DB 可見 {bootstrap.diagnostics.dbCount ?? "-"} 堂 ／ DB 全量 {bootstrap.diagnostics.dbRawCount ?? "-"} 筆
                 {bootstrap.diagnostics.syncedByReconcile ? "（已自動重同步）" : ""}
               </p>
               {bootstrap.diagnostics.reconcileError ? (
