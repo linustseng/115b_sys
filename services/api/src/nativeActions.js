@@ -573,6 +573,57 @@ async function ensureGeneratedMakeupTargetSession_(query, sessionId) {
   return rowOrNull(result);
 }
 
+async function syncAcademicSessionsFromIcs_(icsUrl) {
+  const url = firstText(icsUrl);
+  if (!url) {
+    return { configured: false, didSync: false, count: 0 };
+  }
+  const sessions = await loadAcademicSessionsFromIcs(url, {
+    rangeStart: addDaysDateText_(todayDateText_(), -120),
+    rangeEnd: addDaysDateText_(todayDateText_(), 365),
+  });
+  const hiddenPatch = JSON.stringify({ isVisible: false });
+  await withTransaction(async (client) => {
+    await client.query(
+      `update academic_sessions
+       set is_visible = false,
+           updated_at = $1,
+           raw = coalesce(raw, '{}'::jsonb) || $2::jsonb,
+           synced_at = now()
+       where coalesce(source_type,'') = 'calendar_ics'`,
+      [nowIso(), hiddenPatch]
+    );
+    for (const item of sessions) {
+      await upsertAcademicSession_(client.query.bind(client), item);
+    }
+  });
+  return { configured: true, didSync: true, count: sessions.length };
+}
+
+async function ensureAcademicSessionsFresh_({ force = false } = {}) {
+  const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
+  if (!configuredUrl) {
+    return { configured: false, didSync: false, count: 0 };
+  }
+  if (!force) {
+    const latest = rowOrNull(
+      await query(
+        `select max(synced_at) as latest_synced_at
+         from academic_sessions
+         where coalesce(source_type,'') = 'calendar_ics'`
+      )
+    );
+    const latestSyncedAt = firstText(latest && latest.latest_synced_at ? latest.latest_synced_at : "");
+    if (latestSyncedAt) {
+      const latestMs = Date.parse(latestSyncedAt);
+      if (!Number.isNaN(latestMs) && Date.now() - latestMs < 6 * 60 * 60 * 1000) {
+        return { configured: true, didSync: false, count: 0 };
+      }
+    }
+  }
+  return syncAcademicSessionsFromIcs_(configuredUrl);
+}
+
 function sessionNoteToDbRow_(input, actor = null) {
   const raw = safeJsonObject(input);
   const linkedActor = actor && typeof actor === "object" ? actor : {};
@@ -585,6 +636,8 @@ function sessionNoteToDbRow_(input, actor = null) {
   );
   const normalizedStatus = firstText(raw.status, "draft").toLowerCase() === "published" ? "published" : "draft";
   const publishedAt = normalizedStatus === "published" ? firstText(raw.publishedAt, updatedAt) : "";
+  const homeworkNotice = firstText(raw.homeworkNotice);
+  const quizNotice = firstText(raw.quizNotice);
   return {
     id,
     sessionId: firstText(raw.sessionId),
@@ -592,6 +645,8 @@ function sessionNoteToDbRow_(input, actor = null) {
     summary: firstText(raw.summary),
     linkUrl: firstText(raw.linkUrl),
     linkLabel: firstText(raw.linkLabel, raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+    homeworkNotice,
+    quizNotice,
     status: normalizedStatus,
     publishedAt,
     createdBy,
@@ -605,6 +660,8 @@ function sessionNoteToDbRow_(input, actor = null) {
       summary: firstText(raw.summary),
       linkUrl: firstText(raw.linkUrl),
       linkLabel: firstText(raw.linkLabel, raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+      homeworkNotice,
+      quizNotice,
       status: normalizedStatus,
       publishedAt,
       createdBy,
@@ -1843,6 +1900,7 @@ export async function dispatchNativeAction({
 
     case "listAcademicsBootstrap": {
       requireAuth();
+      await ensureAcademicSessionsFresh_();
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
       const fromDate = addDaysDateText_(todayDateText_(), -120);
@@ -1912,6 +1970,7 @@ export async function dispatchNativeAction({
     case "listAcademicsAdminBootstrap": {
       requireAuth();
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      await ensureAcademicSessionsFresh_();
       const fromDate = addDaysDateText_(todayDateText_(), -180);
       const toDate = addDaysDateText_(todayDateText_(), 365);
 
@@ -1974,22 +2033,12 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Missing icsUrl or ACADEMICS_ICS_URL" };
       }
 
-      const sessions = await loadAcademicSessionsFromIcs(icsUrl, {
-        rangeStart: addDaysDateText_(todayDateText_(), -120),
-        rangeEnd: addDaysDateText_(todayDateText_(), 365),
-      });
-
-      await withTransaction(async (client) => {
-        for (const item of sessions) {
-          await upsertAcademicSession_(client.query.bind(client), item);
-        }
-      });
+      const syncResult = await syncAcademicSessionsFromIcs_(icsUrl);
 
       return {
         ok: true,
         data: {
-          count: sessions.length,
-          sessions: sessions.slice(0, 20),
+          count: syncResult.count,
         },
         error: null,
       };

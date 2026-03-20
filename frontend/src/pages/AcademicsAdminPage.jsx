@@ -7,6 +7,8 @@ function buildNoteForm(note, sessionId = "") {
     summary: (note && note.summary) || "",
     linkUrl: (note && note.linkUrl) || "",
     linkLabel: (note && note.linkLabel) || "",
+    homeworkNotice: (note && note.homeworkNotice) || "",
+    quizNotice: (note && note.quizNotice) || "",
     status: (note && note.status) || "draft",
   };
 }
@@ -798,6 +800,28 @@ export default function AcademicsAdminPage({ shared }) {
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, summary: event.target.value, sessionId: selectedSessionId }))}
                   rows={5}
                   placeholder="課堂重點、提醒事項、講師提到的重要概念..."
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知</label>
+                <textarea
+                  value={noteForm.homeworkNotice}
+                  onChange={(event) => setNoteForm((prev) => ({ ...prev, homeworkNotice: event.target.value, sessionId: selectedSessionId }))}
+                  rows={3}
+                  placeholder="例如：下週前提交個案分析 / 閱讀指定章節"
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知</label>
+                <textarea
+                  value={noteForm.quizNotice}
+                  onChange={(event) => setNoteForm((prev) => ({ ...prev, quizNotice: event.target.value, sessionId: selectedSessionId }))}
+                  rows={3}
+                  placeholder="例如：下次上課前 10 分鐘小考 / 範圍第 3-4 章"
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>

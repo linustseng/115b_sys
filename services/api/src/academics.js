@@ -20,6 +20,12 @@ const ACADEMIC_EXCLUDED_KEYWORDS = [
   "活動",
   "新生盃",
   "隊聚",
+  "welcome",
+  "party",
+  "大集合",
+  "聚會",
+  "春酒",
+  "尾牙",
 ];
 
 function pad2(value) {
@@ -101,6 +107,39 @@ function normalizeKeywordText(value) {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "");
+}
+
+function getCourseGroupTitle(title) {
+  const raw = String(title || "").trim();
+  if (!raw) {
+    return "";
+  }
+  const stripped = raw
+    .replace(/[\s\-_:：]*[0-9０-９]{1,3}$/u, "")
+    .replace(/[（(][0-9０-９]{1,3}[)）]$/u, "")
+    .trim();
+  return stripped || raw;
+}
+
+function getTimeMinutesFromDateTimeText(dateTimeText) {
+  const match = String(dateTimeText || "").trim().match(/(?:T| )(\d{2}):(\d{2})$/);
+  if (!match) {
+    return Number.NaN;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function hasAcademicLocation(value) {
+  return Boolean(firstText(value));
+}
+
+function isAcademicDaytimeRange(startsAt, endsAt) {
+  const startMinutes = getTimeMinutesFromDateTimeText(startsAt);
+  const endMinutes = getTimeMinutesFromDateTimeText(endsAt);
+  if (Number.isNaN(startMinutes) || Number.isNaN(endMinutes)) {
+    return false;
+  }
+  return startMinutes >= 8 * 60 && startMinutes <= 17 * 60 + 30 && endMinutes <= 18 * 60 + 30;
 }
 
 function isAcademicTitle(summary) {
@@ -200,6 +239,8 @@ export function mapAcademicSessionRow(row) {
     classKind: firstText(raw.classKind, firstText(row && row.class_kind ? row.class_kind : "")),
     classGroup: firstText(raw.classGroup, firstText(row && row.class_group ? row.class_group : "")),
     title: firstText(raw.title, firstText(row && row.title ? row.title : "")),
+    courseGroupTitle: firstText(raw.courseGroupTitle, getCourseGroupTitle(firstText(raw.title, firstText(row && row.title ? row.title : "")))),
+    courseGroupKey: firstText(raw.courseGroupKey, normalizeKeywordText(firstText(raw.courseGroupTitle, getCourseGroupTitle(firstText(raw.title, firstText(row && row.title ? row.title : "")))))),
     teacher: firstText(raw.teacher, firstText(row && row.teacher ? row.teacher : "")),
     location: firstText(raw.location, firstText(row && row.location ? row.location : "")),
     sessionDate: firstText(raw.sessionDate, firstText(row && row.session_date ? row.session_date : "")),
@@ -229,6 +270,8 @@ export function mapSessionNoteRow(row) {
     summary: firstText(raw.summary, firstText(row && row.summary ? row.summary : "")),
     linkUrl: firstText(raw.linkUrl, firstText(row && row.link_url ? row.link_url : "")),
     linkLabel: firstText(raw.linkLabel, firstText(row && row.link_label ? row.link_label : "")),
+    homeworkNotice: firstText(raw.homeworkNotice),
+    quizNotice: firstText(raw.quizNotice),
     status: firstText(raw.status, firstText(row && row.status ? row.status : "")),
     publishedAt: firstText(raw.publishedAt, firstText(row && row.published_at ? row.published_at : "")),
     createdBy: firstText(raw.createdBy, firstText(row && row.created_by ? row.created_by : "")),
@@ -282,6 +325,8 @@ function buildCalendarSessionRecord(base) {
     classKind: "regular",
     classGroup: "115B",
     title: firstText(base.title),
+    courseGroupTitle: getCourseGroupTitle(firstText(base.title)),
+    courseGroupKey: normalizeKeywordText(getCourseGroupTitle(firstText(base.title))),
     teacher: firstText(base.teacher),
     location: firstText(base.location),
     sessionDate: firstText(base.sessionDate),
@@ -300,6 +345,8 @@ function buildCalendarSessionRecord(base) {
     classKind: "regular",
     classGroup: "115B",
     title: raw.title,
+    courseGroupTitle: raw.courseGroupTitle,
+    courseGroupKey: raw.courseGroupKey,
     teacher: raw.teacher,
     location: raw.location,
     sessionDate: raw.sessionDate,
@@ -312,22 +359,30 @@ function buildCalendarSessionRecord(base) {
   };
 }
 
-function shouldIncludeAcademicEvent(event, { dateText, title, isDateOnly }) {
+function shouldIncludeAcademicEvent(event, { dateText, title, isDateOnly, location, startsAt, endsAt }) {
   if (!event || isDateOnly) {
     return false;
   }
   if (!dateText || !isWeekendDateText(dateText)) {
     return false;
   }
+  if (!hasAcademicLocation(location)) {
+    return false;
+  }
+  if (!isAcademicDaytimeRange(startsAt, endsAt)) {
+    return false;
+  }
   return isAcademicTitle(title);
 }
 
 function buildStandaloneAcademicSession(event) {
-  const timeZone = firstText(event && event.start && event.start.tz, DEFAULT_CALENDAR_TIMEZONE);
+  const timeZone = DEFAULT_CALENDAR_TIMEZONE;
   const sessionDate = toDateOnlyTextFromZonedDate(event.start, timeZone);
   const title = firstText(event.summary);
   const isDateOnly = Boolean(event && event.start && event.start.dateOnly);
-  if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly })) {
+  const startsAt = toDateTimeTextFromZonedDate(event.start, timeZone);
+  const endsAt = toDateTimeTextFromZonedDate(event.end, timeZone);
+  if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly, location: firstText(event.location), startsAt, endsAt })) {
     return null;
   }
   return buildCalendarSessionRecord({
@@ -337,8 +392,8 @@ function buildStandaloneAcademicSession(event) {
     teacher: "",
     location: firstText(event.location),
     sessionDate,
-    startsAt: toDateTimeTextFromZonedDate(event.start, timeZone),
-    endsAt: toDateTimeTextFromZonedDate(event.end, timeZone),
+    startsAt,
+    endsAt,
     registrationDeadline: "",
     timeZone,
     status: "published",
@@ -362,9 +417,11 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
     }
 
     if (overrideEvent) {
-      const timeZone = firstText(overrideEvent && overrideEvent.start && overrideEvent.start.tz, DEFAULT_CALENDAR_TIMEZONE);
+      const timeZone = DEFAULT_CALENDAR_TIMEZONE;
       const sessionDate = toDateOnlyTextFromZonedDate(overrideEvent.start, timeZone);
-      if (!shouldIncludeAcademicEvent(overrideEvent, { dateText: sessionDate, title, isDateOnly })) {
+      const startsAt = toDateTimeTextFromZonedDate(overrideEvent.start, timeZone);
+      const endsAt = toDateTimeTextFromZonedDate(overrideEvent.end, timeZone);
+      if (!shouldIncludeAcademicEvent(overrideEvent, { dateText: sessionDate, title, isDateOnly, location: firstText(overrideEvent.location, event.location), startsAt, endsAt })) {
         continue;
       }
       results.push(
@@ -375,8 +432,8 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
           teacher: "",
           location: firstText(overrideEvent.location, event.location),
           sessionDate,
-          startsAt: toDateTimeTextFromZonedDate(overrideEvent.start, timeZone),
-          endsAt: toDateTimeTextFromZonedDate(overrideEvent.end, timeZone),
+          startsAt,
+          endsAt,
           registrationDeadline: "",
           timeZone,
           status: "published",
@@ -386,10 +443,12 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
     }
 
     const sessionDate = recurrenceKey;
-    if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly })) {
+    const syntheticEnd = new Date(occurrence.getTime() + durationMs);
+    const startsAt = toDateTimeTextFromUtcParts(occurrence);
+    const endsAt = toDateTimeTextFromUtcParts(syntheticEnd);
+    if (!shouldIncludeAcademicEvent(event, { dateText: sessionDate, title, isDateOnly, location: firstText(event.location), startsAt, endsAt })) {
       continue;
     }
-    const syntheticEnd = new Date(occurrence.getTime() + durationMs);
     results.push(
       buildCalendarSessionRecord({
         uid: event.uid,
@@ -398,8 +457,8 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
         teacher: "",
         location: firstText(event.location),
         sessionDate,
-        startsAt: toDateTimeTextFromUtcParts(occurrence),
-        endsAt: toDateTimeTextFromUtcParts(syntheticEnd),
+        startsAt,
+        endsAt,
         registrationDeadline: "",
         timeZone: DEFAULT_CALENDAR_TIMEZONE,
         status: "published",

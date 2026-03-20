@@ -161,12 +161,58 @@ export default function AcademicsPage({ shared }) {
     return map;
   }, [bootstrap.sessions]);
 
-  const recentNotes = useMemo(() => {
-    return (bootstrap.notes || []).map((note) => ({
-      ...note,
-      session: sessionsById.get(note.sessionId) || null,
-    }));
+  const notesBySessionId = useMemo(() => {
+    const map = new Map();
+    (bootstrap.notes || []).forEach((note) => {
+      map.set(note.sessionId, {
+        ...note,
+        session: sessionsById.get(note.sessionId) || null,
+      });
+    });
+    return map;
   }, [bootstrap.notes, sessionsById]);
+
+  const courseCatalog = useMemo(() => {
+    const groups = new Map();
+    regularSessions.forEach((session) => {
+      const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim();
+      const courseGroupKey = String(session.courseGroupKey || courseGroupTitle || session.id || "").trim();
+      if (!courseGroupKey) {
+        return;
+      }
+      if (!groups.has(courseGroupKey)) {
+        groups.set(courseGroupKey, {
+          courseGroupKey,
+          courseGroupTitle: courseGroupTitle || session.title || "未分類課程",
+          sessions: [],
+          latestSessionDate: "",
+        });
+      }
+      const bucket = groups.get(courseGroupKey);
+      bucket.sessions.push({
+        ...session,
+        note: notesBySessionId.get(session.id) || null,
+      });
+      const sessionDate = String(session.sessionDate || "");
+      if (!bucket.latestSessionDate || sessionDate > bucket.latestSessionDate) {
+        bucket.latestSessionDate = sessionDate;
+      }
+    });
+    return Array.from(groups.values())
+      .map((group) => ({
+        ...group,
+        sessions: group.sessions.slice().sort((a, b) => {
+          const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
+          const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
+          return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+        }),
+      }))
+      .sort((a, b) => {
+        const left = `${String(a.latestSessionDate || "")} ${String(a.courseGroupTitle || "")}`;
+        const right = `${String(b.latestSessionDate || "")} ${String(b.courseGroupTitle || "")}`;
+        return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+  }, [regularSessions, notesBySessionId]);
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -512,50 +558,71 @@ export default function AcademicsPage({ shared }) {
         <section className="mt-6 card p-6 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Sessions</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">近期正式課程</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
+              <p className="mt-2 text-sm text-slate-500">依課程名稱分組，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
-            <span className="text-xs text-slate-400">共 {regularSessions.length} 堂</span>
+            <span className="text-xs text-slate-400">共 {courseCatalog.length} 門</span>
           </div>
-          <div className="mt-5 grid gap-3 lg:grid-cols-2">
-            {regularSessions.slice(0, 12).map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                <p className="mt-1 text-xs text-slate-500">{formatSessionSchedule_(item)}</p>
-                {item.location ? <p className="mt-1 text-xs text-slate-500">地點：{item.location}</p> : null}
-              </div>
-            ))}
-            {!regularSessions.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
-          </div>
-        </section>
+          <div className="mt-5 space-y-4">
+            {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
+            {courseCatalog.map((group) => (
+              <div key={group.courseGroupKey} className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-slate-900">{group.courseGroupTitle}</h3>
+                    <p className="mt-1 text-xs text-slate-500">共 {group.sessions.length} 個場次</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {group.sessions.map((session) => (
+                    <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{session.title}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatSessionSchedule_(session)}</p>
+                          {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
+                          {session.sessionDate}
+                        </span>
+                      </div>
 
-        <section className="mt-6 card p-6 sm:p-7">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Notes</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">課程摘要 / 筆記</h2>
-            </div>
-            <span className="text-xs text-slate-400">已發布 {recentNotes.length} 筆</span>
-          </div>
-          <div className="mt-5 grid gap-3 lg:grid-cols-2">
-            {!recentNotes.length ? <div className="alert alert-info text-xs">目前還沒有已發布的課程摘要。</div> : null}
-            {recentNotes.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-                <p className="text-sm font-semibold text-slate-900">{item.title || (item.session && item.session.title) || "課程摘要"}</p>
-                {item.session ? (
-                  <p className="mt-1 text-xs text-slate-500">{formatSessionSchedule_(item.session)}</p>
-                ) : null}
-                {item.summary ? <p className="mt-3 text-sm leading-6 text-slate-700">{item.summary}</p> : null}
-                {item.linkUrl ? (
-                  <a
-                    href={item.linkUrl}
-                    target="_blank"
-                    rel="noopener"
-                    className="mt-4 inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                  >
-                    {item.linkLabel || "開啟筆記連結"}
-                  </a>
-                ) : null}
+                      {session.note ? (
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-2xl bg-white px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">摘要</p>
+                            <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.summary || "尚未提供"}</p>
+                            {session.note.linkUrl ? (
+                              <a
+                                href={session.note.linkUrl}
+                                target="_blank"
+                                rel="noopener"
+                                className="mt-3 inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                              >
+                                {session.note.linkLabel || "開啟筆記連結"}
+                              </a>
+                            ) : null}
+                          </div>
+                          <div className="grid gap-3">
+                            <div className="rounded-2xl bg-white px-4 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
+                              <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.homeworkNotice || "目前尚無作業通知"}</p>
+                            </div>
+                            <div className="rounded-2xl bg-white px-4 py-3">
+                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
+                              <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.quizNotice || "目前尚無小考通知"}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
+                          這個場次目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
