@@ -28,6 +28,7 @@ export default function AcademicsPage({ shared }) {
   const [authRecovering, setAuthRecovering] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
+  const [activeTab, setActiveTab] = useState("makeup");
   const [form, setForm] = useState(() => defaultForm());
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
@@ -429,7 +430,29 @@ export default function AcademicsPage({ shared }) {
         {error ? <div className="mb-4 alert alert-error">{error}</div> : null}
         {status ? <div className="mb-4 alert alert-success">{status}</div> : null}
 
-        <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <section className="mb-6 card p-3 sm:p-4">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: "makeup", label: "補課登記" },
+              { id: "courses", label: "課程索引" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setActiveTab(item.id)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold ${
+                  activeTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {activeTab === "makeup" ? (
+          <>
+            <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="card p-6 sm:p-7">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -572,11 +595,14 @@ export default function AcademicsPage({ shared }) {
             ))}
           </div>
         </section>
+          </>
+        ) : null}
 
-        <section className="mt-6 card p-6 sm:p-7">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
+        {activeTab === "courses" ? (
+          <section className="mt-6 card p-6 sm:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
               <p className="mt-2 text-sm text-slate-500">依課程名稱分組，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
@@ -644,7 +670,8 @@ export default function AcademicsPage({ shared }) {
               </div>
             ))}
           </div>
-        </section>
+          </section>
+        ) : null}
       </main>
     </div>
   );
