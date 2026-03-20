@@ -573,7 +573,7 @@ async function ensureGeneratedMakeupTargetSession_(query, sessionId) {
   return rowOrNull(result);
 }
 
-async function syncAcademicSessionsFromIcs_(icsUrl) {
+async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
   const url = firstText(icsUrl);
   if (!url) {
     return { configured: false, didSync: false, count: 0 };
@@ -600,7 +600,7 @@ async function syncAcademicSessionsFromIcs_(icsUrl) {
   return { configured: true, didSync: true, count: sessions.length };
 }
 
-async function ensureAcademicSessionsFresh_({ force = false } = {}) {
+async function ensureAcademicSessionsFresh_(query, withTransaction, { force = false } = {}) {
   const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
   if (!configuredUrl) {
     return { configured: false, didSync: false, count: 0 };
@@ -618,7 +618,7 @@ async function ensureAcademicSessionsFresh_({ force = false } = {}) {
       )
     );
     if (Number(legacyCheck && legacyCheck.count ? legacyCheck.count : 0) > 0) {
-      return syncAcademicSessionsFromIcs_(configuredUrl);
+      return syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
     }
 
     const latest = rowOrNull(
@@ -636,7 +636,7 @@ async function ensureAcademicSessionsFresh_({ force = false } = {}) {
       }
     }
   }
-  return syncAcademicSessionsFromIcs_(configuredUrl);
+  return syncAcademicSessionsFromIcs_(query, withTransaction, configuredUrl);
 }
 
 function sessionNoteToDbRow_(input, actor = null) {
@@ -1915,7 +1915,7 @@ export async function dispatchNativeAction({
 
     case "listAcademicsBootstrap": {
       requireAuth();
-      await ensureAcademicSessionsFresh_();
+      await ensureAcademicSessionsFresh_(query, withTransaction);
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
       const fromDate = addDaysDateText_(todayDateText_(), -120);
@@ -1985,7 +1985,7 @@ export async function dispatchNativeAction({
     case "listAcademicsAdminBootstrap": {
       requireAuth();
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
-      await ensureAcademicSessionsFresh_();
+      await ensureAcademicSessionsFresh_(query, withTransaction);
       const fromDate = addDaysDateText_(todayDateText_(), -180);
       const toDate = addDaysDateText_(todayDateText_(), 365);
 
@@ -2048,7 +2048,7 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Missing icsUrl or ACADEMICS_ICS_URL" };
       }
 
-      const syncResult = await syncAcademicSessionsFromIcs_(icsUrl);
+      const syncResult = await syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl);
 
       return {
         ok: true,
