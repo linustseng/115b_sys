@@ -192,43 +192,78 @@ export default function AcademicsPage({ shared }) {
   }, [regularSessions]);
 
   const courseCatalog = useMemo(() => {
-    const groups = new Map();
+    const parseMinutes = (value) => {
+      const match = String(value || "").match(/(?:T| )(\d{2}):(\d{2})$/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
+    };
+
+    const units = new Map();
     recentCourseSessions.forEach((session) => {
-      const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim();
+      const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim() || "未分類課程";
       const courseGroupKey = String(session.courseGroupKey || courseGroupTitle || session.id || "").trim();
-      if (!courseGroupKey) {
+      const sessionDate = String(session.sessionDate || "").trim();
+      if (!courseGroupKey || !sessionDate) {
         return;
       }
-      if (!groups.has(courseGroupKey)) {
-        groups.set(courseGroupKey, {
+      const unitKey = `${sessionDate}__${courseGroupKey}`;
+      if (!units.has(unitKey)) {
+        units.set(unitKey, {
+          unitKey,
+          sessionDate,
           courseGroupKey,
-          courseGroupTitle: courseGroupTitle || session.title || "未分類課程",
-          sessions: [],
-          firstSessionDate: "",
+          courseGroupTitle,
+          slots: [],
+          notes: [],
         });
       }
-      const bucket = groups.get(courseGroupKey);
-      bucket.sessions.push({
+      const bucket = units.get(unitKey);
+      const slot = {
         ...session,
         note: notesBySessionId.get(session.id) || null,
-      });
-      const sessionDate = String(session.sessionDate || "");
-      if (!bucket.firstSessionDate || sessionDate < bucket.firstSessionDate) {
-        bucket.firstSessionDate = sessionDate;
+      };
+      bucket.slots.push(slot);
+      if (slot.note) {
+        bucket.notes.push(slot.note);
       }
     });
-    return Array.from(groups.values())
-      .map((group) => ({
-        ...group,
-        sessions: group.sessions.slice().sort((a, b) => {
-          const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
-          const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
+
+    return Array.from(units.values())
+      .map((unit) => {
+        const sortedSlots = unit.slots.slice().sort((a, b) => {
+          const left = `${String(a.startsAt || "")} ${String(a.endsAt || "")}`;
+          const right = `${String(b.startsAt || "")} ${String(b.endsAt || "")}`;
           return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
-        }),
-      }))
+        });
+        const firstSlot = sortedSlots[0] || null;
+        const location = firstSlot ? firstSlot.location : "";
+        const minStart = sortedSlots.reduce((acc, slot) => {
+          const value = parseMinutes(slot.startsAt);
+          return Number.isNaN(value) ? acc : Math.min(acc, value);
+        }, Number.POSITIVE_INFINITY);
+        const maxEnd = sortedSlots.reduce((acc, slot) => {
+          const value = parseMinutes(slot.endsAt);
+          return Number.isNaN(value) ? acc : Math.max(acc, value);
+        }, Number.NEGATIVE_INFINITY);
+        const mergedSchedule =
+          Number.isFinite(minStart) && Number.isFinite(maxEnd)
+            ? `${String(Math.floor(minStart / 60)).padStart(2, "0")}:${String(minStart % 60).padStart(2, "0")} - ${String(
+                Math.floor(maxEnd / 60)
+              ).padStart(2, "0")}:${String(maxEnd % 60).padStart(2, "0")}`
+            : "";
+
+        const primaryNote = unit.notes[0] || null;
+        return {
+          ...unit,
+          slots: sortedSlots,
+          slotCount: sortedSlots.length,
+          location,
+          mergedSchedule,
+          note: primaryNote,
+        };
+      })
       .sort((a, b) => {
-        const left = `${String(a.firstSessionDate || "")} ${String(a.courseGroupTitle || "")}`;
-        const right = `${String(b.firstSessionDate || "")} ${String(b.courseGroupTitle || "")}`;
+        const left = `${a.sessionDate} ${a.courseGroupTitle}`;
+        const right = `${b.sessionDate} ${b.courseGroupTitle}`;
         return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
   }, [recentCourseSessions, notesBySessionId]);
@@ -604,69 +639,57 @@ export default function AcademicsPage({ shared }) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
-              <p className="mt-2 text-sm text-slate-500">依課程名稱分組，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
+              <p className="mt-2 text-sm text-slate-500">以「天 × 課程」彙整，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
             <span className="text-xs text-slate-400">最近 3 個上課日</span>
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
-            {courseCatalog.map((group) => (
-              <div key={group.courseGroupKey} className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+            {courseCatalog.map((unit) => (
+              <div key={unit.unitKey} className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">{group.courseGroupTitle}</h3>
-                    <p className="mt-1 text-xs text-slate-500">共 {group.sessions.length} 個場次</p>
+                    <h3 className="text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
+                    <p className="mt-1 text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</p>
                   </div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+                    {unit.mergedSchedule || "時間待補"}
+                  </span>
                 </div>
-                <div className="mt-4 space-y-3">
-                  {group.sessions.map((session) => (
-                    <div key={session.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{session.title}</p>
-                          <p className="mt-1 text-xs text-slate-500">{formatSessionSchedule_(session)}</p>
-                          {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
-                        </div>
-                        <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-600">
-                          {session.sessionDate}
-                        </span>
-                      </div>
+                {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
 
-                      {session.note ? (
-                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                          <div className="rounded-2xl bg-white px-4 py-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">摘要</p>
-                            <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.summary || "尚未提供"}</p>
-                            {session.note.linkUrl ? (
-                              <a
-                                href={session.note.linkUrl}
-                                target="_blank"
-                                rel="noopener"
-                                className="mt-3 inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                              >
-                                {session.note.linkLabel || "開啟筆記連結"}
-                              </a>
-                            ) : null}
-                          </div>
-                          <div className="grid gap-3">
-                            <div className="rounded-2xl bg-white px-4 py-3">
-                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
-                              <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.homeworkNotice || "目前尚無作業通知"}</p>
-                            </div>
-                            <div className="rounded-2xl bg-white px-4 py-3">
-                              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
-                              <p className="mt-2 text-sm leading-6 text-slate-700">{session.note.quizNotice || "目前尚無小考通知"}</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-                          這個場次目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
-                        </div>
-                      )}
+                {unit.note ? (
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <div className="rounded-2xl bg-white px-4 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">摘要</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.summary || "尚未提供"}</p>
+                      {unit.note.linkUrl ? (
+                        <a
+                          href={unit.note.linkUrl}
+                          target="_blank"
+                          rel="noopener"
+                          className="mt-3 inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                        >
+                          {unit.note.linkLabel || "開啟筆記連結"}
+                        </a>
+                      ) : null}
                     </div>
-                  ))}
-                </div>
+                    <div className="grid gap-3">
+                      <div className="rounded-2xl bg-white px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.homeworkNotice || "目前尚無作業通知"}</p>
+                      </div>
+                      <div className="rounded-2xl bg-white px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-700">{unit.note.quizNotice || "目前尚無小考通知"}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
+                    這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+                  </div>
+                )}
               </div>
             ))}
           </div>
