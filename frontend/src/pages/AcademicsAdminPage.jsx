@@ -58,10 +58,20 @@ export default function AcademicsAdminPage({ shared }) {
     requests: [],
     notes: [],
     summaryByTarget: [],
+    students: [],
+    hasConfiguredIcsUrl: false,
   });
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [noteForm, setNoteForm] = useState(() => buildNoteForm(null, ""));
   const [requestDrafts, setRequestDrafts] = useState({});
+  const [selectedTargetDate, setSelectedTargetDate] = useState("");
+  const [manualForm, setManualForm] = useState({
+    studentId: "",
+    targetSessionId: "",
+    needMeal: false,
+    needHandout: true,
+    note: "",
+  });
 
   const loadBootstrap_ = async () => {
     setLoading(true);
@@ -79,6 +89,8 @@ export default function AcademicsAdminPage({ shared }) {
         requests: Array.isArray(data.requests) ? data.requests : [],
         notes: Array.isArray(data.notes) ? data.notes : [],
         summaryByTarget: Array.isArray(data.summaryByTarget) ? data.summaryByTarget : [],
+        students: Array.isArray(data.students) ? data.students : [],
+        hasConfiguredIcsUrl: Boolean(data.hasConfiguredIcsUrl),
       });
       setRequestDrafts((prev) => {
         const next = { ...prev };
@@ -132,6 +144,44 @@ export default function AcademicsAdminPage({ shared }) {
     });
     return map;
   }, [activeRequests]);
+
+  const availableTargetDates = useMemo(() => {
+    const values = new Set();
+    (bootstrap.makeupTargets || []).forEach((item) => {
+      const date = String(item.sessionDate || "").trim();
+      if (date) {
+        values.add(date);
+      }
+    });
+    (bootstrap.summaryByTarget || []).forEach((item) => {
+      const session = sessionsById.get(item.targetSessionId) || item.targetSession || null;
+      const date = String((session && session.sessionDate) || "").trim();
+      if (date) {
+        values.add(date);
+      }
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" }));
+  }, [bootstrap.makeupTargets, bootstrap.summaryByTarget, sessionsById]);
+
+  const filteredSummaryByTarget = useMemo(() => {
+    return (bootstrap.summaryByTarget || []).filter((item) => {
+      if (!selectedTargetDate) {
+        return true;
+      }
+      const session = sessionsById.get(item.targetSessionId) || item.targetSession || null;
+      return String((session && session.sessionDate) || "") === selectedTargetDate;
+    });
+  }, [bootstrap.summaryByTarget, sessionsById, selectedTargetDate]);
+
+  const filteredRequests = useMemo(() => {
+    return (bootstrap.requests || []).filter((item) => {
+      if (!selectedTargetDate) {
+        return true;
+      }
+      const session = item.targetSession || sessionsById.get(item.targetSessionId) || null;
+      return String((session && session.sessionDate) || "") === selectedTargetDate;
+    });
+  }, [bootstrap.requests, sessionsById, selectedTargetDate]);
 
   useEffect(() => {
     if (!selectedSessionId) {
@@ -320,6 +370,42 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
+  const handleCreateManualRequest_ = async (event) => {
+    event.preventDefault();
+    if (!manualForm.studentId || !manualForm.targetSessionId) {
+      setError("請先選擇同學與補課日期。");
+      return;
+    }
+    setStatus("");
+    setError("");
+    try {
+      const { result } = await apiRequest({
+        action: "adminCreateMakeupRequest",
+        data: {
+          studentId: manualForm.studentId,
+          targetSessionId: manualForm.targetSessionId,
+          needMeal: manualForm.needMeal,
+          needHandout: manualForm.needHandout,
+          note: manualForm.note,
+        },
+      });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "補資料失敗");
+      }
+      setManualForm({
+        studentId: "",
+        targetSessionId: "",
+        needMeal: false,
+        needHandout: true,
+        note: "",
+      });
+      setStatus("已在後台補登補課資料。");
+      await loadBootstrap_();
+    } catch (err) {
+      setError(String((err && err.message) || "補資料失敗"));
+    }
+  };
+
   const handleSaveNote_ = async (event) => {
     event.preventDefault();
     if (!noteForm.sessionId) {
@@ -394,28 +480,126 @@ export default function AcademicsAdminPage({ shared }) {
           </div>
         </section>
 
+        {!bootstrap.hasConfiguredIcsUrl ? (
+          <section className="mt-6 card p-6 sm:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
+                <p className="mt-2 text-sm text-slate-500">正式環境請在 Render service env 設定 <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">ACADEMICS_ICS_URL</code>；未設定時，可臨時貼入 ICS URL 進行同步。</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSync_}
+                disabled={syncing}
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {syncing ? "同步中..." : "立即同步"}
+              </button>
+            </div>
+            <input
+              value={icsUrlInput}
+              onChange={(event) => setIcsUrlInput(event.target.value)}
+              placeholder="可選：臨時 ICS URL（未填則走後端環境變數）"
+              className="mt-4 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+            />
+          </section>
+        ) : null}
+
         <section className="mt-6 card p-6 sm:p-7">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-500">Calendar Sync</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">同步 Google Calendar 正式課程</h2>
-              <p className="mt-2 text-sm text-slate-500">正式環境請在 Render service env 設定 <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs">ACADEMICS_ICS_URL</code>；未設定時，可臨時貼入 ICS URL 進行同步。</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-500">Manual</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">後台補登補課資料</h2>
+              <p className="mt-2 text-sm text-slate-500">若同學未自行填寫，可由後台直接補登補課資料。</p>
             </div>
-            <button
-              type="button"
-              onClick={handleSync_}
-              disabled={syncing}
-              className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {syncing ? "同步中..." : "立即同步"}
-            </button>
+            <div className="w-full sm:w-auto">
+              <label className="mb-2 block text-sm font-medium text-slate-700">依日期查詢補課名單</label>
+              <select
+                value={selectedTargetDate}
+                onChange={(event) => {
+                  setSelectedTargetDate(event.target.value);
+                  setManualForm((prev) => ({ ...prev, targetSessionId: "" }));
+                }}
+                className="h-11 min-w-[220px] rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+              >
+                <option value="">全部日期</option>
+                {availableTargetDates.map((date) => (
+                  <option key={date} value={date}>{date}</option>
+                ))}
+              </select>
+            </div>
           </div>
-          <input
-            value={icsUrlInput}
-            onChange={(event) => setIcsUrlInput(event.target.value)}
-            placeholder="可選：臨時 ICS URL（未填則走後端環境變數）"
-            className="mt-4 h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-          />
+
+          <form className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_1fr]" onSubmit={handleCreateManualRequest_}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">同學</label>
+                <select
+                  value={manualForm.studentId}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, studentId: event.target.value }))}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                >
+                  <option value="">請選擇同學</option>
+                  {(bootstrap.students || []).map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.group ? `[${student.group}] ` : ""}{student.name || student.email || student.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">補課場次</label>
+                <select
+                  value={manualForm.targetSessionId}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, targetSessionId: event.target.value }))}
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                >
+                  <option value="">請選擇補課場次</option>
+                  {(bootstrap.makeupTargets || []).filter((item) => !selectedTargetDate || item.sessionDate === selectedTargetDate).map((item) => (
+                    <option key={item.id} value={item.id}>{item.sessionDate}｜{item.title}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={manualForm.needMeal}
+                    onChange={(event) => setManualForm((prev) => ({ ...prev, needMeal: event.target.checked }))}
+                  />
+                  需要餐食
+                </label>
+                <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={manualForm.needHandout}
+                    onChange={(event) => setManualForm((prev) => ({ ...prev, needHandout: event.target.checked }))}
+                  />
+                  需要講義
+                </label>
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">備註</label>
+                <input
+                  value={manualForm.note}
+                  onChange={(event) => setManualForm((prev) => ({ ...prev, note: event.target.value }))}
+                  placeholder="例如：學藝組協助代填 / 只領講義"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  type="submit"
+                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  補登補課資料
+                </button>
+              </div>
+            </div>
+          </form>
         </section>
 
         <section className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -426,13 +610,14 @@ export default function AcademicsAdminPage({ shared }) {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-500">Summary</p>
                   <h2 className="mt-2 text-xl font-semibold text-slate-900">補課場次彙總</h2>
                 </div>
-                <span className="text-xs text-slate-400">{(bootstrap.summaryByTarget || []).length} 場</span>
+                <span className="text-xs text-slate-400">{filteredSummaryByTarget.length} 場</span>
               </div>
+              <div className="mt-3 text-xs text-slate-500">{selectedTargetDate ? `目前篩選：${selectedTargetDate}` : "目前顯示全部日期"}</div>
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                {!(bootstrap.summaryByTarget || []).length ? (
+                {!filteredSummaryByTarget.length ? (
                   <div className="alert alert-info text-xs">目前還沒有補課登記。</div>
                 ) : null}
-                {(bootstrap.summaryByTarget || []).map((item) => {
+                {filteredSummaryByTarget.map((item) => {
                   const targetRequests = getRequestsForTarget_(item.targetSessionId);
                   return (
                     <div key={item.targetSessionId} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -489,11 +674,12 @@ export default function AcademicsAdminPage({ shared }) {
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">Requests</p>
                   <h2 className="mt-2 text-xl font-semibold text-slate-900">補課申請管理</h2>
                 </div>
-                <span className="text-xs text-slate-400">共 {(bootstrap.requests || []).length} 筆</span>
+                <span className="text-xs text-slate-400">共 {filteredRequests.length} 筆</span>
               </div>
+              <div className="mt-3 text-xs text-slate-500">{selectedTargetDate ? `目前篩選：${selectedTargetDate}` : "目前顯示全部日期"}</div>
               <div className="mt-5 space-y-4">
-                {!(bootstrap.requests || []).length ? <div className="alert alert-info text-xs">目前沒有補課申請。</div> : null}
-                {(bootstrap.requests || []).map((item) => {
+                {!filteredRequests.length ? <div className="alert alert-info text-xs">目前沒有補課申請。</div> : null}
+                {filteredRequests.map((item) => {
                   const draft = requestDrafts[item.id] || { status: item.status, adminNote: item.adminNote || "" };
                   return (
                     <div key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -501,11 +687,11 @@ export default function AcademicsAdminPage({ shared }) {
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{item.studentName || item.studentEmail || item.studentId}</p>
                           <p className="mt-1 text-xs text-slate-500">
-                            原課：{item.missedSession ? formatSessionSchedule_(item.missedSession) : item.missedSessionId}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
                             補課：{item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
                           </p>
+                          {item.missedSession ? (
+                            <p className="mt-1 text-xs text-slate-500">原課：{formatSessionSchedule_(item.missedSession)}</p>
+                          ) : null}
                         </div>
                         <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
                           <span className="rounded-full bg-slate-100 px-2.5 py-1">餐食：{item.needMeal ? "需要" : "不需要"}</span>

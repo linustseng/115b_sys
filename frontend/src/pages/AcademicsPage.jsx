@@ -2,11 +2,9 @@ import React, { useEffect, useMemo, useState } from "react";
 
 function defaultForm() {
   return {
-    missedSessionId: "",
     targetSessionId: "",
     needMeal: false,
     needHandout: true,
-    reason: "",
     note: "",
   };
 }
@@ -37,6 +35,8 @@ export default function AcademicsPage({ shared }) {
     makeupTargets: [],
     notes: [],
     myRequests: [],
+    publicRequests: [],
+    summaryByTarget: [],
     canManage: false,
   });
 
@@ -91,6 +91,8 @@ export default function AcademicsPage({ shared }) {
         makeupTargets: Array.isArray(result.data && result.data.makeupTargets) ? result.data.makeupTargets : [],
         notes: Array.isArray(result.data && result.data.notes) ? result.data.notes : [],
         myRequests: Array.isArray(result.data && result.data.myRequests) ? result.data.myRequests : [],
+        publicRequests: Array.isArray(result.data && result.data.publicRequests) ? result.data.publicRequests : [],
+        summaryByTarget: Array.isArray(result.data && result.data.summaryByTarget) ? result.data.summaryByTarget : [],
         canManage: Boolean(result.data && result.data.canManage),
       });
     } catch (err) {
@@ -122,6 +124,8 @@ export default function AcademicsPage({ shared }) {
         makeupTargets: [],
         notes: [],
         myRequests: [],
+        publicRequests: [],
+        summaryByTarget: [],
         canManage: false,
       });
       return;
@@ -168,8 +172,8 @@ export default function AcademicsPage({ shared }) {
 
   const handleSubmitMakeup_ = async (event) => {
     event.preventDefault();
-    if (!form.missedSessionId || !form.targetSessionId) {
-      setError("請先選擇原課程與補課場次。");
+    if (!form.targetSessionId) {
+      setError("請先選擇補課場次。");
       return;
     }
     setStatus("");
@@ -178,11 +182,9 @@ export default function AcademicsPage({ shared }) {
       const { result } = await apiRequest({
         action: "submitMakeupRequest",
         data: {
-          missedSessionId: form.missedSessionId,
           targetSessionId: form.targetSessionId,
           needMeal: form.needMeal,
           needHandout: form.needHandout,
-          reason: form.reason,
           note: form.note,
         },
       });
@@ -251,6 +253,21 @@ export default function AcademicsPage({ shared }) {
   };
 
   const activeRequests = (bootstrap.myRequests || []).filter((item) => item.status !== "cancelled");
+  const publicSummaryByTarget = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return (bootstrap.summaryByTarget || [])
+      .filter((item) => {
+        const targetSession = sessionsById.get(item.targetSessionId) || item.targetSession || null;
+        return String((targetSession && targetSession.sessionDate) || "") >= today;
+      })
+      .map((item) => ({
+        ...item,
+        targetSession: sessionsById.get(item.targetSessionId) || item.targetSession || null,
+        requests: (bootstrap.publicRequests || []).filter(
+          (request) => request.status !== "cancelled" && request.targetSessionId === item.targetSessionId
+        ),
+      }));
+  }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById]);
 
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
@@ -360,22 +377,6 @@ export default function AcademicsPage({ shared }) {
 
             <form className="mt-5 space-y-4" onSubmit={handleSubmitMakeup_}>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">原課程（週六 / 週日）</label>
-                <select
-                  value={form.missedSessionId}
-                  onChange={(event) => updateForm_({ missedSessionId: event.target.value })}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                >
-                  <option value="">請選擇原課程</option>
-                  {regularSessions.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.sessionDate}｜{item.title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">補課場次（週四）</label>
                 <select
                   value={form.targetSessionId}
@@ -408,16 +409,6 @@ export default function AcademicsPage({ shared }) {
                   />
                   需要講義
                 </label>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">補課原因</label>
-                <input
-                  value={form.reason}
-                  onChange={(event) => updateForm_({ reason: event.target.value })}
-                  placeholder="可留空，例如：出差 / 家庭行程"
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
               </div>
 
               <div>
@@ -456,10 +447,7 @@ export default function AcademicsPage({ shared }) {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold text-slate-900">
-                          {item.missedSession ? item.missedSession.title : "原課程"}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          原課：{item.missedSession ? formatSessionSchedule_(item.missedSession) : "-"}
+                          {item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
                         </p>
                         <p className="mt-1 text-xs text-slate-500">
                           補課：{item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
@@ -473,8 +461,7 @@ export default function AcademicsPage({ shared }) {
                       <span className="rounded-full bg-slate-100 px-2.5 py-1">餐食：{item.needMeal ? "需要" : "不需要"}</span>
                       <span className="rounded-full bg-slate-100 px-2.5 py-1">講義：{item.needHandout ? "需要" : "不需要"}</span>
                     </div>
-                    {item.reason ? <p className="mt-3 text-xs text-slate-600">原因：{item.reason}</p> : null}
-                    {item.note ? <p className="mt-1 text-xs text-slate-600">備註：{item.note}</p> : null}
+                    {item.note ? <p className="mt-3 text-xs text-slate-600">備註：{item.note}</p> : null}
                     {item.status !== "cancelled" && item.status !== "completed" ? (
                       <div className="mt-3">
                         <button
@@ -490,6 +477,35 @@ export default function AcademicsPage({ shared }) {
                 ))}
               </div>
             </section>
+          </div>
+        </section>
+
+        <section className="mt-6 card p-6 sm:p-7">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-500">Peers</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">已申請補課資訊</h2>
+              <p className="mt-2 text-sm text-slate-500">方便同學彼此照應，查看各週四場次目前有哪些同學已申請補課。</p>
+            </div>
+            <span className="text-xs text-slate-400">共 {publicSummaryByTarget.length} 場</span>
+          </div>
+          <div className="mt-5 grid gap-3 lg:grid-cols-2">
+            {!publicSummaryByTarget.length ? <div className="alert alert-info text-xs">目前還沒有同學申請補課。</div> : null}
+            {publicSummaryByTarget.map((item) => (
+              <div key={item.targetSessionId} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-900">
+                  {item.targetSession ? formatSessionSchedule_(item.targetSession) : item.targetSessionId}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">已申請 {item.active} 人</p>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                  <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">餐食 {item.needMeal}</span>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">講義 {item.needHandout}</span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-700">
+                  {item.requests.map((request) => request.studentName || request.studentEmail || request.studentId).join("、")}
+                </p>
+              </div>
+            ))}
           </div>
         </section>
 

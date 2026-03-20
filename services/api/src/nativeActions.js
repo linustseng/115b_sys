@@ -698,6 +698,29 @@ function buildMakeupSummaryByTarget_(requests = []) {
   });
 }
 
+async function listAcademicStudentOptions_(query) {
+  const result = await query(
+    `select
+       s.id as student_id,
+       s.name as student_name,
+       s.google_email,
+       d.email as directory_email,
+       d.name_zh,
+       d.name_en,
+       d.preferred_name,
+       d.group_id
+     from students s
+     left join directories d on d.id = s.id
+     order by coalesce(d.group_id,''), coalesce(d.preferred_name,''), coalesce(d.name_zh,''), coalesce(s.name,''), s.id`
+  );
+  return result.rows.map((row) => ({
+    id: firstText(row.student_id),
+    name: firstText(row.preferred_name, firstText(row.name_zh, firstText(row.student_name, row.name_en || ""))),
+    email: normalizeEmail(firstText(row.directory_email, row.google_email || "")),
+    group: firstText(row.group_id),
+  })).filter((item) => item.id);
+}
+
 function normalizeGroupId_(value) {
   const raw = String(value || "").trim().toUpperCase();
   if (!raw) {
@@ -1842,14 +1865,19 @@ export async function dispatchNativeAction({
       );
       const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
 
-      const requestResult = await query(
+      const myRequestResult = await query(
         `select * from makeup_requests
          where student_id = $1
          order by coalesce(created_at,'' ) desc, id desc`,
         [auth.studentId]
       );
+      const publicRequestResult = await query(
+        `select * from makeup_requests
+         where coalesce(status,'submitted') <> 'cancelled'
+         order by coalesce(target_session_id,''), coalesce(created_at,'' ) desc, id desc`
+      );
       const requestSessionIds = new Set();
-      requestResult.rows.forEach((row) => {
+      [...myRequestResult.rows, ...publicRequestResult.rows].forEach((row) => {
         requestSessionIds.add(firstText(row.missed_session_id));
         requestSessionIds.add(firstText(row.target_session_id));
       });
@@ -1861,7 +1889,9 @@ export async function dispatchNativeAction({
         const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
         return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
-      const myRequests = requestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+      const myRequests = myRequestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+      const publicRequests = publicRequestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+      const summaryByTarget = buildMakeupSummaryByTarget_(publicRequests);
 
       return {
         ok: true,
@@ -1871,6 +1901,8 @@ export async function dispatchNativeAction({
           makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
           notes,
           myRequests,
+          publicRequests,
+          summaryByTarget,
           canManage,
         },
         error: null,
@@ -1909,6 +1941,7 @@ export async function dispatchNativeAction({
         `select * from session_notes
          order by coalesce(status,'' ) desc, coalesce(published_at,'' ) desc, coalesce(updated_at,'' ) desc, id desc`
       );
+      const studentOptions = await listAcademicStudentOptions_(query);
       const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
       const requests = requestsResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
       const summaryByTarget = buildMakeupSummaryByTarget_(requests);
@@ -1927,6 +1960,8 @@ export async function dispatchNativeAction({
           requests,
           notes,
           summaryByTarget,
+          students: studentOptions,
+          hasConfiguredIcsUrl: Boolean(firstText(process.env.ACADEMICS_ICS_URL || "")),
         },
         error: null,
       };
@@ -1970,17 +2005,20 @@ export async function dispatchNativeAction({
       const payload = safeJsonObject(body.data || body.request || body);
       const missedSessionId = firstText(payload.missedSessionId);
       const targetSessionId = firstText(payload.targetSessionId);
-      if (!missedSessionId || !targetSessionId) {
-        return { ok: false, data: null, error: "Missing missedSessionId or targetSessionId" };
+      if (!targetSessionId) {
+        return { ok: false, data: null, error: "Missing targetSessionId" };
       }
 
-      const missedSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [missedSessionId]));
-      if (!missedSessionRow) {
-        return { ok: false, data: null, error: "原課程不存在" };
-      }
-      const missedSession = mapAcademicSessionRow(missedSessionRow);
-      if (missedSession.classKind !== "regular") {
-        return { ok: false, data: null, error: "原課程類型不正確" };
+      let missedSession = null;
+      if (missedSessionId) {
+        const missedSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [missedSessionId]));
+        if (!missedSessionRow) {
+          return { ok: false, data: null, error: "原課程不存在" };
+        }
+        missedSession = mapAcademicSessionRow(missedSessionRow);
+        if (missedSession.classKind !== "regular") {
+          return { ok: false, data: null, error: "原課程類型不正確" };
+        }
       }
 
       let targetSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [targetSessionId]));
@@ -1998,14 +2036,14 @@ export async function dispatchNativeAction({
       const existingActive = await query(
         `select * from makeup_requests
          where student_id = $1
-           and missed_session_id = $2
+           and target_session_id = $2
            and coalesce(status,'submitted') <> 'cancelled'
          order by coalesce(updated_at,'' ) desc, id desc
          limit 1`,
-        [auth.studentId, missedSessionId]
+        [auth.studentId, targetSessionId]
       );
       if (rowOrNull(existingActive)) {
-        return { ok: false, data: null, error: "這堂課已經有補課登記，若要重填請先撤銷。" };
+        return { ok: false, data: null, error: "你已經申請過這個補課場次，若要重填請先撤銷。" };
       }
 
       const row = makeupRequestToDbRow_(payload, {
@@ -2042,10 +2080,112 @@ export async function dispatchNativeAction({
         ]
       );
       const created = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [row.id]));
-      const sessionsById = new Map([
-        [missedSession.id, missedSession],
-        [targetSession.id, targetSession],
-      ]);
+      const sessionsById = new Map([[targetSession.id, targetSession]]);
+      if (missedSession && missedSession.id) {
+        sessionsById.set(missedSession.id, missedSession);
+      }
+      return { ok: true, data: { request: mapMakeupRequestRow(created, sessionsById) }, error: null };
+    }
+
+    case "adminCreateMakeupRequest": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const payload = safeJsonObject(body.data || body.request || body);
+      const studentId = firstText(payload.studentId, body.studentId);
+      const targetSessionId = firstText(payload.targetSessionId, body.targetSessionId);
+      const missedSessionId = firstText(payload.missedSessionId, body.missedSessionId);
+      if (!studentId || !targetSessionId) {
+        return { ok: false, data: null, error: "Missing studentId or targetSessionId" };
+      }
+
+      const student = await findStudentProfileById(studentId);
+      if (!student || !student.id) {
+        return { ok: false, data: null, error: "Student profile not found" };
+      }
+
+      let missedSession = null;
+      if (missedSessionId) {
+        const missedSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [missedSessionId]));
+        if (!missedSessionRow) {
+          return { ok: false, data: null, error: "原課程不存在" };
+        }
+        missedSession = mapAcademicSessionRow(missedSessionRow);
+        if (missedSession.classKind !== "regular") {
+          return { ok: false, data: null, error: "原課程類型不正確" };
+        }
+      }
+
+      let targetSessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [targetSessionId]));
+      if (!targetSessionRow) {
+        targetSessionRow = await ensureGeneratedMakeupTargetSession_(query, targetSessionId);
+      }
+      if (!targetSessionRow) {
+        return { ok: false, data: null, error: "補課場次不存在" };
+      }
+      const targetSession = mapAcademicSessionRow(targetSessionRow);
+      if (targetSession.classKind !== "makeup_target") {
+        return { ok: false, data: null, error: "補課場次類型不正確" };
+      }
+
+      const existingActive = await query(
+        `select * from makeup_requests
+         where student_id = $1
+           and target_session_id = $2
+           and coalesce(status,'submitted') <> 'cancelled'
+         order by coalesce(updated_at,'' ) desc, id desc
+         limit 1`,
+        [studentId, targetSessionId]
+      );
+      if (rowOrNull(existingActive)) {
+        return { ok: false, data: null, error: "這位同學已經有同場次補課登記。" };
+      }
+
+      const row = makeupRequestToDbRow_({
+        ...payload,
+        missedSessionId,
+        targetSessionId,
+        status: firstText(payload.status, "submitted"),
+      }, student);
+      row.raw = {
+        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
+        manualCreatedBy: auth.studentId,
+        manualCreatedByName: firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId),
+        manualCreatedAt: nowIso(),
+      };
+
+      await query(
+        `insert into makeup_requests (
+           id, student_id, student_name, student_email,
+           missed_session_id, target_session_id,
+           need_meal, need_handout,
+           reason, note, admin_note, status,
+           created_at, updated_at, cancelled_at, raw
+         ) values (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb
+         )`,
+        [
+          row.id,
+          row.studentId,
+          row.studentName,
+          row.studentEmail,
+          row.missedSessionId,
+          row.targetSessionId,
+          row.needMeal,
+          row.needHandout,
+          row.reason,
+          row.note,
+          row.adminNote,
+          row.status,
+          row.createdAt,
+          row.updatedAt,
+          row.cancelledAt,
+          jsonbParam(row.raw, {}),
+        ]
+      );
+      const created = rowOrNull(await query(`select * from makeup_requests where id = $1 limit 1`, [row.id]));
+      const sessionsById = new Map([[targetSession.id, targetSession]]);
+      if (missedSession && missedSession.id) {
+        sessionsById.set(missedSession.id, missedSession);
+      }
       return { ok: true, data: { request: mapMakeupRequestRow(created, sessionsById) }, error: null };
     }
 

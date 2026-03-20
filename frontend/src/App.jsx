@@ -879,6 +879,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "deleteOrderProxyResponse",
   // Academics
   "submitMakeupRequest",
+  "adminCreateMakeupRequest",
   "cancelMakeupRequest",
   "updateMakeupRequest",
   "upsertSessionNote",
