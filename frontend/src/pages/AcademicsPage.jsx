@@ -137,7 +137,7 @@ export default function AcademicsPage({ shared }) {
     return (bootstrap.regularSessions || []).slice().sort((a, b) => {
       const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
       const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
-      return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+      return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
     });
   }, [bootstrap.regularSessions]);
 
@@ -172,9 +172,18 @@ export default function AcademicsPage({ shared }) {
     return map;
   }, [bootstrap.notes, sessionsById]);
 
+  const recentCourseSessions = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const upcoming = regularSessions.filter((session) => String(session.sessionDate || "") >= today);
+    if (upcoming.length) {
+      return upcoming.slice(0, 3);
+    }
+    return regularSessions.slice(-3);
+  }, [regularSessions]);
+
   const courseCatalog = useMemo(() => {
     const groups = new Map();
-    regularSessions.forEach((session) => {
+    recentCourseSessions.forEach((session) => {
       const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim();
       const courseGroupKey = String(session.courseGroupKey || courseGroupTitle || session.id || "").trim();
       if (!courseGroupKey) {
@@ -185,7 +194,7 @@ export default function AcademicsPage({ shared }) {
           courseGroupKey,
           courseGroupTitle: courseGroupTitle || session.title || "未分類課程",
           sessions: [],
-          latestSessionDate: "",
+          firstSessionDate: "",
         });
       }
       const bucket = groups.get(courseGroupKey);
@@ -194,8 +203,8 @@ export default function AcademicsPage({ shared }) {
         note: notesBySessionId.get(session.id) || null,
       });
       const sessionDate = String(session.sessionDate || "");
-      if (!bucket.latestSessionDate || sessionDate > bucket.latestSessionDate) {
-        bucket.latestSessionDate = sessionDate;
+      if (!bucket.firstSessionDate || sessionDate < bucket.firstSessionDate) {
+        bucket.firstSessionDate = sessionDate;
       }
     });
     return Array.from(groups.values())
@@ -204,15 +213,15 @@ export default function AcademicsPage({ shared }) {
         sessions: group.sessions.slice().sort((a, b) => {
           const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
           const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
-          return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+          return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
         }),
       }))
       .sort((a, b) => {
-        const left = `${String(a.latestSessionDate || "")} ${String(a.courseGroupTitle || "")}`;
-        const right = `${String(b.latestSessionDate || "")} ${String(b.courseGroupTitle || "")}`;
-        return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+        const left = `${String(a.firstSessionDate || "")} ${String(a.courseGroupTitle || "")}`;
+        const right = `${String(b.firstSessionDate || "")} ${String(b.courseGroupTitle || "")}`;
+        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
-  }, [regularSessions, notesBySessionId]);
+  }, [recentCourseSessions, notesBySessionId]);
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -562,7 +571,7 @@ export default function AcademicsPage({ shared }) {
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
               <p className="mt-2 text-sm text-slate-500">依課程名稱分組，整合課程摘要、筆記、作業與小考通知，讓同學好找好查。</p>
             </div>
-            <span className="text-xs text-slate-400">共 {courseCatalog.length} 門</span>
+            <span className="text-xs text-slate-400">最近 {recentCourseSessions.length} 堂</span>
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
