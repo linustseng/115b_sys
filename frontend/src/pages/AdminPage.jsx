@@ -2473,6 +2473,150 @@ export default function AdminPage({
     return normalized || "-";
   };
 
+  const escapeHtml_ = (value) =>
+    String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const buildOrderReportHtml_ = () => {
+    const reportTitle = activeOrderLabel || "訂餐報表";
+    const generatedAt = new Date().toLocaleString();
+    const sections = groupedOrderResponses
+      .map((group) => {
+        const rows = group.items
+          .map((item, index) => {
+            const isProxy = String((item && item.sourceType) || "").trim() === "proxy_external";
+            const studentId = String((item && item.studentId) || "").trim();
+            const pickedText = isOrderPickedUp_(item)
+              ? `${formatDisplayDate_(item.pickedUpAt, { withTime: true }) || "已取餐"}${
+                  item.pickedUpByName ? ` · ${item.pickedUpByName}` : ""
+                }`
+              : "未取餐";
+            return `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml_(getOrderAttendeeLabel_(item))}</td>
+                <td>${escapeHtml_(studentId || "-")}</td>
+                <td>${escapeHtml_(isProxy ? `代訂${item.sourceLabel ? `（${item.sourceLabel}）` : ""}` : "班級同學")}</td>
+                <td>${escapeHtml_(String(item.comment || "").trim() || "-")}</td>
+                <td>${escapeHtml_(pickedText)}</td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        return `
+          <section class="meal-block">
+            <h2>${escapeHtml_(group.label)}（${group.items.length}）</h2>
+            ${
+              group.items.length
+                ? `<table>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>姓名</th>
+                        <th>學號</th>
+                        <th>來源</th>
+                        <th>備註</th>
+                        <th>取餐狀態</th>
+                      </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                  </table>`
+                : `<p class="empty">此餐別目前無資料。</p>`
+            }
+          </section>
+        `;
+      })
+      .join("");
+
+    const unsubmittedHtml = unsubmittedOrderStudents.length
+      ? `<ol>${unsubmittedOrderStudents
+          .map((student) => {
+            const studentId = String((student && student.id) || "").trim();
+            const studentLabel =
+              studentLabelByStudentId.get(studentId) ||
+              getChineseName_(student) ||
+              getDisplayName_(student) ||
+              studentId ||
+              "未命名";
+            return `<li>${escapeHtml_(studentLabel)}${studentId ? `（${escapeHtml_(studentId)}）` : ""}</li>`;
+          })
+          .join("")}</ol>`
+      : `<p class="empty">目前所有同學都已完成回覆。</p>`;
+
+    return `<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>${escapeHtml_(reportTitle)}</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif; color: #0f172a; margin: 24px; }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      .meta { color: #475569; font-size: 12px; margin-bottom: 16px; }
+      .summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin: 12px 0 18px; }
+      .summary .item { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; }
+      .summary .label { font-size: 11px; color: #475569; }
+      .summary .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
+      .meal-block { margin-top: 16px; page-break-inside: avoid; }
+      .meal-block h2 { margin: 0 0 8px; font-size: 16px; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
+      th { background: #f8fafc; }
+      .empty { color: #64748b; font-size: 12px; margin: 0; }
+      .unsubmitted { margin-top: 20px; page-break-inside: avoid; }
+      .unsubmitted h2 { margin: 0 0 8px; font-size: 16px; }
+      .unsubmitted ol { margin: 0; padding-left: 20px; }
+      .unsubmitted li { margin: 2px 0; font-size: 12px; }
+      @media print {
+        body { margin: 12mm; }
+        .summary { grid-template-columns: repeat(4, 1fr); }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>${escapeHtml_(reportTitle)}</h1>
+    <div class="meta">匯出時間：${escapeHtml_(generatedAt)}</div>
+    <div class="summary">
+      <div class="item"><div class="label">總數</div><div class="value">${orderStats.total}</div></div>
+      <div class="item"><div class="label">已取餐</div><div class="value">${orderStats.picked}</div></div>
+      <div class="item"><div class="label">未取餐</div><div class="value">${orderStats.unpicked}</div></div>
+      <div class="item"><div class="label">代訂</div><div class="value">${orderStats.proxy}</div></div>
+    </div>
+    ${sections}
+    <section class="unsubmitted">
+      <h2>未訂餐名單（${unsubmittedOrderStudents.length}）</h2>
+      ${unsubmittedHtml}
+    </section>
+  </body>
+</html>`;
+  };
+
+  const handleExportOrderReportPdf = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (!activeSavedOrderId) {
+      setOrderStatusMessage("請先選擇已儲存的訂餐日期");
+      return;
+    }
+    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
+    if (!printWindow) {
+      setOrderStatusMessage("無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗");
+      return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(buildOrderReportHtml_());
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.onload = () => {
+      printWindow.print();
+    };
+  };
+
   const getOrderAttendeeLabel_ = (item) => {
     const isProxy = String((item && item.sourceType) || "").trim() === "proxy_external";
     const studentId = String((item && item.studentId) || "").trim();
@@ -3308,6 +3452,13 @@ export default function AdminPage({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-slate-900">依餐別查看名單</p>
                     <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+                      <button
+                        type="button"
+                        onClick={handleExportOrderReportPdf}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        匯出訂餐報表 PDF
+                      </button>
                       <span>代訂 {proxyOrderResponses.length} 筆</span>
                       <span>未訂餐 {unsubmittedOrderStudents.length} 人</span>
                     </div>
