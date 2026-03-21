@@ -2488,21 +2488,12 @@ export default function AdminPage({
       .map((group) => {
         const rows = group.items
           .map((item, index) => {
-            const isProxy = String((item && item.sourceType) || "").trim() === "proxy_external";
-            const studentId = String((item && item.studentId) || "").trim();
-            const pickedText = isOrderPickedUp_(item)
-              ? `${formatDisplayDate_(item.pickedUpAt, { withTime: true }) || "已取餐"}${
-                  item.pickedUpByName ? ` · ${item.pickedUpByName}` : ""
-                }`
-              : "未取餐";
             return `
               <tr>
                 <td>${index + 1}</td>
                 <td>${escapeHtml_(getOrderAttendeeLabel_(item))}</td>
-                <td>${escapeHtml_(studentId || "-")}</td>
-                <td>${escapeHtml_(isProxy ? `代訂${item.sourceLabel ? `（${item.sourceLabel}）` : ""}` : "班級同學")}</td>
                 <td>${escapeHtml_(String(item.comment || "").trim() || "-")}</td>
-                <td>${escapeHtml_(pickedText)}</td>
+                <td class="check-cell">□</td>
               </tr>
             `;
           })
@@ -2518,10 +2509,8 @@ export default function AdminPage({
                       <tr>
                         <th>#</th>
                         <th>姓名</th>
-                        <th>學號</th>
-                        <th>來源</th>
                         <th>備註</th>
-                        <th>取餐狀態</th>
+                        <th>勾選</th>
                       </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -2566,6 +2555,7 @@ export default function AdminPage({
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
       th, td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; vertical-align: top; }
       th { background: #f8fafc; }
+      .check-cell { text-align: center; font-size: 16px; font-weight: 700; width: 64px; }
       .empty { color: #64748b; font-size: 12px; margin: 0; }
       .unsubmitted { margin-top: 20px; page-break-inside: avoid; }
       .unsubmitted h2 { margin: 0 0 8px; font-size: 16px; }
