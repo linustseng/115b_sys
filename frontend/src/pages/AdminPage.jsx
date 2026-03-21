@@ -2603,18 +2603,32 @@ export default function AdminPage({
       setOrderStatusMessage("請先選擇已儲存的訂餐日期");
       return;
     }
-    const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1100,height=900");
+    const printWindow = window.open("", "_blank", "width=1100,height=900");
     if (!printWindow) {
       setOrderStatusMessage("無法開啟列印視窗，請確認瀏覽器未封鎖彈出視窗");
       return;
     }
+    const html = buildOrderReportHtml_().replace(
+      "</body>",
+      `<script>
+        (function () {
+          var trigger = function () {
+            try { window.focus(); } catch (e) {}
+            setTimeout(function () {
+              try { window.print(); } catch (e) {}
+            }, 350);
+          };
+          if (document.readyState === "complete") {
+            trigger();
+          } else {
+            window.addEventListener("load", trigger, { once: true });
+          }
+        })();
+      </script></body>`
+    );
     printWindow.document.open();
-    printWindow.document.write(buildOrderReportHtml_());
+    printWindow.document.write(html);
     printWindow.document.close();
-    printWindow.focus();
-    printWindow.onload = () => {
-      printWindow.print();
-    };
   };
 
   const getOrderAttendeeLabel_ = (item) => {
