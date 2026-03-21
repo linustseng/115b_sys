@@ -2490,8 +2490,8 @@ export default function AdminPage({
           .map((item, index) => {
             return `
               <tr>
-                <td>${index + 1}</td>
                 <td>${escapeHtml_(getOrderAttendeeLabel_(item))}</td>
+                <td>${escapeHtml_(String(item.comment || "").trim() || "")}</td>
                 <td class="check-cell">□</td>
               </tr>
             `;
@@ -2506,8 +2506,8 @@ export default function AdminPage({
                 ? `<table>
                     <thead>
                       <tr>
-                        <th>#</th>
                         <th>姓名</th>
+                        <th>備註</th>
                         <th>勾選</th>
                       </tr>
                     </thead>
@@ -2520,21 +2520,6 @@ export default function AdminPage({
       })
       .join("");
 
-    const unsubmittedHtml = unsubmittedOrderStudents.length
-      ? `<ol>${unsubmittedOrderStudents
-          .map((student) => {
-            const studentId = String((student && student.id) || "").trim();
-            const studentLabel =
-              studentLabelByStudentId.get(studentId) ||
-              getChineseName_(student) ||
-              getDisplayName_(student) ||
-              studentId ||
-              "未命名";
-            return `<li>${escapeHtml_(studentLabel)}${studentId ? `（${escapeHtml_(studentId)}）` : ""}</li>`;
-          })
-          .join("")}</ol>`
-      : `<p class="empty">目前所有同學都已完成回覆。</p>`;
-
     return `<!doctype html>
 <html lang="zh-Hant">
   <head>
@@ -2544,10 +2529,6 @@ export default function AdminPage({
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", sans-serif; color: #0f172a; margin: 24px; }
       h1 { margin: 0 0 8px; font-size: 24px; }
       .meta { color: #475569; font-size: 12px; margin-bottom: 16px; }
-      .summary { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 8px; margin: 12px 0 18px; }
-      .summary .item { border: 1px solid #cbd5e1; border-radius: 8px; padding: 8px; }
-      .summary .label { font-size: 11px; color: #475569; }
-      .summary .value { font-size: 18px; font-weight: 700; margin-top: 4px; }
       .meal-block { margin-top: 16px; page-break-inside: avoid; }
       .meal-block h2 { margin: 0 0 8px; font-size: 16px; }
       table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -2555,30 +2536,15 @@ export default function AdminPage({
       th { background: #f8fafc; }
       .check-cell { text-align: center; font-size: 16px; font-weight: 700; width: 64px; }
       .empty { color: #64748b; font-size: 12px; margin: 0; }
-      .unsubmitted { margin-top: 20px; page-break-inside: avoid; }
-      .unsubmitted h2 { margin: 0 0 8px; font-size: 16px; }
-      .unsubmitted ol { margin: 0; padding-left: 20px; }
-      .unsubmitted li { margin: 2px 0; font-size: 12px; }
       @media print {
         body { margin: 12mm; }
-        .summary { grid-template-columns: repeat(4, 1fr); }
       }
     </style>
   </head>
   <body>
     <h1>${escapeHtml_(reportTitle)}</h1>
     <div class="meta">匯出時間：${escapeHtml_(generatedAt)}</div>
-    <div class="summary">
-      <div class="item"><div class="label">總數</div><div class="value">${orderStats.total}</div></div>
-      <div class="item"><div class="label">已取餐</div><div class="value">${orderStats.picked}</div></div>
-      <div class="item"><div class="label">未取餐</div><div class="value">${orderStats.unpicked}</div></div>
-      <div class="item"><div class="label">代訂</div><div class="value">${orderStats.proxy}</div></div>
-    </div>
     ${sections}
-    <section class="unsubmitted">
-      <h2>未訂餐名單（${unsubmittedOrderStudents.length}）</h2>
-      ${unsubmittedHtml}
-    </section>
   </body>
 </html>`;
   };
