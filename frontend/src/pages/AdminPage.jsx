@@ -2492,7 +2492,6 @@ export default function AdminPage({
               <tr>
                 <td>${index + 1}</td>
                 <td>${escapeHtml_(getOrderAttendeeLabel_(item))}</td>
-                <td>${escapeHtml_(String(item.comment || "").trim() || "-")}</td>
                 <td class="check-cell">□</td>
               </tr>
             `;
@@ -2509,7 +2508,6 @@ export default function AdminPage({
                       <tr>
                         <th>#</th>
                         <th>姓名</th>
-                        <th>備註</th>
                         <th>勾選</th>
                       </tr>
                     </thead>
