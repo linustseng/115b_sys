@@ -71,6 +71,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     }
   })();
   const needsReauth = hasGoogleLogin && !hasAuthMaterial;
+  const [authRestoreResolved, setAuthRestoreResolved] = useState(() => !hasGoogleLogin || hasAuthMaterial);
   const formatBirthdayName_ = (item) => {
     const zh = String((item && item.nameZh) || "").trim();
     const displayName = String((item && (item.displayName || item.name)) || "").trim();
@@ -99,6 +100,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState(false);
   const [authRecovering, setAuthRecovering] = useState(false);
+  const authRestoring = hasGoogleLogin && needsReauth && (!authRestoreResolved || authRecovering);
+  const shouldShowReauthPrompt = hasGoogleLogin && needsReauth && authRestoreResolved && !authRecovering;
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
@@ -158,6 +161,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [birthdaySummaryLoaded, setBirthdaySummaryLoaded] = useState(false);
   const [birthdaySummaryError, setBirthdaySummaryError] = useState("");
   const downgradeToReauthState_ = () => {
+    setAuthRestoreResolved(false);
     storeGoogleIdToken_("");
     storeAdminSession_(null);
     setMemberships([]);
@@ -198,6 +202,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
   useEffect(() => {
+    if (!hasGoogleLogin || hasAuthMaterial) {
+      setAuthRestoreResolved(true);
+      return;
+    }
+    setAuthRestoreResolved(false);
+  }, [hasGoogleLogin, hasAuthMaterial]);
+
+  useEffect(() => {
     if (!hasGoogleLogin) {
       setLoginCollapsed(false);
     }
@@ -210,21 +222,23 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [hasGoogleLogin, needsReauth]);
 
   useEffect(() => {
-    if (needsReauth) {
+    if (shouldShowReauthPrompt) {
       setLoginCollapsed(false);
     }
-  }, [needsReauth]);
+  }, [shouldShowReauthPrompt]);
 
   useEffect(() => {
     if (!hasGoogleLogin || !needsReauth || authRecovering) {
       return;
     }
     if (typeof getGoogleIdTokenSilently_ !== "function") {
+      setAuthRestoreResolved(true);
       return;
     }
 
     let ignore = false;
     const recoverAuth_ = async () => {
+      setAuthRestoreResolved(false);
       setAuthRecovering(true);
       try {
         const silentToken = await getGoogleIdTokenSilently_();
@@ -266,6 +280,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       } finally {
         if (!ignore) {
           setAuthRecovering(false);
+          setAuthRestoreResolved(true);
         }
       }
     };
@@ -1003,7 +1018,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                     <p className="font-semibold text-slate-900">
                       {displayName ? displayName : "已綁定"}
                       <span className="ml-2 text-xs font-semibold text-slate-500">
-                        {needsReauth ? "需重新登入" : "已登入"}
+                        {authRestoring ? "恢復中" : shouldShowReauthPrompt ? "需重新登入" : "已登入"}
                       </span>
                     </p>
                     <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
@@ -1048,28 +1063,34 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       </header>
 
       <main className="relative mx-auto max-w-6xl px-6 pb-32 pt-6 sm:px-12 sm:pb-24">
-        {!hasGoogleLogin || needsReauth ? (
+        {!hasGoogleLogin || shouldShowReauthPrompt || authRestoring ? (
           <section className="entrance entrance-delay-1 mb-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-4 shadow-[0_30px_80px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-slate-900">Google 登入</h2>
-              <button
-                type="button"
-                onClick={() => setLoginCollapsed((prev) => !prev)}
-                className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-              >
-                {loginCollapsed ? "展開 ▼" : "收合 ▲"}
-              </button>
+              <h2 className="text-sm font-semibold text-slate-900">
+                {authRestoring ? "登入狀態恢復中" : "Google 登入"}
+              </h2>
+              {!authRestoring ? (
+                <button
+                  type="button"
+                  onClick={() => setLoginCollapsed((prev) => !prev)}
+                  className="rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                >
+                  {loginCollapsed ? "展開 ▼" : "收合 ▲"}
+                </button>
+              ) : null}
             </div>
-            {!loginCollapsed ? (
+            {authRestoring ? (
+              <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50/70 px-4 py-4 text-sm text-sky-800">
+                正在嘗試自動恢復登入狀態，通常不需要重新登入。
+              </div>
+            ) : !loginCollapsed ? (
               <>
                 <div className="mt-4">
                   <GoogleSigninPanel
-                    title={needsReauth ? "重新登入" : "Google 登入"}
+                    title={shouldShowReauthPrompt ? "重新登入" : "Google 登入"}
                     helperText={
-                      needsReauth
-                        ? authRecovering
-                          ? "正在嘗試自動恢復登入狀態；若稍後仍未恢復，再手動重新登入。"
-                          : "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
+                      shouldShowReauthPrompt
+                        ? "系統暫時無法自動恢復登入狀態，請重新登入以恢復壽星、簽核與通知等功能。"
                         : "請先完成綁定，才能使用活動、訂餐與壘球功能。"
                     }
                     onLinkedStudent={(student, _profile, idToken, authContext) => {
@@ -1090,6 +1111,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                           memberships,
                         });
                       }
+                      setAuthRestoreResolved(true);
                       setNotificationError("");
                       setApprovalsOverviewError("");
                       setBirthdaySummaryError("");
