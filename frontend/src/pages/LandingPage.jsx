@@ -999,34 +999,31 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      <header className="relative px-6 pt-8 sm:px-12 entrance">
-        <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-[radial-gradient(circle_at_top_left,_rgba(148,163,184,0.18),_transparent_38%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.16),_transparent_30%),linear-gradient(180deg,_rgba(255,255,255,0.82)_0%,_rgba(248,250,252,0)_100%)]" />
+      <header className="relative px-4 pt-5 sm:px-12 sm:pt-8 entrance">
         <div className="mx-auto max-w-6xl">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600">
-              <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm backdrop-blur">
-                NTU EMBA 115B
-              </span>
-              <span className="rounded-full border border-slate-200/80 bg-white/70 px-3 py-1 shadow-sm backdrop-blur">
-                共學 · 共餐 · 共練
-              </span>
-              {hasApprovalAttention ? (
-                <button
-                  type="button"
-                  onClick={() => openApprovalsCenter("pending")}
-                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-rose-700 shadow-sm"
-                >
-                  {pendingApprovalCount > 0 ? `${pendingApprovalCount} 筆待簽核` : "有簽核待追蹤"}
-                </button>
-              ) : null}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <img
+                src={emblem115b}
+                alt="NTU EMBA 115B"
+                className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+              />
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">
+                  NTU EMBA 115B
+                </p>
+                <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-3xl">
+                  115B 班級系統
+                </h1>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => setNotificationOpen(true)}
-                className="relative rounded-full border border-slate-300/80 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm backdrop-blur hover:border-slate-400"
+                className="relative rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
               >
-                通知中心
+                通知
                 {notificationUnread > 0 ? (
                   <span className="absolute -right-1.5 -top-1.5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                     {notificationUnread > 99 ? "99+" : notificationUnread}
@@ -1035,202 +1032,132 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               </button>
               <a
                 href="/profile"
-                className="rounded-full border border-slate-300/80 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm backdrop-blur hover:border-slate-400"
+                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
               >
-                個人資訊維護
+                個人
               </a>
-              {canSeeAdminPortal ? (
-                <a
-                  href="/admin"
-                  className="rounded-full border border-slate-300/80 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800"
-                >
-                  系統後台
-                </a>
-              ) : null}
             </div>
           </div>
 
-          <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_360px]">
-            <section className="relative overflow-hidden rounded-[2.6rem] border border-slate-200/80 bg-[linear-gradient(135deg,rgba(15,23,42,0.97)_0%,rgba(30,41,59,0.92)_48%,rgba(51,65,85,0.9)_100%)] p-6 text-white shadow-[0_45px_120px_-60px_rgba(15,23,42,0.85)] sm:p-8">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(255,255,255,0.14),transparent_28%),radial-gradient(circle_at_85%_15%,rgba(251,191,36,0.18),transparent_24%),linear-gradient(120deg,transparent_20%,rgba(255,255,255,0.06)_48%,transparent_72%)]" />
-              <div className="relative">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-[1.6rem] border border-white/15 bg-white/10 shadow-[0_25px_60px_-35px_rgba(255,255,255,0.35)] backdrop-blur">
-                    <img
-                      src={emblem115b}
-                      alt="NTU EMBA 115B"
-                      className="h-11 w-11 rounded-2xl bg-white/95 p-1"
-                    />
-                  </div>
-                  <div className="max-w-3xl">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-slate-300">
-                      NTU EMBA 115B DIGITAL COMMONS
-                    </p>
-                    <h1 className="mt-3 text-3xl font-semibold leading-tight text-white sm:text-5xl">
-                      115B 班級系統
-                    </h1>
-                    <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 sm:text-[15px]">
-                      把活動、訂餐、財務、學藝與球隊協作整合成同一個班級入口。
-                      手機可快速處理，後台也能穩定管理，是 115B 的日常數位中樞。
-                    </p>
-                  </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="rounded-[2rem] border border-slate-200/80 bg-white/92 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur sm:p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">常用功能</p>
+                  <p className="mt-1 text-xs text-slate-500">先做常用的，其他再往下看。</p>
                 </div>
-
-                <div className="mt-8 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[1.8rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">我的狀態</p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {hasGoogleLogin ? (displayName || "已綁定") : "尚未登入"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-300">
-                      {hasGoogleLogin ? (needsReauth ? "需要重新登入以恢復完整功能" : "Google 已連結，可使用完整功能") : "登入後可使用活動、訂餐與通知"}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.8rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">待注意事項</p>
-                    <p className="mt-2 text-lg font-semibold text-white">
-                      {approvalsOverviewLoaded ? pendingApprovalCount + returnedApprovalCount : "--"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-300">
-                      {approvalsOverviewLoaded ? "待簽核 + 退回補件" : "正在載入簽核摘要"}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.8rem] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-300">未讀通知</p>
-                    <p className="mt-2 text-lg font-semibold text-white">{hasGoogleLogin ? urgentNotificationCount : "--"}</p>
-                    <p className="mt-1 text-xs text-slate-300">
-                      {hasGoogleLogin ? "通知中心與待辦提醒" : "登入後可查看個人通知"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-8 flex flex-wrap items-center gap-3">
-                  <a href="/events" className="inline-flex items-center rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900 shadow-lg shadow-slate-950/20 hover:-translate-y-0.5">
-                    進入班級入口
-                  </a>
-                  <a href="/ordering" className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/15">
-                    查看本週訂餐
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => setShowCalendarDesktop((prev) => !prev)}
-                    className="hidden rounded-full border border-white/15 bg-transparent px-5 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/10 sm:inline-flex"
+                {canSeeAdminPortal ? (
+                  <a
+                    href="/admin"
+                    className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800"
                   >
-                    {showCalendarDesktop ? "收合班級行事曆" : "展開班級行事曆"}
-                  </button>
-                </div>
+                    後台
+                  </a>
+                ) : null}
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {systemCards.map((card) => (
+                  <a
+                    key={card.title}
+                    href={card.href}
+                    className="group rounded-[1.6rem] border border-slate-200/80 bg-slate-50/70 px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-slate-900">{card.title}</p>
+                      <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{card.description}</p>
+                    {card.adminHref ? (
+                      <span className="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
+                        有管理入口
+                      </span>
+                    ) : null}
+                  </a>
+                ))}
               </div>
             </section>
 
-            <aside className="rounded-[2.2rem] border border-slate-200/80 bg-white/88 p-5 shadow-[0_35px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur sm:p-6">
-              {hasGoogleLogin ? (
-                <div className="flex items-start gap-4">
-                  <div className="h-14 w-14 overflow-hidden rounded-[1.4rem] border border-slate-200 bg-slate-100 shadow-sm">
-                    {googleLinkedStudent.photoUrl ? (
-                      <img src={googleLinkedStudent.photoUrl} alt="avatar" className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-slate-400">
-                        {displayName ? displayName.slice(0, 2) : "NT"}
+            <aside className="rounded-[2rem] border border-slate-200/80 bg-white/92 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur sm:p-5">
+              <div className="flex items-start gap-3">
+                {hasGoogleLogin ? (
+                  <>
+                    <div className="h-12 w-12 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
+                      {googleLinkedStudent.photoUrl ? (
+                        <img src={googleLinkedStudent.photoUrl} alt="avatar" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
+                          {displayName ? displayName.slice(0, 2) : "NT"}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{displayName || "已綁定"}</p>
+                      <p className="mt-1 truncate text-xs text-slate-500">{googleLinkedStudent.email}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${needsReauth ? "border border-amber-200 bg-amber-50 text-amber-700" : "border border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
+                          {needsReauth ? "需重新登入" : "已登入"}
+                        </span>
+                        {uniqueRoleBadges.slice(0, 2).map((label) => (
+                          <span key={label} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
+                            {label}
+                          </span>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Identity</p>
-                    <p className="mt-2 truncate text-xl font-semibold text-slate-900">
-                      {displayName ? displayName : "已綁定"}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-slate-500">{googleLinkedStudent.email}</p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${needsReauth ? "border border-amber-200 bg-amber-50 text-amber-700" : "border border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                        {needsReauth ? "需重新登入" : "已登入"}
-                      </span>
-                      {uniqueRoleBadges.length
-                        ? uniqueRoleBadges.map((label) => (
-                            <span key={label} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                              {label}
-                            </span>
-                          ))
-                        : null}
                     </div>
-                    {googleLinkedStudent.id ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(googleLinkedStudent.id);
-                          setCopiedStudentId(true);
-                          setTimeout(() => {
-                            setCopiedStudentId(false);
-                          }, 1500);
-                        }}
-                        className="mt-3 text-xs text-slate-500 transition hover:text-slate-700"
-                        title="點擊複製學號"
-                      >
-                        學號：{googleLinkedStudent.id}
-                        {copiedStudentId ? <span className="ml-2 text-emerald-600">已複製</span> : null}
-                      </button>
-                    ) : null}
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">尚未登入 Google</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">登入後可帶入個人資料與通知。</p>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Identity</p>
-                  <h2 className="mt-2 text-xl font-semibold text-slate-900">尚未登入 Google</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    登入後即可使用班級功能、查看通知與帶入個人資料。
-                  </p>
-                </div>
-              )}
+                )}
+              </div>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-                <div className="rounded-[1.5rem] border border-slate-200/80 bg-slate-50/80 px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Quick status</p>
-                  <div className="mt-3 space-y-2 text-sm text-slate-600">
-                    <div className="flex items-center justify-between gap-3">
-                      <span>通知未讀</span>
-                      <span className="font-semibold text-slate-900">{hasGoogleLogin ? urgentNotificationCount : "--"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>待簽核</span>
-                      <span className="font-semibold text-slate-900">{approvalsOverviewLoaded ? pendingApprovalCount : "--"}</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <span>進行中</span>
-                      <span className="font-semibold text-slate-900">{approvalsOverviewLoaded ? inProgressApprovalCount : "--"}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border border-amber-200/80 bg-[linear-gradient(135deg,rgba(255,251,235,0.95),rgba(255,255,255,0.85))] px-4 py-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-600">Recommended next</p>
-                  <p className="mt-3 text-sm font-semibold text-slate-900">
-                    {hasApprovalAttention
-                      ? "先處理簽核與補件，避免流程卡住。"
-                      : hasGoogleLogin
-                        ? "今天可先看通知、壽星與近期行事曆。"
-                        : "先完成 Google 綁定，之後進各模組會更順。"}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => (hasApprovalAttention ? openApprovalsCenter("pending") : setNotificationOpen(true))}
-                      className="rounded-full border border-amber-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-amber-700 shadow-sm hover:border-amber-400"
-                    >
-                      {hasApprovalAttention ? "查看簽核" : "查看通知"}
-                    </button>
-                    {!hasGoogleLogin || needsReauth ? (
-                      <button
-                        type="button"
-                        onClick={() => setLoginCollapsed(false)}
-                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-300"
-                      >
-                        前往登入
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNotificationOpen(true)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
+                >
+                  <p className="text-[10px] font-semibold text-slate-400">通知</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{hasGoogleLogin ? urgentNotificationCount : "--"}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openApprovalsCenter("pending")}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
+                >
+                  <p className="text-[10px] font-semibold text-slate-400">待簽核</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">{approvalsOverviewLoaded ? pendingApprovalCount : "--"}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCalendarDesktop((prev) => !prev)}
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
+                >
+                  <p className="text-[10px] font-semibold text-slate-400">行事曆</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-900">{showCalendarDesktop ? "收合" : "展開"}</p>
+                </button>
               </div>
 
               {hasGoogleLogin ? (
-                <div className="mt-5 flex flex-wrap items-center gap-2">
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {googleLinkedStudent.id ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(googleLinkedStudent.id);
+                        setCopiedStudentId(true);
+                        setTimeout(() => {
+                          setCopiedStudentId(false);
+                        }, 1500);
+                      }}
+                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      學號：{googleLinkedStudent.id}
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={handleLogout_}
@@ -1238,6 +1165,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   >
                     登出
                   </button>
+                  {copiedStudentId ? <span className="text-[11px] font-semibold text-emerald-600">已複製</span> : null}
                 </div>
               ) : null}
             </aside>
