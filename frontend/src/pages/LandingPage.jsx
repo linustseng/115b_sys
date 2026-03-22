@@ -1072,13 +1072,16 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                           : "偵測到已綁定同學資料，但登入憑證已過期。請重新登入以恢復壽星、簽核與通知等功能。"
                         : "請先完成綁定，才能使用活動、訂餐與壘球功能。"
                     }
-                    onLinkedStudent={(student, _profile, _idToken, authContext) => {
-                      setGoogleLinkedStudent(student);
+                    onLinkedStudent={(student, _profile, idToken, authContext) => {
                       const linkedStudentId = String((student && student.id) || "").trim();
+                      const token = String(idToken || "").trim();
                       const sessionToken = String((authContext && authContext.sessionToken) || "").trim();
                       const refreshToken = String((authContext && authContext.refreshToken) || "").trim();
                       const memberships =
                         authContext && Array.isArray(authContext.memberships) ? authContext.memberships : [];
+
+                      storeGoogleStudent_(student || null);
+                      storeGoogleIdToken_(token);
                       if (sessionToken && linkedStudentId) {
                         storeAdminSession_({
                           token: sessionToken,
@@ -1087,6 +1090,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                           memberships,
                         });
                       }
+                      setNotificationError("");
+                      setApprovalsOverviewError("");
+                      setBirthdaySummaryError("");
+                      setGoogleLinkedStudent(student);
                     }}
                   />
                 </div>

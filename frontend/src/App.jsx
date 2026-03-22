@@ -1971,6 +1971,10 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
               setEmailMatch(payload.emailMatch || null);
               if (payload.student) {
                 setStatus("linked");
+                // Persist auth material before notifying the page-level callback,
+                // so any immediate bootstrap effects can read a complete auth state.
+                storeGoogleStudent_(payload.student);
+                storeGoogleIdToken_(response.credential);
                 onLinkedRef.current(
                   payload.student,
                   payload.profile || null,
@@ -1981,8 +1985,6 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
                     memberships: Array.isArray(payload.memberships) ? payload.memberships : [],
                   }
                 );
-                storeGoogleStudent_(payload.student);
-                storeGoogleIdToken_(response.credential);
               } else {
                 setStatus("needs-link");
               }
@@ -2071,6 +2073,10 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       setLinkedStudent(student);
       setStatus("linked");
       if (student) {
+        // Persist auth material before notifying the page-level callback,
+        // so any immediate bootstrap effects can read a complete auth state.
+        storeGoogleStudent_(student);
+        storeGoogleIdToken_(idToken);
         onLinkedRef.current(student, profile, idToken, {
           sessionToken: String((result.data && result.data.sessionToken) || "").trim(),
           refreshToken: String((result.data && result.data.refreshToken) || "").trim(),
@@ -2078,8 +2084,6 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
             ? result.data.memberships
             : [],
         });
-        storeGoogleStudent_(student);
-        storeGoogleIdToken_(idToken);
       }
     } catch (err) {
       setError(err.message || "綁定失敗");
