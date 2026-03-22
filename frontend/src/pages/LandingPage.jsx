@@ -750,73 +750,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     approvalsOverviewLoaded &&
     (pendingApprovalCount > 0 || inProgressApprovalCount > 0 || returnedApprovalCount > 0);
   const prioritizeApprovalsFirst = hasApprovalAttention;
-  const urgentNotificationCount = notifications.filter((item) => !item.isRead).length;
-  const roleBadges = userMemberships
-    .map((item) => {
-      const groupId = String(item.groupId || "").trim();
-      const roleInGroup = String(item.roleInGroup || "").trim();
-      if (groupId === "A" && roleInGroup === "lead") {
-        return "班代";
-      }
-      if (groupId === "A" && roleInGroup === "deputy") {
-        return "副班代";
-      }
-      return groupId || null;
-    })
-    .filter(Boolean);
-  const uniqueRoleBadges = Array.from(new Set(roleBadges)).slice(0, 5);
-  const systemCards = [
-    {
-      title: "活動管理",
-      description: "報名、簽到與活動資訊一站完成。",
-      href: "/events",
-      cta: "同學入口",
-      adminHref: canSeeEventAdmin ? "/admin/events" : "",
-      adminLabel: "管理入口",
-      tone: "slate",
-      glow: "from-slate-900/10 via-slate-200/30 to-transparent",
-    },
-    {
-      title: "訂餐管理",
-      description: "週末與特別課程訂餐，留意截止時間與領餐節奏。",
-      href: "/ordering",
-      cta: "同學入口",
-      adminHref: canSeeOrderingAdmin ? "/admin/ordering" : "",
-      adminLabel: "管理入口",
-      tone: "amber",
-      glow: "from-amber-300/30 via-amber-100/50 to-transparent",
-    },
-    {
-      title: "財務管理",
-      description: "請購、請款、零用金與簽核流程入口。",
-      href: "/finance",
-      cta: "同學入口",
-      adminHref: canSeeFinanceAdmin ? "/admin/finance" : "",
-      adminLabel: "管理入口",
-      tone: "sky",
-      glow: "from-sky-300/30 via-sky-100/50 to-transparent",
-    },
-    {
-      title: "學藝專區",
-      description: "補課登記、課程摘要與筆記入口。",
-      href: "/academics",
-      cta: "同學入口",
-      adminHref: canSeeAcademicsAdmin ? "/admin/academics" : "",
-      adminLabel: "管理入口",
-      tone: "violet",
-      glow: "from-violet-300/30 via-violet-100/50 to-transparent",
-    },
-    {
-      title: "壘球隊管理",
-      description: "練習排程、點名、出席統計與球員入口。",
-      href: "/softball/player",
-      cta: "球員入口",
-      adminHref: canSeeSoftballAdmin ? "/softball" : "",
-      adminLabel: "管理入口",
-      tone: "emerald",
-      glow: "from-emerald-300/30 via-emerald-100/50 to-transparent",
-    },
-  ];
 
   const birthdaySection = (
     <section className="entrance entrance-delay-3 mt-6 rounded-[2.5rem] border border-slate-200/80 bg-white/90 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.7)] backdrop-blur sm:p-8">
@@ -998,30 +931,35 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
-      <header className="relative px-4 pt-5 sm:px-12 sm:pt-8 entrance">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3">
+    <div className="min-h-screen">
+      <header className="px-6 pt-8 sm:px-12 entrance">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-4">
               <img
                 src={emblem115b}
                 alt="NTU EMBA 115B"
-                className="h-11 w-11 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
+                className="h-12 w-12 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm"
               />
-              <div className="min-w-0">
-                <p className="truncate text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
                   NTU EMBA 115B
                 </p>
-                <h1 className="truncate text-xl font-semibold text-slate-900 sm:text-3xl">
-                  115B 班級系統
+                <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">
+                  NTU EMBA 115B 班級系統
                 </h1>
               </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <p className="mt-3 text-sm text-slate-500">
+              共學 · 共餐 · 共練 · 2026-2028 and forever
+            </p>
+          </div>
+          <div className="flex flex-col items-start gap-2 sm:items-end">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setNotificationOpen(true)}
-                className="relative rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+                className="relative rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
               >
                 通知
                 {notificationUnread > 0 ? (
@@ -1032,143 +970,79 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               </button>
               <a
                 href="/profile"
-                className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
               >
-                個人
+                個人資訊維護
               </a>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-[2rem] border border-slate-200/80 bg-white/92 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">常用功能</p>
-                  <p className="mt-1 text-xs text-slate-500">先做常用的，其他再往下看。</p>
-                </div>
-                {canSeeAdminPortal ? (
-                  <a
-                    href="/admin"
-                    className="rounded-full border border-slate-200 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm hover:bg-slate-800"
-                  >
-                    後台
-                  </a>
-                ) : null}
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {systemCards.map((card) => (
-                  <a
-                    key={card.title}
-                    href={card.href}
-                    className="group rounded-[1.6rem] border border-slate-200/80 bg-slate-50/70 px-4 py-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-slate-900">{card.title}</p>
-                      <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
-                    </div>
-                    <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-500">{card.description}</p>
-                    {card.adminHref ? (
-                      <span className="mt-3 inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-700">
-                        有管理入口
-                      </span>
-                    ) : null}
-                  </a>
-                ))}
-              </div>
-            </section>
-
-            <aside className="rounded-[2rem] border border-slate-200/80 bg-white/92 p-4 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur sm:p-5">
-              <div className="flex items-start gap-3">
-                {hasGoogleLogin ? (
-                  <>
-                    <div className="h-12 w-12 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm">
-                      {googleLinkedStudent.photoUrl ? (
-                        <img src={googleLinkedStudent.photoUrl} alt="avatar" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs font-semibold text-slate-400">
-                          {displayName ? displayName.slice(0, 2) : "NT"}
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{displayName || "已綁定"}</p>
-                      <p className="mt-1 truncate text-xs text-slate-500">{googleLinkedStudent.email}</p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${needsReauth ? "border border-amber-200 bg-amber-50 text-amber-700" : "border border-emerald-200 bg-emerald-50 text-emerald-700"}`}>
-                          {needsReauth ? "需重新登入" : "已登入"}
-                        </span>
-                        {uniqueRoleBadges.slice(0, 2).map((label) => (
-                          <span key={label} className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] font-semibold text-slate-600">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">尚未登入 Google</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">登入後可帶入個人資料與通知。</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNotificationOpen(true)}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
+              {canSeeAdminPortal ? (
+                <a
+                  href="/admin"
+                  className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
                 >
-                  <p className="text-[10px] font-semibold text-slate-400">通知</p>
-                  <p className="mt-1 text-base font-semibold text-slate-900">{hasGoogleLogin ? urgentNotificationCount : "--"}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openApprovalsCenter("pending")}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
-                >
-                  <p className="text-[10px] font-semibold text-slate-400">待簽核</p>
-                  <p className="mt-1 text-base font-semibold text-slate-900">{approvalsOverviewLoaded ? pendingApprovalCount : "--"}</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCalendarDesktop((prev) => !prev)}
-                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-left"
-                >
-                  <p className="text-[10px] font-semibold text-slate-400">行事曆</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-900">{showCalendarDesktop ? "收合" : "展開"}</p>
-                </button>
-              </div>
-
-              {hasGoogleLogin ? (
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  {googleLinkedStudent.id ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(googleLinkedStudent.id);
-                        setCopiedStudentId(true);
-                        setTimeout(() => {
-                          setCopiedStudentId(false);
-                        }, 1500);
-                      }}
-                      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
-                    >
-                      學號：{googleLinkedStudent.id}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={handleLogout_}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-800"
-                  >
-                    登出
-                  </button>
-                  {copiedStudentId ? <span className="text-[11px] font-semibold text-emerald-600">已複製</span> : null}
-                </div>
+                  系統後台
+                </a>
               ) : null}
-            </aside>
+            </div>
+            <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">
+              {hasGoogleLogin ? (
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+                    {googleLinkedStudent.photoUrl ? (
+                      <img
+                        src={googleLinkedStudent.photoUrl}
+                        alt="avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold text-slate-400">
+                        {displayName ? displayName.slice(0, 2) : "NT"}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-semibold text-slate-900">
+                      {displayName ? displayName : "已綁定"}
+                      <span className="ml-2 text-xs font-semibold text-slate-500">
+                        {needsReauth ? "需重新登入" : "已登入"}
+                      </span>
+                    </p>
+                    <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
+                    {googleLinkedStudent.id ? (
+                      <p className="mt-1 text-slate-400">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(googleLinkedStudent.id);
+                            setCopiedStudentId(true);
+                            setTimeout(() => {
+                              setCopiedStudentId(false);
+                            }, 1500);
+                          }}
+                          className="hover:text-slate-600 transition-colors"
+                          title="點擊複製學號"
+                        >
+                          學號：{googleLinkedStudent.id}
+                        </button>
+                        {copiedStudentId ? (
+                          <span className="ml-2 text-xs text-green-600">已複製</span>
+                        ) : null}
+                      </p>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleLogout_}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                      >
+                        登出
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="font-semibold text-slate-600">尚未登入 Google</p>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -1225,45 +1099,132 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         ) : null}
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-5">
-          {systemCards.map((card, index) => (
-            <div
-              key={card.title}
-              className={`entrance group relative flex h-full flex-col justify-between overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white/92 p-5 shadow-[0_30px_90px_-70px_rgba(15,23,42,0.75)] backdrop-blur transition hover:-translate-y-1 hover:shadow-[0_35px_90px_-60px_rgba(15,23,42,0.45)] sm:p-6 ${index === 0 ? "entrance-delay-3" : "entrance-delay-4"}`}
-            >
-              <div className={`pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-br ${card.glow}`} />
-              <div className="relative">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="rounded-full border border-slate-200/80 bg-white/80 px-3 py-1 text-[11px] font-semibold text-slate-500 shadow-sm">
-                    核心模組
-                  </span>
-                  {card.adminHref ? (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-                      含管理入口
-                    </span>
-                  ) : null}
-                </div>
-                <h3 className="mt-6 text-[22px] font-semibold tracking-tight text-slate-900">{card.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{card.description}</p>
-              </div>
-              <div className="relative mt-8 flex flex-wrap items-center gap-3">
-                <a
-                  href={card.href}
-                  className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400"
-                >
-                  {card.cta}
-                  <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
-                </a>
-                {card.adminHref ? (
-                  <a
-                    href={card.adminHref}
-                    className="text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-slate-700"
-                  >
-                    {card.adminLabel}
-                  </a>
-                ) : null}
-              </div>
+          <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">活動管理</h3>
+              <p className="mt-3 text-sm text-slate-500">
+                報名、簽到與活動資訊一站完成。
+              </p>
             </div>
-          ))}
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/events"
+                className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeEventAdmin ? (
+                <a
+                  href="/admin/events"
+                  className="text-xs font-semibold text-slate-500 underline decoration-slate-300 underline-offset-4 hover:text-slate-700"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--amber">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">訂餐管理</h3>
+              <p className="mt-3 text-sm text-amber-900/80">
+                週末與特別課程訂餐，注意有訂餐截止時間。
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/ordering"
+                className="inline-flex items-center rounded-full border border-amber-300 bg-white px-4 py-1.5 text-sm font-semibold text-amber-700 shadow-sm hover:border-amber-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeOrderingAdmin ? (
+                <a
+                  href="/admin/ordering"
+                  className="text-xs font-semibold text-amber-700 underline decoration-amber-300 underline-offset-4 hover:text-amber-800"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--sky">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">財務管理</h3>
+              <p className="mt-3 text-sm text-sky-900/80">
+                請購 / 請款 / 零用金申請。
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/finance"
+                className="inline-flex items-center rounded-full border border-sky-300 bg-white px-4 py-1.5 text-sm font-semibold text-sky-700 shadow-sm hover:border-sky-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeFinanceAdmin ? (
+                <a
+                  href="/admin/finance"
+                  className="text-xs font-semibold text-sky-700 underline decoration-sky-300 underline-offset-4 hover:text-sky-800"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--violet">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">學藝專區</h3>
+              <p className="mt-3 text-sm text-violet-900/80">補課登記、課程摘要與筆記入口。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/academics"
+                className="inline-flex items-center rounded-full border border-violet-300 bg-white px-4 py-1.5 text-sm font-semibold text-violet-700 shadow-sm hover:border-violet-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeAcademicsAdmin ? (
+                <a
+                  href="/admin/academics"
+                  className="text-xs font-semibold text-violet-700 underline decoration-violet-300 underline-offset-4 hover:text-violet-800"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--emerald">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">壘球隊管理</h3>
+              <p className="mt-3 text-sm text-emerald-900/80">練習排程、點名與出席統計。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/softball/player"
+                className="inline-flex items-center rounded-full border border-emerald-300 bg-white px-4 py-1.5 text-sm font-semibold text-emerald-700 shadow-sm hover:border-emerald-400"
+              >
+                球員入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+              {canSeeSoftballAdmin ? (
+                <a
+                  href="/softball"
+                  className="text-xs font-semibold text-emerald-700 underline decoration-emerald-300 underline-offset-4 hover:text-emerald-800"
+                >
+                  管理入口
+                </a>
+              ) : null}
+            </div>
+          </div>
+
         </section>
 
         {prioritizeApprovalsFirst ? (
