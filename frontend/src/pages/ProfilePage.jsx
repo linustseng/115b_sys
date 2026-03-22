@@ -27,15 +27,20 @@ export default function ProfilePage({ shared }) {
     GoogleSigninPanel,
     getGoogleIdTokenSilently_,
     loadStoredGoogleStudent_,
+    loadStoredGoogleIdToken_,
+    storeGoogleIdToken_,
     storeGoogleStudent_,
     normalizePhoneInputValue_,
   } = shared;
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
-  const [idToken, setIdToken] = useState("");
+  const [idToken, setIdToken] = useState(() => loadStoredGoogleIdToken_());
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState(buildEmptyForm_);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [authRecovering, setAuthRecovering] = useState(() =>
+    Boolean(loadStoredGoogleStudent_() && !loadStoredGoogleIdToken_())
+  );
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const monthOptions = useMemo(() => buildNumberOptions_(12), []);
@@ -54,33 +59,35 @@ export default function ProfilePage({ shared }) {
   }, [googleLinkedStudent]);
 
   const loadProfile = async (token) => {
-    if (!token) {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+      setProfile(null);
       return;
     }
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      const { result } = await apiRequest({
-        action: "getDirectoryProfile",
-        idToken: token,
-      });
+      const requestPayload = { action: "getDirectoryProfile" };
+      if (token) {
+        requestPayload.idToken = token;
+      }
+      const { result } = await apiRequest(requestPayload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
-      const payload = result.data && result.data.profile ? result.data.profile : null;
-      setProfile(payload);
+      const profilePayload = result.data && result.data.profile ? result.data.profile : null;
+      setProfile(profilePayload);
       setForm({
-        email: payload && payload.email ? payload.email : "",
-        phone: payload && payload.phone ? payload.phone : "",
-        company: payload && payload.company ? payload.company : "",
-        title: payload && payload.title ? payload.title : "",
-        displayName: payload && payload.displayName ? payload.displayName : "",
-        backupPhone: payload && payload.backupPhone ? payload.backupPhone : "",
-        emergencyContact: payload && payload.emergencyContact ? payload.emergencyContact : "",
-        emergencyPhone: payload && payload.emergencyPhone ? payload.emergencyPhone : "",
-        birthdayMonth: payload && payload.birthdayMonth ? payload.birthdayMonth : "",
-        birthdayDay: payload && payload.birthdayDay ? payload.birthdayDay : "",
+        email: profilePayload && profilePayload.email ? profilePayload.email : "",
+        phone: profilePayload && profilePayload.phone ? profilePayload.phone : "",
+        company: profilePayload && profilePayload.company ? profilePayload.company : "",
+        title: profilePayload && profilePayload.title ? profilePayload.title : "",
+        displayName: profilePayload && profilePayload.displayName ? profilePayload.displayName : "",
+        backupPhone: profilePayload && profilePayload.backupPhone ? profilePayload.backupPhone : "",
+        emergencyContact: profilePayload && profilePayload.emergencyContact ? profilePayload.emergencyContact : "",
+        emergencyPhone: profilePayload && profilePayload.emergencyPhone ? profilePayload.emergencyPhone : "",
+        birthdayMonth: profilePayload && profilePayload.birthdayMonth ? profilePayload.birthdayMonth : "",
+        birthdayDay: profilePayload && profilePayload.birthdayDay ? profilePayload.birthdayDay : "",
       });
     } catch (err) {
       setError(err.message || "載入失敗");
@@ -102,38 +109,49 @@ export default function ProfilePage({ shared }) {
   };
 
   useEffect(() => {
-    if (!idToken) {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
     }
     loadProfile(idToken);
-  }, [idToken]);
+  }, [googleLinkedStudent && googleLinkedStudent.email, idToken]);
 
   useEffect(() => {
-    if (idToken) {
+    if (idToken || !googleLinkedStudent || !googleLinkedStudent.email) {
+      setAuthRecovering(false);
       return;
     }
     let cancelled = false;
+    setAuthRecovering(true);
     getGoogleIdTokenSilently_()
       .then((token) => {
         if (!cancelled && token) {
-          setIdToken(token);
+          const normalized = String(token || "").trim();
+          setIdToken(normalized);
+          storeGoogleIdToken_(normalized);
         }
       })
       .catch(() => {
-        // Silent login can fail; manual sign-in stays available.
+        // Silent login can fail; session-first auth may still be available.
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setAuthRecovering(false);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [idToken, getGoogleIdTokenSilently_]);
+  }, [idToken, googleLinkedStudent && googleLinkedStudent.email, getGoogleIdTokenSilently_, storeGoogleIdToken_]);
 
   const handleLinkedStudent = (student, _profile, token) => {
+    const normalizedToken = String(token || "").trim();
     setGoogleLinkedStudent(student || null);
     if (student) {
       storeGoogleStudent_(student);
     }
-    if (token) {
-      setIdToken(token);
+    if (normalizedToken) {
+      setIdToken(normalizedToken);
+      storeGoogleIdToken_(normalizedToken);
     }
   };
 
@@ -145,15 +163,14 @@ export default function ProfilePage({ shared }) {
     event.preventDefault();
     setError("");
     setSuccess("");
-    if (!idToken) {
+    if (!googleLinkedStudent || !googleLinkedStudent.email) {
       setError("請先登入 Google");
       return;
     }
     setSaving(true);
     try {
-      const { result } = await apiRequest({
+      const requestPayload = {
         action: "updateDirectoryProfile",
-        idToken: idToken,
         data: {
           email: form.email,
           phone: normalizePhoneInputValue_(form.phone),
@@ -166,31 +183,35 @@ export default function ProfilePage({ shared }) {
           birthdayMonth: form.birthdayMonth,
           birthdayDay: form.birthdayDay,
         },
-      });
+      };
+      if (idToken) {
+        requestPayload.idToken = idToken;
+      }
+      const { result } = await apiRequest(requestPayload);
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
-      const payload = result.data && result.data.profile ? result.data.profile : null;
-      setProfile(payload);
-      if (payload) {
+      const profilePayload = result.data && result.data.profile ? result.data.profile : null;
+      setProfile(profilePayload);
+      if (profilePayload) {
         setForm({
-          email: payload.email || "",
-          phone: payload.phone || "",
-          company: payload.company || "",
-          title: payload.title || "",
-          displayName: payload.displayName || "",
-          backupPhone: payload.backupPhone || "",
-          emergencyContact: payload.emergencyContact || "",
-          emergencyPhone: payload.emergencyPhone || "",
-          birthdayMonth: payload.birthdayMonth || "",
-          birthdayDay: payload.birthdayDay || "",
+          email: profilePayload.email || "",
+          phone: profilePayload.phone || "",
+          company: profilePayload.company || "",
+          title: profilePayload.title || "",
+          displayName: profilePayload.displayName || "",
+          backupPhone: profilePayload.backupPhone || "",
+          emergencyContact: profilePayload.emergencyContact || "",
+          emergencyPhone: profilePayload.emergencyPhone || "",
+          birthdayMonth: profilePayload.birthdayMonth || "",
+          birthdayDay: profilePayload.birthdayDay || "",
         });
         updateStoredStudent_({
-          email: payload.email || "",
-          phone: payload.phone || "",
-          company: payload.company || "",
-          title: payload.title || "",
-          preferredName: payload.displayName || "",
+          email: profilePayload.email || "",
+          phone: profilePayload.phone || "",
+          company: profilePayload.company || "",
+          title: profilePayload.title || "",
+          preferredName: profilePayload.displayName || "",
         });
       }
       setSuccess("已更新個人資訊");
@@ -238,13 +259,13 @@ export default function ProfilePage({ shared }) {
       </header>
 
       <main className="mx-auto max-w-4xl px-6 pb-28 pt-8 sm:px-12">
-        {!idToken ? (
+        {!googleLinkedStudent ? (
           <section className="card p-7 sm:p-10">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-slate-900">Google 驗證</h2>
-            {loading ? (
+            {loading || authRecovering ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
-                載入中
+                {authRecovering ? "恢復登入中" : "載入中"}
               </span>
             ) : null}
           </div>

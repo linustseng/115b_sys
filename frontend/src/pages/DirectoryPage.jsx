@@ -6,7 +6,6 @@ export default function DirectoryPage({ shared }) {
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
-    getGoogleIdTokenSilently_,
   } = shared;
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -92,14 +91,6 @@ export default function DirectoryPage({ shared }) {
     setSortDir("asc");
   };
 
-  const getIdToken_ = async () => {
-    const token = await getGoogleIdTokenSilently_();
-    if (!token) {
-      throw new Error("登入已過期，請重新使用 Google 登入。");
-    }
-    return token;
-  };
-
   const loadDirectory = async () => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
@@ -107,8 +98,7 @@ export default function DirectoryPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const idToken = await getIdToken_();
-      const { result } = await apiRequest({ action: "listDirectory", idToken: idToken });
+      const { result } = await apiRequest({ action: "listDirectory" });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "載入失敗");
       }
@@ -117,8 +107,8 @@ export default function DirectoryPage({ shared }) {
       const message = String((err && err.message) || "");
       if (message === "Unauthorized") {
         setError("您目前沒有權限查看通訊錄（僅班代與資管組組長可查看）。");
-      } else if (message.includes("Silent login unavailable") || message.includes("No credential")) {
-        setError("登入已過期，請重新使用 Google 登入。");
+      } else if (message.includes("登入已過期") || message.includes("Silent login unavailable") || message.includes("No credential")) {
+        setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
       } else {
         setError(message || "載入失敗");
       }

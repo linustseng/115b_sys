@@ -6,7 +6,6 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
-    clearStoredAuth_,
     normalizeGroupId_,
     isFinanceRequestRelevantToRole_,
     parseFinanceAmount_,
@@ -320,9 +319,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
         if (!ignore) {
           const message = err.message || "載入失敗";
           if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
-            clearStoredAuth_();
-            setGoogleLinkedStudent(null);
-            setError("");
+            setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
           } else {
             setError(message);
           }

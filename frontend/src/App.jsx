@@ -1651,14 +1651,172 @@ async function requestWithReadRetry_(payload) {
   throw new Error("Request failed");
 }
 
-function apiRequest(payload) {
+let authRecoveryInFlight_ = null;
+
+function isUnauthorizedResponse_(response) {
+  const result = response && response.result ? response.result : null;
+  return Boolean(result && result.ok === false && String(result.error || "") === "Unauthorized");
+}
+
+function shouldSkipAutoAuthRecovery_(payload) {
+  const action = String((payload && payload.action) || "").trim();
+  if (!action) {
+    return true;
+  }
+  return Boolean(
+    (payload && payload.__skipAuthRecovery) ||
+      action === "refreshSession" ||
+      action === "verifyGoogle" ||
+      action === "linkGoogleStudent"
+  );
+}
+
+function dispatchRawApiRequest_(payload) {
   const requestPayload = payload || {};
   if (!isReadAction_(requestPayload)) {
-    clearReadResponseCache_();
     if (shouldUseApiV2Write_(requestPayload)) {
       return requestWithApiV2Write_(requestPayload);
     }
     return requestWithTransportFallback_(requestPayload);
+  }
+  return requestWithReadRetry_(requestPayload);
+}
+
+async function recoverStoredAuthSession_() {
+  if (authRecoveryInFlight_) {
+    return authRecoveryInFlight_;
+  }
+
+  authRecoveryInFlight_ = (async () => {
+    const storedSession = loadStoredAdminSession_();
+    const storedStudent = loadStoredGoogleStudent_();
+
+    if (storedSession && storedSession.refreshToken) {
+      try {
+        const refreshResponse = await dispatchRawApiRequest_({
+          action: "refreshSession",
+          refreshToken: storedSession.refreshToken,
+          __skipAuthRecovery: true,
+        });
+        const refreshResult = refreshResponse && refreshResponse.result ? refreshResponse.result : null;
+        if (refreshResult && refreshResult.ok && refreshResult.data && refreshResult.data.sessionToken) {
+          const refreshData = refreshResult.data || {};
+          const nextSession = {
+            token: String(refreshData.sessionToken || "").trim(),
+            refreshToken: String(refreshData.refreshToken || storedSession.refreshToken || "").trim(),
+            studentId: String((storedSession && storedSession.studentId) || "").trim(),
+            memberships: Array.isArray(refreshData.memberships)
+              ? refreshData.memberships
+              : Array.isArray(storedSession && storedSession.memberships)
+                ? storedSession.memberships
+                : [],
+          };
+          storeAdminSession_(nextSession);
+          return {
+            recovered: true,
+            sessionToken: nextSession.token,
+            idToken: String(loadStoredGoogleIdToken_() || "").trim(),
+          };
+        }
+      } catch (error) {
+        // Fall through to Google-based recovery.
+      }
+    }
+
+    const verifyWithToken_ = async (candidateToken) => {
+      const token = String(candidateToken || "").trim();
+      if (!token) {
+        return null;
+      }
+      const verifyResponse = await dispatchRawApiRequest_({
+        action: "verifyGoogle",
+        idToken: token,
+        __skipAuthRecovery: true,
+      });
+      const verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
+      if (!verifyResult || !verifyResult.ok || !verifyResult.data) {
+        return null;
+      }
+      const verifyData = verifyResult.data || {};
+      const student = verifyData.student || storedStudent || null;
+      const studentId = String((student && student.id) || (storedSession && storedSession.studentId) || "").trim();
+      const sessionToken = String(verifyData.sessionToken || "").trim();
+      const refreshToken = String(verifyData.refreshToken || (storedSession && storedSession.refreshToken) || "").trim();
+      if (student) {
+        storeGoogleStudent_(student);
+      }
+      storeGoogleIdToken_(token);
+      if (sessionToken || refreshToken) {
+        storeAdminSession_({
+          token: sessionToken,
+          refreshToken,
+          studentId,
+          memberships: Array.isArray(verifyData.memberships) ? verifyData.memberships : [],
+        });
+      }
+      return {
+        recovered: true,
+        sessionToken,
+        idToken: token,
+      };
+    };
+
+    const storedIdToken = String(loadStoredGoogleIdToken_() || "").trim();
+    try {
+      const verifiedStored = await verifyWithToken_(storedIdToken);
+      if (verifiedStored) {
+        return verifiedStored;
+      }
+    } catch (error) {
+      // Try silent Google token recovery below.
+    }
+
+    if (typeof getGoogleIdTokenSilently_ === "function") {
+      try {
+        const refreshedIdToken = String((await getGoogleIdTokenSilently_()) || "").trim();
+        const verifiedSilent = await verifyWithToken_(refreshedIdToken);
+        if (verifiedSilent) {
+          return verifiedSilent;
+        }
+      } catch (error) {
+        // No silent Google recovery available.
+      }
+    }
+
+    return { recovered: false, sessionToken: "", idToken: "" };
+  })().finally(() => {
+    authRecoveryInFlight_ = null;
+  });
+
+  return authRecoveryInFlight_;
+}
+
+function apiRequest(payload) {
+  const requestPayload = payload || {};
+  const executeRequest_ = async () => {
+    const response = await dispatchRawApiRequest_(requestPayload);
+    if (shouldSkipAutoAuthRecovery_(requestPayload) || !isUnauthorizedResponse_(response)) {
+      return response;
+    }
+
+    const recovery = await recoverStoredAuthSession_();
+    if (!recovery || !recovery.recovered) {
+      return response;
+    }
+
+    const retryPayload = { ...(requestPayload || {}) };
+    if (recovery.sessionToken) {
+      retryPayload.sessionToken = recovery.sessionToken;
+    }
+    if (recovery.idToken && String((requestPayload && requestPayload.idToken) || "").trim()) {
+      retryPayload.idToken = recovery.idToken;
+    }
+    return dispatchRawApiRequest_(retryPayload);
+  };
+
+  if (!isReadAction_(requestPayload)) {
+    clearReadResponseCache_();
+    return executeRequest_();
   }
   const cacheKey = buildReadRequestKey_(requestPayload);
   const cachedResponse = getCachedReadResponse_(cacheKey);
@@ -1670,7 +1828,7 @@ function apiRequest(payload) {
     return inflight;
   }
   const ttlMs = getReadCacheTtlMs_(requestPayload);
-  const requestPromise = requestWithReadRetry_(requestPayload)
+  const requestPromise = executeRequest_()
     .then((response) => {
       if (response && response.result && response.result.ok) {
         setCachedReadResponse_(cacheKey, response, ttlMs);

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 function BirthdayPage({ shared }) {
-  const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_, clearStoredAuth_ } = shared;
+  const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_ } = shared;
   const cacheKey = "birthdays_page_cache_v4";
   const cacheTtlMs = 6 * 60 * 60 * 1000;
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -86,9 +86,7 @@ function BirthdayPage({ shared }) {
         if (!ignore) {
           const message = requestError.message || "載入壽星資料失敗";
           if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
-            clearStoredAuth_();
-            setGoogleLinkedStudent(null);
-            setError("");
+            setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
           } else {
             setError(message);
           }
