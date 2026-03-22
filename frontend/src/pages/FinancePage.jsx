@@ -355,20 +355,6 @@ function FinancePage({ shared }) {
     let ignore = false;
     const runBootstrap = async () => {
       const email = googleLinkedStudent.email;
-
-      // Security hardening changed API auth requirements; refresh id token when missing.
-      let idToken = loadStoredGoogleIdToken_();
-      if (!idToken) {
-        try {
-          idToken = await getGoogleIdTokenSilently_();
-          if (idToken) {
-            storeGoogleIdToken_(idToken);
-          }
-        } catch (error) {
-          // Ignore silent token refresh failure; downstream calls will report auth errors.
-        }
-      }
-
       const ok = await loadApplicantBootstrap(email);
       if (!ok) {
         await Promise.allSettled([loadRequests(email), loadFinanceBootstrap(email)]);

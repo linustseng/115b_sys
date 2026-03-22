@@ -129,56 +129,15 @@ function SoftballPlayerPage({ shared }) {
       requestPayload.idToken = idToken;
     }
 
-    let response = await apiRequest(requestPayload);
-    let result = response && response.result ? response.result : null;
+    const response = await apiRequest(requestPayload);
+    const result = response && response.result ? response.result : null;
     if (result && result.ok && result.data && result.data.sessionToken) {
       setGoogleSessionToken(String(result.data.sessionToken || "").trim());
-      return response;
     }
-    const unauthorized =
-      result && result.ok === false && String(result.error || "") === "Unauthorized";
-    if (!unauthorized) {
-      return response;
+    if (requireAuth && result && result.ok === false && String(result.error || "") === "Unauthorized") {
+      throw new Error("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
     }
-
-    if (typeof getGoogleIdTokenSilently_ !== "function") {
-      if (requireAuth) {
-        throw new Error("請先登入 Google");
-      }
-      return response;
-    }
-
-    try {
-      const refreshedToken = await getGoogleIdTokenSilently_();
-      if (!refreshedToken) {
-        if (requireAuth) {
-          throw new Error("請先登入 Google");
-        }
-        return response;
-      }
-      setGoogleIdToken(refreshedToken);
-      if (typeof storeGoogleIdToken_ === "function") {
-        storeGoogleIdToken_(refreshedToken);
-      }
-      const retryPayload = {
-        ...(payload || {}),
-        idToken: refreshedToken,
-      };
-      if (sessionToken) {
-        retryPayload.sessionToken = sessionToken;
-      }
-      response = await apiRequest(retryPayload);
-      result = response && response.result ? response.result : null;
-      if (result && result.ok && result.data && result.data.sessionToken) {
-        setGoogleSessionToken(String(result.data.sessionToken || "").trim());
-      }
-      return response;
-    } catch (error) {
-      if (requireAuth) {
-        throw new Error("請先登入 Google");
-      }
-      return response;
-    }
+    return response;
   };
 
   const loadPlayers = async () => {
@@ -884,6 +843,7 @@ function SoftballPlayerPage({ shared }) {
                   helperText="登入後可更新球衣尺寸、申請背號與維護資料。"
                   onLinkedStudent={(student, _profile, idToken, authContext) => {
                     setGoogleLinkedStudent(student);
+                    storeGoogleStudent_(student || null);
                     const token = String(idToken || "").trim();
                     if (token) {
                       setGoogleIdToken(token);

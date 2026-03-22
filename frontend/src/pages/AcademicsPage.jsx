@@ -68,17 +68,14 @@ export default function AcademicsPage({ shared }) {
     GoogleSigninPanel,
     loadStoredGoogleStudent_,
     storeGoogleStudent_,
-    loadStoredGoogleIdToken_,
     storeGoogleIdToken_,
     storeAdminSession_,
-    getGoogleIdTokenSilently_,
     formatDisplayDate_,
     formatEventSchedule_,
   } = shared;
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [loading, setLoading] = useState(false);
-  const [authRecovering, setAuthRecovering] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState("courses");
@@ -95,41 +92,7 @@ export default function AcademicsPage({ shared }) {
     canManage: false,
   });
 
-  const ensureSession_ = async () => {
-    const existingIdToken = String(loadStoredGoogleIdToken_() || "").trim();
-    let token = existingIdToken;
-    if (!token && typeof getGoogleIdTokenSilently_ === "function") {
-      token = String((await getGoogleIdTokenSilently_()) || "").trim();
-    }
-    if (!token) {
-      throw new Error("登入已過期，請重新使用 Google 登入。");
-    }
-    storeGoogleIdToken_(token);
-    const { result } = await apiRequest({ action: "verifyGoogle", idToken: token });
-    if (!result || !result.ok) {
-      throw new Error((result && result.error) || "Google 驗證失敗");
-    }
-    const data = result.data || {};
-    const student = data.student || googleLinkedStudent || null;
-    const studentId = String((student && student.id) || "").trim();
-    const sessionToken = String(data.sessionToken || "").trim();
-    const refreshToken = String(data.refreshToken || "").trim();
-    const memberships = Array.isArray(data.memberships) ? data.memberships : [];
-    if (student) {
-      storeGoogleStudent_(student);
-      setGoogleLinkedStudent(student);
-    }
-    if (sessionToken && studentId) {
-      storeAdminSession_({
-        token: sessionToken,
-        refreshToken,
-        studentId,
-        memberships,
-      });
-    }
-  };
-
-  const loadBootstrap_ = async ({ allowRetry = true } = {}) => {
+  const loadBootstrap_ = async () => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
     }
@@ -152,17 +115,8 @@ export default function AcademicsPage({ shared }) {
       });
     } catch (err) {
       const message = String((err && err.message) || "");
-      if (allowRetry && (message === "Unauthorized" || message.includes("登入已過期"))) {
-        try {
-          setAuthRecovering(true);
-          await ensureSession_();
-          await loadBootstrap_({ allowRetry: false });
-          return;
-        } catch (recoverError) {
-          setError(String((recoverError && recoverError.message) || "登入已過期，請重新登入。"));
-        } finally {
-          setAuthRecovering(false);
-        }
+      if (message === "Unauthorized" || message.includes("登入已過期")) {
+        setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
       } else {
         setError(message || "載入失敗");
       }
@@ -528,7 +482,7 @@ export default function AcademicsPage({ shared }) {
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-12">
         {loading ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            {authRecovering ? "登入恢復中..." : "載入中..."}
+            載入中...
           </div>
         ) : null}
         {error ? <div className="mb-4 alert alert-error">{error}</div> : null}
