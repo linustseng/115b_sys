@@ -737,7 +737,9 @@ export default function AcademicsPage({ shared }) {
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">講義 {item.needHandout}</span>
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-700">
-                  {item.requests.map((request) => request.studentName || request.studentEmail || request.studentId).join("、")}
+                  {item.requests
+                    .map((request) => request.displayName || request.nameZh || request.studentName || request.studentEmail || request.studentId)
+                    .join("、")}
                 </p>
               </div>
             ))}

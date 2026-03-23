@@ -2254,15 +2254,19 @@ export async function dispatchNativeAction({
       const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
 
       const myRequestResult = await query(
-        `select * from makeup_requests
-         where student_id = $1
-         order by coalesce(created_at,'' ) desc, id desc`,
+        `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
+           from makeup_requests r
+           left join directories d on d.id = r.student_id
+          where r.student_id = $1
+          order by coalesce(r.created_at,'' ) desc, r.id desc`,
         [auth.studentId]
       );
       const publicRequestResult = await query(
-        `select * from makeup_requests
-         where coalesce(status,'submitted') <> 'cancelled'
-         order by coalesce(target_session_id,''), coalesce(created_at,'' ) desc, id desc`
+        `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
+           from makeup_requests r
+           left join directories d on d.id = r.student_id
+          where coalesce(r.status,'submitted') <> 'cancelled'
+          order by coalesce(r.target_session_id,''), coalesce(r.created_at,'' ) desc, r.id desc`
       );
       const requestSessionIds = new Set();
       [...myRequestResult.rows, ...publicRequestResult.rows].forEach((row) => {
@@ -2277,8 +2281,16 @@ export async function dispatchNativeAction({
         const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
         return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
       });
-      const myRequests = myRequestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
-      const publicRequests = publicRequestResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
+      const myRequests = myRequestResult.rows.map((row) => ({
+        ...mapMakeupRequestRow(row, sessionsById),
+        nameZh: firstText(row.canonical_name_zh),
+        displayName: firstText(row.canonical_preferred_name),
+      }));
+      const publicRequests = publicRequestResult.rows.map((row) => ({
+        ...mapMakeupRequestRow(row, sessionsById),
+        nameZh: firstText(row.canonical_name_zh),
+        displayName: firstText(row.canonical_preferred_name),
+      }));
       const summaryByTarget = buildMakeupSummaryByTarget_(publicRequests);
 
       return {
