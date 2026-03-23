@@ -9,6 +9,148 @@ const DOC_TYPE_OPTIONS = [
   { id: "reference", label: "其他文件" },
 ];
 
+const DOCUMENT_TEMPLATES = {
+  meeting_minutes: {
+    label: "班會記錄模板",
+    build(ownerGroupId = "A") {
+      return {
+        title: "",
+        docType: "meeting_minutes",
+        ownerGroupId,
+        visibility: "class",
+        tagsText: "班會, 會議記錄",
+        summary: "",
+        content: `# 會議資訊
+- 會議名稱：
+- 日期：
+- 時間：
+- 地點：
+- 主席：
+- 紀錄：
+
+# 出席情況
+- 出席：
+- 請假：
+
+# 議程
+1. 
+2. 
+3. 
+
+# 討論摘要
+## 議題一
+- 
+
+## 議題二
+- 
+
+# 決議事項
+1. 
+2. 
+
+# 待辦事項
+- [ ] 項目：
+  - 負責人：
+  - 截止日：
+
+# 備註
+- `,
+        changeSummary: "建立班會記錄",
+        meetingDate: "",
+        effectiveDate: "",
+        attachments: [],
+        isPinned: false,
+        pinOrder: 0,
+      };
+    },
+  },
+  charter: {
+    label: "章程模板",
+    build(ownerGroupId = "A") {
+      return {
+        title: "組織章程",
+        docType: "charter",
+        ownerGroupId,
+        visibility: "class",
+        tagsText: "章程, 制度",
+        summary: "",
+        content: `# 文件資訊
+- 文件名稱：
+- 版本：
+- 生效日期：
+- 修訂摘要：
+
+# 第一章 總則
+## 第一條
+
+## 第二條
+
+# 第二章 組織與職掌
+## 第三條
+
+## 第四條
+
+# 第三章 會議與決議
+## 第五條
+
+# 第四章 附則
+## 第六條
+`,
+        changeSummary: "建立章程初版",
+        meetingDate: "",
+        effectiveDate: "",
+        attachments: [],
+        isPinned: true,
+        pinOrder: 10,
+      };
+    },
+  },
+  handover: {
+    label: "交接文件模板",
+    build(ownerGroupId = "A") {
+      return {
+        title: "",
+        docType: "handover",
+        ownerGroupId,
+        visibility: "class",
+        tagsText: "交接, SOP",
+        summary: "",
+        content: `# 背景
+- 目的：
+- 適用情境：
+
+# 作業流程
+1. 
+2. 
+3. 
+
+# 關鍵聯絡窗口
+- 
+
+# 常見問題 / 注意事項
+- 
+
+# 相關附件 / 連結
+- `,
+        changeSummary: "建立交接文件初版",
+        meetingDate: "",
+        effectiveDate: "",
+        attachments: [],
+        isPinned: false,
+        pinOrder: 0,
+      };
+    },
+  },
+};
+
+function buildDraftFromTemplate(templateKey, ownerGroupId = "A") {
+  const template = DOCUMENT_TEMPLATES[templateKey];
+  if (!template || typeof template.build !== "function") {
+    return emptyDraft(ownerGroupId);
+  }
+  return template.build(ownerGroupId);
+}
+
 function emptyDraft(ownerGroupId = "A") {
   return {
     title: "",
@@ -216,9 +358,21 @@ export default function DocumentsPage({ shared }) {
   const selectedCanEdit = Boolean(detail && detail.permissions && detail.permissions.canEdit);
 
   const beginCreate = () => {
-    setDraft(emptyDraft(editableGroupIds[0] || "A"));
+    setDraft(buildDraftFromTemplate("meeting_minutes", editableGroupIds[0] || "A"));
     setEditorMode("create");
     setStatusMessage("");
+  };
+
+  const applyTemplate = (templateKey) => {
+    const ownerGroupId = draft.ownerGroupId || editableGroupIds[0] || "A";
+    const next = buildDraftFromTemplate(templateKey, ownerGroupId);
+    setDraft((prev) => ({
+      ...prev,
+      ...next,
+      ownerGroupId,
+      title: prev.title && templateKey !== "charter" ? prev.title : next.title,
+      attachments: Array.isArray(prev.attachments) && prev.attachments.length ? prev.attachments : next.attachments,
+    }));
   };
 
   const beginEditMeta = () => {
@@ -519,6 +673,15 @@ export default function DocumentsPage({ shared }) {
               </div>
               <button type="button" onClick={() => setEditorMode("")} className="btn-ghost">關閉</button>
             </div>
+            <div className="mt-5 flex flex-wrap gap-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+              <span className="self-center px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">快速模板</span>
+              {Object.entries(DOCUMENT_TEMPLATES).map(([key, template]) => (
+                <button key={key} type="button" onClick={() => applyTemplate(key)} className="btn-chip">
+                  {template.label}
+                </button>
+              ))}
+            </div>
+
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="block text-sm font-medium text-slate-700">
                 文件名稱
