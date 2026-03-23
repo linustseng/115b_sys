@@ -371,10 +371,71 @@ export default function AcademicsPage({ shared }) {
 
   const recentCourseCatalog = useMemo(() => buildCourseCatalog_(recentCourseSessions), [recentCourseSessions, notesBySessionId]);
   const allCourseCatalog = useMemo(() => buildCourseCatalog_(regularSessions), [regularSessions, notesBySessionId]);
-  const recentPastCourseCatalog = useMemo(
+  const recentPastCourseCatalogRaw = useMemo(
     () => recentCourseCatalog.filter((unit) => courseDateWindow.pastDates.includes(unit.sessionDate)),
     [recentCourseCatalog, courseDateWindow]
   );
+  const recentPastCourseCatalog = useMemo(() => {
+    const uniqText = (items = []) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
+    const uniqLinks = (items = []) => {
+      const seen = new Set();
+      return items.filter((item) => {
+        const key = `${String(item && item.label ? item.label : "").trim()}::${String(item && item.url ? item.url : "").trim()}`;
+        if (!key || seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    };
+
+    const buckets = new Map();
+    recentPastCourseCatalogRaw.forEach((unit) => {
+      const key = String(unit.courseGroupKey || unit.courseGroupTitle || unit.unitKey || "").trim();
+      if (!key) {
+        return;
+      }
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          ...unit,
+          unitKey: `review__${key}`,
+          reviewDates: [unit.sessionDate],
+          sourceUnits: [unit],
+        });
+        return;
+      }
+      const bucket = buckets.get(key);
+      bucket.reviewDates.push(unit.sessionDate);
+      bucket.sourceUnits.push(unit);
+      bucket.slotCount += unit.slotCount;
+      bucket.mergedSchedule = bucket.mergedSchedule || unit.mergedSchedule;
+      bucket.location = bucket.location || unit.location;
+      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
+      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
+      bucket.note = {
+        ...baseNote,
+        summaryItems: uniqText([...(baseNote.summaryItems || []), ...(nextNote.summaryItems || [])]),
+        homeworkItems: uniqText([...(baseNote.homeworkItems || []), ...(nextNote.homeworkItems || [])]),
+        quizItems: uniqText([...(baseNote.quizItems || []), ...(nextNote.quizItems || [])]),
+        linkItems: uniqLinks([...(baseNote.linkItems || []), ...(nextNote.linkItems || [])]),
+      };
+    });
+
+    return Array.from(buckets.values())
+      .map((unit) => {
+        const sortedDates = Array.from(new Set(unit.reviewDates)).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" }));
+        return {
+          ...unit,
+          sessionDate: sortedDates.length > 1 ? `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]}` : sortedDates[0] || unit.sessionDate,
+          reviewDates: sortedDates,
+        };
+      })
+      .sort((a, b) => {
+        const left = `${a.reviewDates && a.reviewDates[0] ? a.reviewDates[0] : ""} ${a.courseGroupTitle}`;
+        const right = `${b.reviewDates && b.reviewDates[0] ? b.reviewDates[0] : ""} ${b.courseGroupTitle}`;
+        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+  }, [recentPastCourseCatalogRaw]);
   const recentFutureCourseCatalog = useMemo(
     () => recentCourseCatalog.filter((unit) => courseDateWindow.futureDates.includes(unit.sessionDate)),
     [recentCourseCatalog, courseDateWindow]
