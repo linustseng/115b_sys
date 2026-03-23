@@ -844,6 +844,10 @@ const API_V2_READ_ACTIONS = new Set([
   "listSoftballAngels",
   "listSoftballSupplyVendors",
   "listSoftballSupplyCases",
+  // Documents
+  "listDocumentsBootstrap",
+  "getDocumentDetail",
+  "listDocumentVersions",
 ]);
 
 const API_V2_WRITE_ACTIONS = new Set([
