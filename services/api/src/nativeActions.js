@@ -888,6 +888,7 @@ function buildMakeupSummaryByTarget_(requests = []) {
         needMeal: 0,
         needHandout: 0,
         statuses: {},
+        requests: [],
       });
     }
     const bucket = map.get(targetId);
@@ -904,6 +905,9 @@ function buildMakeupSummaryByTarget_(requests = []) {
       }
     }
     bucket.statuses[status] = Number(bucket.statuses[status] || 0) + 1;
+    if (active) {
+      bucket.requests.push(item);
+    }
   });
   return Array.from(map.values()).sort((left, right) => {
     const a = `${firstText(left.targetSession && left.targetSession.sessionDate)} ${firstText(left.targetSessionId)}`;
