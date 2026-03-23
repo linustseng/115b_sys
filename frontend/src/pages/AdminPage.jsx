@@ -1550,34 +1550,19 @@ export default function AdminPage({
     setMembershipStatus("");
     setMembershipSaveError("");
     try {
-      const originKeys = new Map();
-      groupMemberships.forEach((item) => {
-        originKeys.set(buildMembershipKey_(item), item);
-      });
-      const draftKeys = new Map();
-      draftMemberships.forEach((item) => {
-        draftKeys.set(buildMembershipKey_(item), item);
-      });
-
-      const toDelete = groupMemberships.filter(
-        (item) => !draftKeys.has(buildMembershipKey_(item))
-      );
-      const toAdd = draftMemberships.filter(
-        (item) => !originKeys.has(buildMembershipKey_(item))
-      );
+      const normalizedMemberships = draftMemberships.map((item) => ({
+        id: item.id,
+        personId: item.personId,
+        personName: item.personName,
+        groupId: item.groupId,
+        roleInGroup: item.roleInGroup,
+        notes: item.notes || "",
+      }));
 
       const { result } = await apiRequest({
         action: "batchUpdateGroupMemberships",
         data: {
-          toDeleteIds: toDelete.map((item) => item.id).filter(Boolean),
-          toUpsert: toAdd.map((item) => ({
-            id: item.id,
-            personId: item.personId,
-            personName: item.personName,
-            groupId: item.groupId,
-            roleInGroup: item.roleInGroup,
-            notes: item.notes || "",
-          })),
+          memberships: normalizedMemberships,
         },
       });
       if (!result.ok) {

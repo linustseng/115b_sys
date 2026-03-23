@@ -2028,30 +2028,68 @@ export async function dispatchNativeAction({
     case "batchUpdateGroupMemberships": {
       await requireGroupAccess(["E"]);
       const memberships = asArray(body.memberships || (body.data && body.data.memberships) || body.items);
+      const toDeleteIds = asArray(body.toDeleteIds || (body.data && body.data.toDeleteIds));
+      const toUpsert = asArray(body.toUpsert || (body.data && body.data.toUpsert));
       await withTransaction(async (client) => {
-        await client.query(`delete from group_memberships`);
-        for (const item of memberships) {
-          const raw = safeJsonObject(item);
-          const id = firstText(raw.id, crypto.randomUUID());
-          await client.query(
-            `insert into group_memberships (
-              id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at, raw
-            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
-            [
-              id,
-              firstText(raw.personId),
-              firstText(raw.personName),
-              firstText(raw.groupId),
-              firstText(raw.roleInGroup),
-              firstText(raw.notes),
-              firstText(raw.createdAt, nowIso()),
-              firstText(raw.updatedAt, nowIso()),
-              jsonbParam(raw, {}),
-            ]
-          );
+        if (memberships.length) {
+          await client.query(`delete from group_memberships`);
+          for (const item of memberships) {
+            const raw = safeJsonObject(item);
+            const id = firstText(raw.id, crypto.randomUUID());
+            await client.query(
+              `insert into group_memberships (
+                id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at, raw
+              ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+              [
+                id,
+                firstText(raw.personId),
+                firstText(raw.personName),
+                firstText(raw.groupId),
+                firstText(raw.roleInGroup),
+                firstText(raw.notes),
+                firstText(raw.createdAt, nowIso()),
+                firstText(raw.updatedAt, nowIso()),
+                jsonbParam(raw, {}),
+              ]
+            );
+          }
+        } else {
+          for (const rawId of toDeleteIds) {
+            const id = firstText(rawId);
+            if (!id) continue;
+            await client.query(`delete from group_memberships where id = $1`, [id]);
+          }
+          for (const item of toUpsert) {
+            const raw = safeJsonObject(item);
+            const id = firstText(raw.id, crypto.randomUUID());
+            await client.query(
+              `insert into group_memberships (
+                id, person_id, person_name, group_id, role_in_group, notes, created_at, updated_at, raw
+              ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+              on conflict (id) do update set
+                person_id = excluded.person_id,
+                person_name = excluded.person_name,
+                group_id = excluded.group_id,
+                role_in_group = excluded.role_in_group,
+                notes = excluded.notes,
+                updated_at = excluded.updated_at,
+                raw = excluded.raw`,
+              [
+                id,
+                firstText(raw.personId),
+                firstText(raw.personName),
+                firstText(raw.groupId),
+                firstText(raw.roleInGroup),
+                firstText(raw.notes),
+                firstText(raw.createdAt, nowIso()),
+                firstText(raw.updatedAt, nowIso()),
+                jsonbParam(raw, {}),
+              ]
+            );
+          }
         }
       });
-      return { ok: true, data: { updated: memberships.length }, error: null };
+      return { ok: true, data: { updated: memberships.length || toUpsert.length, deleted: toDeleteIds.length }, error: null };
     }
 
     case "getDirectoryProfile": {
