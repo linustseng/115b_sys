@@ -63,6 +63,7 @@ const AcademicsPage = lazyImportWithRetry_(() => import("./pages/AcademicsPage")
 const AcademicsAdminPage = lazyImportWithRetry_(() => import("./pages/AcademicsAdminPage"), "AcademicsAdminPage");
 const SoftballPage = lazyImportWithRetry_(() => import("./pages/SoftballPage"), "SoftballPage");
 const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPlayerPage"), "SoftballPlayerPage");
+const DocumentsPage = lazyImportWithRetry_(() => import("./pages/DocumentsPage"), "DocumentsPage");
 import {
   addDays_,
   addMinutes_,
@@ -784,6 +785,9 @@ const API_POST_ACTIONS = new Set([
   "refreshSession",
   "listAcademicsBootstrap",
   "listAcademicsAdminBootstrap",
+  "listDocumentsBootstrap",
+  "getDocumentDetail",
+  "listDocumentVersions",
 ]);
 
 const API_V2_READ_ACTIONS = new Set([
@@ -910,6 +914,11 @@ const API_V2_WRITE_ACTIONS = new Set([
   "updateSoftballConfig",
   "submitSoftballAttendance",
   "setSoftballMembershipRole",
+  // Documents
+  "createDocument",
+  "createDocumentVersion",
+  "updateDocumentMeta",
+  "archiveDocument",
 ]);
 
 function normalizeApiEndpoint_(rawUrl) {
@@ -2883,6 +2892,7 @@ function AppShell() {
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
   const isApprovalsPage = pathname.startsWith("/approvals");
+  const isDocumentsPage = pathname.includes("documents");
   const lineInfo = getLineInAppInfo_();
   const [hideLineBanner, setHideLineBanner] = useState(() => {
     try {
@@ -3285,6 +3295,8 @@ function AppShell() {
         GoogleSigninPanel={GoogleSigninPanel}
       />
     );
+  } else if (isDocumentsPage) {
+    content = <DocumentsPage shared={shared} />;
   } else if (isAcademicsPage) {
     content = <AcademicsPage shared={shared} />;
   } else if (isOrderingPage) {

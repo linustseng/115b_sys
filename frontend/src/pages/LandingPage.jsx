@@ -1230,6 +1230,22 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             </div>
           </div>
 
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--slate">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">班務文件中心</h3>
+              <p className="mt-3 text-sm text-slate-600">查閱班會記錄、組織章程、制度文件與各組交接資料。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/documents"
+                className="inline-flex items-center rounded-full border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+              >
+                文件入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+            </div>
+          </div>
+
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between card-system card-system--emerald">
             <div>
               <h3 className="mt-4 text-xl font-semibold text-slate-900">壘球隊管理</h3>

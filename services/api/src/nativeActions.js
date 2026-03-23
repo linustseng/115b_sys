@@ -1407,6 +1407,145 @@ function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], student
   return String((record && record.status) || "").trim();
 }
 
+
+function slugifyDocumentTitle_(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9一-鿿]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+  return normalized || `doc-${Date.now()}`;
+}
+
+function normalizeDocumentTags_(value) {
+  const input = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+  const seen = new Set();
+  return input
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 20);
+}
+
+function normalizeDocumentAttachments_(value) {
+  const list = Array.isArray(value) ? value : safeJsonArray(value);
+  return list
+    .map((item) => ({
+      name: firstText(item && item.name ? item.name : ""),
+      url: firstText(item && item.url ? item.url : ""),
+    }))
+    .filter((item) => item.url)
+    .slice(0, 20);
+}
+
+function mapDocumentVersionRow(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: firstText(row.id),
+    documentId: firstText(row.document_id),
+    versionNumber: Number(row.version_number || 0),
+    title: firstText(row.title_snapshot),
+    summary: firstText(row.summary_snapshot),
+    content: firstText(row.content_snapshot),
+    changeSummary: firstText(row.change_summary),
+    meetingDate: firstText(row.meeting_date),
+    effectiveDate: firstText(row.effective_date),
+    attachments: normalizeDocumentAttachments_(row.attachments),
+    createdBy: firstText(row.created_by),
+    createdByName: firstText(row.created_by_name),
+    createdAt: firstText(row.created_at),
+  };
+}
+
+function mapDocumentRow(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: firstText(row.id),
+    slug: firstText(row.slug),
+    title: firstText(row.title),
+    docType: firstText(row.doc_type),
+    ownerGroupId: firstText(row.owner_group_id),
+    visibility: firstText(row.visibility, "class"),
+    tags: Array.isArray(row.tags) ? row.tags.map((item) => firstText(item)).filter(Boolean) : [],
+    isPinned: Boolean(row.is_pinned),
+    pinOrder: Number(row.pin_order || 0),
+    latestVersionNumber: Number(row.latest_version_number || 0),
+    latestVersionId: firstText(row.latest_version_id),
+    status: firstText(row.status, "published"),
+    createdBy: firstText(row.created_by),
+    createdByName: firstText(row.created_by_name),
+    createdAt: firstText(row.created_at),
+    updatedAt: firstText(row.updated_at),
+    archivedAt: firstText(row.archived_at),
+    latestSummary: firstText(row.latest_summary),
+    latestChangeSummary: firstText(row.latest_change_summary),
+    latestMeetingDate: firstText(row.latest_meeting_date),
+    latestEffectiveDate: firstText(row.latest_effective_date),
+    latestVersionCreatedAt: firstText(row.latest_version_created_at),
+    latestAttachments: normalizeDocumentAttachments_(row.latest_attachments),
+  };
+}
+
+function canManageDocumentsGlobal_(memberships) {
+  return asArray(memberships).some((item) => {
+    const groupId = firstText(item.groupId || item.group_id);
+    const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
+    if (groupId === "E") {
+      return true;
+    }
+    return groupId === "A" && (role === "lead" || role === "deputy");
+  });
+}
+
+function getEditableDocumentGroupIds_(memberships) {
+  const editable = new Set();
+  asArray(memberships).forEach((item) => {
+    const groupId = firstText(item.groupId || item.group_id);
+    const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
+    if (!groupId) {
+      return;
+    }
+    if (groupId === "E") {
+      editable.add(groupId);
+      return;
+    }
+    if (groupId === "A" || role === "lead" || role === "deputy") {
+      editable.add(groupId);
+    }
+  });
+  return Array.from(editable);
+}
+
+function canEditDocumentWithMemberships_(documentRow, memberships) {
+  if (!documentRow) {
+    return false;
+  }
+  if (canManageDocumentsGlobal_(memberships)) {
+    return true;
+  }
+  const ownerGroupId = firstText(documentRow.owner_group_id || documentRow.ownerGroupId);
+  return getEditableDocumentGroupIds_(memberships).includes(ownerGroupId);
+}
+
 export async function dispatchNativeAction({
   action,
   payload,
@@ -5326,6 +5465,347 @@ export async function dispatchNativeAction({
         },
         error: null,
       };
+    }
+
+
+    case "listDocumentsBootstrap": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const canManageAll = canManageDocumentsGlobal_(memberships);
+      const includeArchived = canManageAll && Boolean(body.includeArchived);
+      const result = await query(
+        `select d.*, v.summary_snapshot as latest_summary, v.change_summary as latest_change_summary,
+                v.meeting_date as latest_meeting_date, v.effective_date as latest_effective_date,
+                v.created_at as latest_version_created_at, v.attachments as latest_attachments
+           from documents d
+           left join document_versions v on v.id = d.latest_version_id
+          where ($1::boolean or coalesce(d.status, 'published') <> 'archived')
+          order by d.is_pinned desc, d.pin_order asc, coalesce(d.updated_at,'') desc, d.id desc`,
+        [includeArchived]
+      );
+      const documents = result.rows
+        .map((row) => mapDocumentRow(row))
+        .filter((item) => item && (item.status !== "archived" || includeArchived));
+      return {
+        ok: true,
+        data: {
+          documents,
+          memberships,
+          editableGroupIds: getEditableDocumentGroupIds_(memberships),
+          canManageAll,
+        },
+        error: null,
+      };
+    }
+
+    case "getDocumentDetail": {
+      requireAuth();
+      const id = firstText(body.id || body.documentId);
+      const slug = firstText(body.slug);
+      if (!id && !slug) {
+        return { ok: false, data: null, error: "Missing document id" };
+      }
+      const result = id
+        ? await query(
+            `select d.*, v.summary_snapshot as latest_summary, v.change_summary as latest_change_summary,
+                    v.meeting_date as latest_meeting_date, v.effective_date as latest_effective_date,
+                    v.created_at as latest_version_created_at, v.attachments as latest_attachments,
+                    v.content_snapshot as latest_content
+               from documents d
+               left join document_versions v on v.id = d.latest_version_id
+              where d.id = $1 limit 1`,
+            [id]
+          )
+        : await query(
+            `select d.*, v.summary_snapshot as latest_summary, v.change_summary as latest_change_summary,
+                    v.meeting_date as latest_meeting_date, v.effective_date as latest_effective_date,
+                    v.created_at as latest_version_created_at, v.attachments as latest_attachments,
+                    v.content_snapshot as latest_content
+               from documents d
+               left join document_versions v on v.id = d.latest_version_id
+              where d.slug = $1 limit 1`,
+            [slug]
+          );
+      const row = result.rows[0];
+      if (!row) {
+        return { ok: false, data: null, error: "Document not found" };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const document = mapDocumentRow(row);
+      const latestVersion = {
+        id: firstText(row.latest_version_id),
+        documentId: firstText(row.id),
+        versionNumber: Number(row.latest_version_number || 0),
+        title: firstText(row.title),
+        summary: firstText(row.latest_summary),
+        content: firstText(row.latest_content),
+        changeSummary: firstText(row.latest_change_summary),
+        meetingDate: firstText(row.latest_meeting_date),
+        effectiveDate: firstText(row.latest_effective_date),
+        attachments: normalizeDocumentAttachments_(row.latest_attachments),
+        createdAt: firstText(row.latest_version_created_at),
+      };
+      return {
+        ok: true,
+        data: {
+          document,
+          latestVersion,
+          permissions: {
+            canEdit: canEditDocumentWithMemberships_(row, memberships),
+            canManageAll: canManageDocumentsGlobal_(memberships),
+          },
+        },
+        error: null,
+      };
+    }
+
+    case "listDocumentVersions": {
+      requireAuth();
+      const documentId = firstText(body.documentId || body.id);
+      if (!documentId) {
+        return { ok: false, data: null, error: "Missing documentId" };
+      }
+      const documentResult = await query(`select * from documents where id = $1 limit 1`, [documentId]);
+      const documentRow = documentResult.rows[0];
+      if (!documentRow) {
+        return { ok: false, data: null, error: "Document not found" };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const versionsResult = await query(
+        `select * from document_versions where document_id = $1 order by version_number desc, coalesce(created_at,'') desc, id desc`,
+        [documentId]
+      );
+      return {
+        ok: true,
+        data: {
+          versions: versionsResult.rows.map((row) => mapDocumentVersionRow(row)),
+          permissions: {
+            canEdit: canEditDocumentWithMemberships_(documentRow, memberships),
+            canManageAll: canManageDocumentsGlobal_(memberships),
+          },
+        },
+        error: null,
+      };
+    }
+
+    case "createDocument": {
+      requireAuth();
+      const data = body.data && typeof body.data === "object" ? body.data : body;
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const ownerGroupId = firstText(data.ownerGroupId);
+      if (!ownerGroupId) {
+        return { ok: false, data: null, error: "Missing ownerGroupId" };
+      }
+      if (!getEditableDocumentGroupIds_(memberships).includes(ownerGroupId) && !canManageDocumentsGlobal_(memberships)) {
+        const error = new Error("Forbidden");
+        error.statusCode = 403;
+        throw error;
+      }
+      const actorProfile = await findStudentProfileById(auth.studentId);
+      const actorName = firstText(auth && auth.profile && auth.profile.name, firstText(actorProfile && actorProfile.name, actorProfile && actorProfile.nameZh));
+      const title = firstText(data.title);
+      const docType = firstText(data.docType, "reference");
+      const summary = firstText(data.summary);
+      const content = firstText(data.content);
+      if (!title || !content) {
+        return { ok: false, data: null, error: "Missing title or content" };
+      }
+      const createdAt = nowIso();
+      const documentId = crypto.randomUUID();
+      const versionId = crypto.randomUUID();
+      const tags = normalizeDocumentTags_(data.tags);
+      const attachments = normalizeDocumentAttachments_(data.attachments);
+      const baseSlug = slugifyDocumentTitle_(title);
+      let slug = baseSlug;
+      for (let counter = 2; counter < 1000; counter += 1) {
+        const existing = await query(`select id from documents where slug = $1 limit 1`, [slug]);
+        if (!existing.rows.length) {
+          break;
+        }
+        slug = `${baseSlug}-${counter}`;
+      }
+      await withTransaction(async (client) => {
+        await client.query(
+          `insert into documents (id, slug, title, doc_type, owner_group_id, visibility, tags, is_pinned, pin_order, latest_version_number, latest_version_id, status, created_by, created_by_name, created_at, updated_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb)`,
+          [
+            documentId,
+            slug,
+            title,
+            docType,
+            ownerGroupId,
+            firstText(data.visibility, "class"),
+            tags,
+            false,
+            0,
+            1,
+            versionId,
+            "published",
+            auth.studentId,
+            actorName,
+            createdAt,
+            createdAt,
+            jsonbParam(data.raw || data, {}),
+          ]
+        );
+        await client.query(
+          `insert into document_versions (id, document_id, version_number, title_snapshot, summary_snapshot, content_snapshot, change_summary, meeting_date, effective_date, attachments, created_by, created_by_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb)`,
+          [
+            versionId,
+            documentId,
+            1,
+            title,
+            summary,
+            content,
+            firstText(data.changeSummary, "初版建立"),
+            firstText(data.meetingDate),
+            firstText(data.effectiveDate),
+            jsonbParam(attachments, []),
+            auth.studentId,
+            actorName,
+            createdAt,
+            jsonbParam(data.raw || data, {}),
+          ]
+        );
+      });
+      return { ok: true, data: { id: documentId, slug, versionNumber: 1 }, error: null };
+    }
+
+    case "createDocumentVersion": {
+      requireAuth();
+      const data = body.data && typeof body.data === "object" ? body.data : body;
+      const documentId = firstText(data.documentId || data.id);
+      if (!documentId) {
+        return { ok: false, data: null, error: "Missing documentId" };
+      }
+      const documentResult = await query(`select * from documents where id = $1 limit 1`, [documentId]);
+      const documentRow = documentResult.rows[0];
+      if (!documentRow) {
+        return { ok: false, data: null, error: "Document not found" };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      if (!canEditDocumentWithMemberships_(documentRow, memberships)) {
+        const error = new Error("Forbidden");
+        error.statusCode = 403;
+        throw error;
+      }
+      const actorProfile = await findStudentProfileById(auth.studentId);
+      const actorName = firstText(auth && auth.profile && auth.profile.name, firstText(actorProfile && actorProfile.name, actorProfile && actorProfile.nameZh));
+      const versionNumber = Number(documentRow.latest_version_number || 0) + 1;
+      const versionId = crypto.randomUUID();
+      const title = firstText(data.title, documentRow.title);
+      const summary = firstText(data.summary);
+      const content = firstText(data.content);
+      if (!content) {
+        return { ok: false, data: null, error: "Missing content" };
+      }
+      const createdAt = nowIso();
+      const attachments = normalizeDocumentAttachments_(data.attachments);
+      await withTransaction(async (client) => {
+        await client.query(
+          `insert into document_versions (id, document_id, version_number, title_snapshot, summary_snapshot, content_snapshot, change_summary, meeting_date, effective_date, attachments, created_by, created_by_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14::jsonb)`,
+          [
+            versionId,
+            documentId,
+            versionNumber,
+            title,
+            summary,
+            content,
+            firstText(data.changeSummary, `更新 v${versionNumber}`),
+            firstText(data.meetingDate),
+            firstText(data.effectiveDate),
+            jsonbParam(attachments, []),
+            auth.studentId,
+            actorName,
+            createdAt,
+            jsonbParam(data.raw || data, {}),
+          ]
+        );
+        await client.query(
+          `update documents
+              set title = $2,
+                  latest_version_number = $3,
+                  latest_version_id = $4,
+                  updated_at = $5,
+                  status = 'published',
+                  archived_at = null,
+                  synced_at = now()
+            where id = $1`,
+          [documentId, title, versionNumber, versionId, createdAt]
+        );
+      });
+      return { ok: true, data: { id: documentId, versionNumber }, error: null };
+    }
+
+    case "updateDocumentMeta": {
+      requireAuth();
+      const data = body.data && typeof body.data === "object" ? body.data : body;
+      const documentId = firstText(data.documentId || data.id);
+      if (!documentId) {
+        return { ok: false, data: null, error: "Missing documentId" };
+      }
+      const documentResult = await query(`select * from documents where id = $1 limit 1`, [documentId]);
+      const documentRow = documentResult.rows[0];
+      if (!documentRow) {
+        return { ok: false, data: null, error: "Document not found" };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const canManageAll = canManageDocumentsGlobal_(memberships);
+      if (!canEditDocumentWithMemberships_(documentRow, memberships)) {
+        const error = new Error("Forbidden");
+        error.statusCode = 403;
+        throw error;
+      }
+      const nextTitle = firstText(data.title, documentRow.title);
+      const nextDocType = firstText(data.docType, documentRow.doc_type);
+      const nextTags = data.tags != null ? normalizeDocumentTags_(data.tags) : documentRow.tags || [];
+      const nextVisibility = firstText(data.visibility, documentRow.visibility || "class");
+      const nextOwnerGroupId = canManageAll ? firstText(data.ownerGroupId, documentRow.owner_group_id) : firstText(documentRow.owner_group_id);
+      const nextIsPinned = canManageAll ? Boolean(data.isPinned) : Boolean(documentRow.is_pinned);
+      const nextPinOrder = canManageAll ? Number(data.pinOrder || 0) : Number(documentRow.pin_order || 0);
+      const nextStatus = canManageAll && firstText(data.status) ? firstText(data.status) : firstText(documentRow.status, "published");
+      const updatedAt = nowIso();
+      await query(
+        `update documents
+            set title = $2,
+                doc_type = $3,
+                owner_group_id = $4,
+                visibility = $5,
+                tags = $6,
+                is_pinned = $7,
+                pin_order = $8,
+                status = $9,
+                archived_at = case when $9 = 'archived' then coalesce(archived_at, $10) else null end,
+                updated_at = $10,
+                synced_at = now()
+          where id = $1`,
+        [documentId, nextTitle, nextDocType, nextOwnerGroupId, nextVisibility, nextTags, nextIsPinned, nextPinOrder, nextStatus, updatedAt]
+      );
+      return { ok: true, data: { id: documentId }, error: null };
+    }
+
+    case "archiveDocument": {
+      requireAuth();
+      const documentId = firstText(body.documentId || body.id);
+      if (!documentId) {
+        return { ok: false, data: null, error: "Missing documentId" };
+      }
+      const documentResult = await query(`select * from documents where id = $1 limit 1`, [documentId]);
+      const documentRow = documentResult.rows[0];
+      if (!documentRow) {
+        return { ok: false, data: null, error: "Document not found" };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      if (!canEditDocumentWithMemberships_(documentRow, memberships)) {
+        const error = new Error("Forbidden");
+        error.statusCode = 403;
+        throw error;
+      }
+      const archivedAt = nowIso();
+      await query(`update documents set status = 'archived', archived_at = $2, updated_at = $2, synced_at = now() where id = $1`, [documentId, archivedAt]);
+      return { ok: true, data: { id: documentId }, error: null };
     }
 
 
