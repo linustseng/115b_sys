@@ -1497,7 +1497,7 @@ function FinanceAdminPage({ shared }) {
         ) : null}
         {!initialLoading && !hasFinanceAccess ? (
           <div className="alert alert-warning">
-            目前帳號沒有財務後台權限，請確認是否屬於財會組、資管組或班代/副班代。
+            目前帳號沒有財務後台權限，請確認是否屬於財務組、資管組或班代/副班代。
           </div>
         ) : null}
         {!initialLoading && hasFinanceAccess ? (
@@ -1506,7 +1506,7 @@ function FinanceAdminPage({ shared }) {
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
             <div className="flex flex-wrap items-center gap-3">
               <span className="text-xs font-medium text-slate-400">
-                財會組可檢視；可操作需指派財務角色
+                財務組可檢視；可操作需指派財務角色
               </span>
               {availableRoles.length > 1 ? (
                 <div className="flex flex-wrap gap-2">
@@ -2856,7 +2856,7 @@ function FinanceAdminPage({ shared }) {
               <h3 className="text-lg font-semibold text-slate-900">設定財務角色</h3>
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div className="grid gap-2 sm:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">選擇同學（財會組）</label>
+                  <label className="text-sm font-medium text-slate-700">選擇同學（財務組）</label>
                   <input
                     list="finance-role-students"
                     onChange={(event) => handleSelectFinanceRoleMember_(event.target.value)}

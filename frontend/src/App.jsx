@@ -351,11 +351,11 @@ const CLASS_GROUPS = [
   { id: "A", label: "班代組" },
   { id: "B", label: "公關組" },
   { id: "C", label: "活動組" },
-  { id: "D", label: "財會組" },
+  { id: "D", label: "財務組" },
   { id: "E", label: "資訊組" },
   { id: "F", label: "學藝組" },
   { id: "G", label: "醫療組" },
-  { id: "H", label: "體育主將組" },
+  { id: "H", label: "體育組" },
   { id: "I", label: "美食組" },
   { id: "J", label: "班董" },
   { id: "K", label: "壘球隊" },
@@ -3215,7 +3215,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="財務管理 · 後台"
-        helperText="僅限班代、副班代、財會組、資管組成員。"
+        helperText="僅限班代、副班代、財務組、資管組成員。"
         allowedGroupIds={["D", "E"]}
       >
         <FinanceAdminPage shared={shared} />
@@ -3317,7 +3317,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="壘球隊管理 · 後台"
-        helperText="僅限班代、副班代、資管組、體育主將組、球隊經理。"
+        helperText="僅限班代、副班代、資管組、體育組、球隊經理。"
         allowedGroupIds={["E", "H"]}
         extraAccessAction="getSoftballAdminAccess"
       >

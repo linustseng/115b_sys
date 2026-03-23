@@ -1734,7 +1734,7 @@ export async function dispatchNativeAction({
   const requireSoftballAdminAccess = async () => {
     requireAuth();
     const memberships = await listMembershipsByStudentId(auth.studentId);
-    // 1. E/H 組（資管組、體育主將組）
+    // 1. E/H 組（資管組、體育組）
     if (canAccessByGroups(memberships, ["E", "H"])) {
       return memberships;
     }
