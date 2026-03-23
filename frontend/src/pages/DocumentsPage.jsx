@@ -61,6 +61,14 @@ const DOCUMENT_TEMPLATES = {
         attachments: [],
         isPinned: false,
         pinOrder: 0,
+        meetingForm: {
+          ...emptyMeetingForm(),
+          agenda: "1. \n2. \n3. ",
+          discussion: "## 議題一\n- \n\n## 議題二\n- ",
+          resolutions: "1. \n2. ",
+          actionItems: "- [ ] 項目：\n  - 負責人：\n  - 截止日：",
+          notes: "- ",
+        },
       };
     },
   },
@@ -102,6 +110,7 @@ const DOCUMENT_TEMPLATES = {
         attachments: [],
         isPinned: true,
         pinOrder: 10,
+        meetingForm: emptyMeetingForm(),
       };
     },
   },
@@ -138,10 +147,76 @@ const DOCUMENT_TEMPLATES = {
         attachments: [],
         isPinned: false,
         pinOrder: 0,
+        meetingForm: emptyMeetingForm(),
       };
     },
   },
 };
+
+function emptyMeetingForm() {
+  return {
+    meetingName: "",
+    meetingTime: "",
+    location: "",
+    chairperson: "",
+    recorder: "",
+    attendees: "",
+    absentees: "",
+    agenda: "",
+    discussion: "",
+    resolutions: "",
+    actionItems: "",
+    notes: "",
+  };
+}
+
+function hasMeetingFormContent(form) {
+  if (!form || typeof form !== "object") {
+    return false;
+  }
+  return Object.values(form).some((value) => String(value || "").trim());
+}
+
+function buildMeetingMinutesContent(draft) {
+  const form = draft && draft.meetingForm ? draft.meetingForm : emptyMeetingForm();
+  const meetingDate = String((draft && draft.meetingDate) || "").trim();
+  const meetingTime = String(form.meetingTime || "").trim();
+  const dateLine = [meetingDate, meetingTime].filter(Boolean).join(" ");
+  return `# 會議資訊
+- 會議名稱：${String(form.meetingName || "").trim()}
+- 日期：${dateLine}
+- 地點：${String(form.location || "").trim()}
+- 主席：${String(form.chairperson || "").trim()}
+- 紀錄：${String(form.recorder || "").trim()}
+
+# 出席情況
+- 出席：${String(form.attendees || "").trim()}
+- 請假：${String(form.absentees || "").trim()}
+
+# 議程
+${String(form.agenda || "").trim()}
+
+# 討論摘要
+${String(form.discussion || "").trim()}
+
+# 決議事項
+${String(form.resolutions || "").trim()}
+
+# 待辦事項
+${String(form.actionItems || "").trim()}
+
+# 備註
+${String(form.notes || "").trim()}`;
+}
+
+function buildMeetingMinutesSummary(draft) {
+  const form = draft && draft.meetingForm ? draft.meetingForm : emptyMeetingForm();
+  const parts = [form.discussion, form.resolutions, form.actionItems]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+  const joined = parts.join(" ").replace(/\s+/g, " ").trim();
+  return joined ? joined.slice(0, 120) : "";
+}
 
 function buildDraftFromTemplate(templateKey, ownerGroupId = "A") {
   const template = DOCUMENT_TEMPLATES[templateKey];
@@ -166,6 +241,7 @@ function emptyDraft(ownerGroupId = "A") {
     attachments: [],
     isPinned: false,
     pinOrder: 0,
+    meetingForm: emptyMeetingForm(),
   };
 }
 
@@ -393,6 +469,7 @@ export default function DocumentsPage({ shared }) {
       attachments: selectedLatestVersion && Array.isArray(selectedLatestVersion.attachments) ? selectedLatestVersion.attachments : [],
       isPinned: Boolean(selectedDocument.isPinned),
       pinOrder: Number(selectedDocument.pinOrder || 0),
+      meetingForm: emptyMeetingForm(),
     });
     setEditorMode("meta");
     setStatusMessage("");
@@ -416,6 +493,7 @@ export default function DocumentsPage({ shared }) {
       attachments: selectedLatestVersion && Array.isArray(selectedLatestVersion.attachments) ? selectedLatestVersion.attachments : [],
       isPinned: Boolean(selectedDocument.isPinned),
       pinOrder: Number(selectedDocument.pinOrder || 0),
+      meetingForm: emptyMeetingForm(),
     });
     setEditorMode("version");
     setStatusMessage("");
@@ -483,6 +561,11 @@ export default function DocumentsPage({ shared }) {
     setSubmitting(true);
     setStatusMessage("");
     try {
+      const generatedMeetingContent = draft.docType === "meeting_minutes" && hasMeetingFormContent(draft.meetingForm)
+        ? buildMeetingMinutesContent(draft)
+        : "";
+      const finalContent = generatedMeetingContent || draft.content;
+      const finalSummary = draft.summary || (draft.docType === "meeting_minutes" ? buildMeetingMinutesSummary(draft) : "");
       if (editorMode === "create") {
         const { result } = await apiRequest({
           action: "createDocument",
@@ -492,8 +575,8 @@ export default function DocumentsPage({ shared }) {
             ownerGroupId: draft.ownerGroupId,
             visibility: draft.visibility,
             tags: parseTags(draft.tagsText),
-            summary: draft.summary,
-            content: draft.content,
+            summary: finalSummary,
+            content: finalContent,
             changeSummary: draft.changeSummary || "初版建立",
             meetingDate: draft.meetingDate,
             effectiveDate: draft.effectiveDate,
@@ -513,8 +596,8 @@ export default function DocumentsPage({ shared }) {
           data: {
             documentId: selectedDocument.id,
             title: draft.title,
-            summary: draft.summary,
-            content: draft.content,
+            summary: finalSummary,
+            content: finalContent,
             changeSummary: draft.changeSummary,
             meetingDate: draft.meetingDate,
             effectiveDate: draft.effectiveDate,
@@ -725,12 +808,79 @@ export default function DocumentsPage({ shared }) {
                 </label>
                 <label className="mt-4 block text-sm font-medium text-slate-700">
                   摘要
-                  <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                  <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} placeholder={draft.docType === "meeting_minutes" ? "可留白，系統會依討論摘要 / 決議事項自動產生" : "文件摘要"} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
                 </label>
-                <label className="mt-4 block text-sm font-medium text-slate-700">
-                  內容
-                  <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={14} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                </label>
+                {draft.docType === "meeting_minutes" ? (
+                  <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">班會記錄表單</p>
+                        <p className="mt-1 text-xs text-slate-500">先填結構化欄位，送出時會自動組成標準記錄格式。</p>
+                      </div>
+                      <span className="badge-success">結構化模板</span>
+                    </div>
+                    <div className="mt-4 grid gap-4 md:grid-cols-2">
+                      <label className="block text-sm font-medium text-slate-700">
+                        會議名稱
+                        <input value={draft.meetingForm.meetingName} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingName: e.target.value }, title: prev.title || e.target.value }))} className="input-base mt-2 w-full" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        時間
+                        <input value={draft.meetingForm.meetingTime} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingTime: e.target.value } }))} placeholder="例如 19:00-21:00" className="input-base mt-2 w-full" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        地點
+                        <input value={draft.meetingForm.location} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, location: e.target.value } }))} className="input-base mt-2 w-full" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        主席 / 紀錄
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          <input value={draft.meetingForm.chairperson} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, chairperson: e.target.value } }))} placeholder="主席" className="input-base w-full" />
+                          <input value={draft.meetingForm.recorder} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, recorder: e.target.value } }))} placeholder="紀錄" className="input-base w-full" />
+                        </div>
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        出席
+                        <textarea value={draft.meetingForm.attendees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, attendees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        請假 / 缺席
+                        <textarea value={draft.meetingForm.absentees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, absentees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                    </div>
+                    <div className="mt-4 grid gap-4">
+                      <label className="block text-sm font-medium text-slate-700">
+                        議程
+                        <textarea value={draft.meetingForm.agenda} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, agenda: e.target.value } }))} rows={4} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        討論摘要
+                        <textarea value={draft.meetingForm.discussion} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, discussion: e.target.value } }))} rows={6} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        決議事項
+                        <textarea value={draft.meetingForm.resolutions} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, resolutions: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        待辦事項
+                        <textarea value={draft.meetingForm.actionItems} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, actionItems: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        備註
+                        <textarea value={draft.meetingForm.notes} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, notes: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        原始內容（進階／舊版相容）
+                        <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={8} placeholder="如果這份紀錄有既有舊內容或特殊排版，可直接在這裡手動編修。若上方結構化欄位有填寫，送出時會優先採用結構化內容。" className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="mt-4 block text-sm font-medium text-slate-700">
+                    內容
+                    <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={14} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                  </label>
+                )}
                 <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
