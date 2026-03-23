@@ -738,7 +738,7 @@ export default function AcademicsPage({ shared }) {
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-700">
                   {item.requests
-                    .map((request) => request.displayName || request.nameZh || request.studentName || request.studentEmail || request.studentId)
+                    .map((request) => request.nameZh || request.displayName || request.studentName || request.studentEmail || request.studentId)
                     .join("、")}
                 </p>
               </div>
