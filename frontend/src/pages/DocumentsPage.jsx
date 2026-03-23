@@ -218,6 +218,102 @@ function buildMeetingMinutesSummary(draft) {
   return joined ? joined.slice(0, 120) : "";
 }
 
+function parseMeetingMinutesContent(content) {
+  const raw = String(content || "").replace(/\r/g, "");
+  const headings = ["會議資訊", "出席情況", "議程", "討論摘要", "決議事項", "待辦事項", "備註"];
+  const sections = {};
+  for (let index = 0; index < headings.length; index += 1) {
+    const heading = headings[index];
+    const startToken = `# ${heading}`;
+    const start = raw.indexOf(startToken);
+    if (start === -1) {
+      sections[heading] = "";
+      continue;
+    }
+    let end = raw.length;
+    for (let nextIndex = index + 1; nextIndex < headings.length; nextIndex += 1) {
+      const nextStart = raw.indexOf(`# ${headings[nextIndex]}`, start + startToken.length);
+      if (nextStart !== -1) {
+        end = nextStart;
+        break;
+      }
+    }
+    sections[heading] = raw.slice(start + startToken.length, end).trim();
+  }
+
+  const infoLines = sections["會議資訊"]
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean);
+  const infoMap = {};
+  infoLines.forEach((line) => {
+    const parts = line.split("：");
+    if (parts.length >= 2) {
+      const key = String(parts.shift() || "").trim();
+      const value = parts.join("：").trim();
+      infoMap[key] = value;
+    }
+  });
+
+  const attendanceLines = sections["出席情況"]
+    .split("\n")
+    .map((line) => line.replace(/^[-*]\s*/, "").trim())
+    .filter(Boolean);
+  const attendanceMap = {};
+  attendanceLines.forEach((line) => {
+    const parts = line.split("：");
+    if (parts.length >= 2) {
+      const key = String(parts.shift() || "").trim();
+      const value = parts.join("：").trim();
+      attendanceMap[key] = value;
+    }
+  });
+
+  return {
+    meetingName: infoMap["會議名稱"] || "",
+    date: infoMap["日期"] || "",
+    location: infoMap["地點"] || "",
+    chairperson: infoMap["主席"] || "",
+    recorder: infoMap["紀錄"] || "",
+    attendees: attendanceMap["出席"] || "",
+    absentees: attendanceMap["請假"] || attendanceMap["缺席"] || "",
+    agenda: sections["議程"] || "",
+    discussion: sections["討論摘要"] || "",
+    resolutions: sections["決議事項"] || "",
+    actionItems: sections["待辦事項"] || "",
+    notes: sections["備註"] || "",
+  };
+}
+
+function renderMeetingMinutesDetail(parsed, latestVersion) {
+  const cards = [
+    {
+      title: "會議資訊",
+      content: [
+        parsed.meetingName ? `會議名稱：${parsed.meetingName}` : "",
+        parsed.date ? `日期：${parsed.date}` : latestVersion && latestVersion.meetingDate ? `日期：${latestVersion.meetingDate}` : "",
+        parsed.location ? `地點：${parsed.location}` : "",
+        parsed.chairperson ? `主席：${parsed.chairperson}` : "",
+        parsed.recorder ? `紀錄：${parsed.recorder}` : "",
+      ].filter(Boolean).join("\n"),
+    },
+    {
+      title: "出席情況",
+      content: [
+        parsed.attendees ? `出席：${parsed.attendees}` : "",
+        parsed.absentees ? `請假 / 缺席：${parsed.absentees}` : "",
+      ].filter(Boolean).join("\n"),
+    },
+    { title: "議程", content: parsed.agenda },
+    { title: "討論摘要", content: parsed.discussion },
+    { title: "決議事項", content: parsed.resolutions },
+    { title: "待辦事項", content: parsed.actionItems },
+    { title: "備註", content: parsed.notes },
+  ].filter((item) => String(item.content || "").trim());
+
+  return cards;
+}
+
 function buildDraftFromTemplate(templateKey, ownerGroupId = "A") {
   const template = DOCUMENT_TEMPLATES[templateKey];
   if (!template || typeof template.build !== "function") {
@@ -432,6 +528,18 @@ export default function DocumentsPage({ shared }) {
   const selectedDocument = detail && detail.document ? detail.document : null;
   const selectedLatestVersion = detail && detail.latestVersion ? detail.latestVersion : null;
   const selectedCanEdit = Boolean(detail && detail.permissions && detail.permissions.canEdit);
+  const parsedMeetingDetail = useMemo(() => {
+    if (!selectedDocument || selectedDocument.docType !== "meeting_minutes") {
+      return null;
+    }
+    return parseMeetingMinutesContent(selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "");
+  }, [selectedDocument, selectedLatestVersion]);
+  const meetingDetailCards = useMemo(() => {
+    if (!parsedMeetingDetail) {
+      return [];
+    }
+    return renderMeetingMinutesDetail(parsedMeetingDetail, selectedLatestVersion);
+  }, [parsedMeetingDetail, selectedLatestVersion]);
 
   const beginCreate = () => {
     setDraft(buildDraftFromTemplate("meeting_minutes", editableGroupIds[0] || "A"));
@@ -1022,9 +1130,20 @@ export default function DocumentsPage({ shared }) {
                     {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
                   </div>
 
-                  <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
-                    {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
-                  </article>
+                  {selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
+                    <div className="mt-6 grid gap-4">
+                      {meetingDetailCards.map((card) => (
+                        <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                          <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{card.title}</h3>
+                          <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{card.content}</div>
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
+                      {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
+                    </article>
+                  )}
 
                   {(selectedLatestVersion && selectedLatestVersion.attachments && selectedLatestVersion.attachments.length) ? (
                     <div className="mt-6">
