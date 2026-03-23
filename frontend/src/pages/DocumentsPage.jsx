@@ -156,6 +156,7 @@ const DOCUMENT_TEMPLATES = {
 function emptyMeetingForm() {
   return {
     meetingName: "",
+    meetingDate: "",
     meetingTime: "",
     location: "",
     chairperson: "",
@@ -179,7 +180,7 @@ function hasMeetingFormContent(form) {
 
 function buildMeetingMinutesContent(draft) {
   const form = draft && draft.meetingForm ? draft.meetingForm : emptyMeetingForm();
-  const meetingDate = String((draft && draft.meetingDate) || "").trim();
+  const meetingDate = String(form.meetingDate || "").trim() || String((draft && draft.meetingDate) || "").trim();
   const meetingTime = String(form.meetingTime || "").trim();
   const dateLine = [meetingDate, meetingTime].filter(Boolean).join(" ");
   return `# 會議資訊
@@ -269,9 +270,15 @@ function parseMeetingMinutesContent(content) {
     }
   });
 
+  const dateRaw = String(infoMap["日期"] || "").trim();
+  const dateMatch = dateRaw.match(/\d{4}-\d{2}-\d{2}/);
+  const timeMatch = dateRaw.match(/\d{1,2}:\d{2}(?:-\d{1,2}:\d{2})?/);
+
   return {
     meetingName: infoMap["會議名稱"] || "",
-    date: infoMap["日期"] || "",
+    date: dateRaw,
+    meetingDate: dateMatch ? dateMatch[0] : "",
+    meetingTime: timeMatch ? timeMatch[0] : "",
     location: infoMap["地點"] || "",
     chairperson: infoMap["主席"] || "",
     recorder: infoMap["紀錄"] || "",
@@ -403,6 +410,7 @@ export default function DocumentsPage({ shared }) {
   const [submitting, setSubmitting] = useState(false);
   const [editorMode, setEditorMode] = useState("");
   const [draft, setDraft] = useState(() => emptyDraft("A"));
+  const [showAdvancedRawContent, setShowAdvancedRawContent] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const uploadInputRef = useRef(null);
 
@@ -543,6 +551,7 @@ export default function DocumentsPage({ shared }) {
 
   const beginCreate = () => {
     setDraft(buildDraftFromTemplate("meeting_minutes", editableGroupIds[0] || "A"));
+    setShowAdvancedRawContent(false);
     setEditorMode("create");
     setStatusMessage("");
   };
@@ -579,6 +588,7 @@ export default function DocumentsPage({ shared }) {
       pinOrder: Number(selectedDocument.pinOrder || 0),
       meetingForm: emptyMeetingForm(),
     });
+    setShowAdvancedRawContent(false);
     setEditorMode("meta");
     setStatusMessage("");
   };
@@ -587,6 +597,9 @@ export default function DocumentsPage({ shared }) {
     if (!selectedDocument) {
       return;
     }
+    const parsedMeeting = selectedDocument.docType === "meeting_minutes"
+      ? parseMeetingMinutesContent(selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "")
+      : null;
     setDraft({
       title: selectedDocument.title || "",
       docType: selectedDocument.docType || "reference",
@@ -601,8 +614,13 @@ export default function DocumentsPage({ shared }) {
       attachments: selectedLatestVersion && Array.isArray(selectedLatestVersion.attachments) ? selectedLatestVersion.attachments : [],
       isPinned: Boolean(selectedDocument.isPinned),
       pinOrder: Number(selectedDocument.pinOrder || 0),
-      meetingForm: emptyMeetingForm(),
+      meetingForm: parsedMeeting ? {
+        ...emptyMeetingForm(),
+        ...parsedMeeting,
+        meetingDate: parsedMeeting.meetingDate || (selectedLatestVersion && selectedLatestVersion.meetingDate) || "",
+      } : emptyMeetingForm(),
     });
+    setShowAdvancedRawContent(false);
     setEditorMode("version");
     setStatusMessage("");
   };
@@ -674,6 +692,9 @@ export default function DocumentsPage({ shared }) {
         : "";
       const finalContent = generatedMeetingContent || draft.content;
       const finalSummary = draft.summary || (draft.docType === "meeting_minutes" ? buildMeetingMinutesSummary(draft) : "");
+      const resolvedMeetingDate = draft.docType === "meeting_minutes"
+        ? String((draft.meetingForm && draft.meetingForm.meetingDate) || draft.meetingDate || "").trim()
+        : draft.meetingDate;
       if (editorMode === "create") {
         const { result } = await apiRequest({
           action: "createDocument",
@@ -686,7 +707,7 @@ export default function DocumentsPage({ shared }) {
             summary: finalSummary,
             content: finalContent,
             changeSummary: draft.changeSummary || "初版建立",
-            meetingDate: draft.meetingDate,
+            meetingDate: resolvedMeetingDate,
             effectiveDate: draft.effectiveDate,
             attachments: draft.attachments,
           },
@@ -707,7 +728,7 @@ export default function DocumentsPage({ shared }) {
             summary: finalSummary,
             content: finalContent,
             changeSummary: draft.changeSummary,
-            meetingDate: draft.meetingDate,
+            meetingDate: resolvedMeetingDate,
             effectiveDate: draft.effectiveDate,
             attachments: draft.attachments,
           },
@@ -898,10 +919,12 @@ export default function DocumentsPage({ shared }) {
                 標籤
                 <input value={draft.tagsText} onChange={(e) => setDraft((prev) => ({ ...prev, tagsText: e.target.value }))} placeholder="章程, 班會, 財務" className="input-base mt-2 w-full" />
               </label>
-              <label className="block text-sm font-medium text-slate-700">
-                會議日期（選填）
-                <input type="date" value={draft.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingDate: e.target.value }))} className="input-base mt-2 w-full" />
-              </label>
+              {draft.docType !== "meeting_minutes" ? (
+                <label className="block text-sm font-medium text-slate-700">
+                  會議日期（選填）
+                  <input type="date" value={draft.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingDate: e.target.value }))} className="input-base mt-2 w-full" />
+                </label>
+              ) : null}
               <label className="block text-sm font-medium text-slate-700">
                 生效日期（選填）
                 <input type="date" value={draft.effectiveDate} onChange={(e) => setDraft((prev) => ({ ...prev, effectiveDate: e.target.value }))} className="input-base mt-2 w-full" />
@@ -931,6 +954,10 @@ export default function DocumentsPage({ shared }) {
                       <label className="block text-sm font-medium text-slate-700">
                         會議名稱
                         <input value={draft.meetingForm.meetingName} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingName: e.target.value }, title: prev.title || e.target.value }))} className="input-base mt-2 w-full" />
+                      </label>
+                      <label className="block text-sm font-medium text-slate-700">
+                        會議日期
+                        <input type="date" value={draft.meetingForm.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingDate: e.target.value } }))} className="input-base mt-2 w-full" />
                       </label>
                       <label className="block text-sm font-medium text-slate-700">
                         時間
@@ -977,10 +1004,14 @@ export default function DocumentsPage({ shared }) {
                         備註
                         <textarea value={draft.meetingForm.notes} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, notes: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
                       </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        原始內容（進階／舊版相容）
-                        <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={8} placeholder="如果這份紀錄有既有舊內容或特殊排版，可直接在這裡手動編修。若上方結構化欄位有填寫，送出時會優先採用結構化內容。" className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
+                      <div className="block text-sm font-medium text-slate-700">
+                        <button type="button" onClick={() => setShowAdvancedRawContent((prev) => !prev)} className="btn-chip">
+                          {showAdvancedRawContent ? "收合進階原始內容" : "展開進階原始內容（舊版相容）"}
+                        </button>
+                        {showAdvancedRawContent ? (
+                          <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={8} placeholder="只有舊資料匯入或特殊排版才需要填。一般維護請直接用上方表單。" className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 ) : (
