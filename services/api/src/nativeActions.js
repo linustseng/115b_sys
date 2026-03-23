@@ -1507,12 +1507,8 @@ function mapDocumentRow(row) {
 
 function canManageDocumentsGlobal_(memberships) {
   return asArray(memberships).some((item) => {
-    const groupId = firstText(item.groupId || item.group_id);
     const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
-    if (groupId === "E") {
-      return true;
-    }
-    return groupId === "A" && (role === "lead" || role === "deputy");
+    return role === "lead" || role === "deputy";
   });
 }
 
