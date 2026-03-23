@@ -62,6 +62,91 @@ function normalizeNoteItems_(note) {
   };
 }
 
+function CourseCatalogCard({ unit }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
+          <p className="mt-1 text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+          {unit.mergedSchedule || "時間待補"}
+        </span>
+      </div>
+      {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
+
+      {unit.note ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              {unit.timelineMode === "review" ? "複習重點" : "課前摘要"}
+            </p>
+            {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                {unit.note.summaryItems.map((item, index) => (
+                  <li key={`summary-${index}`}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
+            )}
+
+            {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
+              <div className="mt-3 flex flex-col gap-2">
+                {unit.note.linkItems.map((item, index) => (
+                  <a
+                    key={`link-${index}`}
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener"
+                    className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                  >
+                    {item.label || "開啟筆記連結"}
+                  </a>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="grid gap-3">
+            {unit.timelineMode === "review" ? (
+              <div className="rounded-2xl bg-white px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
+                {Array.isArray(unit.note.homeworkItems) && unit.note.homeworkItems.length ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                    {unit.note.homeworkItems.map((item, index) => (
+                      <li key={`homework-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無作業通知</p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-white px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
+                {Array.isArray(unit.note.quizItems) && unit.note.quizItems.length ? (
+                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                    {unit.note.quizItems.map((item, index) => (
+                      <li key={`quiz-${index}`}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無小考通知</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
+          這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AcademicsPage({ shared }) {
   const {
     apiRequest,
@@ -183,7 +268,7 @@ export default function AcademicsPage({ shared }) {
     return map;
   }, [bootstrap.notes, sessionsById]);
 
-  const recentCourseSessions = useMemo(() => {
+  const courseDateWindow = useMemo(() => {
     const todayText = new Date().toISOString().slice(0, 10);
     const uniqueDates = Array.from(
       new Set(
@@ -193,12 +278,16 @@ export default function AcademicsPage({ shared }) {
       )
     ).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" }));
 
-    const pastDates = uniqueDates.filter((date) => date <= todayText).slice(-2);
-    const futureDates = uniqueDates.filter((date) => date > todayText).slice(0, 2);
-    const selectedDates = new Set([...pastDates, ...futureDates]);
-
-    return regularSessions.filter((session) => selectedDates.has(String(session.sessionDate || "").trim()));
+    return {
+      pastDates: uniqueDates.filter((date) => date <= todayText).slice(-2),
+      futureDates: uniqueDates.filter((date) => date > todayText).slice(0, 2),
+    };
   }, [regularSessions]);
+
+  const recentCourseSessions = useMemo(() => {
+    const selectedDates = new Set([...courseDateWindow.pastDates, ...courseDateWindow.futureDates]);
+    return regularSessions.filter((session) => selectedDates.has(String(session.sessionDate || "").trim()));
+  }, [regularSessions, courseDateWindow]);
 
   const buildCourseCatalog_ = (sourceSessions) => {
     const parseMinutes = (value) => {
@@ -282,6 +371,14 @@ export default function AcademicsPage({ shared }) {
 
   const recentCourseCatalog = useMemo(() => buildCourseCatalog_(recentCourseSessions), [recentCourseSessions, notesBySessionId]);
   const allCourseCatalog = useMemo(() => buildCourseCatalog_(regularSessions), [regularSessions, notesBySessionId]);
+  const recentPastCourseCatalog = useMemo(
+    () => recentCourseCatalog.filter((unit) => courseDateWindow.pastDates.includes(unit.sessionDate)),
+    [recentCourseCatalog, courseDateWindow]
+  );
+  const recentFutureCourseCatalog = useMemo(
+    () => recentCourseCatalog.filter((unit) => courseDateWindow.futureDates.includes(unit.sessionDate)),
+    [recentCourseCatalog, courseDateWindow]
+  );
   const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
@@ -680,88 +777,55 @@ export default function AcademicsPage({ shared }) {
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
-            {courseCatalog.map((unit) => (
-              <div key={unit.unitKey} className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
-                    <p className="mt-1 text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</p>
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-                    {unit.mergedSchedule || "時間待補"}
-                  </span>
-                </div>
-                {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
-
-                {unit.note ? (
-                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                    <div className="rounded-2xl bg-white px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        {unit.timelineMode === "review" ? "複習重點" : "課前摘要"}
-                      </p>
-                      {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                          {unit.note.summaryItems.map((item, index) => (
-                            <li key={`summary-${index}`}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
-                      )}
-
-                      {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
-                        <div className="mt-3 flex flex-col gap-2">
-                          {unit.note.linkItems.map((item, index) => (
-                            <a
-                              key={`link-${index}`}
-                              href={item.url}
-                              target="_blank"
-                              rel="noopener"
-                              className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                            >
-                              {item.label || "開啟筆記連結"}
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
+            {courseScope === "all" ? (
+              courseCatalog.map((unit) => (
+                <CourseCatalogCard key={unit.unitKey} unit={unit} />
+              ))
+            ) : (
+              <div className="space-y-6">
+                <section className="rounded-3xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-500">Review</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-900">剛上完</h3>
+                      <p className="mt-1 text-xs text-slate-500">前 2 個上課日，方便回頭看複習重點與作業。</p>
                     </div>
-                    <div className="grid gap-3">
-                      {unit.timelineMode === "review" ? (
-                        <div className="rounded-2xl bg-white px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
-                          {Array.isArray(unit.note.homeworkItems) && unit.note.homeworkItems.length ? (
-                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                              {unit.note.homeworkItems.map((item, index) => (
-                                <li key={`homework-${index}`}>{item}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無作業通知</p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="rounded-2xl bg-white px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
-                          {Array.isArray(unit.note.quizItems) && unit.note.quizItems.length ? (
-                            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                              {unit.note.quizItems.map((item, index) => (
-                                <li key={`quiz-${index}`}>{item}</li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無小考通知</p>
-                          )}
-                        </div>
-                      )}
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm">
+                      {recentPastCourseCatalog.length} 堂
+                    </span>
+                  </div>
+                  <div className="mt-4 space-y-4">
+                    {!recentPastCourseCatalog.length ? (
+                      <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的已上課課程。</div>
+                    ) : null}
+                    {recentPastCourseCatalog.map((unit) => (
+                      <CourseCatalogCard key={unit.unitKey} unit={unit} />
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-3xl border border-rose-200 bg-rose-50/40 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-rose-500">Upcoming</p>
+                      <h3 className="mt-1 text-lg font-semibold text-slate-900">即將上課</h3>
+                      <p className="mt-1 text-xs text-slate-500">後 2 個上課日，方便課前看摘要與小考提醒。</p>
                     </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-rose-700 shadow-sm">
+                      {recentFutureCourseCatalog.length} 堂
+                    </span>
                   </div>
-                ) : (
-                  <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-                    這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+                  <div className="mt-4 space-y-4">
+                    {!recentFutureCourseCatalog.length ? (
+                      <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的即將上課課程。</div>
+                    ) : null}
+                    {recentFutureCourseCatalog.map((unit) => (
+                      <CourseCatalogCard key={unit.unitKey} unit={unit} />
+                    ))}
                   </div>
-                )}
+                </section>
               </div>
-            ))}
+            )}
           </div>
           </section>
         ) : null}
