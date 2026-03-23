@@ -124,6 +124,7 @@ export default function AdminPage({
   const [membershipQuery, setMembershipQuery] = useState("");
   const [membershipStatus, setMembershipStatus] = useState("");
   const [membershipSaveError, setMembershipSaveError] = useState("");
+  const [lineExportStatus, setLineExportStatus] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [showOnlyUnassigned, setShowOnlyUnassigned] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState(() => new Set());
@@ -1585,6 +1586,84 @@ export default function AdminPage({
     setMembershipDirty(false);
     setMembershipStatus("");
     setError("");
+  };
+
+  const buildLineMembershipExportText_ = () => {
+    const normalizeRoleOrder = (role) => {
+      if (role === "lead") return 0;
+      if (role === "deputy") return 1;
+      return 2;
+    };
+    const getRoleTitle = (groupId, role) => {
+      if (groupId === "A") {
+        if (role === "lead") return "班代";
+        if (role === "deputy") return "副班代";
+      }
+      return GROUP_ROLE_LABELS[role] || role || "成員";
+    };
+    const sortByName = (items) =>
+      items
+        .slice()
+        .sort((a, b) =>
+          normalizeName_(a.personName || "").localeCompare(normalizeName_(b.personName || ""), "zh-Hant")
+        );
+
+    const sections = CLASS_GROUPS.map((group) => {
+      const items = sortByName(
+        draftMemberships.filter((item) => String(item.groupId || "").trim() === String(group.id || "").trim())
+      ).sort((a, b) => {
+        const roleDiff = normalizeRoleOrder(String(a.roleInGroup || "").trim()) - normalizeRoleOrder(String(b.roleInGroup || "").trim());
+        if (roleDiff !== 0) {
+          return roleDiff;
+        }
+        return normalizeName_(a.personName || "").localeCompare(normalizeName_(b.personName || ""), "zh-Hant");
+      });
+      if (!items.length) {
+        return `【${group.label}】\n（尚未配置）`;
+      }
+      const roleBuckets = {
+        lead: items.filter((item) => String(item.roleInGroup || "").trim() === "lead"),
+        deputy: items.filter((item) => String(item.roleInGroup || "").trim() === "deputy"),
+        member: items.filter((item) => String(item.roleInGroup || "").trim() === "member"),
+      };
+      const lines = [`【${group.label}】`];
+      if (roleBuckets.lead.length) {
+        lines.push(`${getRoleTitle(group.id, "lead")}：${roleBuckets.lead.map((item) => item.personName || item.personId).join("、")}`);
+      }
+      if (roleBuckets.deputy.length) {
+        lines.push(`${getRoleTitle(group.id, "deputy")}：${roleBuckets.deputy.map((item) => item.personName || item.personId).join("、")}`);
+      }
+      if (roleBuckets.member.length) {
+        lines.push(`成員：${roleBuckets.member.map((item) => item.personName || item.personId).join("、")}`);
+      }
+      const extraRoles = items.filter((item) => !["lead", "deputy", "member"].includes(String(item.roleInGroup || "").trim()));
+      extraRoles.forEach((item) => {
+        lines.push(`${getRoleTitle(group.id, String(item.roleInGroup || "").trim())}：${item.personName || item.personId}`);
+      });
+      return lines.join("\n");
+    });
+
+    return sections.join("\n\n");
+  };
+
+  const handleCopyLineMembershipExport_ = async () => {
+    const text = buildLineMembershipExportText_();
+    if (!text) {
+      setLineExportStatus("沒有可匯出的分組資料");
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        throw new Error("Clipboard unavailable");
+      }
+      setLineExportStatus("已複製 LINE 版各組名單");
+    } catch (error) {
+      setLineExportStatus("複製失敗");
+    } finally {
+      window.setTimeout(() => setLineExportStatus(""), 2500);
+    }
   };
 
   const handleRegistrationDelete = async (id) => {
@@ -4425,6 +4504,13 @@ export default function AdminPage({
                       ) : null}
                       <button
                         type="button"
+                        onClick={handleCopyLineMembershipExport_}
+                        className="btn-chip"
+                      >
+                        匯出 LINE 版名單
+                      </button>
+                      <button
+                        type="button"
                         onClick={handleResetMembershipDrafts_}
                         disabled={!membershipDirty || saving}
                         className="btn-chip disabled:cursor-not-allowed disabled:opacity-50"
@@ -4444,6 +4530,11 @@ export default function AdminPage({
                   {membershipStatus ? (
                     <p className="mt-2 text-xs font-semibold text-emerald-600">
                       {membershipStatus}
+                    </p>
+                  ) : null}
+                  {lineExportStatus ? (
+                    <p className="mt-2 text-xs font-semibold text-sky-600">
+                      {lineExportStatus}
                     </p>
                   ) : null}
                   {isMembershipSaving ? (
