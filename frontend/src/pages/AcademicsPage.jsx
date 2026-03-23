@@ -65,17 +65,14 @@ function normalizeNoteItems_(note) {
 function CourseCatalogCard({ unit }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">時間</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-              {unit.mergedSchedule || "時間待補"}
-            </span>
-            <span className="text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</span>
-          </div>
-          <h3 className="mt-3 text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
+          <h3 className="text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
+          <p className="mt-1 text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</p>
         </div>
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
+          {unit.mergedSchedule || "時間待補"}
+        </span>
       </div>
       {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
 
@@ -434,9 +431,23 @@ export default function AcademicsPage({ shared }) {
         };
       })
       .sort((a, b) => {
-        const left = `${a.reviewDates && a.reviewDates[0] ? a.reviewDates[0] : ""} ${a.courseGroupTitle}`;
-        const right = `${b.reviewDates && b.reviewDates[0] ? b.reviewDates[0] : ""} ${b.courseGroupTitle}`;
-        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+        const leftDate = a.reviewDates && a.reviewDates[0] ? a.reviewDates[0] : "";
+        const rightDate = b.reviewDates && b.reviewDates[0] ? b.reviewDates[0] : "";
+        const dateCompare = leftDate.localeCompare(rightDate, "zh-Hant", { numeric: true, sensitivity: "base" });
+        if (dateCompare !== 0) {
+          return dateCompare;
+        }
+        const scheduleCompare = String(a.mergedSchedule || "").localeCompare(String(b.mergedSchedule || ""), "zh-Hant", {
+          numeric: true,
+          sensitivity: "base",
+        });
+        if (scheduleCompare !== 0) {
+          return scheduleCompare;
+        }
+        return String(a.courseGroupTitle || "").localeCompare(String(b.courseGroupTitle || ""), "zh-Hant", {
+          numeric: true,
+          sensitivity: "base",
+        });
       });
   }, [recentPastCourseCatalogRaw]);
   const recentFutureCourseCatalog = useMemo(
