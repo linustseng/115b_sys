@@ -1739,9 +1739,10 @@ function SoftballPage({ shared }) {
     return acc;
   }, {});
 
-  const attendanceStats = attendance.reduce(
-    (acc, item) => {
-      const status = String(item.status || "").toLowerCase();
+  const attendanceStats = filteredPlayers.reduce(
+    (acc, player) => {
+      const record = attendanceByStudent[normalizeId_(player.id)] || {};
+      const status = String(record.status || "unknown").toLowerCase();
       if (status === "attend") {
         acc.attend += 1;
       } else if (status === "late") {
