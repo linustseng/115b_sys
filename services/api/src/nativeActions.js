@@ -5138,7 +5138,7 @@ export async function dispatchNativeAction({
     case "listSoftballAttendance": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || (await isSoftballManager_());
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || hasSoftballTeamRole_(memberships) || (await isSoftballManager_());
       const practiceId = firstText(body.practiceId);
       const requestedStudentId = firstText(body.studentId);
       const studentId = firstText(body.studentId, auth.studentId);
@@ -5197,7 +5197,7 @@ export async function dispatchNativeAction({
     case "submitSoftballAttendance": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || (await isSoftballManager_());
+      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || hasSoftballTeamRole_(memberships) || (await isSoftballManager_());
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);
       const playerId = firstText(data.playerId || data.studentId || body.playerId || body.studentId, auth.studentId);
