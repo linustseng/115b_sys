@@ -1735,20 +1735,23 @@ export async function dispatchNativeAction({
     });
   };
 
-  const requireSoftballAdminAccess = async () => {
+  const getSoftballAdminAccess_ = async (membershipsInput = null) => {
     requireAuth();
-    const memberships = await listMembershipsByStudentId(auth.studentId);
-    // 1. E/H 組（資管組、體育組）
-    if (canAccessByGroups(memberships, ["E", "H"])) {
-      return memberships;
-    }
-    // 2. K 組的 manager/lead/deputy
-    if (hasSoftballTeamRole_(memberships)) {
-      return memberships;
-    }
-    // 3. 球員表裡有「球隊經理」位置（向下相容）
-    if (await isSoftballManager_()) {
-      return memberships;
+    const memberships = membershipsInput || (await listMembershipsByStudentId(auth.studentId));
+    const byGroup = canAccessByGroups(memberships, ["E", "H"]);
+    const byTeamRole = byGroup ? false : hasSoftballTeamRole_(memberships);
+    const byManager = byGroup || byTeamRole ? false : await isSoftballManager_();
+    return {
+      memberships,
+      allowed: Boolean(byGroup || byTeamRole || byManager),
+      source: byGroup ? "group" : byTeamRole ? "team-role" : byManager ? "manager" : "",
+    };
+  };
+
+  const requireSoftballAdminAccess = async () => {
+    const access = await getSoftballAdminAccess_();
+    if (access.allowed) {
+      return access.memberships;
     }
     const error = new Error("Forbidden");
     error.statusCode = 403;
@@ -4906,16 +4909,12 @@ export async function dispatchNativeAction({
     }
 
     case "getSoftballAdminAccess": {
-      requireAuth();
-      const memberships = await listMembershipsByStudentId(auth.studentId);
-      const byGroup = canAccessByGroups(memberships, ["E", "H"]);
-      const byTeamRole = byGroup ? false : hasSoftballTeamRole_(memberships);
-      const byManager = byGroup || byTeamRole ? false : await isSoftballManager_();
+      const access = await getSoftballAdminAccess_();
       return {
         ok: true,
         data: {
-          allowed: Boolean(byGroup || byTeamRole || byManager),
-          source: byGroup ? "group" : byTeamRole ? "team-role" : byManager ? "manager" : "",
+          allowed: access.allowed,
+          source: access.source,
         },
         error: null,
       };
@@ -5137,8 +5136,8 @@ export async function dispatchNativeAction({
 
     case "listSoftballAttendance": {
       requireAuth();
-      const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || hasSoftballTeamRole_(memberships) || (await isSoftballManager_());
+      const softballAccess = await getSoftballAdminAccess_();
+      const isAdmin = softballAccess.allowed;
       const practiceId = firstText(body.practiceId);
       const requestedStudentId = firstText(body.studentId);
       const studentId = firstText(body.studentId, auth.studentId);
@@ -5196,8 +5195,8 @@ export async function dispatchNativeAction({
 
     case "submitSoftballAttendance": {
       requireAuth();
-      const memberships = await listMembershipsByStudentId(auth.studentId);
-      const isAdmin = canAccessByGroups(memberships, ["E", "H"]) || hasSoftballTeamRole_(memberships) || (await isSoftballManager_());
+      const softballAccess = await getSoftballAdminAccess_();
+      const isAdmin = softballAccess.allowed;
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);
       const playerId = firstText(data.playerId || data.studentId || body.playerId || body.studentId, auth.studentId);
