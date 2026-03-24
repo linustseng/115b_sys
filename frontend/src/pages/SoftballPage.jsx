@@ -679,7 +679,12 @@ function SoftballPage({ shared }) {
   }, []);
 
   useEffect(() => {
-    const needsStudents = activeTab === "players" || activeTab === "stats" || activeTab === "roles" || activeTab === "supply";
+    const needsStudents =
+      activeTab === "players" ||
+      activeTab === "attendance" ||
+      activeTab === "stats" ||
+      activeTab === "roles" ||
+      activeTab === "supply";
     if (!needsStudents || studentsLoaded || studentsLoading) {
       return;
     }
