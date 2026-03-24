@@ -1686,6 +1686,74 @@ function SoftballPage({ shared }) {
     );
   };
 
+  const handleExportAttendanceLineText = async () => {
+    if (!activePracticeId) {
+      setStatusMessage("請先選擇練習");
+      return;
+    }
+
+    const practice = practiceById[normalizeId_(activePracticeId)] || selectedPractice || null;
+    if (!practice) {
+      setStatusMessage("找不到練習資料");
+      return;
+    }
+
+    const practiceDateParts = getDatePartsFromValue_(practice.date || practice.startAt);
+    const weekdayLabel = practiceDateParts
+      ? ["日", "一", "二", "三", "四", "五", "六"][
+          new Date(practiceDateParts.year, practiceDateParts.month - 1, practiceDateParts.day).getDay()
+        ]
+      : "";
+    const dateLabel = practiceDateParts ? `${practiceDateParts.month}/${practiceDateParts.day}` : "";
+    const startTimeParts = getTimePartsFromValue_(practice.startAt);
+    const startTimeLabel = startTimeParts ? `${startTimeParts.hour}:${pad2_(startTimeParts.minute)}` : "";
+    const practiceField = fields.find((field) => normalizeId_(field.id) === normalizeId_(practice.fieldId)) || null;
+    const locationLabel = String(practiceField?.name || practice.location || "").trim() || "未命名球場";
+    const practiceTitle = String(practice.title || "壘球練習").trim();
+
+    const attendeeNames = filteredPlayers
+      .filter((player) => {
+        const record = attendanceByStudent[normalizeId_(player.id)] || {};
+        const status = String(record.status || "unknown").toLowerCase();
+        return status === "attend" || status === "late";
+      })
+      .map((player) => {
+        const matchedStudent = studentById[normalizeId_(player.id)] || null;
+        return String(getPlayerDisplayName_(player, matchedStudent) || normalizeId_(player.id)).trim();
+      })
+      .filter((name) => name);
+
+    const slotCount = Math.max(30, attendeeNames.length);
+    const lineItems = Array.from({ length: slotCount }, (_, index) => {
+      const name = attendeeNames[index] || "";
+      return `${index + 1}. ${name}`;
+    });
+
+    const headerParts = ["@All 📢"];
+    if (dateLabel) {
+      headerParts.push(weekdayLabel ? `${dateLabel}(${weekdayLabel})` : dateLabel);
+    }
+    if (startTimeLabel) {
+      headerParts.push(startTimeLabel);
+    }
+    if (locationLabel) {
+      headerParts.push(locationLabel);
+    }
+    if (practiceTitle) {
+      headerParts.push(practiceTitle);
+    }
+
+    const exportText = [
+      headerParts.join(" "),
+      "出席接龍開始～請大家往下接龍！",
+      "👉 還沒報名的快來接龍！",
+      "",
+      ...lineItems,
+    ].join("\n");
+
+    await copyTextToClipboard_(exportText, "已複製 LINE 文案");
+  };
+
   const filteredPlayers = players.filter((player) => {
     const matchedStudent = studentById[normalizeId_(player && player.id)] || null;
     if (!playerQuery) {
@@ -2068,20 +2136,30 @@ function SoftballPage({ shared }) {
                   {activePracticeId ? `練習編號 ${activePracticeId}` : "請選擇練習"}
                 </p>
               </div>
-              <select
-                value={activePracticeId}
-                onChange={(event) => setActivePracticeId(event.target.value)}
-                className="input-sm"
-              >
-                <option value="">選擇練習</option>
-                {practices.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {formatPracticeDate_(toDateInputValueFromValue_(item.date || item.startAt))}
-                    {getPracticeListTimeLabel_(item) ? ` ${getPracticeListTimeLabel_(item)}` : ""}
-                    {` · ${item.title || "練習"}`}
-                  </option>
-                ))}
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={activePracticeId}
+                  onChange={(event) => setActivePracticeId(event.target.value)}
+                  className="input-sm"
+                >
+                  <option value="">選擇練習</option>
+                  {practices.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {formatPracticeDate_(toDateInputValueFromValue_(item.date || item.startAt))}
+                      {getPracticeListTimeLabel_(item) ? ` ${getPracticeListTimeLabel_(item)}` : ""}
+                      {` · ${item.title || "練習"}`}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleExportAttendanceLineText}
+                  disabled={!activePracticeId}
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  複製 LINE 文案
+                </button>
+              </div>
             </div>
 
             {selectedPractice ? (
