@@ -63,6 +63,30 @@ function normalizeNoteItems_(note) {
 }
 
 function CourseCatalogCard({ unit }) {
+  const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
+  const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
+  const infoCards = [];
+
+  if (homeworkItems.length || unit.timelineMode === "review") {
+    infoCards.push({
+      key: "homework",
+      title: "作業",
+      toneClassName: "text-amber-500",
+      items: homeworkItems,
+      emptyText: "目前尚無作業通知",
+    });
+  }
+
+  if (quizItems.length || unit.timelineMode !== "review") {
+    infoCards.push({
+      key: "quiz",
+      title: "小考通知",
+      toneClassName: "text-rose-500",
+      items: quizItems,
+      emptyText: "目前尚無小考通知",
+    });
+  }
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -109,33 +133,20 @@ function CourseCatalogCard({ unit }) {
             ) : null}
           </div>
           <div className="grid gap-3">
-            {unit.timelineMode === "review" ? (
-              <div className="rounded-2xl bg-white px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
-                {Array.isArray(unit.note.homeworkItems) && unit.note.homeworkItems.length ? (
+            {infoCards.map((card) => (
+              <div key={card.key} className="rounded-2xl bg-white px-4 py-3">
+                <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${card.toneClassName}`}>{card.title}</p>
+                {card.items.length ? (
                   <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                    {unit.note.homeworkItems.map((item, index) => (
-                      <li key={`homework-${index}`}>{item}</li>
+                    {card.items.map((item, index) => (
+                      <li key={`${card.key}-${index}`}>{item}</li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無作業通知</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{card.emptyText}</p>
                 )}
               </div>
-            ) : (
-              <div className="rounded-2xl bg-white px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考通知</p>
-                {Array.isArray(unit.note.quizItems) && unit.note.quizItems.length ? (
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                    {unit.note.quizItems.map((item, index) => (
-                      <li key={`quiz-${index}`}>{item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-2 text-sm leading-6 text-slate-700">目前尚無小考通知</p>
-                )}
-              </div>
-            )}
+            ))}
           </div>
         </div>
       ) : (
