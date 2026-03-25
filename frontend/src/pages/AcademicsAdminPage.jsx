@@ -60,24 +60,14 @@ function toLinkItemsText_(items = [], fallbackUrl = "", fallbackLabel = "") {
   return label ? `${label} | ${url}` : url;
 }
 
-function getPrimaryNoticeValue_(items = [], fallbackText = "") {
-  const normalizedItems = Array.isArray(items)
-    ? items.map((item) => String(item || "").trim()).filter(Boolean)
-    : [];
-  if (normalizedItems.length) {
-    return normalizedItems[0];
-  }
-  return String(fallbackText || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean)[0] || "";
-}
-
 function buildNoteForm(note, sessionId = "") {
   return {
     sessionId: sessionId || (note && note.sessionId) || "",
     title: (note && note.title) || "",
-    summary: "",
+    summary: toMultilineText_(note && note.summaryItems, (note && note.summary) || ""),
     linkItemsText: toLinkItemsText_(note && note.linkItems, (note && note.linkUrl) || "", (note && note.linkLabel) || ""),
-    homeworkNotice: getPrimaryNoticeValue_(note && note.homeworkItems, (note && note.homeworkNotice) || ""),
-    quizNotice: getPrimaryNoticeValue_(note && note.quizItems, (note && note.quizNotice) || ""),
+    homeworkNotice: toMultilineText_(note && note.homeworkItems, (note && note.homeworkNotice) || ""),
+    quizNotice: toMultilineText_(note && note.quizItems, (note && note.quizNotice) || ""),
     status: (note && note.status) || "draft",
   };
 }
@@ -461,21 +451,22 @@ export default function AcademicsAdminPage({ shared }) {
     setStatus("");
     setError("");
     try {
+      const summaryItems = parseMultilineItems_(noteForm.summary);
+      const homeworkItems = parseMultilineItems_(noteForm.homeworkNotice);
+      const quizItems = parseMultilineItems_(noteForm.quizNotice);
       const linkItems = parseLinkItemsText_(noteForm.linkItemsText);
       const firstLink = linkItems[0] || null;
-      const homeworkNotice = String(noteForm.homeworkNotice || "").trim();
-      const quizNotice = String(noteForm.quizNotice || "").trim();
 
       const payload = {
         ...noteForm,
-        summary: "",
-        homeworkNotice,
-        quizNotice,
+        summary: summaryItems.join("\n"),
+        homeworkNotice: homeworkItems.join("\n"),
+        quizNotice: quizItems.join("\n"),
         linkUrl: firstLink ? firstLink.url : "",
         linkLabel: firstLink ? firstLink.label : "",
-        summaryItems: [],
-        homeworkItems: homeworkNotice ? [homeworkNotice] : [],
-        quizItems: quizNotice ? [quizNotice] : [],
+        summaryItems,
+        homeworkItems,
+        quizItems,
         linkItems,
       };
 
@@ -483,7 +474,7 @@ export default function AcademicsAdminPage({ shared }) {
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
       }
-      setStatus(noteForm.status === "published" ? "課程內容已發布。" : "課程草稿已儲存。");
+      setStatus(noteForm.status === "published" ? "摘要已發布。" : "摘要草稿已儲存。");
       await loadBootstrap_();
     } catch (err) {
       setError(String((err && err.message) || "儲存失敗"));
@@ -560,7 +551,7 @@ export default function AcademicsAdminPage({ shared }) {
           <div className="card p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-400">Notes</p>
             <p className="mt-3 text-3xl font-semibold text-slate-900">{totalPublishedNotes}</p>
-            <p className="mt-2 text-sm text-slate-500">已發布課程內容</p>
+            <p className="mt-2 text-sm text-slate-500">已發布摘要</p>
           </div>
         </section>
 
@@ -797,8 +788,8 @@ export default function AcademicsAdminPage({ shared }) {
             <section className="card p-6 sm:p-7">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Notes</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">課程連結 / 通知管理</h2>
-              <p className="mt-2 text-sm text-slate-500">以 NotebookLM / 外部連結為主；作業、小考只需放可開啟的連結即可。</p>
+              <h2 className="mt-2 text-xl font-semibold text-slate-900">課程摘要 / 筆記管理</h2>
+              <p className="mt-2 text-sm text-slate-500">目前以 NotebookLM / 外部連結為主，系統負責索引與入口。</p>
             </div>
 
             <form className="mt-5 space-y-4" onSubmit={handleSaveNote_}>
@@ -841,31 +832,42 @@ export default function AcademicsAdminPage({ shared }) {
                   value={noteForm.linkItemsText}
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, linkItemsText: event.target.value, sessionId: selectedSessionId }))}
                   rows={4}
-                  placeholder={"每行一筆\n範例：NotebookLM 連結 | https://notebooklm.google.com/...\n或只填 URL 也可"}
+                  placeholder={"每行一筆\n範例：NotebookLM 摘要 | https://notebooklm.google.com/...\n或只填 URL 也可"}
                   className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知連結</label>
-                <input
-                  value={noteForm.homeworkNotice}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, homeworkNotice: event.target.value, sessionId: selectedSessionId }))}
-                  placeholder="https://..."
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                <label className="mb-2 block text-sm font-medium text-slate-700">摘要（可多筆）</label>
+                <textarea
+                  value={noteForm.summary}
+                  onChange={(event) => setNoteForm((prev) => ({ ...prev, summary: event.target.value, sessionId: selectedSessionId }))}
+                  rows={5}
+                  placeholder={"每行一筆\n例如：課堂重點、提醒事項、講師提到的重要概念..."}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
-                <p className="mt-2 text-xs text-slate-500">有連結就填，沒有可留白。</p>
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知連結</label>
-                <input
+                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知（可多筆）</label>
+                <textarea
+                  value={noteForm.homeworkNotice}
+                  onChange={(event) => setNoteForm((prev) => ({ ...prev, homeworkNotice: event.target.value, sessionId: selectedSessionId }))}
+                  rows={3}
+                  placeholder={"每行一筆\n例如：下週前提交個案分析\n例如：閱讀指定章節"}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知（可多筆）</label>
+                <textarea
                   value={noteForm.quizNotice}
                   onChange={(event) => setNoteForm((prev) => ({ ...prev, quizNotice: event.target.value, sessionId: selectedSessionId }))}
-                  placeholder="https://..."
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  rows={3}
+                  placeholder={"每行一筆\n例如：下次上課前 10 分鐘小考\n例如：範圍第 3-4 章"}
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                 />
-                <p className="mt-2 text-xs text-slate-500">有連結就填，沒有可留白。</p>
               </div>
 
               <div>
@@ -885,7 +887,7 @@ export default function AcademicsAdminPage({ shared }) {
                   type="submit"
                   className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
                 >
-                  儲存課程資訊
+                  儲存摘要
                 </button>
               </div>
             </form>

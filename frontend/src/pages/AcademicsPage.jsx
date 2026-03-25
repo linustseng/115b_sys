@@ -42,85 +42,50 @@ function normalizeLinkItems_(note) {
   ];
 }
 
-function normalizeNoticeContent_(itemsInput, fallbackText = "", defaultLabel = "開啟連結") {
-  const rawItems = Array.isArray(itemsInput)
-    ? itemsInput.map((item) => String(item || "").trim()).filter(Boolean)
-    : parseMultilineItems_(fallbackText);
-
-  const textItems = [];
-  const linkItems = [];
-
-  rawItems.forEach((item) => {
-    if (/^https?:\/\//i.test(item)) {
-      linkItems.push({ label: defaultLabel, url: item });
-    } else {
-      textItems.push(item);
-    }
-  });
-
-  return { textItems, linkItems };
-}
-
 function normalizeNoteItems_(note) {
-  const homeworkContent = normalizeNoticeContent_(note && note.homeworkItems, note && note.homeworkNotice, "開啟作業通知");
-  const quizContent = normalizeNoticeContent_(note && note.quizItems, note && note.quizNotice, "開啟小考通知");
+  const summaryItems = Array.isArray(note && note.summaryItems)
+    ? note.summaryItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.summary);
+  const homeworkItems = Array.isArray(note && note.homeworkItems)
+    ? note.homeworkItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.homeworkNotice);
+  const quizItems = Array.isArray(note && note.quizItems)
+    ? note.quizItems.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(note && note.quizNotice);
   const linkItems = normalizeLinkItems_(note);
 
   return {
-    summaryItems: [],
-    homeworkItems: homeworkContent.textItems,
-    homeworkLinks: homeworkContent.linkItems,
-    quizItems: quizContent.textItems,
-    quizLinks: quizContent.linkItems,
+    summaryItems,
+    homeworkItems,
+    quizItems,
     linkItems,
   };
 }
 
-function NoticeContentBlock({ title, toneClassName, items = [], links = [] }) {
-  const hasItems = Array.isArray(items) && items.length > 0;
-  const hasLinks = Array.isArray(links) && links.length > 0;
-  if (!hasItems && !hasLinks) {
-    return null;
+function CourseCatalogCard({ unit }) {
+  const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
+  const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
+  const infoCards = [];
+
+  if (homeworkItems.length || unit.timelineMode === "review") {
+    infoCards.push({
+      key: "homework",
+      title: "作業",
+      toneClassName: "text-amber-500",
+      items: homeworkItems,
+      emptyText: "目前尚無作業通知",
+    });
   }
 
-  return (
-    <div className="rounded-2xl bg-white px-4 py-3">
-      <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${toneClassName}`}>{title}</p>
-      {hasItems ? (
-        <div className="mt-3 space-y-3">
-          {items.map((item, index) => (
-            <div key={`${title}-text-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
-              <p className="whitespace-pre-line text-sm leading-6 text-slate-700">{item}</p>
-            </div>
-          ))}
-        </div>
-      ) : null}
-      {hasLinks ? (
-        <div className="mt-3 flex flex-col gap-2">
-          {links.map((item, index) => (
-            <a
-              key={`${title}-link-${index}`}
-              href={item.url}
-              target="_blank"
-              rel="noopener"
-              className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-            >
-              {item.label || `開啟${title}連結`}
-            </a>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function CourseCatalogCard({ unit }) {
-  const noteLinks = Array.isArray(unit.note && unit.note.linkItems) ? unit.note.linkItems : [];
-  const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
-  const homeworkLinks = Array.isArray(unit.note && unit.note.homeworkLinks) ? unit.note.homeworkLinks : [];
-  const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
-  const quizLinks = Array.isArray(unit.note && unit.note.quizLinks) ? unit.note.quizLinks : [];
-  const hasAnyContent = noteLinks.length || homeworkItems.length || homeworkLinks.length || quizItems.length || quizLinks.length;
+  if (quizItems.length || unit.timelineMode !== "review") {
+    infoCards.push({
+      key: "quiz",
+      title: "小考通知",
+      toneClassName: "text-rose-500",
+      items: quizItems,
+      emptyText: "目前尚無小考通知",
+    });
+  }
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -135,13 +100,25 @@ function CourseCatalogCard({ unit }) {
       </div>
       {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
 
-      {hasAnyContent ? (
-        <div className="mt-4 grid gap-3">
-          {noteLinks.length ? (
-            <div className="rounded-2xl bg-white px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程連結</p>
+      {unit.note ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <div className="rounded-2xl bg-white px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              {unit.timelineMode === "review" ? "複習重點" : "課前摘要"}
+            </p>
+            {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                {unit.note.summaryItems.map((item, index) => (
+                  <li key={`summary-${index}`}>{item}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
+            )}
+
+            {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
               <div className="mt-3 flex flex-col gap-2">
-                {noteLinks.map((item, index) => (
+                {unit.note.linkItems.map((item, index) => (
                   <a
                     key={`link-${index}`}
                     href={item.url}
@@ -149,19 +126,32 @@ function CourseCatalogCard({ unit }) {
                     rel="noopener"
                     className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
                   >
-                    {item.label || "開啟課程連結"}
+                    {item.label || "開啟筆記連結"}
                   </a>
                 ))}
               </div>
-            </div>
-          ) : null}
-
-          <NoticeContentBlock title="作業" toneClassName="text-amber-500" items={homeworkItems} links={homeworkLinks} />
-          <NoticeContentBlock title="小考通知" toneClassName="text-rose-500" items={quizItems} links={quizLinks} />
+            ) : null}
+          </div>
+          <div className="grid gap-3">
+            {infoCards.map((card) => (
+              <div key={card.key} className="rounded-2xl bg-white px-4 py-3">
+                <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${card.toneClassName}`}>{card.title}</p>
+                {card.items.length ? (
+                  <div className="mt-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+                    <p className="whitespace-pre-line text-sm leading-6 text-slate-700">
+                      {card.items.join("\n")}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{card.emptyText}</p>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-          這堂課目前還沒有上架課程 / 作業 / 小考資訊。
+          這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
         </div>
       )}
     </div>
@@ -431,15 +421,13 @@ export default function AcademicsPage({ shared }) {
       bucket.slotCount += unit.slotCount;
       bucket.mergedSchedule = bucket.mergedSchedule || unit.mergedSchedule;
       bucket.location = bucket.location || unit.location;
-      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], homeworkLinks: [], quizItems: [], quizLinks: [], linkItems: [] };
-      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], homeworkLinks: [], quizItems: [], quizLinks: [], linkItems: [] };
+      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
+      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
       bucket.note = {
         ...baseNote,
         summaryItems: uniqText([...(baseNote.summaryItems || []), ...(nextNote.summaryItems || [])]),
         homeworkItems: uniqText([...(baseNote.homeworkItems || []), ...(nextNote.homeworkItems || [])]),
-        homeworkLinks: uniqLinks([...(baseNote.homeworkLinks || []), ...(nextNote.homeworkLinks || [])]),
         quizItems: uniqText([...(baseNote.quizItems || []), ...(nextNote.quizItems || [])]),
-        quizLinks: uniqLinks([...(baseNote.quizLinks || []), ...(nextNote.quizLinks || [])]),
         linkItems: uniqLinks([...(baseNote.linkItems || []), ...(nextNote.linkItems || [])]),
       };
     });
