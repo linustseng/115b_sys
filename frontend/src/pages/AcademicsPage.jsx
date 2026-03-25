@@ -42,47 +42,71 @@ function normalizeLinkItems_(note) {
   ];
 }
 
+function normalizeNoticeContent_(itemsInput, fallbackText = "", defaultLabel = "開啟連結") {
+  const rawItems = Array.isArray(itemsInput)
+    ? itemsInput.map((item) => String(item || "").trim()).filter(Boolean)
+    : parseMultilineItems_(fallbackText);
+
+  const textItems = [];
+  const linkItems = [];
+
+  rawItems.forEach((item) => {
+    if (/^https?:\/\//i.test(item)) {
+      linkItems.push({ label: defaultLabel, url: item });
+    } else {
+      textItems.push(item);
+    }
+  });
+
+  return { textItems, linkItems };
+}
+
 function normalizeNoteItems_(note) {
   const summaryItems = Array.isArray(note && note.summaryItems)
     ? note.summaryItems.map((item) => String(item || "").trim()).filter(Boolean)
     : parseMultilineItems_(note && note.summary);
-  const homeworkItems = Array.isArray(note && note.homeworkItems)
-    ? note.homeworkItems.map((item) => String(item || "").trim()).filter(Boolean)
-    : parseMultilineItems_(note && note.homeworkNotice);
-  const quizItems = Array.isArray(note && note.quizItems)
-    ? note.quizItems.map((item) => String(item || "").trim()).filter(Boolean)
-    : parseMultilineItems_(note && note.quizNotice);
+  const homeworkContent = normalizeNoticeContent_(note && note.homeworkItems, note && note.homeworkNotice, "開啟作業通知");
+  const quizContent = normalizeNoticeContent_(note && note.quizItems, note && note.quizNotice, "開啟小考通知");
   const linkItems = normalizeLinkItems_(note);
 
   return {
     summaryItems,
-    homeworkItems,
-    quizItems,
+    homeworkItems: homeworkContent.textItems,
+    homeworkLinks: homeworkContent.linkItems,
+    quizItems: quizContent.textItems,
+    quizLinks: quizContent.linkItems,
     linkItems,
   };
 }
 
 function CourseCatalogCard({ unit }) {
+  const summaryItems = Array.isArray(unit.note && unit.note.summaryItems) ? unit.note.summaryItems : [];
+  const noteLinks = Array.isArray(unit.note && unit.note.linkItems) ? unit.note.linkItems : [];
   const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
+  const homeworkLinks = Array.isArray(unit.note && unit.note.homeworkLinks) ? unit.note.homeworkLinks : [];
   const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
+  const quizLinks = Array.isArray(unit.note && unit.note.quizLinks) ? unit.note.quizLinks : [];
+  const hasPrimaryLinks = summaryItems.length || noteLinks.length;
   const infoCards = [];
 
-  if (homeworkItems.length || unit.timelineMode === "review") {
+  if (homeworkItems.length || homeworkLinks.length || unit.timelineMode === "review") {
     infoCards.push({
       key: "homework",
       title: "作業",
       toneClassName: "text-amber-500",
       items: homeworkItems,
+      links: homeworkLinks,
       emptyText: "目前尚無作業通知",
     });
   }
 
-  if (quizItems.length || unit.timelineMode !== "review") {
+  if (quizItems.length || quizLinks.length || unit.timelineMode !== "review") {
     infoCards.push({
       key: "quiz",
       title: "小考通知",
       toneClassName: "text-rose-500",
       items: quizItems,
+      links: quizLinks,
       emptyText: "目前尚無小考通知",
     });
   }
@@ -101,37 +125,37 @@ function CourseCatalogCard({ unit }) {
       {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
 
       {unit.note ? (
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              {unit.timelineMode === "review" ? "複習重點" : "課前摘要"}
-            </p>
-            {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                {unit.note.summaryItems.map((item, index) => (
-                  <li key={`summary-${index}`}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
-            )}
+        <div className={`mt-4 grid gap-3 ${hasPrimaryLinks ? "lg:grid-cols-2" : ""}`}>
+          {hasPrimaryLinks ? (
+            <div className="rounded-2xl bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+                {summaryItems.length ? (unit.timelineMode === "review" ? "複習重點" : "課程重點") : "課程連結"}
+              </p>
+              {summaryItems.length ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+                  {summaryItems.map((item, index) => (
+                    <li key={`summary-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              ) : null}
 
-            {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
-              <div className="mt-3 flex flex-col gap-2">
-                {unit.note.linkItems.map((item, index) => (
-                  <a
-                    key={`link-${index}`}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                  >
-                    {item.label || "開啟筆記連結"}
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </div>
+              {noteLinks.length ? (
+                <div className="mt-3 flex flex-col gap-2">
+                  {noteLinks.map((item, index) => (
+                    <a
+                      key={`link-${index}`}
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener"
+                      className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                    >
+                      {item.label || "開啟筆記連結"}
+                    </a>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid gap-3">
             {infoCards.map((card) => (
               <div key={card.key} className="rounded-2xl bg-white px-4 py-3">
@@ -142,16 +166,32 @@ function CourseCatalogCard({ unit }) {
                       <li key={`${card.key}-${index}`}>{item}</li>
                     ))}
                   </ul>
-                ) : (
+                ) : null}
+                {card.links.length ? (
+                  <div className="mt-2 flex flex-col gap-2">
+                    {card.links.map((item, index) => (
+                      <a
+                        key={`${card.key}-link-${index}`}
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                      >
+                        {item.label || `開啟${card.title}連結`}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+                {!card.items.length && !card.links.length ? (
                   <p className="mt-2 text-sm leading-6 text-slate-700">{card.emptyText}</p>
-                )}
+                ) : null}
               </div>
             ))}
           </div>
         </div>
       ) : (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-          這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+          這堂課目前還沒有上架課程連結 / 作業 / 小考通知。
         </div>
       )}
     </div>
@@ -421,13 +461,15 @@ export default function AcademicsPage({ shared }) {
       bucket.slotCount += unit.slotCount;
       bucket.mergedSchedule = bucket.mergedSchedule || unit.mergedSchedule;
       bucket.location = bucket.location || unit.location;
-      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
-      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
+      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], homeworkLinks: [], quizItems: [], quizLinks: [], linkItems: [] };
+      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], homeworkLinks: [], quizItems: [], quizLinks: [], linkItems: [] };
       bucket.note = {
         ...baseNote,
         summaryItems: uniqText([...(baseNote.summaryItems || []), ...(nextNote.summaryItems || [])]),
         homeworkItems: uniqText([...(baseNote.homeworkItems || []), ...(nextNote.homeworkItems || [])]),
+        homeworkLinks: uniqLinks([...(baseNote.homeworkLinks || []), ...(nextNote.homeworkLinks || [])]),
         quizItems: uniqText([...(baseNote.quizItems || []), ...(nextNote.quizItems || [])]),
+        quizLinks: uniqLinks([...(baseNote.quizLinks || []), ...(nextNote.quizLinks || [])]),
         linkItems: uniqLinks([...(baseNote.linkItems || []), ...(nextNote.linkItems || [])]),
       };
     });
