@@ -68,39 +68,59 @@ function normalizeNoteItems_(note) {
 
   return {
     summaryItems: [],
-    homeworkItems: [],
+    homeworkItems: homeworkContent.textItems,
     homeworkLinks: homeworkContent.linkItems,
-    quizItems: [],
+    quizItems: quizContent.textItems,
     quizLinks: quizContent.linkItems,
     linkItems,
   };
 }
 
+function NoticeContentBlock({ title, toneClassName, items = [], links = [] }) {
+  const hasItems = Array.isArray(items) && items.length > 0;
+  const hasLinks = Array.isArray(links) && links.length > 0;
+  if (!hasItems && !hasLinks) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl bg-white px-4 py-3">
+      <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${toneClassName}`}>{title}</p>
+      {hasItems ? (
+        <div className="mt-3 space-y-3">
+          {items.map((item, index) => (
+            <div key={`${title}-text-${index}`} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+              <p className="whitespace-pre-line text-sm leading-6 text-slate-700">{item}</p>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {hasLinks ? (
+        <div className="mt-3 flex flex-col gap-2">
+          {links.map((item, index) => (
+            <a
+              key={`${title}-link-${index}`}
+              href={item.url}
+              target="_blank"
+              rel="noopener"
+              className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+            >
+              {item.label || `開啟${title}連結`}
+            </a>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function CourseCatalogCard({ unit }) {
   const noteLinks = Array.isArray(unit.note && unit.note.linkItems) ? unit.note.linkItems : [];
+  const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
   const homeworkLinks = Array.isArray(unit.note && unit.note.homeworkLinks) ? unit.note.homeworkLinks : [];
+  const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
   const quizLinks = Array.isArray(unit.note && unit.note.quizLinks) ? unit.note.quizLinks : [];
-  const infoCards = [];
-
-  if (homeworkLinks.length) {
-    infoCards.push({
-      key: "homework",
-      title: "作業",
-      toneClassName: "text-amber-500",
-      links: homeworkLinks,
-    });
-  }
-
-  if (quizLinks.length) {
-    infoCards.push({
-      key: "quiz",
-      title: "小考通知",
-      toneClassName: "text-rose-500",
-      links: quizLinks,
-    });
-  }
-
-  const hasAnyContent = noteLinks.length || infoCards.length;
+  const hasAnyContent = noteLinks.length || homeworkItems.length || homeworkLinks.length || quizItems.length || quizLinks.length;
 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -116,7 +136,7 @@ function CourseCatalogCard({ unit }) {
       {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
 
       {hasAnyContent ? (
-        <div className={`mt-4 grid gap-3 ${noteLinks.length && infoCards.length ? "lg:grid-cols-2" : ""}`}>
+        <div className="mt-4 grid gap-3">
           {noteLinks.length ? (
             <div className="rounded-2xl bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程連結</p>
@@ -135,32 +155,13 @@ function CourseCatalogCard({ unit }) {
               </div>
             </div>
           ) : null}
-          {infoCards.length ? (
-            <div className="grid gap-3">
-              {infoCards.map((card) => (
-                <div key={card.key} className="rounded-2xl bg-white px-4 py-3">
-                  <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${card.toneClassName}`}>{card.title}</p>
-                  <div className="mt-2 flex flex-col gap-2">
-                    {card.links.map((item, index) => (
-                      <a
-                        key={`${card.key}-link-${index}`}
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener"
-                        className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                      >
-                        {item.label || `開啟${card.title}連結`}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+
+          <NoticeContentBlock title="作業" toneClassName="text-amber-500" items={homeworkItems} links={homeworkLinks} />
+          <NoticeContentBlock title="小考通知" toneClassName="text-rose-500" items={quizItems} links={quizLinks} />
         </div>
       ) : (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-          這堂課目前還沒有上架可點擊的課程 / 作業 / 小考連結。
+          這堂課目前還沒有上架課程 / 作業 / 小考資訊。
         </div>
       )}
     </div>
