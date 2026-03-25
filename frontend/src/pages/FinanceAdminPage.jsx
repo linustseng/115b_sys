@@ -565,25 +565,6 @@ function FinanceAdminPage({ shared }) {
   }, [fundPaymentForm.eventId]);
 
   useEffect(() => {
-    if (!manualRequestForm.applicantId) {
-      if (manualRequestForm.applicantDepartment) {
-        setManualRequestForm((prev) => ({ ...prev, applicantDepartment: "" }));
-      }
-      return;
-    }
-    if (!manualApplicantDepartments.length) {
-      return;
-    }
-    const currentDepartment = String(manualRequestForm.applicantDepartment || "").trim();
-    if (!currentDepartment || !manualApplicantDepartments.some((item) => String(item.id || "").trim() === currentDepartment)) {
-      setManualRequestForm((prev) => ({
-        ...prev,
-        applicantDepartment: String(manualApplicantDepartments[0].id || "").trim(),
-      }));
-    }
-  }, [manualRequestForm.applicantId, manualRequestForm.applicantDepartment, manualApplicantDepartments]);
-
-  useEffect(() => {
     if (!showFundEventModal) {
       return;
     }
@@ -667,6 +648,25 @@ function FinanceAdminPage({ shared }) {
     () => resolveApplicantGroups_(manualRequestForm.applicantId, manualRequestForm.applicantDepartment),
     [groupMemberships, CLASS_GROUPS, manualRequestForm.applicantId, manualRequestForm.applicantDepartment]
   );
+
+  useEffect(() => {
+    if (!manualRequestForm.applicantId) {
+      if (manualRequestForm.applicantDepartment) {
+        setManualRequestForm((prev) => ({ ...prev, applicantDepartment: "" }));
+      }
+      return;
+    }
+    if (!manualApplicantDepartments.length) {
+      return;
+    }
+    const currentDepartment = String(manualRequestForm.applicantDepartment || "").trim();
+    if (!currentDepartment || !manualApplicantDepartments.some((item) => String(item.id || "").trim() === currentDepartment)) {
+      setManualRequestForm((prev) => ({
+        ...prev,
+        applicantDepartment: String(manualApplicantDepartments[0].id || "").trim(),
+      }));
+    }
+  }, [manualRequestForm.applicantId, manualRequestForm.applicantDepartment, manualApplicantDepartments]);
 
   const normalizedStudents = students.map((item) => {
     const name = getChineseStudentName_(item) || item.email || "";
