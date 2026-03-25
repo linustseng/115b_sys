@@ -948,6 +948,44 @@ function normalizeGroupId_(value) {
   return match ? match[0] : raw;
 }
 
+function normalizeMembershipGroupIds_(memberships) {
+  const ids = [];
+  (memberships || []).forEach((item) => {
+    const groupId = normalizeGroupId_(item && (item.groupId || item.group_id || ""));
+    if (groupId && !ids.includes(groupId)) {
+      ids.push(groupId);
+    }
+  });
+  return ids;
+}
+
+function ensureFinanceApplicantDepartmentAllowed_(row, memberships) {
+  if (!row || typeof row !== "object") {
+    return { ok: false, error: "申請資料格式錯誤" };
+  }
+  const allowedGroupIds = normalizeMembershipGroupIds_(memberships);
+  const requestedGroupId = normalizeGroupId_(row.applicantDepartment);
+
+  if (!allowedGroupIds.length) {
+    return { ok: false, error: "查無申請人所屬組別，請先設定組別資料" };
+  }
+
+  if (!requestedGroupId) {
+    if (allowedGroupIds.length === 1) {
+      row.applicantDepartment = allowedGroupIds[0];
+      return { ok: true, allowedGroupIds };
+    }
+    return { ok: false, error: "請選擇申請組別" };
+  }
+
+  if (!allowedGroupIds.includes(requestedGroupId)) {
+    return { ok: false, error: "申請組別必須為申請人所屬組別" };
+  }
+
+  row.applicantDepartment = requestedGroupId;
+  return { ok: true, allowedGroupIds };
+}
+
 function parseFinanceAmount_(value) {
   const raw = String(value || "")
     .replace(/,/g, "")
@@ -3732,6 +3770,10 @@ export async function dispatchNativeAction({
       }
 
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
+      if (!applicantDepartmentCheck.ok) {
+        return { ok: false, data: null, error: applicantDepartmentCheck.error };
+      }
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
@@ -3869,6 +3911,10 @@ export async function dispatchNativeAction({
       const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
 
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
+      if (!applicantDepartmentCheck.ok) {
+        return { ok: false, data: null, error: applicantDepartmentCheck.error };
+      }
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
       if (!normalizedStatus || normalizedStatus === "pending_lead") {
@@ -4150,6 +4196,10 @@ export async function dispatchNativeAction({
       }
 
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
+      const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
+      if (!applicantDepartmentCheck.ok) {
+        return { ok: false, data: null, error: applicantDepartmentCheck.error };
+      }
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const normalizedAction = requestAction.toLowerCase();
       const normalizedStatus = String(row.status || "").trim().toLowerCase();

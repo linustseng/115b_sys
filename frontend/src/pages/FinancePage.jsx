@@ -505,6 +505,21 @@ function FinancePage({ shared }) {
     }
   }, [memberGroups, form.applicantDepartment]);
 
+  const availableApplicantDepartments = useMemo(() => {
+    const candidateIds = [];
+    memberGroups.forEach((groupId) => {
+      const normalized = String(groupId || "").trim();
+      if (normalized && !candidateIds.includes(normalized)) {
+        candidateIds.push(normalized);
+      }
+    });
+    const currentDepartment = String(form.applicantDepartment || "").trim();
+    if (currentDepartment && !candidateIds.includes(currentDepartment)) {
+      candidateIds.push(currentDepartment);
+    }
+    return CLASS_GROUPS.filter((item) => candidateIds.includes(String(item.id || "").trim()));
+  }, [CLASS_GROUPS, memberGroups, form.applicantDepartment]);
+
   useEffect(() => {
     if (form.type === "pettycash" && form.paymentMethod !== "pettycash") {
       setForm((prev) => ({ ...prev, paymentMethod: "pettycash" }));
@@ -1648,14 +1663,25 @@ function FinancePage({ shared }) {
                     value={form.applicantDepartment}
                     onChange={(event) => handleFormChange("applicantDepartment", event.target.value)}
                     className="input-sm"
+                    disabled={!availableApplicantDepartments.length || availableApplicantDepartments.length === 1}
                   >
-                    <option value="">請選擇</option>
-                    {CLASS_GROUPS.map((item) => (
+                    {!availableApplicantDepartments.length ? (
+                      <option value="">尚未設定所屬組別</option>
+                    ) : null}
+                    {availableApplicantDepartments.length > 1 ? <option value="">請選擇</option> : null}
+                    {availableApplicantDepartments.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.label}
                       </option>
                     ))}
                   </select>
+                  {!availableApplicantDepartments.length ? (
+                    <p className="text-[11px] text-rose-600">查無你的所屬組別，請聯絡管理員先設定。</p>
+                  ) : availableApplicantDepartments.length === 1 ? (
+                    <p className="text-[11px] text-slate-500">已自動帶入你的所屬組別。</p>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">只顯示你所屬的組別。</p>
+                  )}
                 </div>
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">

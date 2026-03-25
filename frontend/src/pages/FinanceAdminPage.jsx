@@ -562,6 +562,25 @@ function FinanceAdminPage({ shared }) {
   }, [fundPaymentForm.eventId]);
 
   useEffect(() => {
+    if (!manualRequestForm.applicantId) {
+      if (manualRequestForm.applicantDepartment) {
+        setManualRequestForm((prev) => ({ ...prev, applicantDepartment: "" }));
+      }
+      return;
+    }
+    if (!manualApplicantDepartments.length) {
+      return;
+    }
+    const currentDepartment = String(manualRequestForm.applicantDepartment || "").trim();
+    if (!currentDepartment || !manualApplicantDepartments.some((item) => String(item.id || "").trim() === currentDepartment)) {
+      setManualRequestForm((prev) => ({
+        ...prev,
+        applicantDepartment: String(manualApplicantDepartments[0].id || "").trim(),
+      }));
+    }
+  }, [manualRequestForm.applicantId, manualRequestForm.applicantDepartment, manualApplicantDepartments]);
+
+  useEffect(() => {
     if (!showFundEventModal) {
       return;
     }
@@ -619,6 +638,32 @@ function FinanceAdminPage({ shared }) {
   const adminRoles = financeRoleItems
     .map((item) => String(item.role || "").trim())
     .filter(Boolean);
+
+  const resolveApplicantGroups_ = (personId, fallbackGroupId = "") => {
+    const normalizedPersonId = String(personId || "").trim();
+    const candidateIds = [];
+    if (normalizedPersonId) {
+      groupMemberships.forEach((item) => {
+        if (String(item.personId || "").trim() !== normalizedPersonId) {
+          return;
+        }
+        const groupId = String(item.groupId || "").trim();
+        if (groupId && !candidateIds.includes(groupId)) {
+          candidateIds.push(groupId);
+        }
+      });
+    }
+    const fallback = String(fallbackGroupId || "").trim();
+    if (fallback && !candidateIds.includes(fallback)) {
+      candidateIds.push(fallback);
+    }
+    return CLASS_GROUPS.filter((group) => candidateIds.includes(String(group.id || "").trim()));
+  };
+
+  const manualApplicantDepartments = useMemo(
+    () => resolveApplicantGroups_(manualRequestForm.applicantId, manualRequestForm.applicantDepartment),
+    [groupMemberships, CLASS_GROUPS, manualRequestForm.applicantId, manualRequestForm.applicantDepartment]
+  );
 
   const normalizedStudents = students.map((item) => {
     const name = item.preferredName || item.nameZh || item.name || item.email || "";
@@ -1939,6 +1984,7 @@ function FinanceAdminPage({ shared }) {
                       ...manualRequestForm,
                       applicantId: selectedId,
                       applicantName: student ? student.name : "",
+                      applicantDepartment: "",
                     });
                   }}
                   className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
@@ -2052,15 +2098,29 @@ function FinanceAdminPage({ shared }) {
                       applicantDepartment: e.target.value,
                     })
                   }
-                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                  disabled={!manualRequestForm.applicantId || !manualApplicantDepartments.length || manualApplicantDepartments.length === 1}
+                  className="mt-2 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 disabled:bg-slate-100 disabled:text-slate-500"
                 >
-                  <option value="">請選擇</option>
-                  {CLASS_GROUPS.map((group) => (
+                  {!manualRequestForm.applicantId ? <option value="">請先選擇申請人</option> : null}
+                  {manualRequestForm.applicantId && !manualApplicantDepartments.length ? (
+                    <option value="">查無所屬組別</option>
+                  ) : null}
+                  {manualApplicantDepartments.length > 1 ? <option value="">請選擇</option> : null}
+                  {manualApplicantDepartments.map((group) => (
                     <option key={group.id} value={group.id}>
                       {group.label}
                     </option>
                   ))}
                 </select>
+                {!manualRequestForm.applicantId ? (
+                  <p className="mt-1 text-[11px] text-slate-500">請先選申請人，再帶出其所屬組別。</p>
+                ) : !manualApplicantDepartments.length ? (
+                  <p className="mt-1 text-[11px] text-rose-600">查無申請人所屬組別，請先到組別資料補齊。</p>
+                ) : manualApplicantDepartments.length === 1 ? (
+                  <p className="mt-1 text-[11px] text-slate-500">已自動帶入申請人的所屬組別。</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-500">只顯示申請人實際所屬的組別。</p>
+                )}
               </div>
 
               {manualRequestForm.type === "payment" ? (
