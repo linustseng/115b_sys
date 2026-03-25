@@ -128,10 +128,12 @@ function FinancePage({ shared }) {
     transferLast5: fundPaymentErrorActive && error.includes("末 5 碼"),
   };
 
-  const applicantName =
-    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
-    (googleLinkedStudent && googleLinkedStudent.name) ||
-    "";
+  const getChineseStudentName_ = (student) =>
+    String(
+      (student && (student.nameZh || student.name || student.preferredName || student.nameEn)) || ""
+    ).trim();
+
+  const applicantName = getChineseStudentName_(googleLinkedStudent);
 
   const bankByCode = useMemo(() => {
     const map = new Map();
@@ -624,9 +626,7 @@ function FinancePage({ shared }) {
 
   const studentOptions = students.map((student) => {
     const id = String(student.id || "").trim();
-    const name = String(
-      student.preferredName || student.nameZh || student.nameEn || student.name || ""
-    ).trim();
+    const name = getChineseStudentName_(student);
     const email = String(student.googleEmail || student.email || "")
       .trim()
       .toLowerCase();
@@ -781,11 +781,11 @@ function FinancePage({ shared }) {
       selectedApplicant.name || resolvedApplicant.name || form.applicantName || applicantName || ""
     ).trim();
     if (!resolvedApplicantId) {
-      setError("請選擇請款人學號");
+      setError("請選擇申請人學號");
       return;
     }
     if (!resolvedApplicantName) {
-      setError("請填寫請款人");
+      setError("請填寫申請人");
       return;
     }
     if (!form.title) {
@@ -1628,7 +1628,7 @@ function FinancePage({ shared }) {
                 </div>
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">
-                    請款人 <span className="required-mark">*</span>
+                    申請人 <span className="required-mark">*</span>
                   </label>
                   <input
                     value={form.applicantName}
@@ -1640,13 +1640,7 @@ function FinancePage({ shared }) {
                   <datalist id="finance-students">
                     {students.map((student) => {
                       const id = String(student.id || "").trim();
-                      const name = String(
-                        student.preferredName ||
-                          student.nameZh ||
-                          student.nameEn ||
-                          student.name ||
-                          ""
-                      ).trim();
+                      const name = getChineseStudentName_(student);
                       if (!id && !name) {
                         return null;
                       }
