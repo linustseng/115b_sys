@@ -77,9 +77,13 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   const [actorNote, setActorNote] = useState("");
   const [acting, setActing] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
+  const getChineseStudentName_ = (student) =>
+    String(
+      (student && (student.nameZh || student.name || student.preferredName || student.nameEn)) || ""
+    ).trim();
+
   const displayName =
-    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
-    (googleLinkedStudent && googleLinkedStudent.name) ||
+    getChineseStudentName_(googleLinkedStudent) ||
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
 

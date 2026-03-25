@@ -92,10 +92,13 @@ function FinanceAdminPage({ shared }) {
   const [manualBankPickerOpen, setManualBankPickerOpen] = useState(false);
   const fundEventModalRef = useRef(null);
   const fundPaymentModalRef = useRef(null);
+  const getChineseStudentName_ = (student) =>
+    String(
+      (student && (student.nameZh || student.name || student.preferredName || student.nameEn)) || ""
+    ).trim();
+
   const adminDisplayName =
-    (googleLinkedStudent &&
-      (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
-    (googleLinkedStudent && googleLinkedStudent.name) ||
+    getChineseStudentName_(googleLinkedStudent) ||
     (googleLinkedStudent && googleLinkedStudent.email) ||
     "";
 
@@ -666,7 +669,7 @@ function FinanceAdminPage({ shared }) {
   );
 
   const normalizedStudents = students.map((item) => {
-    const name = item.preferredName || item.nameZh || item.name || item.email || "";
+    const name = getChineseStudentName_(item) || item.email || "";
     return {
       id: item.id || "",
       name: name,
