@@ -124,8 +124,26 @@ function isAllowedUploadMime_(mime) {
   ]).has(normalized);
 }
 
-function safeFilename_(value) {
+function recoverUtf8Filename_(value) {
   const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+  try {
+    const recovered = Buffer.from(raw, "latin1").toString("utf8").trim();
+    const hasMojibake = /[ÃÂÅÆÇÐÑÕØåæçéö]/.test(raw);
+    const hasReadableUnicode = /[\u4e00-\u9fff]/.test(recovered);
+    if (recovered && recovered !== raw && (hasMojibake || hasReadableUnicode)) {
+      return recovered;
+    }
+  } catch {
+    // ignore recovery failures
+  }
+  return raw;
+}
+
+function safeFilename_(value) {
+  const raw = recoverUtf8Filename_(value);
   if (!raw) {
     return "attachment";
   }

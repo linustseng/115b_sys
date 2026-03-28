@@ -60,8 +60,28 @@ function toStorageSafeFilename(value) {
   return safeExt ? `${safeBase}.${safeExt}` : safeBase;
 }
 
+function recoverUtf8Filename(value) {
+  const raw = firstText(value);
+  if (!raw) {
+    return "";
+  }
+  // Common multipart mojibake: UTF-8 bytes interpreted as latin1.
+  // Try a reversible latin1 -> utf8 recovery only when the decoded result looks better.
+  try {
+    const recovered = Buffer.from(raw, "latin1").toString("utf8").trim();
+    const hasMojibake = /[ÃÂÅÆÇÐÑÕØåæçéö]/.test(raw);
+    const hasReadableUnicode = /[\u4e00-\u9fff]/.test(recovered);
+    if (recovered && recovered !== raw && (hasMojibake || hasReadableUnicode)) {
+      return recovered;
+    }
+  } catch {
+    // ignore recovery failures
+  }
+  return raw;
+}
+
 function safeFilename(value) {
-  const raw = firstText(value, "attachment");
+  const raw = recoverUtf8Filename(firstText(value, "attachment"));
   const cleaned = raw
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/[\\/]+/g, "_")
