@@ -284,7 +284,7 @@ export async function uploadAttachmentFile({
   };
 }
 
-export async function createSignedReadUrlForAttachment(row, ttlSeconds = null) {
+export async function createSignedReadUrlForAttachment(row, ttlSeconds = null, options = {}) {
   if (!row) {
     return "";
   }
@@ -293,11 +293,15 @@ export async function createSignedReadUrlForAttachment(row, ttlSeconds = null) {
   if (!bucket || !storagePath) {
     return "";
   }
+  const throwOnError = Boolean(options && options.throwOnError);
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.storage
     .from(bucket)
     .createSignedUrl(storagePath, parseNumber(ttlSeconds, parseNumber(config.attachmentSignedUrlTtlSeconds, DEFAULT_SIGNED_URL_TTL_SECONDS)));
   if (error) {
+    if (throwOnError) {
+      throw new Error(firstText(error.message, "Failed to create signed URL"));
+    }
     return "";
   }
   return firstText(data && data.signedUrl);

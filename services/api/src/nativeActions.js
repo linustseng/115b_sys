@@ -5736,7 +5736,12 @@ export async function dispatchNativeAction({
       if (!row || firstText(row.status) === "deleted") {
         return { ok: false, data: null, error: "Attachment not found" };
       }
-      const url = await createSignedReadUrlForAttachment(row);
+      let url = "";
+      try {
+        url = await createSignedReadUrlForAttachment(row, null, { throwOnError: true });
+      } catch (err) {
+        return { ok: false, data: null, error: firstText((err && err.message) || "Attachment URL unavailable") };
+      }
       if (!url) {
         return { ok: false, data: null, error: "Attachment URL unavailable" };
       }
