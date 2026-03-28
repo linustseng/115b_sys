@@ -666,17 +666,32 @@ export default function DocumentsPage({ shared }) {
     setUploadingAttachment(true);
     try {
       const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("entityType", "document_version");
-      formData.append("entityId", `draft:${attachmentDraftId}`);
-      formData.append("attachmentKind", "reference");
-      formData.append("ownerGroupId", String(draft.ownerGroupId || editableGroupIds[0] || "A"));
-      const response = await fetch(`${base}/v1/attachments/upload`, {
-        method: "POST",
-        headers: { "x-id-token": idToken },
-        body: formData,
-      });
+      const sendUpload_ = async (token) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("entityType", "document_version");
+        formData.append("entityId", `draft:${attachmentDraftId}`);
+        formData.append("attachmentKind", "reference");
+        formData.append("ownerGroupId", String(draft.ownerGroupId || editableGroupIds[0] || "A"));
+        return fetch(`${base}/v1/attachments/upload`, {
+          method: "POST",
+          headers: { "x-id-token": token },
+          body: formData,
+        });
+      };
+      let response = await sendUpload_(idToken);
+      if (response.status === 401 && typeof getGoogleIdTokenSilently_ === "function") {
+        try {
+          const refreshed = String((await getGoogleIdTokenSilently_()) || "").trim();
+          if (refreshed) {
+            storeGoogleIdToken_(refreshed);
+            idToken = refreshed;
+            response = await sendUpload_(idToken);
+          }
+        } catch {
+          // ignore silent refresh failure and surface original 401 below
+        }
+      }
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload || payload.ok !== true) {
         throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
