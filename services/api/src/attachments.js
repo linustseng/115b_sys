@@ -21,6 +21,9 @@ function firstText(value, fallback = "") {
 }
 
 function parseNumber(value, fallback) {
+  if (value == null || String(value).trim() === "") {
+    return fallback;
+  }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
