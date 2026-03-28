@@ -9,6 +9,13 @@ const DOC_TYPE_OPTIONS = [
   { id: "reference", label: "其他文件" },
 ];
 
+const DOC_TYPE_SECTIONS = [
+  { id: "governance", title: "章程 / 制度", docTypes: ["charter", "policy"], accent: "slate" },
+  { id: "meetings", title: "班會記錄", docTypes: ["meeting_minutes"], accent: "sky" },
+  { id: "handover", title: "交接 / SOP", docTypes: ["handover"], accent: "amber" },
+  { id: "reference", title: "其他文件", docTypes: ["reference"], accent: "emerald" },
+];
+
 const DOCUMENT_TEMPLATES = {
   meeting_minutes: {
     label: "班會記錄模板",
@@ -418,6 +425,7 @@ export default function DocumentsPage({ shared }) {
       : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   ));
   const uploadInputRef = useRef(null);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
 
   const groupLabelMap = useMemo(() => {
     const map = {};
@@ -505,6 +513,7 @@ export default function DocumentsPage({ shared }) {
     if (!selectedId) {
       return;
     }
+    setShowVersionHistory(false);
     loadDetail(selectedId);
   }, [selectedId]);
 
@@ -537,6 +546,10 @@ export default function DocumentsPage({ shared }) {
 
   const pinnedDocuments = visibleDocuments.filter((item) => item.isPinned);
   const recentDocuments = visibleDocuments.filter((item) => !item.isPinned);
+  const groupedRecentSections = DOC_TYPE_SECTIONS.map((section) => ({
+    ...section,
+    items: recentDocuments.filter((item) => section.docTypes.includes(String(item.docType || ""))),
+  })).filter((section) => section.items.length > 0);
 
   const selectedDocument = detail && detail.document ? detail.document : null;
   const selectedLatestVersion = detail && detail.latestVersion ? detail.latestVersion : null;
@@ -553,6 +566,193 @@ export default function DocumentsPage({ shared }) {
     }
     return renderMeetingMinutesDetail(parsedMeetingDetail, selectedLatestVersion);
   }, [parsedMeetingDetail, selectedLatestVersion]);
+
+  const renderDocumentButton = (item, tone = "default") => {
+    const isSelected = selectedId === item.id;
+    const toneClassMap = {
+      default: isSelected ? "border-sky-300 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300",
+      slate: isSelected ? "border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/20" : "border-slate-200 bg-white hover:border-slate-300",
+      sky: isSelected ? "border-sky-300 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-sky-200",
+      amber: isSelected ? "border-amber-300 bg-amber-50 shadow-sm" : "border-slate-200 bg-white hover:border-amber-200",
+      emerald: isSelected ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white hover:border-emerald-200",
+    };
+    const mutedTextClass = isSelected && tone === "slate" ? "text-white/80" : "text-slate-500";
+    const metaTextClass = isSelected && tone === "slate" ? "text-white/70" : "text-slate-400";
+    const badgeClass = isSelected && tone === "slate" ? "rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/90" : "badge";
+    const mutedBadgeClass = isSelected && tone === "slate" ? "rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/90" : "badge-muted";
+    return (
+      <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className={`w-full rounded-3xl border px-4 py-4 text-left transition ${toneClassMap[tone] || toneClassMap.default}`}>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={badgeClass}>{docTypeLabel(item.docType)}</span>
+          <span className={mutedBadgeClass}>{groupLabelMap[item.ownerGroupId] || item.ownerGroupId}</span>
+          <span className={mutedBadgeClass}>v{item.latestVersionNumber}</span>
+        </div>
+        <h3 className={`mt-3 text-base font-semibold ${isSelected && tone === "slate" ? "text-white" : "text-slate-900"}`}>{item.title}</h3>
+        <p className={`mt-2 text-sm ${mutedTextClass}`}>{item.latestSummary || item.latestChangeSummary || "尚無摘要"}</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(item.tags || []).slice(0, 4).map((tag) => <span key={tag} className={mutedBadgeClass}>#{tag}</span>)}
+        </div>
+        <p className={`mt-3 text-xs ${metaTextClass}`}>{groupLabelMap[item.ownerGroupId] || item.ownerGroupId} ・ 更新 {formatDate(item.updatedAt || item.latestVersionCreatedAt)}</p>
+      </button>
+    );
+  };
+
+  const renderEditorForm = () => (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="section-title">{editorMode === "create" ? "新增文件" : editorMode === "version" ? "修改內容（發布新版本）" : "編輯文件資訊（不改正文）"}</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {editorMode === "version"
+              ? "你正在原地修改這份文件。送出後會保留舊版本，並把新版設為最新內容。"
+              : editorMode === "meta"
+                ? "這裡只會更新標題、類型、組別、標籤等文件資訊，不會改到正文內容。"
+                : "先把基本資料與內容填好，之後若要改正文，請用「修改內容」。"}
+          </p>
+        </div>
+        <button type="button" onClick={() => setEditorMode("")} className="btn-ghost">關閉</button>
+      </div>
+      <div className="mt-5 flex flex-wrap gap-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
+        <span className="self-center px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">快速模板</span>
+        {Object.entries(DOCUMENT_TEMPLATES).map(([key, template]) => (
+          <button key={key} type="button" onClick={() => applyTemplate(key)} className="btn-chip">
+            {template.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <label className="block text-sm font-medium text-slate-700">
+          文件名稱
+          <input value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} className="input-base mt-2 w-full" />
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          文件類型
+          <select value={draft.docType} onChange={(e) => setDraft((prev) => ({ ...prev, docType: e.target.value }))} className="input-base mt-2 w-full">
+            {DOC_TYPE_OPTIONS.filter((item) => item.id !== "all").map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          所屬組別
+          <select value={draft.ownerGroupId} onChange={(e) => setDraft((prev) => ({ ...prev, ownerGroupId: e.target.value }))} className="input-base mt-2 w-full" disabled={editorMode !== "meta" && !canManageAll && editableGroupIds.length === 1}>
+            {(CLASS_GROUPS || []).filter((item) => canManageAll || editableGroupIds.includes(item.id) || item.id === draft.ownerGroupId).map((item) => (
+              <option key={item.id} value={item.id}>{item.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          標籤
+          <input value={draft.tagsText} onChange={(e) => setDraft((prev) => ({ ...prev, tagsText: e.target.value }))} placeholder="章程, 班會, 財務" className="input-base mt-2 w-full" />
+        </label>
+        {draft.docType !== "meeting_minutes" ? (
+          <label className="block text-sm font-medium text-slate-700">
+            會議日期（選填）
+            <input type="date" value={draft.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingDate: e.target.value }))} className="input-base mt-2 w-full" />
+          </label>
+        ) : null}
+        <label className="block text-sm font-medium text-slate-700">
+          生效日期（選填）
+          <input type="date" value={draft.effectiveDate} onChange={(e) => setDraft((prev) => ({ ...prev, effectiveDate: e.target.value }))} className="input-base mt-2 w-full" />
+        </label>
+      </div>
+
+      {editorMode !== "meta" ? (
+        <>
+          <label className="mt-4 block text-sm font-medium text-slate-700">
+            本次變更摘要
+            <input value={draft.changeSummary} onChange={(e) => setDraft((prev) => ({ ...prev, changeSummary: e.target.value }))} placeholder="例如：新增財務核銷條文、補上 3/20 班會決議" className="input-base mt-2 w-full" />
+          </label>
+          <label className="mt-4 block text-sm font-medium text-slate-700">
+            摘要
+            <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} placeholder={draft.docType === "meeting_minutes" ? "可留白，系統會依討論摘要 / 決議事項自動產生" : "文件摘要"} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+          </label>
+          {draft.docType === "meeting_minutes" ? (
+            <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">班會記錄表單</p>
+                  <p className="mt-1 text-xs text-slate-500">先填結構化欄位，送出時會自動組成標準記錄格式。</p>
+                </div>
+                <span className="badge-success">結構化模板</span>
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="block text-sm font-medium text-slate-700">會議名稱<input value={draft.meetingForm.meetingName} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingName: e.target.value } }))} className="input-base mt-2 w-full" /></label>
+                <label className="block text-sm font-medium text-slate-700">日期<input type="date" value={draft.meetingForm.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingDate: e.target.value } }))} className="input-base mt-2 w-full" /></label>
+                <label className="block text-sm font-medium text-slate-700">時間<input value={draft.meetingForm.meetingTime} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingTime: e.target.value } }))} placeholder="例如 19:00-21:00" className="input-base mt-2 w-full" /></label>
+                <label className="block text-sm font-medium text-slate-700">地點<input value={draft.meetingForm.location} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, location: e.target.value } }))} className="input-base mt-2 w-full" /></label>
+                <label className="block text-sm font-medium text-slate-700">主席 / 紀錄<div className="mt-2 grid gap-3 sm:grid-cols-2"><input value={draft.meetingForm.chairperson} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, chairperson: e.target.value } }))} placeholder="主席" className="input-base w-full" /><input value={draft.meetingForm.recorder} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, recorder: e.target.value } }))} placeholder="紀錄" className="input-base w-full" /></div></label>
+                <label className="block text-sm font-medium text-slate-700">出席<textarea value={draft.meetingForm.attendees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, attendees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">請假 / 缺席<textarea value={draft.meetingForm.absentees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, absentees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+              </div>
+              <div className="mt-4 grid gap-4">
+                <label className="block text-sm font-medium text-slate-700">議程<textarea value={draft.meetingForm.agenda} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, agenda: e.target.value } }))} rows={4} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">討論摘要<textarea value={draft.meetingForm.discussion} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, discussion: e.target.value } }))} rows={6} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">決議事項<textarea value={draft.meetingForm.resolutions} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, resolutions: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">待辦事項<textarea value={draft.meetingForm.actionItems} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, actionItems: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">備註<textarea value={draft.meetingForm.notes} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, notes: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <div className="block text-sm font-medium text-slate-700">
+                  <button type="button" onClick={() => setShowAdvancedRawContent((prev) => !prev)} className="btn-chip">
+                    {showAdvancedRawContent ? "收合進階原始內容" : "展開進階原始內容（舊版相容）"}
+                  </button>
+                  {showAdvancedRawContent ? (
+                    <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={8} placeholder="只有舊資料匯入或特殊排版才需要填。一般維護請直接用上方表單。" className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <label className="mt-4 block text-sm font-medium text-slate-700">內容<textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={14} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+          )}
+          <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">附件</p>
+                <p className="text-xs text-slate-500">可附 PDF / 圖片 / docx，先沿用現有上傳服務。</p>
+              </div>
+              <label className="btn-secondary cursor-pointer">
+                {uploadingAttachment ? "上傳中..." : "上傳附件"}
+                <input ref={uploadInputRef} type="file" className="hidden" onChange={(e) => handleUploadAttachment(e.target.files && e.target.files[0])} />
+              </label>
+            </div>
+            <div className="mt-3 space-y-2">
+              {(draft.attachments || []).map((item, index) => (
+                <div key={`${item.url}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  <a href={item.url} target="_blank" rel="noreferrer" className="truncate hover:text-slate-900">{item.name || item.url}</a>
+                  <button type="button" onClick={() => setDraft((prev) => ({ ...prev, attachments: (prev.attachments || []).filter((_, idx) => idx !== index) }))} className="btn-chip">移除</button>
+                </div>
+              ))}
+              {!draft.attachments.length ? <p className="text-xs text-slate-400">尚未加入附件</p> : null}
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {editorMode === "meta" && canManageAll ? (
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <label className="block text-sm font-medium text-slate-700">
+            置頂
+            <select value={draft.isPinned ? "yes" : "no"} onChange={(e) => setDraft((prev) => ({ ...prev, isPinned: e.target.value === "yes" }))} className="input-base mt-2 w-full">
+              <option value="no">一般</option>
+              <option value="yes">置頂</option>
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            置頂順序
+            <input type="number" value={draft.pinOrder} onChange={(e) => setDraft((prev) => ({ ...prev, pinOrder: Number(e.target.value || 0) }))} className="input-base mt-2 w-full" />
+          </label>
+        </div>
+      ) : null}
+
+      <div className="mt-6 flex flex-wrap justify-end gap-3">
+        <button type="button" onClick={() => setEditorMode("")} className="btn-secondary">取消</button>
+        <button type="button" onClick={handleSubmit} disabled={submitting} className="btn-primary">
+          {submitting ? "儲存中..." : editorMode === "create" ? "建立文件" : editorMode === "version" ? "發布新版內容" : "儲存資訊設定"}
+        </button>
+      </div>
+    </>
+  );
 
   const beginCreate = () => {
     setDraft(buildDraftFromTemplate("meeting_minutes", editableGroupIds[0] || "A"));
@@ -914,202 +1114,9 @@ export default function DocumentsPage({ shared }) {
           {error ? <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         </section>
 
-        {editorMode ? (
+        {editorMode === "create" ? (
           <section className="card mt-6 p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="section-title">{editorMode === "create" ? "新增文件" : editorMode === "version" ? "修改內容（發布新版本）" : "編輯文件資訊（不改正文）"}</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {editorMode === "version"
-                    ? "這裡是修改文件內容的地方。系統會保留舊版本，不會直接覆蓋；請順手填本次變更摘要。"
-                    : editorMode === "meta"
-                      ? "這裡只會更新標題、類型、組別、標籤等文件資訊，不會改到正文內容。"
-                      : "先把基本資料與內容填好，之後若要改正文，請用「修改內容（發布新版本）」。"}
-                </p>
-              </div>
-              <button type="button" onClick={() => setEditorMode("")} className="btn-ghost">關閉</button>
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2 rounded-3xl border border-slate-200 bg-slate-50/70 p-3">
-              <span className="self-center px-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">快速模板</span>
-              {Object.entries(DOCUMENT_TEMPLATES).map(([key, template]) => (
-                <button key={key} type="button" onClick={() => applyTemplate(key)} className="btn-chip">
-                  {template.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                文件名稱
-                <input value={draft.title} onChange={(e) => setDraft((prev) => ({ ...prev, title: e.target.value }))} className="input-base mt-2 w-full" />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                文件類型
-                <select value={draft.docType} onChange={(e) => setDraft((prev) => ({ ...prev, docType: e.target.value }))} className="input-base mt-2 w-full">
-                  {DOC_TYPE_OPTIONS.filter((item) => item.id !== "all").map((item) => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                所屬組別
-                <select value={draft.ownerGroupId} onChange={(e) => setDraft((prev) => ({ ...prev, ownerGroupId: e.target.value }))} className="input-base mt-2 w-full" disabled={editorMode !== "meta" && !canManageAll && editableGroupIds.length === 1}>
-                  {(CLASS_GROUPS || []).filter((item) => canManageAll || editableGroupIds.includes(item.id) || item.id === draft.ownerGroupId).map((item) => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                標籤
-                <input value={draft.tagsText} onChange={(e) => setDraft((prev) => ({ ...prev, tagsText: e.target.value }))} placeholder="章程, 班會, 財務" className="input-base mt-2 w-full" />
-              </label>
-              {draft.docType !== "meeting_minutes" ? (
-                <label className="block text-sm font-medium text-slate-700">
-                  會議日期（選填）
-                  <input type="date" value={draft.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingDate: e.target.value }))} className="input-base mt-2 w-full" />
-                </label>
-              ) : null}
-              <label className="block text-sm font-medium text-slate-700">
-                生效日期（選填）
-                <input type="date" value={draft.effectiveDate} onChange={(e) => setDraft((prev) => ({ ...prev, effectiveDate: e.target.value }))} className="input-base mt-2 w-full" />
-              </label>
-            </div>
-
-            {editorMode !== "meta" ? (
-              <>
-                <label className="mt-4 block text-sm font-medium text-slate-700">
-                  本次變更摘要
-                  <input value={draft.changeSummary} onChange={(e) => setDraft((prev) => ({ ...prev, changeSummary: e.target.value }))} placeholder="例如：新增財務核銷條文、補上 3/20 班會決議" className="input-base mt-2 w-full" />
-                </label>
-                <label className="mt-4 block text-sm font-medium text-slate-700">
-                  摘要
-                  <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} placeholder={draft.docType === "meeting_minutes" ? "可留白，系統會依討論摘要 / 決議事項自動產生" : "文件摘要"} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                </label>
-                {draft.docType === "meeting_minutes" ? (
-                  <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">班會記錄表單</p>
-                        <p className="mt-1 text-xs text-slate-500">先填結構化欄位，送出時會自動組成標準記錄格式。</p>
-                      </div>
-                      <span className="badge-success">結構化模板</span>
-                    </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <label className="block text-sm font-medium text-slate-700">
-                        會議名稱
-                        <input value={draft.meetingForm.meetingName} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingName: e.target.value }, title: prev.title || e.target.value }))} className="input-base mt-2 w-full" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        會議日期
-                        <input type="date" value={draft.meetingForm.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingDate: e.target.value } }))} className="input-base mt-2 w-full" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        時間
-                        <input value={draft.meetingForm.meetingTime} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, meetingTime: e.target.value } }))} placeholder="例如 19:00-21:00" className="input-base mt-2 w-full" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        地點
-                        <input value={draft.meetingForm.location} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, location: e.target.value } }))} className="input-base mt-2 w-full" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        主席 / 紀錄
-                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                          <input value={draft.meetingForm.chairperson} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, chairperson: e.target.value } }))} placeholder="主席" className="input-base w-full" />
-                          <input value={draft.meetingForm.recorder} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, recorder: e.target.value } }))} placeholder="紀錄" className="input-base w-full" />
-                        </div>
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        出席
-                        <textarea value={draft.meetingForm.attendees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, attendees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        請假 / 缺席
-                        <textarea value={draft.meetingForm.absentees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, absentees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                    </div>
-                    <div className="mt-4 grid gap-4">
-                      <label className="block text-sm font-medium text-slate-700">
-                        議程
-                        <textarea value={draft.meetingForm.agenda} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, agenda: e.target.value } }))} rows={4} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        討論摘要
-                        <textarea value={draft.meetingForm.discussion} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, discussion: e.target.value } }))} rows={6} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        決議事項
-                        <textarea value={draft.meetingForm.resolutions} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, resolutions: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        待辦事項
-                        <textarea value={draft.meetingForm.actionItems} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, actionItems: e.target.value } }))} rows={5} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <label className="block text-sm font-medium text-slate-700">
-                        備註
-                        <textarea value={draft.meetingForm.notes} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, notes: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                      </label>
-                      <div className="block text-sm font-medium text-slate-700">
-                        <button type="button" onClick={() => setShowAdvancedRawContent((prev) => !prev)} className="btn-chip">
-                          {showAdvancedRawContent ? "收合進階原始內容" : "展開進階原始內容（舊版相容）"}
-                        </button>
-                        {showAdvancedRawContent ? (
-                          <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={8} placeholder="只有舊資料匯入或特殊排版才需要填。一般維護請直接用上方表單。" className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <label className="mt-4 block text-sm font-medium text-slate-700">
-                    內容
-                    <textarea value={draft.content} onChange={(e) => setDraft((prev) => ({ ...prev, content: e.target.value }))} rows={14} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
-                  </label>
-                )}
-                <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">附件</p>
-                      <p className="text-xs text-slate-500">可附 PDF / 圖片 / docx，先沿用現有上傳服務。</p>
-                    </div>
-                    <label className="btn-secondary cursor-pointer">
-                      {uploadingAttachment ? "上傳中..." : "上傳附件"}
-                      <input ref={uploadInputRef} type="file" className="hidden" onChange={(e) => handleUploadAttachment(e.target.files && e.target.files[0])} />
-                    </label>
-                  </div>
-                  <div className="mt-3 space-y-2">
-                    {(draft.attachments || []).map((item, index) => (
-                      <div key={`${item.url}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                        <a href={item.url} target="_blank" rel="noreferrer" className="truncate hover:text-slate-900">{item.name || item.url}</a>
-                        <button type="button" onClick={() => setDraft((prev) => ({ ...prev, attachments: (prev.attachments || []).filter((_, idx) => idx !== index) }))} className="btn-chip">移除</button>
-                      </div>
-                    ))}
-                    {!draft.attachments.length ? <p className="text-xs text-slate-400">尚未加入附件</p> : null}
-                  </div>
-                </div>
-              </>
-            ) : null}
-
-            {editorMode === "meta" && canManageAll ? (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="block text-sm font-medium text-slate-700">
-                  置頂
-                  <select value={draft.isPinned ? "yes" : "no"} onChange={(e) => setDraft((prev) => ({ ...prev, isPinned: e.target.value === "yes" }))} className="input-base mt-2 w-full">
-                    <option value="no">一般</option>
-                    <option value="yes">置頂</option>
-                  </select>
-                </label>
-                <label className="block text-sm font-medium text-slate-700">
-                  置頂順序
-                  <input type="number" value={draft.pinOrder} onChange={(e) => setDraft((prev) => ({ ...prev, pinOrder: Number(e.target.value || 0) }))} className="input-base mt-2 w-full" />
-                </label>
-              </div>
-            ) : null}
-
-            <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <button type="button" onClick={() => setEditorMode("")} className="btn-secondary">取消</button>
-              <button type="button" onClick={handleSubmit} disabled={submitting} className="btn-primary">
-                {submitting ? "儲存中..." : editorMode === "create" ? "建立文件" : editorMode === "version" ? "發布新版內容" : "儲存資訊設定"}
-              </button>
-            </div>
+            {renderEditorForm()}
           </section>
         ) : null}
 
@@ -1120,42 +1127,34 @@ export default function DocumentsPage({ shared }) {
                 <h2 className="section-title">重要文件</h2>
                 <span className="text-xs text-slate-400">{pinnedDocuments.length} 份</span>
               </div>
+              <p className="mt-1 text-sm text-slate-500">置頂文件會固定在最上面，適合章程、核心制度與常用交接資料。</p>
               <div className="mt-4 space-y-3">
-                {pinnedDocuments.length ? pinnedDocuments.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className={`w-full rounded-3xl border px-4 py-4 text-left transition ${selectedId === item.id ? "border-slate-900 bg-slate-900 text-white shadow-lg shadow-slate-900/20" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={selectedId === item.id ? "rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/90" : "badge"}>{docTypeLabel(item.docType)}</span>
-                      <span className={selectedId === item.id ? "rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/90" : "badge-muted"}>v{item.latestVersionNumber}</span>
-                    </div>
-                    <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
-                    <p className={`mt-2 text-sm ${selectedId === item.id ? "text-white/80" : "text-slate-500"}`}>{item.latestSummary || item.latestChangeSummary || "尚無摘要"}</p>
-                    <p className={`mt-3 text-xs ${selectedId === item.id ? "text-white/70" : "text-slate-400"}`}>{groupLabelMap[item.ownerGroupId] || item.ownerGroupId} ・ 更新 {formatDate(item.updatedAt || item.latestVersionCreatedAt)}</p>
-                  </button>
-                )) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">目前沒有置頂文件</div>}
+                {pinnedDocuments.length ? pinnedDocuments.map((item) => renderDocumentButton(item, "slate")) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">目前沒有置頂文件</div>}
               </div>
             </div>
 
             <div className="card p-5 sm:p-6">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="section-title">全部文件</h2>
+                <div>
+                  <h2 className="section-title">文件總覽</h2>
+                  <p className="mt-1 text-sm text-slate-500">依文件用途分區，手機上也比較不會混在一起。</p>
+                </div>
                 <span className="text-xs text-slate-400">{recentDocuments.length} 份</span>
               </div>
               {loading ? <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">載入中...</div> : null}
-              <div className="mt-4 space-y-3">
-                {recentDocuments.length ? recentDocuments.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} className={`w-full rounded-3xl border px-4 py-4 text-left transition ${selectedId === item.id ? "border-sky-300 bg-sky-50 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300"}`}>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge">{docTypeLabel(item.docType)}</span>
-                      <span className="badge-muted">{groupLabelMap[item.ownerGroupId] || item.ownerGroupId}</span>
-                      <span className="badge-muted">v{item.latestVersionNumber}</span>
+              <div className="mt-5 space-y-5">
+                {groupedRecentSections.length ? groupedRecentSections.map((section) => (
+                  <section key={section.id} className="rounded-[28px] border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{section.title}</h3>
+                        <p className="mt-1 text-xs text-slate-400">{section.items.length} 份文件</p>
+                      </div>
                     </div>
-                    <h3 className="mt-3 text-base font-semibold text-slate-900">{item.title}</h3>
-                    <p className="mt-2 text-sm text-slate-500">{item.latestSummary || item.latestChangeSummary || "尚無摘要"}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {(item.tags || []).slice(0, 4).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
+                    <div className="mt-4 space-y-3">
+                      {section.items.map((item) => renderDocumentButton(item, section.accent))}
                     </div>
-                    <p className="mt-3 text-xs text-slate-400">更新 {formatDate(item.updatedAt || item.latestVersionCreatedAt)}</p>
-                  </button>
+                  </section>
                 )) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">找不到符合條件的文件</div>}
               </div>
             </div>
@@ -1180,103 +1179,120 @@ export default function DocumentsPage({ shared }) {
                     </div>
                     {selectedCanEdit ? (
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={beginCreateVersion} className="btn-secondary">修改內容</button>
+                        <button type="button" onClick={beginCreateVersion} className="btn-primary">修改內容</button>
                         <button type="button" onClick={beginEditMeta} className="btn-secondary">編輯資訊</button>
                         <button type="button" onClick={handleArchive} disabled={submitting} className="btn-ghost">封存</button>
                       </div>
                     ) : null}
                   </div>
 
-                  {selectedLatestVersion && selectedLatestVersion.summary ? (
-                    <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">摘要</p>
-                      <p className="mt-2 text-sm text-slate-700">{selectedLatestVersion.summary}</p>
-                    </div>
-                  ) : null}
-
-                  {selectedLatestVersion && selectedLatestVersion.changeSummary ? (
-                    <div className="mt-4 rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
-                      <span className="font-semibold">本版更新：</span>
-                      {selectedLatestVersion.changeSummary}
-                    </div>
-                  ) : null}
-
-                  <div className={`mt-4 rounded-3xl border px-4 py-3 text-sm ${selectedCanEdit ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-                    {selectedCanEdit ? (
-                      <>
-                        <span className="font-semibold">修改方式：</span>
-                        這個文件採版本留存制；要改正文內容請按右上角「修改內容」，送出後會發布新版本並保留歷史。
-                      </>
-                    ) : (
-                      <>
-                        <span className="font-semibold">目前無法直接修改：</span>
-                        這個頁面不是直接覆蓋編輯。正常情況會在右上角看到「修改內容」；如果沒看到，代表你目前登入身分對這份文件沒有編輯權限。
-                      </>
-                    )}
-                  </div>
-
-                  <div className="mt-6 flex flex-wrap gap-2">
-                    {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
-                  </div>
-
-                  {selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
-                    <div className="mt-6 grid gap-4">
-                      {meetingDetailCards.map((card) => (
-                        <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-                          <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{card.title}</h3>
-                          <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{card.content}</div>
-                        </section>
-                      ))}
+                  {editorMode && editorMode !== "create" ? (
+                    <div className="mt-6 rounded-[28px] border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+                      {renderEditorForm()}
                     </div>
                   ) : (
-                    <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
-                      {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
-                    </article>
-                  )}
+                    <>
+                      {selectedLatestVersion && selectedLatestVersion.summary ? (
+                        <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">摘要</p>
+                          <p className="mt-2 text-sm text-slate-700">{selectedLatestVersion.summary}</p>
+                        </div>
+                      ) : null}
 
-                  {(selectedLatestVersion && selectedLatestVersion.attachments && selectedLatestVersion.attachments.length) ? (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-semibold text-slate-900">附件</h3>
-                      <div className="mt-3 space-y-2">
-                        {selectedLatestVersion.attachments.map((item, index) => (
-                          <a key={`${item.url}-${index}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 hover:bg-white">
-                            <span className="truncate">{item.name || item.url}</span>
-                            <span className="text-xs text-slate-400">開啟</span>
-                          </a>
-                        ))}
+                      {selectedLatestVersion && selectedLatestVersion.changeSummary ? (
+                        <div className="mt-4 rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
+                          <span className="font-semibold">本版更新：</span>
+                          {selectedLatestVersion.changeSummary}
+                        </div>
+                      ) : null}
+
+                      <div className={`mt-4 rounded-3xl border px-4 py-3 text-sm ${selectedCanEdit ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                        {selectedCanEdit ? (
+                          <>
+                            <span className="font-semibold">修改方式：</span>
+                            這裡已改成詳頁原地編輯；按右上角「修改內容」後，就會直接在這個區塊切成可編輯模式。
+                          </>
+                        ) : (
+                          <>
+                            <span className="font-semibold">目前無法直接修改：</span>
+                            正常情況會在右上角看到「修改內容」；如果沒看到，代表你目前登入身分對這份文件沒有編輯權限。
+                          </>
+                        )}
                       </div>
-                    </div>
-                  ) : null}
+
+                      <div className="mt-6 flex flex-wrap gap-2">
+                        {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
+                      </div>
+
+                      {selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
+                        <div className="mt-6 grid gap-4">
+                          {meetingDetailCards.map((card) => (
+                            <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                              <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{card.title}</h3>
+                              <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{card.content}</div>
+                            </section>
+                          ))}
+                        </div>
+                      ) : (
+                        <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
+                          {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
+                        </article>
+                      )}
+
+                      {(selectedLatestVersion && selectedLatestVersion.attachments && selectedLatestVersion.attachments.length) ? (
+                        <div className="mt-6">
+                          <h3 className="text-sm font-semibold text-slate-900">附件</h3>
+                          <div className="mt-3 space-y-2">
+                            {selectedLatestVersion.attachments.map((item, index) => (
+                              <a key={`${item.url}-${index}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 hover:bg-white">
+                                <span className="truncate">{item.name || item.url}</span>
+                                <span className="text-xs text-slate-400">開啟</span>
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </>
               ) : null}
             </div>
 
-            <div className="card p-5 sm:p-6">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="section-title">版本歷史</h2>
-                <span className="text-xs text-slate-400">{versions.length} 個版本</span>
-              </div>
-              <div className="mt-4 space-y-3">
-                {versions.length ? versions.map((version) => (
-                  <div key={version.id} className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="badge">v{version.versionNumber}</span>
-                      <span className="badge-muted">{formatDate(version.createdAt)}</span>
-                      {version.createdByName ? <span className="badge-muted">{version.createdByName}</span> : null}
-                    </div>
-                    {version.changeSummary ? <p className="mt-3 text-sm font-medium text-slate-800">{version.changeSummary}</p> : null}
-                    {version.summary ? <p className="mt-2 text-sm text-slate-500">{version.summary}</p> : null}
-                    {(version.meetingDate || version.effectiveDate) ? (
-                      <p className="mt-3 text-xs text-slate-400">
-                        {version.meetingDate ? `會議日期：${version.meetingDate}` : ""}
-                        {version.meetingDate && version.effectiveDate ? " ・ " : ""}
-                        {version.effectiveDate ? `生效日：${version.effectiveDate}` : ""}
-                      </p>
-                    ) : null}
+            {selectedDocument ? (
+              <div className="card p-5 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="section-title">版本歷史</h2>
+                    <p className="mt-1 text-sm text-slate-500">平常先看最新內容；需要追版本時再展開。</p>
                   </div>
-                )) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">尚無版本歷史</div>}
+                  <button type="button" onClick={() => setShowVersionHistory((prev) => !prev)} className="btn-secondary">
+                    {showVersionHistory ? `收合版本歷史` : `展開版本歷史（${versions.length}）`}
+                  </button>
+                </div>
+                {showVersionHistory ? (
+                  <div className="mt-4 space-y-3">
+                    {versions.length ? versions.map((version) => (
+                      <div key={version.id} className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="badge">v{version.versionNumber}</span>
+                          <span className="badge-muted">{formatDate(version.createdAt)}</span>
+                          {version.createdByName ? <span className="badge-muted">{version.createdByName}</span> : null}
+                        </div>
+                        {version.changeSummary ? <p className="mt-3 text-sm font-medium text-slate-800">{version.changeSummary}</p> : null}
+                        {version.summary ? <p className="mt-2 text-sm text-slate-500">{version.summary}</p> : null}
+                        {(version.meetingDate || version.effectiveDate) ? (
+                          <p className="mt-3 text-xs text-slate-400">
+                            {version.meetingDate ? `會議日期：${version.meetingDate}` : ""}
+                            {version.meetingDate && version.effectiveDate ? " ・ " : ""}
+                            {version.effectiveDate ? `生效日：${version.effectiveDate}` : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                    )) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">尚無版本歷史</div>}
+                  </div>
+                ) : null}
               </div>
-            </div>
+            ) : null}
           </section>
         </div>
       </main>
