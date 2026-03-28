@@ -38,6 +38,28 @@ function normalizeEntityId(value, fallback = "draft") {
     .slice(0, 120) || fallback;
 }
 
+function toStorageSafeSegment(value, fallback = "file") {
+  const normalized = String(value == null ? "" : value)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^[-._]+|[-._]+$/g, "")
+    .slice(0, 120);
+  return normalized || fallback;
+}
+
+function toStorageSafeFilename(value) {
+  const original = safeFilename(value);
+  const dotIndex = original.lastIndexOf(".");
+  const hasExt = dotIndex > 0 && dotIndex < original.length - 1;
+  const ext = hasExt ? original.slice(dotIndex + 1) : "";
+  const base = hasExt ? original.slice(0, dotIndex) : original;
+  const safeBase = toStorageSafeSegment(base, "file");
+  const safeExt = ext ? toStorageSafeSegment(ext, "bin").toLowerCase() : "";
+  return safeExt ? `${safeBase}.${safeExt}` : safeBase;
+}
+
 function safeFilename(value) {
   const raw = firstText(value, "attachment");
   const cleaned = raw
@@ -136,7 +158,10 @@ export function buildAttachmentPublicShape(row, signedUrl = "") {
 }
 
 function buildStoragePath({ entityType, entityId, attachmentId, fileName }) {
-  return `${normalizeEntityType(entityType)}/${normalizeEntityId(entityId)}/${attachmentId}-${safeFilename(fileName)}`;
+  const safeEntityType = toStorageSafeSegment(normalizeEntityType(entityType), "generic");
+  const safeEntityId = toStorageSafeSegment(normalizeEntityId(entityId), "draft");
+  const safeFileName = toStorageSafeFilename(fileName);
+  return `${safeEntityType}/${safeEntityId}/${attachmentId}-${safeFileName}`;
 }
 
 export async function uploadAttachmentFile({
