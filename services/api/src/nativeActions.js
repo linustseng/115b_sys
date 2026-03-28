@@ -11,6 +11,7 @@ import {
 import { jsonbParam } from "./jsonb.js";
 import {
   claimAttachments,
+  createSignedReadUrlForAttachment,
   extractAttachmentIds,
   hydrateAttachmentItems,
   normalizeAttachmentItems,
@@ -5719,6 +5720,33 @@ export async function dispatchNativeAction({
             canEdit: canEditDocumentWithMemberships_(documentRow, memberships),
             canManageAll: canManageDocumentsGlobal_(memberships),
           },
+        },
+        error: null,
+      };
+    }
+
+    case "getAttachmentAccessUrl": {
+      requireAuth();
+      const attachmentId = firstText(body.attachmentId || body.id);
+      if (!attachmentId) {
+        return { ok: false, data: null, error: "Missing attachmentId" };
+      }
+      const result = await query(`select * from attachments where id = $1 limit 1`, [attachmentId]);
+      const row = result.rows[0];
+      if (!row || firstText(row.status) === "deleted") {
+        return { ok: false, data: null, error: "Attachment not found" };
+      }
+      const url = await createSignedReadUrlForAttachment(row);
+      if (!url) {
+        return { ok: false, data: null, error: "Attachment URL unavailable" };
+      }
+      return {
+        ok: true,
+        data: {
+          attachmentId,
+          url,
+          name: firstText(row.original_name),
+          mimeType: firstText(row.mime_type),
         },
         error: null,
       };

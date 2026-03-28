@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
-import { openAttachmentUrl_ } from "../utils/attachments";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function FinanceAdminPage({ shared }) {
   const {
@@ -1978,7 +1978,7 @@ function FinanceAdminPage({ shared }) {
                         <button
                           key={`${item.url}-${index}`}
                           type="button"
-                          onClick={() => openAttachmentUrl_(item.url)}
+                          onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                           className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 hover:border-slate-300"
                         >
                           {item.name || item.url}
@@ -2524,7 +2524,7 @@ function FinanceAdminPage({ shared }) {
                         >
                           <button
                             type="button"
-                            onClick={() => openAttachmentUrl_(String((item && item.url) || "").trim())}
+                            onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                             className="flex-1 truncate text-left text-xs text-slate-600 underline-offset-2 hover:underline"
                           >
                             {label}

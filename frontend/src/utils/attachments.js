@@ -35,3 +35,20 @@ export function openAttachmentUrl_(url) {
   window.location.assign(href);
   return true;
 }
+
+export async function resolveAndOpenAttachment_(item, apiRequest) {
+  const attachment = item && typeof item === "object" ? item : {};
+  const existingUrl = String(attachment.url || "").trim();
+  if (existingUrl) {
+    return openAttachmentUrl_(existingUrl);
+  }
+  const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
+  if (!attachmentId || typeof apiRequest !== "function") {
+    return false;
+  }
+  const { result } = await apiRequest({ action: "getAttachmentAccessUrl", attachmentId });
+  if (!result || !result.ok || !result.data || !result.data.url) {
+    throw new Error((result && result.error) || "附件連結暫時無法取得");
+  }
+  return openAttachmentUrl_(result.data.url);
+}

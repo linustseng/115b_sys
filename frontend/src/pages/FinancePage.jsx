@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
-import { openAttachmentUrl_ } from "../utils/attachments";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function FinancePage({ shared }) {
 
@@ -2038,7 +2038,7 @@ function FinancePage({ shared }) {
                     >
                       <button
                         type="button"
-                        onClick={() => openAttachmentUrl_(item.url)}
+                        onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                         className="font-semibold text-slate-700 hover:text-slate-900"
                       >
                         {item.name || item.url}
