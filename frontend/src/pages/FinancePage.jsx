@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
+import { openAttachmentUrl_ } from "../utils/attachments";
 
 function FinancePage({ shared }) {
 
@@ -2035,14 +2036,13 @@ function FinancePage({ shared }) {
                       key={`${item.url}-${index}`}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs text-slate-600"
                     >
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => openAttachmentUrl_(item.url)}
                         className="font-semibold text-slate-700 hover:text-slate-900"
                       >
                         {item.name || item.url}
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveAttachment(index)}

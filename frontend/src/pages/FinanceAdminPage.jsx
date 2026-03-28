@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
+import { openAttachmentUrl_ } from "../utils/attachments";
 
 function FinanceAdminPage({ shared }) {
   const {
@@ -1974,15 +1975,14 @@ function FinanceAdminPage({ shared }) {
                     <p className="text-xs font-semibold text-slate-600">附件</p>
                     <div className="mt-2 space-y-2">
                       {parseFinanceAttachments_(selectedRequest.attachments).map((item, index) => (
-                        <a
+                        <button
                           key={`${item.url}-${index}`}
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:border-slate-300"
+                          type="button"
+                          onClick={() => openAttachmentUrl_(item.url)}
+                          className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 hover:border-slate-300"
                         >
                           {item.name || item.url}
-                        </a>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2522,14 +2522,13 @@ function FinanceAdminPage({ shared }) {
                           key={key || index}
                           className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                         >
-                          <a
-                            href={String((item && item.url) || "").trim() || undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex-1 truncate text-xs text-slate-600 underline-offset-2 hover:underline"
+                          <button
+                            type="button"
+                            onClick={() => openAttachmentUrl_(String((item && item.url) || "").trim())}
+                            className="flex-1 truncate text-left text-xs text-slate-600 underline-offset-2 hover:underline"
                           >
                             {label}
-                          </a>
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleRemoveManualAttachment(key)}

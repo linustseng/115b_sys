@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { openAttachmentUrl_ } from "../utils/attachments";
 
 const DOC_TYPE_OPTIONS = [
   { id: "all", label: "全部類型" },
@@ -719,7 +720,7 @@ export default function DocumentsPage({ shared }) {
             <div className="mt-3 space-y-2">
               {(draft.attachments || []).map((item, index) => (
                 <div key={`${item.url}-${index}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
-                  <a href={item.url} target="_blank" rel="noreferrer" className="truncate hover:text-slate-900">{item.name || item.url}</a>
+                  <button type="button" onClick={() => openAttachmentUrl_(item.url)} className="truncate text-left hover:text-slate-900">{item.name || item.url}</button>
                   <button type="button" onClick={() => setDraft((prev) => ({ ...prev, attachments: (prev.attachments || []).filter((_, idx) => idx !== index) }))} className="btn-chip">移除</button>
                 </div>
               ))}
@@ -1244,10 +1245,10 @@ export default function DocumentsPage({ shared }) {
                           <h3 className="text-sm font-semibold text-slate-900">附件</h3>
                           <div className="mt-3 space-y-2">
                             {selectedLatestVersion.attachments.map((item, index) => (
-                              <a key={`${item.url}-${index}`} href={item.url} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 hover:bg-white">
+                              <button key={`${item.url}-${index}`} type="button" onClick={() => openAttachmentUrl_(item.url)} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 hover:bg-white">
                                 <span className="truncate">{item.name || item.url}</span>
                                 <span className="text-xs text-slate-400">開啟</span>
-                              </a>
+                              </button>
                             ))}
                           </div>
                         </div>
