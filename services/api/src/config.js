@@ -42,6 +42,12 @@ export function getConfig() {
   ).trim();
   const driveAttachmentPublicRead = parseBoolean(process.env.DRIVE_ATTACHMENT_PUBLIC_READ, false);
 
+  const supabaseUrl = String(process.env.SUPABASE_URL || "").trim();
+  const supabaseServiceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+  const supabaseAttachmentBucket = String(process.env.SUPABASE_ATTACHMENT_BUCKET || "attachments").trim() || "attachments";
+  const attachmentSignedUrlTtlSeconds = parseNumber(process.env.ATTACHMENT_SIGNED_URL_TTL_SECONDS, 1800);
+  const attachmentMaxFileSizeBytes = parseNumber(process.env.ATTACHMENT_MAX_FILE_SIZE_BYTES, 20 * 1024 * 1024);
+
   const nodeEnv = String(process.env.NODE_ENV || "development").trim();
   const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
 
@@ -62,6 +68,11 @@ export function getConfig() {
     driveFinanceFolderId,
     driveServiceAccountJsonBase64,
     driveAttachmentPublicRead,
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    supabaseAttachmentBucket,
+    attachmentSignedUrlTtlSeconds,
+    attachmentMaxFileSizeBytes,
   };
 
   return cachedConfig;

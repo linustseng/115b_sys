@@ -73,7 +73,7 @@ function FinancePage({ shared }) {
     : "requests";
 
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
-  const financeUploadEnabled = String(import.meta.env.VITE_FINANCE_UPLOAD_ENABLED || "0")
+  const financeUploadEnabled = String(import.meta.env.VITE_FINANCE_UPLOAD_ENABLED || "1")
     .trim()
     .toLowerCase() === "1";
   const [loginExpanded, setLoginExpanded] = useState(false);
@@ -104,6 +104,19 @@ function FinancePage({ shared }) {
   const [uploadAttachmentError, setUploadAttachmentError] = useState("");
   const [memberGroups, setMemberGroups] = useState([]);
   const [fundEvents, setFundEvents] = useState([]);
+
+  const ensureAttachmentDraftRequestId_ = () => {
+    const current = String(form.id || editingId || "").trim();
+    if (current) {
+      return current;
+    }
+    const nextId =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    setForm((prev) => ({ ...prev, id: prev.id || nextId }));
+    return nextId;
+  };
   const [fundEventsLoading, setFundEventsLoading] = useState(false);
   const [fundEventsError, setFundEventsError] = useState("");
   const [fundPaymentForm, setFundPaymentForm] = useState(() => {
@@ -586,10 +599,14 @@ function FinancePage({ shared }) {
     setUploadingAttachment(true);
     setUploadAttachmentError("");
     try {
+      const draftRequestId = ensureAttachmentDraftRequestId_();
       const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`${base}/v1/finance/attachments/upload`, {
+      formData.append("entityType", "finance_request");
+      formData.append("entityId", `draft:${draftRequestId}`);
+      formData.append("attachmentKind", "supporting_document");
+      const response = await fetch(`${base}/v1/attachments/upload`, {
         method: "POST",
         headers: {
           "x-id-token": idToken,
@@ -601,14 +618,20 @@ function FinancePage({ shared }) {
         throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
       }
       const data = payload.data || {};
-      const url = String(data.url || "").trim();
-      const name = String(data.name || file.name || url).trim();
-      if (!url) {
-        throw new Error("上傳成功但缺少連結");
+      const item = data.item || {
+        attachmentId: String(data.attachmentId || "").trim(),
+        name: String(data.name || file.name || "附件").trim(),
+        url: String(data.url || "").trim(),
+        mimeType: String(data.mimeType || file.type || "").trim(),
+        sizeBytes: Number(data.sizeBytes || file.size || 0),
+        attachmentKind: String(data.attachmentKind || "supporting_document").trim(),
+      };
+      if (!item.url) {
+        throw new Error("上傳成功但缺少附件連結");
       }
       setForm((prev) => ({
         ...prev,
-        attachments: (prev.attachments || []).concat([{ name, url }]),
+        attachments: (prev.attachments || []).concat([item]),
       }));
     } catch (error) {
       setUploadAttachmentError(String(error && error.message ? error.message : "上傳失敗"));
@@ -1940,14 +1963,7 @@ function FinancePage({ shared }) {
             <div className="mt-6 space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <label className="text-sm font-medium text-slate-700">附件</label>
-                <a
-                  href="https://drive.google.com/drive/my-drive"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 btn-chip"
-                >
-                  上傳到 Google Drive
-                </a>
+                <span className="text-xs text-slate-400">支援 PDF / 圖片 / Office 檔</span>
               </div>
               <div className="flex flex-wrap items-center gap-3">
                 {financeUploadEnabled ? (
@@ -1977,7 +1993,7 @@ function FinancePage({ shared }) {
                   <input
                     value={attachmentUrl}
                     onChange={(event) => setAttachmentUrl(event.target.value)}
-                    placeholder="貼上 Drive 連結"
+                    placeholder="貼上附件網址（選填，若有外部連結）"
                     className="h-11 flex-1 rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900"
                   />
                   <button
@@ -1995,7 +2011,7 @@ function FinancePage({ shared }) {
               ) : null}
 
               <p className="text-xs text-slate-400">
-                目前附件請使用 Google Drive 分享連結貼上即可。
+                可直接上傳到系統附件庫；若是外部資料，也可補貼網址。
               </p>
               {form.attachments && form.attachments.length ? (
                 <div className="space-y-2">

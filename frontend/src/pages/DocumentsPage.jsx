@@ -412,6 +412,11 @@ export default function DocumentsPage({ shared }) {
   const [draft, setDraft] = useState(() => emptyDraft("A"));
   const [showAdvancedRawContent, setShowAdvancedRawContent] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentDraftId, setAttachmentDraftId] = useState(() => (
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  ));
   const uploadInputRef = useRef(null);
 
   const groupLabelMap = useMemo(() => {
@@ -551,6 +556,11 @@ export default function DocumentsPage({ shared }) {
 
   const beginCreate = () => {
     setDraft(buildDraftFromTemplate("meeting_minutes", editableGroupIds[0] || "A"));
+    setAttachmentDraftId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    );
     setShowAdvancedRawContent(false);
     setEditorMode("create");
     setStatusMessage("");
@@ -597,6 +607,11 @@ export default function DocumentsPage({ shared }) {
     if (!selectedDocument) {
       return;
     }
+    setAttachmentDraftId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+    );
     const parsedMeeting = selectedDocument.docType === "meeting_minutes"
       ? parseMeetingMinutesContent(selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "")
       : null;
@@ -653,7 +668,11 @@ export default function DocumentsPage({ shared }) {
       const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`${base}/v1/finance/attachments/upload`, {
+      formData.append("entityType", "document_version");
+      formData.append("entityId", `draft:${attachmentDraftId}`);
+      formData.append("attachmentKind", "reference");
+      formData.append("ownerGroupId", String(draft.ownerGroupId || editableGroupIds[0] || "A"));
+      const response = await fetch(`${base}/v1/attachments/upload`, {
         method: "POST",
         headers: { "x-id-token": idToken },
         body: formData,
@@ -663,14 +682,20 @@ export default function DocumentsPage({ shared }) {
         throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
       }
       const data = payload.data || {};
-      const url = String(data.url || "").trim();
-      const name = String(data.name || file.name || url).trim();
-      if (!url) {
-        throw new Error("上傳成功但缺少連結");
+      const item = data.item || {
+        attachmentId: String(data.attachmentId || "").trim(),
+        name: String(data.name || file.name || "附件").trim(),
+        url: String(data.url || "").trim(),
+        mimeType: String(data.mimeType || file.type || "").trim(),
+        sizeBytes: Number(data.sizeBytes || file.size || 0),
+        attachmentKind: String(data.attachmentKind || "reference").trim(),
+      };
+      if (!item.url) {
+        throw new Error("上傳成功但缺少附件連結");
       }
       setDraft((prev) => ({
         ...prev,
-        attachments: (prev.attachments || []).concat([{ name, url }]),
+        attachments: (prev.attachments || []).concat([item]),
       }));
       setStatusMessage("附件已加入");
     } catch (err) {

@@ -10,6 +10,13 @@ import { jsonbParam } from "./jsonb.js";
 import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
 import { dispatchNativeAction, runAcademicAutoSync } from "./nativeActions.js";
+import {
+  isAllowedAttachmentMime,
+  isAttachmentStorageConfigured,
+  listAttachmentsByEntity,
+  softDeleteAttachment,
+  uploadAttachmentFile,
+} from "./attachments.js";
 
 const config = getConfig();
 const app = express();
@@ -55,7 +62,7 @@ if (!config.googleClientId) {
 app.use(
   cors({
     origin: true,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-id-token", "x-goog-id-token"],
   })
 );
@@ -127,6 +134,97 @@ function safeFilename_(value) {
     .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/[\\/]+/g, "_")
     .slice(0, 160) || "attachment";
+}
+
+function normalizeAttachmentEntityType_(value) {
+  return String(value || "").trim().toLowerCase().replace(/[^a-z0-9:_-]+/g, "_").slice(0, 80);
+}
+
+function normalizeAttachmentEntityId_(value) {
+  return String(value || "").trim().replace(/[^a-zA-Z0-9:_-]+/g, "_").slice(0, 120);
+}
+
+function isDocumentDraftEntity_(entityType, entityId) {
+  return entityType === "document_version" && entityId.startsWith("draft:");
+}
+
+function isFinanceDraftEntity_(entityType, entityId) {
+  return entityType === "finance_request" && entityId.startsWith("draft:");
+}
+
+async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = {}) {
+  if (!auth || !auth.studentId) {
+    return { canView: false, canUpload: false, canDelete: false };
+  }
+  const memberships = await listMembershipsByStudentId(auth.studentId);
+  const isAdminLike = memberships.some((item) => {
+    const groupId = String(item.groupId || item.group_id || "").trim();
+    const role = String(item.roleInGroup || item.role_in_group || "").trim().toLowerCase();
+    if (groupId === "E") {
+      return true;
+    }
+    return groupId === "A" && (role === "lead" || role === "deputy");
+  });
+
+  if (entityType === "document_version") {
+    if (isDocumentDraftEntity_(entityType, entityId)) {
+      const ownerGroupId = String(reqBody.ownerGroupId || reqBody.groupId || "").trim();
+      if (!ownerGroupId) {
+        return { canView: false, canUpload: false, canDelete: false };
+      }
+      const canEdit = memberships.some((item) => {
+        const groupId = String(item.groupId || item.group_id || "").trim();
+        const role = String(item.roleInGroup || item.role_in_group || "").trim().toLowerCase();
+        if (isAdminLike) {
+          return true;
+        }
+        return groupId === ownerGroupId && (role === "lead" || role === "deputy");
+      });
+      return { canView: canEdit, canUpload: canEdit, canDelete: canEdit };
+    }
+
+    const result = await query(`select * from documents where latest_version_id = $1 or id = $1 limit 1`, [entityId]);
+    const row = result.rows[0];
+    if (!row) {
+      return { canView: false, canUpload: false, canDelete: false };
+    }
+    const ownerGroupId = String(row.owner_group_id || "").trim();
+    const canEdit = isAdminLike || memberships.some((item) => {
+      const groupId = String(item.groupId || item.group_id || "").trim();
+      const role = String(item.roleInGroup || item.role_in_group || "").trim().toLowerCase();
+      return groupId === ownerGroupId && (role === "lead" || role === "deputy");
+    });
+    return { canView: true, canUpload: canEdit, canDelete: canEdit };
+  }
+
+  if (entityType === "finance_request") {
+    if (isFinanceDraftEntity_(entityType, entityId)) {
+      return { canView: true, canUpload: true, canDelete: true };
+    }
+    const result = await query(`select * from finance_requests where id = $1 limit 1`, [entityId]);
+    const row = result.rows[0];
+    if (!row) {
+      return { canView: false, canUpload: false, canDelete: false };
+    }
+    const applicantId = String(row.applicant_id || "").trim();
+    const isOwner = applicantId && applicantId === String(auth.studentId || "").trim();
+    const financeRole = memberships.some((item) => {
+      const groupId = String(item.groupId || item.group_id || "").trim();
+      return groupId === "D" || groupId === "E" || groupId === "A";
+    });
+    const canManage = isAdminLike || financeRole;
+    return { canView: isOwner || canManage, canUpload: isOwner || canManage, canDelete: canManage || isOwner };
+  }
+
+  if (entityType === "academic_session_note") {
+    const canManage = isAdminLike || memberships.some((item) => {
+      const groupId = String(item.groupId || item.group_id || "").trim();
+      return groupId === "F" || groupId === "E" || groupId === "A";
+    });
+    return { canView: true, canUpload: canManage, canDelete: canManage };
+  }
+
+  return { canView: isAdminLike, canUpload: isAdminLike, canDelete: isAdminLike };
 }
 
 const STUDENT_PROFILE_SELECT = `
@@ -1433,16 +1531,14 @@ app.post("/v1/auth/create-session", async (req, res) => {
   }
 });
 
-app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, res) => {
+async function handleAttachmentUpload_(req, res, defaults = {}) {
   try {
     const auth = await resolveAuthContext(req);
     if (!auth || !auth.studentId) {
       return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
     }
-
-    const folderId = String(config.driveFinanceFolderId || "").trim();
-    if (!folderId) {
-      return res.status(500).json({ ok: false, data: null, error: "Drive folder not configured" });
+    if (!isAttachmentStorageConfigured()) {
+      return res.status(500).json({ ok: false, data: null, error: "Supabase Storage 尚未設定" });
     }
 
     const file = req.file;
@@ -1450,8 +1546,19 @@ app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, re
       return res.status(400).json({ ok: false, data: null, error: "Missing file" });
     }
 
+    const mergedBody = {
+      ...(defaults && typeof defaults === "object" ? defaults : {}),
+      ...(req.body && typeof req.body === "object" ? req.body : {}),
+    };
+    const entityType = normalizeAttachmentEntityType_(mergedBody.entityType);
+    const entityId = normalizeAttachmentEntityId_(mergedBody.entityId);
+    const attachmentKind = String(mergedBody.attachmentKind || "general").trim() || "general";
+    if (!entityType || !entityId) {
+      return res.status(400).json({ ok: false, data: null, error: "Missing entityType or entityId" });
+    }
+
     const mimetype = String(file.mimetype || "").trim();
-    if (!isAllowedUploadMime_(mimetype)) {
+    if (!isAllowedAttachmentMime(mimetype)) {
       return res.status(400).json({
         ok: false,
         data: null,
@@ -1459,59 +1566,107 @@ app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, re
       });
     }
 
-    const drive = await getDriveClient_();
-    const name = safeFilename_(file.originalname);
+    const access = await canAccessAttachmentEntity_(auth, entityType, entityId, mergedBody);
+    if (!access.canUpload) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
 
-    const createResponse = await drive.files.create({
-      requestBody: {
-        name,
-        parents: [folderId],
+    const actorProfile = await findStudentProfileById(auth.studentId);
+    const actorName = firstText(auth && auth.profile && auth.profile.name, firstText(actorProfile && actorProfile.name, actorProfile && actorProfile.nameZh));
+
+    const uploaded = await uploadAttachmentFile({
+      fileBuffer: file.buffer,
+      fileName: safeFilename_(file.originalname),
+      mimeType: mimetype,
+      entityType,
+      entityId,
+      attachmentKind,
+      uploadedBy: auth.studentId,
+      uploadedByName: actorName,
+      raw: {
+        originalFieldName: firstText(file.fieldname),
+        uploadSource: "http_upload",
       },
-      media: {
-        mimeType: mimetype,
-        body: Readable.from(file.buffer),
-      },
-      fields: "id,name,webViewLink",
-      supportsAllDrives: true,
+      query,
     });
 
-    const fileId = String((createResponse && createResponse.data && createResponse.data.id) || "").trim();
-    if (!fileId) {
-      throw new Error("Drive upload failed");
-    }
-
-    // Security hardening: do NOT expose attachments as public-by-link by default.
-    // Access is governed by Drive folder permissions.
-    if (config.driveAttachmentPublicRead) {
-      await drive.permissions.create({
-        fileId,
-        requestBody: {
-          role: "reader",
-          type: "anyone",
-        },
-        supportsAllDrives: true,
-      });
-    }
-
-    const url = `https://drive.google.com/file/d/${fileId}/view`;
     return res.json({
       ok: true,
       data: {
-        fileId,
-        name,
-        url,
-        size: Number(file.size || 0),
-        mimeType: mimetype,
+        attachmentId: uploaded.attachmentId,
+        name: uploaded.item && uploaded.item.name,
+        url: uploaded.item && uploaded.item.url,
+        size: uploaded.item && uploaded.item.sizeBytes,
+        sizeBytes: uploaded.item && uploaded.item.sizeBytes,
+        mimeType: uploaded.item && uploaded.item.mimeType,
+        attachmentKind: uploaded.item && uploaded.item.attachmentKind,
+        item: uploaded.item,
       },
       error: null,
     });
   } catch (error) {
     const message = String((error && error.message) || "Upload failed");
-    if (message === "Drive upload not configured") {
-      return res.status(500).json({ ok: false, data: null, error: "Drive 上傳尚未設定" });
-    }
     return res.status(500).json({ ok: false, data: null, error: message || "Upload failed" });
   }
+}
+
+app.post("/v1/attachments/upload", upload.single("file"), async (req, res) => handleAttachmentUpload_(req, res));
+
+app.get("/v1/attachments", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const entityType = normalizeAttachmentEntityType_(req.query && req.query.entityType);
+    const entityId = normalizeAttachmentEntityId_(req.query && req.query.entityId);
+    if (!entityType || !entityId) {
+      return res.status(400).json({ ok: false, data: null, error: "Missing entityType or entityId" });
+    }
+    const access = await canAccessAttachmentEntity_(auth, entityType, entityId, req.query || {});
+    if (!access.canView) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
+    const attachments = await listAttachmentsByEntity(query, { entityType, entityId });
+    return res.json({ ok: true, data: { attachments }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.delete("/v1/attachments/:id", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const attachmentId = String(req.params && req.params.id || "").trim();
+    if (!attachmentId) {
+      return res.status(400).json({ ok: false, data: null, error: "Missing attachment id" });
+    }
+    const existing = await query(`select * from attachments where id = $1 limit 1`, [attachmentId]);
+    const row = existing.rows[0];
+    if (!row) {
+      return res.status(404).json({ ok: false, data: null, error: "Attachment not found" });
+    }
+    const access = await canAccessAttachmentEntity_(auth, normalizeAttachmentEntityType_(row.entity_type), normalizeAttachmentEntityId_(row.entity_id), {});
+    if (!access.canDelete) {
+      return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    }
+    await softDeleteAttachment(query, { attachmentId, deletedBy: auth.studentId });
+    return res.json({ ok: true, data: { id: attachmentId }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, res) => {
+  const draftId = String((req.body && req.body.entityId) || crypto.randomUUID()).trim();
+  return handleAttachmentUpload_(req, res, {
+    entityType: "finance_request",
+    entityId: `draft:${draftId}`,
+    attachmentKind: "supporting_document",
+  });
 });
 
 async function handleListMyMemberships(req, res) {

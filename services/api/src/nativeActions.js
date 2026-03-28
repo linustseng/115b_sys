@@ -9,6 +9,12 @@ import {
   mapSessionNoteRow,
 } from "./academics.js";
 import { jsonbParam } from "./jsonb.js";
+import {
+  claimAttachments,
+  extractAttachmentIds,
+  hydrateAttachmentItems,
+  normalizeAttachmentItems,
+} from "./attachments.js";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -1485,14 +1491,7 @@ function normalizeDocumentTags_(value) {
 }
 
 function normalizeDocumentAttachments_(value) {
-  const list = Array.isArray(value) ? value : safeJsonArray(value);
-  return list
-    .map((item) => ({
-      name: firstText(item && item.name ? item.name : ""),
-      url: firstText(item && item.url ? item.url : ""),
-    }))
-    .filter((item) => item.url)
-    .slice(0, 20);
+  return normalizeAttachmentItems(value);
 }
 
 function mapDocumentVersionRow(row) {
@@ -3886,6 +3885,12 @@ export async function dispatchNativeAction({
           jsonbParam(row.raw, {}),
         ]
       );
+      await claimAttachments(query, {
+        attachmentIds: extractAttachmentIds(row.attachments),
+        entityType: "finance_request",
+        entityId: row.id,
+        uploadedBy: auth.studentId,
+      });
       return { ok: true, data: { id: row.id }, error: null };
     }
 
@@ -4023,6 +4028,13 @@ export async function dispatchNativeAction({
           jsonbParam(row.raw, {}),
         ]
       );
+      await claimAttachments(query, {
+        attachmentIds: extractAttachmentIds(row.attachments),
+        entityType: "finance_request",
+        entityId: row.id,
+        uploadedBy: auth.studentId,
+        allowUnowned: true,
+      });
       return { ok: true, data: { id: row.id }, error: null };
     }
 
@@ -4301,6 +4313,13 @@ export async function dispatchNativeAction({
           jsonbParam(row.raw, {}),
         ]
       );
+      await claimAttachments(query, {
+        attachmentIds: extractAttachmentIds(row.attachments),
+        entityType: "finance_request",
+        entityId: row.id,
+        uploadedBy: auth.studentId,
+        allowUnowned: true,
+      });
       return { ok: true, data: { id: row.id }, error: null };
     }
 
@@ -4326,7 +4345,12 @@ export async function dispatchNativeAction({
       for (const row of result.rows) {
         rows.push(await autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles));
       }
-      const requests = rows.map((row) => mapFinanceRequestRow(row));
+      const requests = [];
+      for (const row of rows) {
+        const mapped = mapFinanceRequestRow(row);
+        mapped.attachments = await hydrateAttachmentItems(query, mapped.attachments);
+        requests.push(mapped);
+      }
       return { ok: true, data: { requests }, error: null };
     }
 
@@ -5582,9 +5606,15 @@ export async function dispatchNativeAction({
           order by d.is_pinned desc, d.pin_order asc, coalesce(d.updated_at,'') desc, d.id desc`,
         [includeArchived]
       );
-      const documents = result.rows
-        .map((row) => mapDocumentRow(row))
-        .filter((item) => item && (item.status !== "archived" || includeArchived));
+      const documents = [];
+      for (const row of result.rows) {
+        const item = mapDocumentRow(row);
+        if (!item || (item.status === "archived" && !includeArchived)) {
+          continue;
+        }
+        item.latestAttachments = await hydrateAttachmentItems(query, item.latestAttachments);
+        documents.push(item);
+      }
       return {
         ok: true,
         data: {
@@ -5631,6 +5661,7 @@ export async function dispatchNativeAction({
       }
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const document = mapDocumentRow(row);
+      document.latestAttachments = await hydrateAttachmentItems(query, document.latestAttachments);
       const latestVersion = {
         id: firstText(row.latest_version_id),
         documentId: firstText(row.id),
@@ -5641,7 +5672,7 @@ export async function dispatchNativeAction({
         changeSummary: firstText(row.latest_change_summary),
         meetingDate: firstText(row.latest_meeting_date),
         effectiveDate: firstText(row.latest_effective_date),
-        attachments: normalizeDocumentAttachments_(row.latest_attachments),
+        attachments: await hydrateAttachmentItems(query, normalizeDocumentAttachments_(row.latest_attachments)),
         createdAt: firstText(row.latest_version_created_at),
       };
       return {
@@ -5674,10 +5705,16 @@ export async function dispatchNativeAction({
         `select * from document_versions where document_id = $1 order by version_number desc, coalesce(created_at,'') desc, id desc`,
         [documentId]
       );
+      const versions = [];
+      for (const row of versionsResult.rows) {
+        const item = mapDocumentVersionRow(row);
+        item.attachments = await hydrateAttachmentItems(query, item.attachments);
+        versions.push(item);
+      }
       return {
         ok: true,
         data: {
-          versions: versionsResult.rows.map((row) => mapDocumentVersionRow(row)),
+          versions,
           permissions: {
             canEdit: canEditDocumentWithMemberships_(documentRow, memberships),
             canManageAll: canManageDocumentsGlobal_(memberships),
@@ -5768,7 +5805,13 @@ export async function dispatchNativeAction({
           ]
         );
       });
-      return { ok: true, data: { id: documentId, slug, versionNumber: 1 }, error: null };
+      await claimAttachments(query, {
+        attachmentIds: extractAttachmentIds(attachments),
+        entityType: "document_version",
+        entityId: versionId,
+        uploadedBy: auth.studentId,
+      });
+      return { ok: true, data: { id: documentId, slug, versionNumber: 1, versionId }, error: null };
     }
 
     case "createDocumentVersion": {
@@ -5835,7 +5878,13 @@ export async function dispatchNativeAction({
           [documentId, title, versionNumber, versionId, createdAt]
         );
       });
-      return { ok: true, data: { id: documentId, versionNumber }, error: null };
+      await claimAttachments(query, {
+        attachmentIds: extractAttachmentIds(attachments),
+        entityType: "document_version",
+        entityId: versionId,
+        uploadedBy: auth.studentId,
+      });
+      return { ok: true, data: { id: documentId, versionNumber, versionId }, error: null };
     }
 
     case "updateDocumentMeta": {
