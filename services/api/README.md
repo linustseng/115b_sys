@@ -61,7 +61,25 @@ BENCH_API_V2_URL=https://one15b-sys.onrender.com BENCH_ITERATIONS=10 npm run ben
 - `JSONB_WRITE_RULES.md` — JSON / JSONB 寫入規範
 - `MIGRATION_SAFETY_TEMPLATE.md` — 既有資料先清洗、再加 constraint 的 migration 模板
 
+## Attachment storage env
+
+Attachment v1 uses Supabase Storage (private bucket).
+
+Required / recommended env:
+
+- `SUPABASE_URL` — project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — server-side only; never expose to frontend
+- `SUPABASE_ATTACHMENT_BUCKET` — defaults to `attachments`
+- `ATTACHMENT_SIGNED_URL_TTL_SECONDS` — defaults to `1800`
+- `ATTACHMENT_MAX_FILE_SIZE_BYTES` — defaults to `20971520` (20 MB)
+
+Runtime notes:
+
+- bucket should be **private**
+- backend signs read URLs dynamically
+- frontend must never receive the service role key
+
 ## Security note
 
-- Keep `SESSION_SECRET` and `DATABASE_URL` in server-side env only.
+- Keep `SESSION_SECRET`, `DATABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` in server-side env only.
 - Never commit `.env`.

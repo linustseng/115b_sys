@@ -11,3 +11,13 @@ services:
     envVars:
       - key: ACADEMICS_ICS_URL
         sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ATTACHMENT_BUCKET
+        value: attachments
+      - key: ATTACHMENT_SIGNED_URL_TTL_SECONDS
+        value: "1800"
+      - key: ATTACHMENT_MAX_FILE_SIZE_BYTES
+        value: "20971520"

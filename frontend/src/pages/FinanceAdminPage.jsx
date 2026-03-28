@@ -4,7 +4,11 @@ import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 function FinanceAdminPage({ shared }) {
   const {
     apiRequest,
+    API_V2_URL,
     loadStoredGoogleStudent_,
+    loadStoredGoogleIdToken_,
+    storeGoogleIdToken_,
+    getGoogleIdTokenSilently_,
     storeGoogleStudent_,
     formatDisplayDate_,
     formatDisplayDateNoMidnight_,
@@ -88,6 +92,13 @@ function FinanceAdminPage({ shared }) {
     status: "pending_lead",
   }));
   const [manualRequestAttachmentInput, setManualRequestAttachmentInput] = useState("");
+  const [manualUploadingAttachment, setManualUploadingAttachment] = useState(false);
+  const [manualUploadAttachmentError, setManualUploadAttachmentError] = useState("");
+  const [manualAttachmentDraftId, setManualAttachmentDraftId] = useState(() => (
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  ));
   const [manualBankPickerQuery, setManualBankPickerQuery] = useState("");
   const [manualBankPickerOpen, setManualBankPickerOpen] = useState(false);
   const fundEventModalRef = useRef(null);
@@ -270,6 +281,12 @@ function FinanceAdminPage({ shared }) {
         status: "pending_lead",
       });
       setManualRequestAttachmentInput("");
+      setManualUploadAttachmentError("");
+      setManualAttachmentDraftId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+      );
       setManualBankPickerQuery("");
       setManualBankPickerOpen(false);
       await loadRequests();
@@ -288,25 +305,92 @@ function FinanceAdminPage({ shared }) {
     const existing = Array.isArray(manualRequestForm.attachments)
       ? manualRequestForm.attachments
       : [];
-    if (existing.includes(url)) {
+    if (existing.some((item) => String((item && item.url) || item || "").trim() === url)) {
       setManualRequestAttachmentInput("");
       return;
     }
     setManualRequestForm({
       ...manualRequestForm,
-      attachments: [...existing, url],
+      attachments: [...existing, { name: url, url, source: "legacy_url" }],
     });
     setManualRequestAttachmentInput("");
   };
 
-  const handleRemoveManualAttachment = (url) => {
+  const handleRemoveManualAttachment = (target) => {
     const existing = Array.isArray(manualRequestForm.attachments)
       ? manualRequestForm.attachments
       : [];
     setManualRequestForm({
       ...manualRequestForm,
-      attachments: existing.filter((item) => item !== url),
+      attachments: existing.filter((item) => {
+        const key = String((item && (item.attachmentId || item.url)) || item || "").trim();
+        return key !== target;
+      }),
     });
+  };
+
+  const handleUploadManualAttachment = async (file) => {
+    if (!file) {
+      return;
+    }
+    if (!API_V2_URL) {
+      setManualUploadAttachmentError("目前尚未設定 API v2，附件上傳未啟用");
+      return;
+    }
+    let idToken = String(loadStoredGoogleIdToken_() || "").trim();
+    if (!idToken && typeof getGoogleIdTokenSilently_ === "function") {
+      try {
+        idToken = String((await getGoogleIdTokenSilently_()) || "").trim();
+        if (idToken) {
+          storeGoogleIdToken_(idToken);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!idToken) {
+      setManualUploadAttachmentError("請先完成 Google 登入，再上傳附件");
+      return;
+    }
+    setManualUploadingAttachment(true);
+    setManualUploadAttachmentError("");
+    try {
+      const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("entityType", "finance_request");
+      formData.append("entityId", `draft:${manualAttachmentDraftId}`);
+      formData.append("attachmentKind", "supporting_document");
+      const response = await fetch(`${base}/v1/attachments/upload`, {
+        method: "POST",
+        headers: { "x-id-token": idToken },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
+      }
+      const data = payload.data || {};
+      const item = data.item || {
+        attachmentId: String(data.attachmentId || "").trim(),
+        name: String(data.name || file.name || "附件").trim(),
+        url: String(data.url || "").trim(),
+        mimeType: String(data.mimeType || file.type || "").trim(),
+        sizeBytes: Number(data.sizeBytes || file.size || 0),
+        attachmentKind: String(data.attachmentKind || "supporting_document").trim(),
+      };
+      if (!item.url) {
+        throw new Error("上傳成功但缺少附件連結");
+      }
+      setManualRequestForm((prev) => ({
+        ...prev,
+        attachments: (prev.attachments || []).concat([item]),
+      }));
+    } catch (err) {
+      setManualUploadAttachmentError(String((err && err.message) || "上傳失敗"));
+    } finally {
+      setManualUploadingAttachment(false);
+    }
   };
 
   const loadStudents = async () => {
@@ -2367,12 +2451,32 @@ function FinanceAdminPage({ shared }) {
                 <label className="block text-sm font-semibold text-slate-900">
                   附件（LINE 截圖等憑據）
                 </label>
-                <div className="mt-2 flex gap-2">
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <label
+                    className={`inline-flex h-10 cursor-pointer items-center justify-center rounded-xl border px-4 text-sm font-semibold shadow-sm transition ${
+                      manualUploadingAttachment
+                        ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                        : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      className="hidden"
+                      disabled={manualUploadingAttachment}
+                      accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                      onChange={(event) => {
+                        const f = event.target.files && event.target.files[0];
+                        event.target.value = "";
+                        handleUploadManualAttachment(f);
+                      }}
+                    />
+                    {manualUploadingAttachment ? "上傳中..." : "上傳附件"}
+                  </label>
                   <input
                     type="text"
                     value={manualRequestAttachmentInput}
                     onChange={(e) => setManualRequestAttachmentInput(e.target.value)}
-                    placeholder="貼上圖片或 PDF 網址"
+                    placeholder="貼上附件網址（選填）"
                     className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -2386,27 +2490,41 @@ function FinanceAdminPage({ shared }) {
                     onClick={handleAddManualAttachment}
                     className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300"
                   >
-                    新增
+                    新增網址
                   </button>
                 </div>
+                {manualUploadAttachmentError ? (
+                  <div className="mt-2 alert alert-error text-xs">{manualUploadAttachmentError}</div>
+                ) : null}
                 {Array.isArray(manualRequestForm.attachments) &&
                 manualRequestForm.attachments.length > 0 ? (
                   <div className="mt-3 space-y-2">
-                    {manualRequestForm.attachments.map((url, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
-                      >
-                        <span className="flex-1 truncate text-xs text-slate-600">{url}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveManualAttachment(url)}
-                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                    {manualRequestForm.attachments.map((item, index) => {
+                      const key = String((item && (item.attachmentId || item.url)) || index).trim();
+                      const label = String((item && (item.name || item.url)) || "附件").trim();
+                      return (
+                        <div
+                          key={key || index}
+                          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                         >
-                          移除
-                        </button>
-                      </div>
-                    ))}
+                          <a
+                            href={String((item && item.url) || "").trim() || undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex-1 truncate text-xs text-slate-600 underline-offset-2 hover:underline"
+                          >
+                            {label}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveManualAttachment(key)}
+                            className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                          >
+                            移除
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
@@ -2445,6 +2563,12 @@ function FinanceAdminPage({ shared }) {
                       status: "pending_lead",
                     });
                     setManualRequestAttachmentInput("");
+                    setManualUploadAttachmentError("");
+                    setManualAttachmentDraftId(
+                      typeof crypto !== "undefined" && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+                    );
                     setManualBankPickerQuery("");
                     setManualBankPickerOpen(false);
                   }}
