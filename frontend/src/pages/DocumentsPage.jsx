@@ -918,9 +918,13 @@ export default function DocumentsPage({ shared }) {
           <section className="card mt-6 p-5 sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h2 className="section-title">{editorMode === "create" ? "新增文件" : editorMode === "version" ? "發布新版本" : "編輯文件資訊"}</h2>
+                <h2 className="section-title">{editorMode === "create" ? "新增文件" : editorMode === "version" ? "修改內容（發布新版本）" : "編輯文件資訊（不改正文）"}</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  {editorMode === "version" ? "同一份文件保留版本歷史，更新內容時請填本次變更摘要。" : "先把基本資料與內容填好，之後都能回頭再補版本。"}
+                  {editorMode === "version"
+                    ? "這裡是修改文件內容的地方。系統會保留舊版本，不會直接覆蓋；請順手填本次變更摘要。"
+                    : editorMode === "meta"
+                      ? "這裡只會更新標題、類型、組別、標籤等文件資訊，不會改到正文內容。"
+                      : "先把基本資料與內容填好，之後若要改正文，請用「修改內容（發布新版本）」。"}
                 </p>
               </div>
               <button type="button" onClick={() => setEditorMode("")} className="btn-ghost">關閉</button>
@@ -1103,7 +1107,7 @@ export default function DocumentsPage({ shared }) {
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <button type="button" onClick={() => setEditorMode("")} className="btn-secondary">取消</button>
               <button type="button" onClick={handleSubmit} disabled={submitting} className="btn-primary">
-                {submitting ? "儲存中..." : editorMode === "create" ? "建立文件" : editorMode === "version" ? "發布新版本" : "儲存設定"}
+                {submitting ? "儲存中..." : editorMode === "create" ? "建立文件" : editorMode === "version" ? "發布新版內容" : "儲存資訊設定"}
               </button>
             </div>
           </section>
@@ -1176,7 +1180,7 @@ export default function DocumentsPage({ shared }) {
                     </div>
                     {selectedCanEdit ? (
                       <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={beginCreateVersion} className="btn-secondary">新增版本</button>
+                        <button type="button" onClick={beginCreateVersion} className="btn-secondary">修改內容</button>
                         <button type="button" onClick={beginEditMeta} className="btn-secondary">編輯資訊</button>
                         <button type="button" onClick={handleArchive} disabled={submitting} className="btn-ghost">封存</button>
                       </div>
@@ -1196,6 +1200,20 @@ export default function DocumentsPage({ shared }) {
                       {selectedLatestVersion.changeSummary}
                     </div>
                   ) : null}
+
+                  <div className={`mt-4 rounded-3xl border px-4 py-3 text-sm ${selectedCanEdit ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
+                    {selectedCanEdit ? (
+                      <>
+                        <span className="font-semibold">修改方式：</span>
+                        這個文件採版本留存制；要改正文內容請按右上角「修改內容」，送出後會發布新版本並保留歷史。
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold">目前無法直接修改：</span>
+                        這個頁面不是直接覆蓋編輯。正常情況會在右上角看到「修改內容」；如果沒看到，代表你目前登入身分對這份文件沒有編輯權限。
+                      </>
+                    )}
+                  </div>
 
                   <div className="mt-6 flex flex-wrap gap-2">
                     {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
