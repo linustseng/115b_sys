@@ -555,6 +555,8 @@ export default function DocumentsPage({ shared }) {
   const selectedDocument = detail && detail.document ? detail.document : null;
   const selectedLatestVersion = detail && detail.latestVersion ? detail.latestVersion : null;
   const selectedCanEdit = Boolean(detail && detail.permissions && detail.permissions.canEdit);
+  const selectedSummary = String((selectedLatestVersion && selectedLatestVersion.summary) || "").trim();
+  const selectedChangeSummary = String((selectedLatestVersion && selectedLatestVersion.changeSummary) || "").trim();
   const parsedMeetingDetail = useMemo(() => {
     if (!selectedDocument || selectedDocument.docType !== "meeting_minutes") {
       return null;
@@ -1176,7 +1178,10 @@ export default function DocumentsPage({ shared }) {
                         <span className="badge-muted">最新 v{selectedDocument.latestVersionNumber}</span>
                       </div>
                       <h2 className="mt-4 text-2xl font-semibold text-slate-900">{selectedDocument.title}</h2>
-                      <p className="mt-2 text-sm text-slate-500">更新時間：{formatDate(selectedDocument.updatedAt || (selectedLatestVersion && selectedLatestVersion.createdAt))}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+                        <span>更新時間：{formatDate(selectedDocument.updatedAt || (selectedLatestVersion && selectedLatestVersion.createdAt))}</span>
+                        {selectedChangeSummary ? <span>本版更新：{selectedChangeSummary}</span> : null}
+                      </div>
                     </div>
                     {selectedCanEdit ? (
                       <div className="flex flex-wrap gap-2">
@@ -1193,35 +1198,14 @@ export default function DocumentsPage({ shared }) {
                     </div>
                   ) : (
                     <>
-                      {selectedLatestVersion && selectedLatestVersion.summary ? (
-                        <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                      {selectedSummary ? (
+                        <div className="mt-5 rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
                           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">摘要</p>
-                          <p className="mt-2 text-sm text-slate-700">{selectedLatestVersion.summary}</p>
+                          <p className="mt-2 text-sm leading-7 text-slate-700">{selectedSummary}</p>
                         </div>
                       ) : null}
 
-                      {selectedLatestVersion && selectedLatestVersion.changeSummary ? (
-                        <div className="mt-4 rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-700">
-                          <span className="font-semibold">本版更新：</span>
-                          {selectedLatestVersion.changeSummary}
-                        </div>
-                      ) : null}
-
-                      <div className={`mt-4 rounded-3xl border px-4 py-3 text-sm ${selectedCanEdit ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-800"}`}>
-                        {selectedCanEdit ? (
-                          <>
-                            <span className="font-semibold">修改方式：</span>
-                            這裡已改成詳頁原地編輯；按右上角「修改內容」後，就會直接在這個區塊切成可編輯模式。
-                          </>
-                        ) : (
-                          <>
-                            <span className="font-semibold">目前無法直接修改：</span>
-                            正常情況會在右上角看到「修改內容」；如果沒看到，代表你目前登入身分對這份文件沒有編輯權限。
-                          </>
-                        )}
-                      </div>
-
-                      <div className="mt-6 flex flex-wrap gap-2">
+                      <div className="mt-5 flex flex-wrap gap-2">
                         {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
                       </div>
 
