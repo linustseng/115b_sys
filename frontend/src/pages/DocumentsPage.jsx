@@ -161,6 +161,51 @@ const DOCUMENT_TEMPLATES = {
   },
 };
 
+function normalizeTemplateText(text) {
+  return String(text || "")
+    .replace(/\r/g, "")
+    .replace(/^\s*[-*]\s*(?:\[\s?\]\s*)?(?:項目|負責人|截止日|目的|適用情境|文件名稱|版本|生效日期|修訂摘要|會議名稱|日期|時間|地點|主席|紀錄|出席|請假|缺席|相關附件\s*\/\s*連結|關鍵聯絡窗口|常見問題\s*\/\s*注意事項)\s*：?\s*$/gm, "")
+    .replace(/^\s*[-*]\s*$/gm, "")
+    .replace(/^\s*\d+\.\s*$/gm, "")
+    .replace(/^\s*#+\s*第?[一二三四五六七八九十0-9]+(?:章|條)?\s*.*$/gm, "")
+    .replace(/^\s*#+\s*(會議資訊|出席情況|議程|討論摘要|決議事項|待辦事項|備註|文件資訊|背景|作業流程)\s*$/gm, "")
+    .replace(/^\s*##\s*議題[一二三四五六七八九十0-9]+\s*$/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isTemplateLikeSummary(summary) {
+  const text = String(summary || "").trim();
+  if (!text) {
+    return true;
+  }
+  const normalized = text.replace(/\s+/g, " ").trim();
+  return ["文件摘要", "可留白，系統會依討論摘要 / 決議事項自動產生", "尚無摘要"].includes(normalized);
+}
+
+function hasMeaningfulDocumentContent(docType, content) {
+  const text = String(content || "").trim();
+  if (!text) {
+    return false;
+  }
+  if (docType === "meeting_minutes") {
+    const parsed = parseMeetingMinutesContent(text);
+    const cards = renderMeetingMinutesDetail(parsed, null);
+    return cards.length > 0;
+  }
+  const templateBuilder = DOCUMENT_TEMPLATES[docType] && DOCUMENT_TEMPLATES[docType].build;
+  const templateContent = typeof templateBuilder === "function" ? templateBuilder("A").content : "";
+  const normalizedActual = normalizeTemplateText(text);
+  const normalizedTemplate = normalizeTemplateText(templateContent);
+  if (!normalizedActual) {
+    return false;
+  }
+  if (normalizedTemplate && normalizedActual === normalizedTemplate) {
+    return false;
+  }
+  return normalizedActual.length >= 12;
+}
+
 function emptyMeetingForm() {
   return {
     meetingName: "",
@@ -555,8 +600,14 @@ export default function DocumentsPage({ shared }) {
   const selectedDocument = detail && detail.document ? detail.document : null;
   const selectedLatestVersion = detail && detail.latestVersion ? detail.latestVersion : null;
   const selectedCanEdit = Boolean(detail && detail.permissions && detail.permissions.canEdit);
-  const selectedSummary = String((selectedLatestVersion && selectedLatestVersion.summary) || "").trim();
+  const selectedSummary = isTemplateLikeSummary(selectedLatestVersion && selectedLatestVersion.summary)
+    ? ""
+    : String((selectedLatestVersion && selectedLatestVersion.summary) || "").trim();
   const selectedChangeSummary = String((selectedLatestVersion && selectedLatestVersion.changeSummary) || "").trim();
+  const selectedHasMeaningfulContent = hasMeaningfulDocumentContent(
+    selectedDocument && selectedDocument.docType,
+    selectedLatestVersion && selectedLatestVersion.content
+  );
   const parsedMeetingDetail = useMemo(() => {
     if (!selectedDocument || selectedDocument.docType !== "meeting_minutes") {
       return null;
@@ -1209,19 +1260,25 @@ export default function DocumentsPage({ shared }) {
                         {(selectedDocument.tags || []).map((tag) => <span key={tag} className="badge-muted">#{tag}</span>)}
                       </div>
 
-                      {selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
-                        <div className="mt-6 grid gap-4">
-                          {meetingDetailCards.map((card) => (
-                            <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
-                              <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{card.title}</h3>
-                              <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{card.content}</div>
-                            </section>
-                          ))}
-                        </div>
+                      {selectedHasMeaningfulContent ? (
+                        selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
+                          <div className="mt-6 grid gap-4">
+                            {meetingDetailCards.map((card) => (
+                              <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+                                <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">{card.title}</h3>
+                                <div className="mt-3 whitespace-pre-wrap break-words text-sm leading-7 text-slate-800">{card.content}</div>
+                              </section>
+                            ))}
+                          </div>
+                        ) : (
+                          <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
+                            {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
+                          </article>
+                        )
                       ) : (
-                        <article className="mt-6 whitespace-pre-wrap break-words rounded-3xl border border-slate-200 bg-white px-5 py-5 text-sm leading-7 text-slate-800">
-                          {selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "尚無內容"}
-                        </article>
+                        <div className="mt-6 rounded-3xl border border-dashed border-slate-200 bg-slate-50/60 px-5 py-8 text-center text-sm text-slate-400">
+                          這份文件目前只有模板骨架，尚未補上正式內容。
+                        </div>
                       )}
 
                       {(selectedLatestVersion && selectedLatestVersion.attachments && selectedLatestVersion.attachments.length) ? (
