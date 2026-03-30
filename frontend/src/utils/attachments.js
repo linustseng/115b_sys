@@ -21,18 +21,21 @@ export function isStandalonePwa_() {
 
 export function openAttachmentUrl_(url) {
   const href = String(url || "").trim();
-  if (!href || typeof window === "undefined") {
+  if (!href || typeof window === "undefined" || typeof document === "undefined") {
     return false;
   }
   if (isStandalonePwa_()) {
     window.location.assign(href);
     return true;
   }
-  const opened = window.open(href, "_blank", "noopener,noreferrer");
-  if (opened) {
-    return true;
-  }
-  window.location.assign(href);
+  const anchor = document.createElement("a");
+  anchor.href = href;
+  anchor.target = "_blank";
+  anchor.rel = "noopener noreferrer";
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
   return true;
 }
 
