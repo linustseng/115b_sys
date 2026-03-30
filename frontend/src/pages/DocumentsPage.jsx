@@ -218,6 +218,10 @@ function hasMeaningfulDocumentContent(docType, content) {
   return normalizedActual.length >= 12;
 }
 
+function getCleanSummary_(summary, fallback = "") {
+  return isTemplateLikeSummary(summary) ? String(fallback || "").trim() : String(summary || "").trim();
+}
+
 function emptyMeetingForm() {
   return {
     meetingName: "",
@@ -654,7 +658,9 @@ export default function DocumentsPage({ shared }) {
           <span className={mutedBadgeClass}>v{item.latestVersionNumber}</span>
         </div>
         <h3 className={`mt-3 text-base font-semibold ${isSelected && tone === "slate" ? "text-white" : "text-slate-900"}`}>{item.title}</h3>
-        <p className={`mt-2 text-sm ${mutedTextClass}`}>{item.latestSummary || item.latestChangeSummary || "尚無摘要"}</p>
+        {getCleanSummary_(item.latestSummary, item.latestChangeSummary) ? (
+          <p className={`mt-2 text-sm ${mutedTextClass}`}>{getCleanSummary_(item.latestSummary, item.latestChangeSummary)}</p>
+        ) : null}
         <div className="mt-3 flex flex-wrap gap-2">
           {(item.tags || []).slice(0, 4).map((tag) => <span key={tag} className={mutedBadgeClass}>#{tag}</span>)}
         </div>
@@ -1325,24 +1331,28 @@ export default function DocumentsPage({ shared }) {
                 </div>
                 {showVersionHistory ? (
                   <div className="mt-4 space-y-3">
-                    {versions.length ? versions.map((version) => (
-                      <div key={version.id} className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="badge">v{version.versionNumber}</span>
-                          <span className="badge-muted">{formatDate(version.createdAt)}</span>
-                          {version.createdByName ? <span className="badge-muted">{version.createdByName}</span> : null}
+                    {versions.length ? versions.map((version) => {
+                      const cleanVersionSummary = getCleanSummary_(version.summary);
+                      const cleanVersionChange = getCleanSummary_(version.changeSummary);
+                      return (
+                        <div key={version.id} className="rounded-3xl border border-slate-200 bg-white px-4 py-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="badge">v{version.versionNumber}</span>
+                            <span className="badge-muted">{formatDate(version.createdAt)}</span>
+                            {version.createdByName ? <span className="badge-muted">{version.createdByName}</span> : null}
+                          </div>
+                          {cleanVersionChange ? <p className="mt-3 text-sm font-medium text-slate-800">{cleanVersionChange}</p> : null}
+                          {cleanVersionSummary ? <p className="mt-2 text-sm text-slate-500">{cleanVersionSummary}</p> : null}
+                          {(version.meetingDate || version.effectiveDate) ? (
+                            <p className="mt-3 text-xs text-slate-400">
+                              {version.meetingDate ? `會議日期：${version.meetingDate}` : ""}
+                              {version.meetingDate && version.effectiveDate ? " ・ " : ""}
+                              {version.effectiveDate ? `生效日：${version.effectiveDate}` : ""}
+                            </p>
+                          ) : null}
                         </div>
-                        {version.changeSummary ? <p className="mt-3 text-sm font-medium text-slate-800">{version.changeSummary}</p> : null}
-                        {version.summary ? <p className="mt-2 text-sm text-slate-500">{version.summary}</p> : null}
-                        {(version.meetingDate || version.effectiveDate) ? (
-                          <p className="mt-3 text-xs text-slate-400">
-                            {version.meetingDate ? `會議日期：${version.meetingDate}` : ""}
-                            {version.meetingDate && version.effectiveDate ? " ・ " : ""}
-                            {version.effectiveDate ? `生效日：${version.effectiveDate}` : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                    )) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">尚無版本歷史</div>}
+                      );
+                    }) : <div className="rounded-3xl border border-dashed border-slate-200 px-4 py-6 text-sm text-slate-400">尚無版本歷史</div>}
                   </div>
                 ) : null}
               </div>
