@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
-import { resolveAndOpenAttachment_ } from "../utils/attachments";
+import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function FinanceAdminPage({ shared }) {
+  const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
   const {
     apiRequest,
     API_V2_URL,
@@ -1981,7 +1982,8 @@ function FinanceAdminPage({ shared }) {
                           onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                           className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 hover:border-slate-300"
                         >
-                          {item.name || item.url}
+                          <span className="truncate">{item.name || item.url}</span>
+                          <span className="ml-2 text-[11px] text-slate-400">{attachmentActionLabel}</span>
                         </button>
                       ))}
                     </div>
@@ -2527,7 +2529,8 @@ function FinanceAdminPage({ shared }) {
                             onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                             className="flex-1 truncate text-left text-xs text-slate-600 underline-offset-2 hover:underline"
                           >
-                            {label}
+                            <span className="truncate">{label}</span>
+                            <span className="ml-2 text-[11px] text-slate-400">{attachmentActionLabel}</span>
                           </button>
                           <button
                             type="button"

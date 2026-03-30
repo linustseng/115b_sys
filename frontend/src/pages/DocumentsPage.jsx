@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { resolveAndOpenAttachment_ } from "../utils/attachments";
+import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 
 const DOC_TYPE_OPTIONS = [
   { id: "all", label: "全部類型" },
@@ -488,6 +488,7 @@ export default function DocumentsPage({ shared }) {
   ));
   const uploadInputRef = useRef(null);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
 
   const groupLabelMap = useMemo(() => {
     const map = {};
@@ -1306,7 +1307,7 @@ export default function DocumentsPage({ shared }) {
                             {selectedLatestVersion.attachments.map((item, index) => (
                               <button key={`${item.url}-${index}`} type="button" onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch((err) => setStatusMessage(String((err && err.message) || "附件開啟失敗")))} className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700 hover:border-slate-300 hover:bg-white">
                                 <span className="truncate">{item.name || item.url}</span>
-                                <span className="text-xs text-slate-400">開啟</span>
+                                <span className="text-xs text-slate-400">{attachmentActionLabel}</span>
                               </button>
                             ))}
                           </div>

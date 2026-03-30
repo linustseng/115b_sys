@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
-import { resolveAndOpenAttachment_ } from "../utils/attachments";
+import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function FinancePage({ shared }) {
+  const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
 
   const {
     apiRequest,
@@ -2042,6 +2043,7 @@ function FinancePage({ shared }) {
                         className="font-semibold text-slate-700 hover:text-slate-900"
                       >
                         {item.name || item.url}
+                        <span className="ml-2 text-[11px] font-medium text-slate-400">{attachmentActionLabel}</span>
                       </button>
                       <button
                         type="button"
