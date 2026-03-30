@@ -180,7 +180,19 @@ function isTemplateLikeSummary(summary) {
     return true;
   }
   const normalized = text.replace(/\s+/g, " ").trim();
-  return ["文件摘要", "可留白，系統會依討論摘要 / 決議事項自動產生", "尚無摘要"].includes(normalized);
+  if (["文件摘要", "可留白，系統會依討論摘要 / 決議事項自動產生", "尚無摘要"].includes(normalized)) {
+    return true;
+  }
+  const stripped = normalized
+    .replace(/##\s*議題[一二三四五六七八九十0-9]+/g, "")
+    .replace(/-\s*\[\s?\]\s*項目：?/g, "")
+    .replace(/-\s*負責人：?/g, "")
+    .replace(/-\s*截止日：?/g, "")
+    .replace(/\b\d+\./g, "")
+    .replace(/[-•：:]/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+  return !stripped;
 }
 
 function hasMeaningfulDocumentContent(docType, content) {
