@@ -19,7 +19,19 @@ export function isStandalonePwa_() {
   return false;
 }
 
-export function openAttachmentUrl_(url) {
+function buildAttachmentPreviewUrl_(url, name = "附件預覽") {
+  const href = String(url || "").trim();
+  const filename = String(name || "附件預覽").trim() || "附件預覽";
+  if (!href || typeof window === "undefined") {
+    return "";
+  }
+  const previewUrl = new URL("/attachment-preview.html", window.location.origin);
+  previewUrl.searchParams.set("url", href);
+  previewUrl.searchParams.set("name", filename);
+  return previewUrl.toString();
+}
+
+export function openAttachmentUrl_(url, name = "附件預覽") {
   const href = String(url || "").trim();
   if (!href || typeof window === "undefined" || typeof document === "undefined") {
     return false;
@@ -28,8 +40,9 @@ export function openAttachmentUrl_(url) {
     window.location.assign(href);
     return true;
   }
+  const targetHref = buildAttachmentPreviewUrl_(href, name) || href;
   const anchor = document.createElement("a");
-  anchor.href = href;
+  anchor.href = targetHref;
   anchor.target = "_blank";
   anchor.rel = "noopener noreferrer";
   anchor.style.display = "none";
@@ -41,9 +54,10 @@ export function openAttachmentUrl_(url) {
 
 export async function resolveAndOpenAttachment_(item, apiRequest) {
   const attachment = item && typeof item === "object" ? item : {};
+  const attachmentName = String(attachment.name || attachment.originalName || "附件預覽").trim() || "附件預覽";
   const existingUrl = String(attachment.url || "").trim();
   if (existingUrl) {
-    return openAttachmentUrl_(existingUrl);
+    return openAttachmentUrl_(existingUrl, attachmentName);
   }
   const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
   if (!attachmentId || typeof apiRequest !== "function") {
@@ -53,5 +67,5 @@ export async function resolveAndOpenAttachment_(item, apiRequest) {
   if (!result || !result.ok || !result.data || !result.data.url) {
     throw new Error((result && result.error) || "附件連結暫時無法取得");
   }
-  return openAttachmentUrl_(result.data.url);
+  return openAttachmentUrl_(result.data.url, result.data.name || attachmentName);
 }

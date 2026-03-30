@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>附件預覽</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f8fafc;
+        --card: #ffffff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --border: #dbe2ea;
+        --accent: #2563eb;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-rows: auto 1fr;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(255,255,255,0.92);
+        backdrop-filter: blur(12px);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      .meta { min-width: 0; }
+      .title {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.4;
+        word-break: break-word;
+      }
+      .hint {
+        margin: 4px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+      .btn {
+        appearance: none;
+        border: 1px solid var(--border);
+        background: var(--card);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 9px 14px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn.primary {
+        border-color: var(--accent);
+        color: white;
+        background: var(--accent);
+      }
+      .viewer {
+        padding: 0;
+        min-height: 0;
+      }
+      iframe {
+        display: block;
+        width: 100%;
+        height: calc(100vh - 72px);
+        border: 0;
+        background: white;
+      }
+      .fallback {
+        padding: 32px 20px;
+        max-width: 720px;
+        margin: 0 auto;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 20px;
+      }
+      code {
+        word-break: break-all;
+        background: #eff6ff;
+        padding: 2px 6px;
+        border-radius: 8px;
+      }
+      @media (max-width: 640px) {
+        .topbar { align-items: flex-start; flex-direction: column; }
+        iframe { height: calc(100vh - 124px); }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topbar">
+        <div class="meta">
+          <p id="title" class="title">附件預覽</p>
+          <p class="hint">如果瀏覽器不支援內嵌預覽，可用右側按鈕直接開啟。</p>
+        </div>
+        <div class="actions">
+          <a id="openLink" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">直接開啟</a>
+        </div>
+      </div>
+      <div id="viewer" class="viewer"></div>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const rawUrl = params.get('url') || '';
+      const rawName = params.get('name') || '附件預覽';
+      const title = document.getElementById('title');
+      const openLink = document.getElementById('openLink');
+      const viewer = document.getElementById('viewer');
+      document.title = rawName;
+      title.textContent = rawName;
+      if (!rawUrl) {
+        viewer.innerHTML = '<div class="fallback"><div class="card">找不到附件網址。</div></div>';
+      } else {
+        openLink.href = rawUrl;
+        const iframe = document.createElement('iframe');
+        iframe.src = rawUrl;
+        iframe.title = rawName;
+        iframe.referrerPolicy = 'no-referrer';
+        viewer.appendChild(iframe);
+        iframe.addEventListener('error', () => {
+          viewer.innerHTML = `<div class="fallback"><div class="card"><p>這個檔案無法在頁內預覽。</p><p>請改用上方 <strong>直接開啟</strong>。</p><p class="hint"><code>${rawName}</code></p></div></div>`;
+        });
+      }
+    </script>
+  </body>
+</html>
