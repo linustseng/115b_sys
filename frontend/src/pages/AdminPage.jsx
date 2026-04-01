@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import {
   addDays_,
   addMinutes_,
@@ -2560,9 +2561,6 @@ export default function AdminPage({
   const publicOrderUrl = publicOrderLinkForm.token
     ? `${String(PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "")}/ordering-public?token=${encodeURIComponent(publicOrderLinkForm.token)}`
     : "";
-  const publicOrderQrUrl = publicOrderUrl
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicOrderUrl)}`
-    : "";
   const isOrderPickedUp_ = (item) => Boolean(String((item && item.pickedUpAt) || "").trim());
   const orderStats = orderResponses.reduce(
     (acc, item) => {
@@ -3584,8 +3582,10 @@ export default function AdminPage({
                   </div>
                   <div className="lg:col-span-2 flex flex-wrap items-end justify-between gap-4">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
-                      {publicOrderQrUrl ? (
-                        <img src={publicOrderQrUrl} alt="外部訂餐 QR Code" className="h-36 w-36 rounded-xl bg-white" />
+                      {publicOrderUrl ? (
+                        <div className="rounded-xl bg-white p-2">
+                          <QRCodeSVG value={publicOrderUrl} size={144} includeMargin />
+                        </div>
                       ) : (
                         <div className="flex h-36 w-36 items-center justify-center rounded-xl bg-white text-xs text-slate-400">儲存後顯示 QR Code</div>
                       )}

@@ -314,6 +314,13 @@ function isOrderPlanClosed_(plan, overrideCloseAt = "") {
   return Date.now() > cutoff.getTime();
 }
 
+function normalizeDuplicateKey_(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function toFundEventRow(input) {
   const raw = safeJsonObject(input);
   const id = firstText(raw.id, crypto.randomUUID());
@@ -3732,6 +3739,48 @@ export async function dispatchNativeAction({
       if (!["A", "B", "C", "NONE"].includes(choice)) {
         return { ok: false, data: null, error: "Invalid choice" };
       }
+
+      const existingResponsesResult = await query(
+        `select id, raw, student_name, created_at
+         from order_responses
+         where order_id = $1
+         order by coalesce(created_at, '') desc, id desc`,
+        [publicLink.orderPlanId]
+      );
+      const normalizedGuestName = normalizeDuplicateKey_(guestName);
+      const normalizedGuestGroup = normalizeDuplicateKey_(guestGroup);
+      const normalizedGuestContact = normalizeDuplicateKey_(guestContact);
+      const possibleDuplicate = existingResponsesResult.rows.find((row) => {
+        const raw = safeJsonObject(row && row.raw);
+        if (firstText(raw.sourceType) !== "public_external") {
+          return false;
+        }
+        const existingName = normalizeDuplicateKey_(firstText(raw.guestName, row && row.student_name));
+        if (!existingName || existingName !== normalizedGuestName) {
+          return false;
+        }
+        const existingGroup = normalizeDuplicateKey_(firstText(raw.guestGroup, raw.sourceLabel));
+        const existingContact = normalizeDuplicateKey_(firstText(raw.guestContact));
+        if (normalizedGuestContact && existingContact && normalizedGuestContact === existingContact) {
+          return true;
+        }
+        if (!normalizedGuestContact && normalizedGuestGroup && existingGroup && normalizedGuestGroup === existingGroup) {
+          return true;
+        }
+        return false;
+      });
+      if (possibleDuplicate) {
+        return {
+          ok: false,
+          data: {
+            duplicate: true,
+            existingId: firstText(possibleDuplicate.id),
+            createdAt: firstText(possibleDuplicate.created_at),
+          },
+          error: "可能重複下單：系統已找到相同姓名且聯絡方式／身分相符的外部訂單。若需修改，請聯絡美食組。",
+        };
+      }
+
       const id = `public:${crypto.randomUUID()}`;
       const createdAt = nowIso();
       const choiceLabel = firstText((getOrderChoicesForPlan_(plan).find((item) => item.value === choice) || {}).label);

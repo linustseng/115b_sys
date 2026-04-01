@@ -77,6 +77,9 @@ function OrderingPublicPage({ shared }) {
         },
       });
       if (!result || !result.ok) {
+        if (result && result.data && result.data.duplicate) {
+          throw new Error("你可能已經送出過這張訂餐單了；如需修改，請聯絡美食組協助處理。");
+        }
         throw new Error((result && result.error) || "送出失敗");
       }
       setSubmitDone(result.data && result.data.response ? result.data.response : form);
