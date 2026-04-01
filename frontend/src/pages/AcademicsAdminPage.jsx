@@ -83,6 +83,13 @@ function buildMakeupNoteForm(note, sessionId = "") {
   };
 }
 
+const MAKEUP_REMINDER_PRESETS = [
+  { title: "本次有小考", text: "前 20 分鐘進行小考，請提前入座。" },
+  { title: "請帶講義", text: "請記得攜帶講義 / 指定教材。" },
+  { title: "已改教室", text: "本次補課地點有調整，請留意現場公告。" },
+  { title: "請先看資料", text: "上課前請先閱讀指定資料 / 影片。" },
+];
+
 function toCsvCell_(value) {
   const text = String(value == null ? "" : value);
   if (/[",\n]/.test(text)) {
@@ -541,6 +548,16 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
+  const applyMakeupPreset_ = (preset) => {
+    const safePreset = preset && typeof preset === "object" ? preset : {};
+    setMakeupNoteForm((prev) => ({
+      ...prev,
+      sessionId: selectedMakeupSessionId,
+      reminderTitle: String(safePreset.title || "").trim() || prev.reminderTitle,
+      reminderText: String(safePreset.text || "").trim() || prev.reminderText,
+    }));
+  };
+
   const totalActiveRequests = activeRequests.length;
   const totalPublishedNotes = (bootstrap.notes || []).filter((item) => item.status === "published").length;
 
@@ -744,9 +761,27 @@ export default function AcademicsAdminPage({ shared }) {
               <input
                 value={makeupNoteForm.reminderTitle}
                 onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderTitle: event.target.value, sessionId: selectedMakeupSessionId }))}
+                maxLength={30}
                 placeholder="例如：本次有小考"
                 className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
               />
+              <p className="mt-2 text-xs text-slate-500">建議 15 字內，最多 30 字。</p>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">快捷填入</label>
+              <div className="flex flex-wrap gap-2">
+                {MAKEUP_REMINDER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.title}
+                    type="button"
+                    onClick={() => applyMakeupPreset_(preset)}
+                    className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:border-violet-300"
+                  >
+                    {preset.title}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div>
@@ -754,10 +789,15 @@ export default function AcademicsAdminPage({ shared }) {
               <textarea
                 value={makeupNoteForm.reminderText}
                 onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderText: event.target.value, sessionId: selectedMakeupSessionId }))}
+                maxLength={120}
                 rows={3}
                 placeholder="例如：前 20 分鐘小考，範圍第 3 章 p.45–68。"
                 className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
               />
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs text-slate-500">
+                <span>建議 100 字內，最多 120 字；超過就改放外部連結。</span>
+                <span>{String(makeupNoteForm.reminderText || "").length}/120</span>
+              </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
