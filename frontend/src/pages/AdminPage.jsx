@@ -111,6 +111,15 @@ export default function AdminPage({
     choice: "A",
     comment: "",
   });
+  const [publicOrderLinkForm, setPublicOrderLinkForm] = useState({
+    id: "",
+    orderPlanId: "",
+    title: "",
+    description: "",
+    closeAt: "",
+    status: "disabled",
+    token: "",
+  });
   const [studentsQuery, setStudentsQuery] = useState("");
   const [studentsGroupFilter, setStudentsGroupFilter] = useState("all");
   const [studentsSortKey, setStudentsSortKey] = useState("nameZh");
@@ -458,6 +467,16 @@ export default function AdminPage({
     comment: "",
   });
 
+  const buildDefaultPublicOrderLinkForm = (plan = null, existing = null) => ({
+    id: existing && existing.id ? existing.id : "",
+    orderPlanId: plan && plan.id ? plan.id : "",
+    title: existing && existing.title ? existing.title : plan && plan.title ? `${plan.title}｜外部訂餐` : "",
+    description: existing && existing.description ? existing.description : "提供其他班同學 / 學長姐訂餐",
+    closeAt: normalizeDateTimeInput_(existing && existing.closeAt ? existing.closeAt : plan && plan.cutoffAt ? plan.cutoffAt : ""),
+    status: existing && existing.status ? existing.status : "disabled",
+    token: existing && existing.token ? existing.token : "",
+  });
+
   const buildDefaultForm = (items) => {
     const baseDate = addDays_(new Date(), 10);
     const startAt = toLocalInput_(baseDate, 19, 0);
@@ -711,6 +730,7 @@ export default function AdminPage({
           status: selected.status || "open",
           notes: selected.notes || "",
         });
+        loadOrderPublicLink(normalizedId, selected);
       }
     }
   }, [activeTab, orderActiveId, orderPlans]);
@@ -959,6 +979,20 @@ export default function AdminPage({
       setError("訂餐名單載入失敗。");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOrderPublicLink = async (orderId, plan = null) => {
+    if (!orderId) {
+      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, null));
+      return;
+    }
+    try {
+      const { result } = await apiRequest({ action: "getOrderPublicLinkAdmin", orderPlanId: orderId });
+      const existing = result && result.ok && result.data ? result.data.publicLink || null : null;
+      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, existing));
+    } catch (err) {
+      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, null));
     }
   };
 
@@ -1314,6 +1348,37 @@ export default function AdminPage({
       await loadOrderResponses(normalizeOrderId_(orderActiveId));
       setProxyOrderForm(buildDefaultProxyOrderForm());
       setOrderStatusMessage("已更新代訂餐");
+    } catch (err) {
+      setOrderStatusMessage(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveOrderPublicLink = async (event) => {
+    event.preventDefault();
+    if (!orderActiveId) {
+      setOrderStatusMessage("請先選擇訂餐日期。");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({
+        action: "upsertOrderPublicLink",
+        data: {
+          ...publicOrderLinkForm,
+          orderPlanId: normalizeOrderId_(orderActiveId),
+          status: publicOrderLinkForm.status || "disabled",
+        },
+      });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "儲存失敗");
+      }
+      const saved = result.data && result.data.publicLink ? result.data.publicLink : null;
+      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(activeOrderPlan, saved));
+      setOrderStatusMessage(publicOrderLinkForm.status === "active" ? "已更新外部訂餐入口" : "已儲存外部訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
     } finally {
@@ -2492,6 +2557,12 @@ export default function AdminPage({
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
+  const publicOrderUrl = publicOrderLinkForm.token
+    ? `${String(PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "")}/ordering-public?token=${encodeURIComponent(publicOrderLinkForm.token)}`
+    : "";
+  const publicOrderQrUrl = publicOrderUrl
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(publicOrderUrl)}`
+    : "";
   const isOrderPickedUp_ = (item) => Boolean(String((item && item.pickedUpAt) || "").trim());
   const orderStats = orderResponses.reduce(
     (acc, item) => {
@@ -2514,10 +2585,13 @@ export default function AdminPage({
       if (String(item.sourceType || "").trim() === "proxy_external") {
         acc.proxy += 1;
       }
+      if (String(item.sourceType || "").trim() === "public_external") {
+        acc.public += 1;
+      }
       acc.total += 1;
       return acc;
     },
-    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0, picked: 0, unpicked: 0 }
+    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0, public: 0, picked: 0, unpicked: 0 }
   );
 
   const getOrderChoiceLabel_ = (choice) => {
@@ -3437,6 +3511,94 @@ export default function AdminPage({
                 </form>
               </div>
 
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">外部訂餐連結</p>
+                    <p className="mt-1 text-xs text-slate-500">給沒有 115B 帳號的同學 / 學長姐掃 QR Code 或點連結自助訂餐。</p>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {activeOrderLabel ? `目前套用 ${activeOrderLabel}` : "請先選擇訂餐日期"}
+                  </span>
+                </div>
+                <form onSubmit={handleSaveOrderPublicLink} className="mt-4 grid gap-3 lg:grid-cols-2">
+                  <div className="grid gap-2 lg:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">狀態</label>
+                    <select
+                      value={publicOrderLinkForm.status}
+                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, status: event.target.value, orderPlanId: orderActiveId }))}
+                      className="input-sm"
+                    >
+                      <option value="disabled">關閉</option>
+                      <option value="active">啟用</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">對外標題</label>
+                    <input
+                      value={publicOrderLinkForm.title}
+                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, title: event.target.value, orderPlanId: orderActiveId }))}
+                      placeholder="例如：4/12 中餐訂購"
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">外部截止時間</label>
+                    <input
+                      type="datetime-local"
+                      value={publicOrderLinkForm.closeAt}
+                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, closeAt: event.target.value, orderPlanId: orderActiveId }))}
+                      className="input-sm"
+                    />
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">對外說明</label>
+                    <textarea
+                      value={publicOrderLinkForm.description}
+                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, description: event.target.value, orderPlanId: orderActiveId }))}
+                      rows="3"
+                      placeholder="例如：提供其他班同學與學長姐訂餐，請於截止前完成填寫。"
+                      className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
+                    />
+                  </div>
+                  <div className="grid gap-2 lg:col-span-2">
+                    <label className="text-sm font-medium text-slate-700">外部連結</label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <input value={publicOrderUrl} readOnly placeholder="先啟用並儲存後會產生連結" className="input-sm flex-1" />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!publicOrderUrl) return;
+                          try {
+                            await navigator.clipboard.writeText(publicOrderUrl);
+                            setOrderStatusMessage("已複製外部訂餐連結");
+                          } catch (error) {
+                            setOrderStatusMessage("複製失敗，請手動複製");
+                          }
+                        }}
+                        className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                      >
+                        複製連結
+                      </button>
+                    </div>
+                  </div>
+                  <div className="lg:col-span-2 flex flex-wrap items-end justify-between gap-4">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                      {publicOrderQrUrl ? (
+                        <img src={publicOrderQrUrl} alt="外部訂餐 QR Code" className="h-36 w-36 rounded-xl bg-white" />
+                      ) : (
+                        <div className="flex h-36 w-36 items-center justify-center rounded-xl bg-white text-xs text-slate-400">儲存後顯示 QR Code</div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={saving || !orderActiveId} className="btn-primary">
+                        {saving ? "儲存中..." : "儲存外部入口"}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
               <div className="card-muted p-5 text-sm text-slate-600">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="font-semibold text-slate-900">訂餐統計</p>
@@ -3476,6 +3638,10 @@ export default function AdminPage({
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">代訂</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.proxy}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                    <p className="text-xs text-slate-400">外部自助</p>
+                    <p className="text-lg font-semibold text-slate-900">{orderStats.public}</p>
                   </div>
                 </div>
 

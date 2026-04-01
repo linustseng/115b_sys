@@ -56,6 +56,7 @@ const BirthdayPage = lazyImportWithRetry_(() => import("./pages/BirthdayPage"), 
 const RegistrationPage = lazyImportWithRetry_(() => import("./pages/RegistrationPage"), "RegistrationPage");
 const CheckinPage = lazyImportWithRetry_(() => import("./pages/CheckinPage"), "CheckinPage");
 const OrderingPage = lazyImportWithRetry_(() => import("./pages/OrderingPage"), "OrderingPage");
+const OrderingPublicPage = lazyImportWithRetry_(() => import("./pages/OrderingPublicPage"), "OrderingPublicPage");
 const FinancePage = lazyImportWithRetry_(() => import("./pages/FinancePage"), "FinancePage");
 const ApprovalsPage = lazyImportWithRetry_(() => import("./pages/ApprovalsPage"), "ApprovalsPage");
 const FinanceAdminPage = lazyImportWithRetry_(() => import("./pages/FinanceAdminPage"), "FinanceAdminPage");
@@ -764,6 +765,8 @@ const API_POST_ACTIONS = new Set([
   "listFinanceRequests",
   "listFinanceActionsSummary",
   "listOrderPlans",
+  "getOrderPublicLinkAdmin",
+  "getOrderPublicPage",
   "listOrderResponses",
   "listSoftballBootstrap",
   "listStudents",
@@ -884,7 +887,9 @@ const API_V2_WRITE_ACTIONS = new Set([
   // Ordering
   "createOrderPlan",
   "updateOrderPlan",
+  "upsertOrderPublicLink",
   "submitOrderResponse",
+  "submitOrderPublicResponse",
   "adminUpsertOrderProxyResponse",
   "deleteOrderProxyResponse",
   // Academics
@@ -2885,6 +2890,7 @@ function AppShell() {
   const isCheckinPage = pathname.includes("checkin");
   const isAdminEventsPage = pathname.includes("admin/events");
   const isAdminOrderingPage = pathname.includes("admin/ordering");
+  const isOrderingPublicPage = pathname.includes("ordering-public");
   const isAdminFinancePage = pathname.includes("admin/finance");
   const isAdminAcademicsPage = pathname.includes("admin/academics");
   const isAdminPage = pathname.includes("admin");
@@ -3305,6 +3311,8 @@ function AppShell() {
     content = <DocumentsPage shared={shared} />;
   } else if (isAcademicsPage) {
     content = <AcademicsPage shared={shared} />;
+  } else if (isOrderingPublicPage) {
+    content = <OrderingPublicPage shared={shared} />;
   } else if (isOrderingPage) {
     content = <OrderingPage shared={shared} />;
   } else if (isFinancePage) {

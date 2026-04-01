@@ -250,6 +250,70 @@ function toOrderPlanRow(input) {
   };
 }
 
+function normalizeOrderingPublicLinkRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    orderPlanId: firstText(row && row.order_plan_id, raw.orderPlanId),
+    token: firstText(row && row.token, raw.token),
+    title: firstText(row && row.title, raw.title),
+    description: firstText(row && row.description, raw.description),
+    closeAt: firstText(row && row.close_at, raw.closeAt),
+    status: firstText(row && row.status, raw.status, "active"),
+    createdAt: firstText(row && row.created_at, raw.createdAt),
+    updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+  };
+}
+
+function generateOrderingPublicToken_() {
+  return crypto.randomBytes(18).toString("base64url");
+}
+
+function buildOrderPlanForClient_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: row && row.id ? row.id : "",
+    date: row && row.date ? row.date : "",
+    title: row && row.title ? row.title : "",
+    description: row && row.description ? row.description : "",
+    closeAt: row && row.close_at ? row.close_at : "",
+    vendor: row && row.vendor ? row.vendor : "",
+    items: row && Array.isArray(row.items) ? row.items : [],
+    status: row && row.status ? row.status : "",
+    createdAt: row && row.created_at ? row.created_at : "",
+    updatedAt: row && row.updated_at ? row.updated_at : "",
+  };
+}
+
+function getOrderChoicesForPlan_(plan) {
+  return [
+    { value: "A", label: firstText(plan && plan.optionA, "A 餐"), image: firstText(plan && plan.optionAImage) },
+    { value: "B", label: firstText(plan && plan.optionB, "B 餐"), image: firstText(plan && plan.optionBImage) },
+    { value: "C", label: firstText(plan && plan.optionC, "素食餐"), image: firstText(plan && plan.optionCImage) },
+    { value: "NONE", label: "不吃", image: "" },
+  ];
+}
+
+function isOrderPlanClosed_(plan, overrideCloseAt = "") {
+  if (!plan) {
+    return true;
+  }
+  if (firstText(plan.status).toLowerCase() === "closed") {
+    return true;
+  }
+  const cutoffText = firstText(overrideCloseAt, plan.closeAt);
+  if (!cutoffText) {
+    return false;
+  }
+  const cutoff = new Date(cutoffText);
+  if (Number.isNaN(cutoff.getTime())) {
+    return false;
+  }
+  return Date.now() > cutoff.getTime();
+}
+
 function toFundEventRow(input) {
   const raw = safeJsonObject(input);
   const id = firstText(raw.id, crypto.randomUUID());
@@ -3467,20 +3531,62 @@ export async function dispatchNativeAction({
     case "listOrderPlans": {
       // User-facing page uses this without admin auth.
       const result = await query(`select * from order_plans order by coalesce(date, '') desc, id desc`);
-      const plans = result.rows.map((row) => ({
-        ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
-        id: row.id,
-        date: row.date || "",
-        title: row.title || "",
-        description: row.description || "",
-        closeAt: row.close_at || "",
-        vendor: row.vendor || "",
-        items: row.items || [],
-        status: row.status || "",
-        createdAt: row.created_at || "",
-        updatedAt: row.updated_at || "",
-      }));
+      const plans = result.rows.map((row) => buildOrderPlanForClient_(row));
       return { ok: true, data: { plans }, error: null };
+    }
+
+    case "getOrderPublicLinkAdmin": {
+      await requireGroupAccess(["I", "E"]);
+      const orderPlanId = firstText(body.orderPlanId || body.order_id || body.id);
+      if (!orderPlanId) {
+        return { ok: true, data: { publicLink: null }, error: null };
+      }
+      const result = await query(`select * from ordering_public_links where order_plan_id = $1 limit 1`, [orderPlanId]);
+      const row = rowOrNull(result);
+      const publicLink = row ? normalizeOrderingPublicLinkRow(row) : null;
+      return { ok: true, data: { publicLink }, error: null };
+    }
+
+    case "getOrderPublicPage": {
+      const token = firstText(body.token || body.publicToken);
+      if (!token) {
+        return { ok: false, data: null, error: "Missing token" };
+      }
+      const linkRow = rowOrNull(await query(`select * from ordering_public_links where token = $1 limit 1`, [token]));
+      if (!linkRow) {
+        return { ok: false, data: null, error: "Link not found" };
+      }
+      const publicLink = normalizeOrderingPublicLinkRow(linkRow);
+      if (String(publicLink.status || "").toLowerCase() !== "active") {
+        return { ok: false, data: null, error: "Link closed" };
+      }
+      const planRow = rowOrNull(await query(`select * from order_plans where id = $1 limit 1`, [publicLink.orderPlanId]));
+      if (!planRow) {
+        return { ok: false, data: null, error: "Order plan not found" };
+      }
+      const plan = buildOrderPlanForClient_(planRow);
+      const closed = isOrderPlanClosed_(plan, publicLink.closeAt);
+      return {
+        ok: true,
+        data: {
+          publicLink: {
+            id: publicLink.id,
+            title: firstText(publicLink.title, plan.title),
+            description: firstText(publicLink.description),
+            closeAt: firstText(publicLink.closeAt, plan.closeAt),
+            status: publicLink.status,
+          },
+          plan: {
+            ...plan,
+            closeAt: firstText(publicLink.closeAt, plan.closeAt),
+            publicTitle: firstText(publicLink.title, plan.title),
+            publicDescription: firstText(publicLink.description),
+            choices: getOrderChoicesForPlan_(plan),
+            isClosed: closed,
+          },
+        },
+        error: null,
+      };
     }
 
     case "createOrderPlan": {
@@ -3527,6 +3633,133 @@ export async function dispatchNativeAction({
         [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, jsonbParam(row.items, []), row.status, jsonbParam(row.raw, {}), row.updatedAt]
       );
       return { ok: true, data: { id: row.id, plan: row }, error: null };
+    }
+
+    case "upsertOrderPublicLink": {
+      await requireGroupAccess(["I", "E"]);
+      const data = safeJsonObject(body.data || body.publicLink || body);
+      const orderPlanId = firstText(data.orderPlanId || body.orderPlanId || body.order_id);
+      if (!orderPlanId) {
+        return { ok: false, data: null, error: "Missing orderPlanId" };
+      }
+      const planExists = rowOrNull(await query(`select id from order_plans where id = $1 limit 1`, [orderPlanId]));
+      if (!planExists) {
+        return { ok: false, data: null, error: "Order plan not found" };
+      }
+      const existing = rowOrNull(await query(`select * from ordering_public_links where order_plan_id = $1 limit 1`, [orderPlanId]));
+      const now = nowIso();
+      const row = {
+        id: firstText(data.id, existing && existing.id, `order_public:${crypto.randomUUID()}`),
+        orderPlanId,
+        token: firstText(data.token, existing && existing.token, generateOrderingPublicToken_()),
+        title: firstText(data.title),
+        description: firstText(data.description),
+        closeAt: firstText(data.closeAt),
+        status: firstText(data.status, data.enabled === false ? "disabled" : "active", "active"),
+        createdAt: firstText(data.createdAt, existing && existing.created_at, now),
+        updatedAt: now,
+      };
+      const raw = {
+        ...data,
+        id: row.id,
+        orderPlanId: row.orderPlanId,
+        token: row.token,
+        title: row.title,
+        description: row.description,
+        closeAt: row.closeAt,
+        status: row.status,
+        enabled: row.status === "active",
+      };
+      await query(
+        `insert into ordering_public_links (id, order_plan_id, token, title, description, close_at, status, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
+         on conflict (id) do update set
+           order_plan_id = excluded.order_plan_id,
+           token = excluded.token,
+           title = excluded.title,
+           description = excluded.description,
+           close_at = excluded.close_at,
+           status = excluded.status,
+           raw = excluded.raw,
+           updated_at = excluded.updated_at,
+           synced_at = now()`,
+        [row.id, row.orderPlanId, row.token, row.title, row.description, row.closeAt, row.status, jsonbParam(raw, {}), row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { publicLink: normalizeOrderingPublicLinkRow({
+        id: row.id,
+        order_plan_id: row.orderPlanId,
+        token: row.token,
+        title: row.title,
+        description: row.description,
+        close_at: row.closeAt,
+        status: row.status,
+        created_at: row.createdAt,
+        updated_at: row.updatedAt,
+        raw,
+      }) }, error: null };
+    }
+
+    case "submitOrderPublicResponse": {
+      const data = safeJsonObject(body.data || body.response || body);
+      const token = firstText(data.token || body.token);
+      if (!token) {
+        return { ok: false, data: null, error: "Missing token" };
+      }
+      const linkRow = rowOrNull(await query(`select * from ordering_public_links where token = $1 limit 1`, [token]));
+      if (!linkRow) {
+        return { ok: false, data: null, error: "Link not found" };
+      }
+      const publicLink = normalizeOrderingPublicLinkRow(linkRow);
+      if (String(publicLink.status || "").toLowerCase() !== "active") {
+        return { ok: false, data: null, error: "Link closed" };
+      }
+      const planRow = rowOrNull(await query(`select * from order_plans where id = $1 limit 1`, [publicLink.orderPlanId]));
+      if (!planRow) {
+        return { ok: false, data: null, error: "Order plan not found" };
+      }
+      const plan = buildOrderPlanForClient_(planRow);
+      if (isOrderPlanClosed_(plan, publicLink.closeAt)) {
+        return { ok: false, data: null, error: "訂餐已截止" };
+      }
+      const guestName = firstText(data.guestName, data.displayName, data.studentName);
+      const guestGroup = firstText(data.guestGroup, data.sourceLabel);
+      const guestContact = firstText(data.guestContact);
+      const choice = firstText(data.choice).toUpperCase();
+      const comment = firstText(data.comment);
+      if (!guestName) {
+        return { ok: false, data: null, error: "Missing guestName" };
+      }
+      if (!["A", "B", "C", "NONE"].includes(choice)) {
+        return { ok: false, data: null, error: "Invalid choice" };
+      }
+      const id = `public:${crypto.randomUUID()}`;
+      const createdAt = nowIso();
+      const choiceLabel = firstText((getOrderChoicesForPlan_(plan).find((item) => item.value === choice) || {}).label);
+      const raw = {
+        ...data,
+        id,
+        orderId: publicLink.orderPlanId,
+        studentId: "",
+        studentName: guestName,
+        studentEmail: "",
+        displayName: guestName,
+        sourceType: "public_external",
+        sourceLabel: firstText(guestGroup, "外部自助訂餐"),
+        guestName,
+        guestGroup,
+        guestContact,
+        choice,
+        choiceLabel,
+        comment,
+        publicLinkId: publicLink.id,
+        publicToken: token,
+      };
+      await query(
+        `insert into order_responses (id, order_id, student_id, student_name, student_email, response, total_amount, created_at, updated_at, raw)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10::jsonb)`,
+        [id, publicLink.orderPlanId, "", guestName, "", jsonbParam(raw, {}), null, createdAt, createdAt, jsonbParam(raw, {})]
+      );
+      return { ok: true, data: { response: raw }, error: null };
     }
 
     case "submitOrderResponse": {
@@ -3648,8 +3881,8 @@ export async function dispatchNativeAction({
         return { ok: true, data: { id }, error: null };
       }
       const raw = safeJsonObject(existing.raw);
-      if (firstText(raw.sourceType) !== "proxy_external") {
-        return { ok: false, data: null, error: "Only proxy responses can be deleted here" };
+      if (!["proxy_external", "public_external"].includes(firstText(raw.sourceType))) {
+        return { ok: false, data: null, error: "Only external responses can be deleted here" };
       }
       await query(`delete from order_responses where id = $1`, [id]);
       return { ok: true, data: { id }, error: null };
@@ -3668,6 +3901,7 @@ export async function dispatchNativeAction({
       const responseCountResult = await query(`select count(*)::int as count from order_responses where order_id = $1`, [id]);
       const deletedResponses = Number((responseCountResult.rows[0] && responseCountResult.rows[0].count) || 0);
       await query(`delete from order_responses where order_id = $1`, [id]);
+      await query(`delete from ordering_public_links where order_plan_id = $1`, [id]);
       await query(`delete from order_plans where id = $1`, [id]);
       return { ok: true, data: { id, deletedResponses }, error: null };
     }
