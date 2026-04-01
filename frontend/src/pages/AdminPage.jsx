@@ -993,7 +993,12 @@ export default function AdminPage({
       const existing = result && result.ok && result.data ? result.data.publicLink || null : null;
       setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, existing));
     } catch (err) {
-      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, null));
+      setPublicOrderLinkForm((prev) => {
+        if (String(prev.orderPlanId || "") === String(orderId || "").trim()) {
+          return { ...prev, orderPlanId: String(orderId || "").trim() };
+        }
+        return buildDefaultPublicOrderLinkForm(plan, null);
+      });
     }
   };
 
@@ -1376,6 +1381,10 @@ export default function AdminPage({
       });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
+      }
+      const saved = result.data && result.data.publicLink ? result.data.publicLink : null;
+      if (saved) {
+        setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(activeOrderPlan, saved));
       }
       await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan);
       setOrderStatusMessage(publicOrderLinkForm.status === "active" ? "已更新外部訂餐入口" : "已儲存外部訂餐設定");
@@ -3594,7 +3603,7 @@ export default function AdminPage({
                     </div>
                     <div className="flex gap-2">
                       <button type="submit" disabled={saving || !orderActiveId} className="btn-primary">
-                        {saving ? "儲存中..." : "儲存外部入口"}
+                        {saving ? "儲存中..." : "儲存外部入口設定"}
                       </button>
                     </div>
                   </div>
