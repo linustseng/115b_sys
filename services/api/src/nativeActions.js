@@ -30,6 +30,16 @@ function firstText(value, fallback = "") {
   return text || String(fallback || "").trim();
 }
 
+function firstNonEmptyText(...values) {
+  for (const value of values) {
+    const text = String(value == null ? "" : value).trim();
+    if (text) {
+      return text;
+    }
+  }
+  return "";
+}
+
 function asArray(value) {
   return Array.isArray(value) ? value : [];
 }
@@ -3656,9 +3666,9 @@ export async function dispatchNativeAction({
       const existing = rowOrNull(await query(`select * from ordering_public_links where order_plan_id = $1 limit 1`, [orderPlanId]));
       const now = nowIso();
       const row = {
-        id: firstText(data.id, existing && existing.id, `order_public:${crypto.randomUUID()}`),
+        id: firstNonEmptyText(data.id, existing && existing.id, `order_public:${crypto.randomUUID()}`),
         orderPlanId,
-        token: firstText(data.token, existing && existing.token, generateOrderingPublicToken_()),
+        token: firstNonEmptyText(data.token, existing && existing.token, generateOrderingPublicToken_()),
         title: firstText(data.title),
         description: firstText(data.description),
         closeAt: firstText(data.closeAt),
