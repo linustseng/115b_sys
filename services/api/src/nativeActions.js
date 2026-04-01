@@ -3196,6 +3196,121 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Info notification: if the student has an active makeup registration and that target session
+      // has published reminder info, surface it in notifications.
+      try {
+        const myMakeupRequestsResult = await query(
+          `select * from makeup_requests
+           where student_id = $1
+             and coalesce(status,'submitted') <> 'cancelled'
+           order by coalesce(created_at,'' ) desc, id desc`,
+          [studentId]
+        );
+        const publishedMakeupNotesResult = await query(
+          `select * from session_notes
+           where coalesce(status,'draft') = 'published'
+           order by coalesce(updated_at,'' ) desc, id desc`
+        );
+
+        const publishedMakeupNotesBySessionId = new Map(
+          publishedMakeupNotesResult.rows
+            .map((row) => mapSessionNoteRow(row))
+            .map((note) => [firstText(note.sessionId), note])
+        );
+
+        const activeReminderTodoIds = new Set();
+
+        for (const requestRow of myMakeupRequestsResult.rows) {
+          const targetSessionId = firstText(requestRow && requestRow.target_session_id);
+          if (!targetSessionId) {
+            continue;
+          }
+          const note = publishedMakeupNotesBySessionId.get(targetSessionId);
+          if (!note) {
+            continue;
+          }
+
+          const reminderTitle = firstText(note.reminderTitle, note.title);
+          const reminderText = firstText(note.reminderText, note.makeupReminder, note.note);
+          const reminderLinkUrl = firstText(note.reminderLinkUrl, note.linkUrl);
+          const reminderLinkLabel = firstText(note.reminderLinkLabel, note.linkLabel);
+          if (!reminderTitle && !reminderText && !reminderLinkUrl) {
+            continue;
+          }
+
+          const targetSession = buildGeneratedThursdaySessionFromId(targetSessionId) || null;
+          const scheduleText = [
+            firstText(targetSession && targetSession.sessionDate),
+            firstText(targetSession && targetSession.title),
+          ]
+            .filter(Boolean)
+            .join("｜");
+          const notificationId = `academics:makeup-reminder:${targetSessionId}:${studentId}`;
+          activeReminderTodoIds.add(notificationId);
+          const createdAtText = nowIso();
+          const title = `補課提醒${scheduleText ? `｜${scheduleText}` : ""}`;
+          const bodyParts = [];
+          if (reminderTitle) {
+            bodyParts.push(reminderTitle);
+          }
+          if (reminderText) {
+            bodyParts.push(reminderText);
+          }
+          const body = bodyParts.join(" · ");
+          const url = `/academics`;
+          const raw = {
+            kind: "announcement",
+            category: "academics_makeup",
+            targetSessionId,
+            reminderTitle,
+            reminderText,
+            reminderLinkUrl,
+            reminderLinkLabel,
+            title,
+            message: body,
+            url,
+            createdAt: createdAtText,
+          };
+
+          await query(
+            `insert into notifications (
+               id, dedupe_key, kind, status,
+               target_student_id, target_group_id,
+               title, body, url,
+               created_at, updated_at, raw
+             ) values ($1,$2,'announcement','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+             on conflict (id) do update set
+               status = 'open',
+               title = excluded.title,
+               body = excluded.body,
+               url = excluded.url,
+               raw = excluded.raw,
+               target_student_id = excluded.target_student_id,
+               updated_at = case
+                 when notifications.status <> 'open'
+                   or notifications.title is distinct from excluded.title
+                   or notifications.body is distinct from excluded.body
+                   or notifications.url is distinct from excluded.url
+                 then excluded.updated_at
+                 else notifications.updated_at
+               end`,
+            [notificationId, notificationId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+          );
+        }
+
+        await query(
+          `update notifications
+           set status = 'closed', updated_at = now()
+           where coalesce(raw->>'category','') = 'academics_makeup'
+             and coalesce(target_student_id,'') = $1
+             and coalesce(status,'open') <> 'closed'
+             and not (id = any($2::text[]))`,
+          [studentId, Array.from(activeReminderTodoIds).length ? Array.from(activeReminderTodoIds) : ["__none__"]]
+        );
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
         `select n.*, r.read_at, r.seen_updated_at
          from notifications n

@@ -750,7 +750,7 @@ export default function AcademicsPage({ shared }) {
                   <option value="">請選擇補課場次</option>
                   {makeupTargets.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.sessionDate}｜{item.title}
+                      {item.sessionDate}｜{item.title}{normalizeMakeupReminder_(notesBySessionId.get(item.id)) ? "｜有提醒" : ""}
                     </option>
                   ))}
                 </select>
