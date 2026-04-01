@@ -149,6 +149,8 @@ export default function AdminPage({
   const uploadFileRef = useRef(null);
   const uploadCompletedRef = useRef(false);
   const directoryLoadedTokenRef = useRef("");
+  const publicOrderLinkDraftTouchedRef = useRef(false);
+  const publicOrderLinkLoadSeqRef = useRef(0);
   const ALLOWED_UPLOAD_EXTENSIONS = [
     "pdf",
     "jpg",
@@ -731,7 +733,7 @@ export default function AdminPage({
           status: selected.status || "open",
           notes: selected.notes || "",
         });
-        loadOrderPublicLink(normalizedId, selected);
+        loadOrderPublicLink(normalizedId, selected, { resetDraft: true });
       }
     }
   }, [activeTab, orderActiveId, orderPlans]);
@@ -983,7 +985,12 @@ export default function AdminPage({
     }
   };
 
-  const loadOrderPublicLink = async (orderId, plan = null) => {
+  const loadOrderPublicLink = async (orderId, plan = null, options = {}) => {
+    const resetDraft = Boolean(options && options.resetDraft);
+    const requestSeq = ++publicOrderLinkLoadSeqRef.current;
+    if (resetDraft) {
+      publicOrderLinkDraftTouchedRef.current = false;
+    }
     if (!orderId) {
       setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, null));
       return;
@@ -991,8 +998,17 @@ export default function AdminPage({
     try {
       const { result } = await apiRequest({ action: "getOrderPublicLinkAdmin", orderPlanId: orderId });
       const existing = result && result.ok && result.data ? result.data.publicLink || null : null;
+      if (requestSeq !== publicOrderLinkLoadSeqRef.current) {
+        return;
+      }
+      if (publicOrderLinkDraftTouchedRef.current && !resetDraft) {
+        return;
+      }
       setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(plan, existing));
     } catch (err) {
+      if (requestSeq !== publicOrderLinkLoadSeqRef.current) {
+        return;
+      }
       setPublicOrderLinkForm((prev) => {
         if (String(prev.orderPlanId || "") === String(orderId || "").trim()) {
           return { ...prev, orderPlanId: String(orderId || "").trim() };
@@ -1385,8 +1401,9 @@ export default function AdminPage({
       const saved = result.data && result.data.publicLink ? result.data.publicLink : null;
       if (saved) {
         setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(activeOrderPlan, saved));
+        publicOrderLinkDraftTouchedRef.current = false;
       }
-      await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan);
+      await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan, { resetDraft: true });
       setOrderStatusMessage(publicOrderLinkForm.status === "active" ? "已更新外部訂餐入口" : "已儲存外部訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
@@ -3532,7 +3549,10 @@ export default function AdminPage({
                     <label className="text-sm font-medium text-slate-700">狀態</label>
                     <select
                       value={publicOrderLinkForm.status}
-                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, status: event.target.value, orderPlanId: orderActiveId }))}
+                      onChange={(event) => {
+                        publicOrderLinkDraftTouchedRef.current = true;
+                        setPublicOrderLinkForm((prev) => ({ ...prev, status: event.target.value, orderPlanId: orderActiveId }));
+                      }}
                       className="input-sm"
                     >
                       <option value="disabled">關閉</option>
@@ -3543,7 +3563,10 @@ export default function AdminPage({
                     <label className="text-sm font-medium text-slate-700">對外標題</label>
                     <input
                       value={publicOrderLinkForm.title}
-                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, title: event.target.value, orderPlanId: orderActiveId }))}
+                      onChange={(event) => {
+                        publicOrderLinkDraftTouchedRef.current = true;
+                        setPublicOrderLinkForm((prev) => ({ ...prev, title: event.target.value, orderPlanId: orderActiveId }));
+                      }}
                       placeholder="例如：4/12 中餐訂購"
                       className="input-sm"
                     />
@@ -3553,7 +3576,10 @@ export default function AdminPage({
                     <input
                       type="datetime-local"
                       value={publicOrderLinkForm.closeAt}
-                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, closeAt: event.target.value, orderPlanId: orderActiveId }))}
+                      onChange={(event) => {
+                        publicOrderLinkDraftTouchedRef.current = true;
+                        setPublicOrderLinkForm((prev) => ({ ...prev, closeAt: event.target.value, orderPlanId: orderActiveId }));
+                      }}
                       className="input-sm"
                     />
                   </div>
@@ -3561,7 +3587,10 @@ export default function AdminPage({
                     <label className="text-sm font-medium text-slate-700">對外說明</label>
                     <textarea
                       value={publicOrderLinkForm.description}
-                      onChange={(event) => setPublicOrderLinkForm((prev) => ({ ...prev, description: event.target.value, orderPlanId: orderActiveId }))}
+                      onChange={(event) => {
+                        publicOrderLinkDraftTouchedRef.current = true;
+                        setPublicOrderLinkForm((prev) => ({ ...prev, description: event.target.value, orderPlanId: orderActiveId }));
+                      }}
                       rows="3"
                       placeholder="例如：提供其他班同學與學長姐訂餐，請於截止前完成填寫。"
                       className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
