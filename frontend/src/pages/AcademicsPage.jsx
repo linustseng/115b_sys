@@ -829,6 +829,9 @@ export default function AcademicsPage({ shared }) {
                       <span className="rounded-full bg-slate-100 px-2.5 py-1">餐食：{item.needMeal ? "需要" : "不需要"}</span>
                       <span className="rounded-full bg-slate-100 px-2.5 py-1">講義：{item.needHandout ? "需要" : "不需要"}</span>
                     </div>
+                    <div className="mt-3">
+                      <MakeupReminderCard reminder={normalizeMakeupReminder_(notesBySessionId.get(item.targetSessionId))} />
+                    </div>
                     {item.note ? <p className="mt-3 text-xs text-slate-600">備註：{item.note}</p> : null}
                     {item.status !== "cancelled" && item.status !== "completed" ? (
                       <div className="mt-3">
