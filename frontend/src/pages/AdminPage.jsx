@@ -1377,8 +1377,7 @@ export default function AdminPage({
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
       }
-      const saved = result.data && result.data.publicLink ? result.data.publicLink : null;
-      setPublicOrderLinkForm(buildDefaultPublicOrderLinkForm(activeOrderPlan, saved));
+      await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan);
       setOrderStatusMessage(publicOrderLinkForm.status === "active" ? "已更新外部訂餐入口" : "已儲存外部訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
@@ -3579,6 +3578,9 @@ export default function AdminPage({
                         複製連結
                       </button>
                     </div>
+                    {publicOrderLinkForm.status === "active" && !publicOrderUrl ? (
+                      <p className="text-xs text-amber-600">已啟用，但連結尚未載入完成；儲存後會自動重新抓取。</p>
+                    ) : null}
                   </div>
                   <div className="lg:col-span-2 flex flex-wrap items-end justify-between gap-4">
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
