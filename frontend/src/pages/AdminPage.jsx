@@ -2583,8 +2583,10 @@ export default function AdminPage({
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
+  const runtimeOrigin = typeof window !== "undefined" ? String(window.location.origin || "").trim() : "";
+  const publicSiteBase = String(runtimeOrigin || PUBLIC_SITE_URL || "").replace(/\/$/, "");
   const publicOrderUrl = publicOrderLinkForm.token
-    ? `${String(PUBLIC_SITE_URL || window.location.origin).replace(/\/$/, "")}/ordering-public?token=${encodeURIComponent(publicOrderLinkForm.token)}`
+    ? `${publicSiteBase}/ordering-public?token=${encodeURIComponent(publicOrderLinkForm.token)}`
     : "";
   const isOrderPickedUp_ = (item) => Boolean(String((item && item.pickedUpAt) || "").trim());
   const orderStats = orderResponses.reduce(
@@ -3616,6 +3618,9 @@ export default function AdminPage({
                         複製連結
                       </button>
                     </div>
+                    {publicOrderUrl ? (
+                      <p className="text-xs text-slate-400">目前外部頁站點：{publicSiteBase}</p>
+                    ) : null}
                     {publicOrderLinkForm.status === "active" && !publicOrderUrl ? (
                       <p className="text-xs text-amber-600">已啟用，但連結尚未載入完成；儲存後會自動重新抓取。</p>
                     ) : null}
