@@ -62,6 +62,48 @@ function normalizeNoteItems_(note) {
   };
 }
 
+function normalizeMakeupReminder_(note) {
+  if (!note) {
+    return null;
+  }
+  const reminderTitle = String(note.reminderTitle || note.title || "").trim();
+  const reminderText = String(note.reminderText || note.makeupReminder || note.note || "").trim();
+  const reminderLinkUrl = String(note.reminderLinkUrl || note.linkUrl || "").trim();
+  const reminderLinkLabel = String(note.reminderLinkLabel || note.linkLabel || "").trim();
+  if (!reminderTitle && !reminderText && !/^https?:\/\//i.test(reminderLinkUrl)) {
+    return null;
+  }
+  return {
+    title: reminderTitle,
+    text: reminderText,
+    linkUrl: /^https?:\/\//i.test(reminderLinkUrl) ? reminderLinkUrl : "",
+    linkLabel: reminderLinkLabel,
+  };
+}
+
+function MakeupReminderCard({ reminder }) {
+  if (!reminder) {
+    return null;
+  }
+  return (
+    <div className="rounded-2xl border border-violet-200 bg-violet-50/70 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-600">補課提醒</p>
+      {reminder.title ? <p className="mt-2 text-sm font-semibold text-slate-900">{reminder.title}</p> : null}
+      {reminder.text ? <p className="mt-1 whitespace-pre-line text-sm leading-6 text-slate-700">{reminder.text}</p> : null}
+      {reminder.linkUrl ? (
+        <a
+          href={reminder.linkUrl}
+          target="_blank"
+          rel="noopener"
+          className="mt-2 inline-flex items-center text-sm font-semibold text-violet-700 underline decoration-violet-300 underline-offset-4 hover:text-violet-800"
+        >
+          {reminder.linkLabel || "查看補充說明"}
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
 function CourseCatalogCard({ unit }) {
   const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
   const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
@@ -562,11 +604,12 @@ export default function AcademicsPage({ shared }) {
       .map((item) => ({
         ...item,
         targetSession: sessionsById.get(item.targetSessionId) || item.targetSession || null,
+        note: notesBySessionId.get(item.targetSessionId) || null,
         requests: (bootstrap.publicRequests || []).filter(
           (request) => request.status !== "cancelled" && request.targetSessionId === item.targetSessionId
         ),
       }));
-  }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById]);
+  }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById, notesBySessionId]);
 
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
@@ -713,6 +756,10 @@ export default function AcademicsPage({ shared }) {
                 </select>
               </div>
 
+              {form.targetSessionId ? (
+                <MakeupReminderCard reminder={normalizeMakeupReminder_(notesBySessionId.get(form.targetSessionId))} />
+              ) : null}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
                   <input
@@ -821,6 +868,9 @@ export default function AcademicsPage({ shared }) {
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-500">
                   <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">餐食 {item.needMeal}</span>
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">講義 {item.needHandout}</span>
+                </div>
+                <div className="mt-3">
+                  <MakeupReminderCard reminder={normalizeMakeupReminder_(item.note)} />
                 </div>
                 <p className="mt-3 text-sm leading-6 text-slate-700">
                   {item.requests

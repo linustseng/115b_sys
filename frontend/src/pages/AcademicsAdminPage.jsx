@@ -72,6 +72,17 @@ function buildNoteForm(note, sessionId = "") {
   };
 }
 
+function buildMakeupNoteForm(note, sessionId = "") {
+  return {
+    sessionId: sessionId || (note && note.sessionId) || "",
+    reminderTitle: (note && (note.reminderTitle || note.title)) || "",
+    reminderText: (note && (note.reminderText || note.makeupReminder || note.note)) || "",
+    reminderLinkUrl: (note && (note.reminderLinkUrl || note.linkUrl)) || "",
+    reminderLinkLabel: (note && (note.reminderLinkLabel || note.linkLabel)) || "",
+    status: (note && note.status) || "published",
+  };
+}
+
 function toCsvCell_(value) {
   const text = String(value == null ? "" : value);
   if (/[",\n]/.test(text)) {
@@ -122,6 +133,8 @@ export default function AcademicsAdminPage({ shared }) {
   });
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [noteForm, setNoteForm] = useState(() => buildNoteForm(null, ""));
+  const [selectedMakeupSessionId, setSelectedMakeupSessionId] = useState("");
+  const [makeupNoteForm, setMakeupNoteForm] = useState(() => buildMakeupNoteForm(null, ""));
   const [requestDrafts, setRequestDrafts] = useState({});
   const [selectedTargetDate, setSelectedTargetDate] = useState("");
   const [manualForm, setManualForm] = useState({
@@ -252,6 +265,18 @@ export default function AcademicsAdminPage({ shared }) {
     }
     setNoteForm(buildNoteForm(notesBySessionId.get(selectedSessionId), selectedSessionId));
   }, [selectedSessionId, notesBySessionId, bootstrap.regularSessions]);
+
+  useEffect(() => {
+    if (!selectedMakeupSessionId) {
+      const firstSessionId = String(((bootstrap.makeupTargets || [])[0] && (bootstrap.makeupTargets || [])[0].id) || "");
+      if (firstSessionId) {
+        setSelectedMakeupSessionId(firstSessionId);
+        setMakeupNoteForm(buildMakeupNoteForm(notesBySessionId.get(firstSessionId), firstSessionId));
+      }
+      return;
+    }
+    setMakeupNoteForm(buildMakeupNoteForm(notesBySessionId.get(selectedMakeupSessionId), selectedMakeupSessionId));
+  }, [selectedMakeupSessionId, notesBySessionId, bootstrap.makeupTargets]);
 
   const formatSessionSchedule_ = (session) => {
     if (!session) {
@@ -481,6 +506,41 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
+  const handleSaveMakeupNote_ = async (event) => {
+    event.preventDefault();
+    if (!makeupNoteForm.sessionId) {
+      setError("請先選擇補課場次。");
+      return;
+    }
+    setStatus("");
+    setError("");
+    try {
+      const payload = {
+        sessionId: makeupNoteForm.sessionId,
+        title: String(makeupNoteForm.reminderTitle || "").trim(),
+        summary: "",
+        homeworkNotice: "",
+        quizNotice: "",
+        linkUrl: String(makeupNoteForm.reminderLinkUrl || "").trim(),
+        linkLabel: String(makeupNoteForm.reminderLinkLabel || "").trim(),
+        reminderTitle: String(makeupNoteForm.reminderTitle || "").trim(),
+        reminderText: String(makeupNoteForm.reminderText || "").trim(),
+        reminderLinkUrl: String(makeupNoteForm.reminderLinkUrl || "").trim(),
+        reminderLinkLabel: String(makeupNoteForm.reminderLinkLabel || "").trim(),
+        status: makeupNoteForm.status || "published",
+      };
+
+      const { result } = await apiRequest({ action: "upsertSessionNote", data: payload });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "儲存失敗");
+      }
+      setStatus(makeupNoteForm.status === "published" ? "補課提醒已發布。" : "補課提醒草稿已儲存。");
+      await loadBootstrap_();
+    } catch (err) {
+      setError(String((err && err.message) || "儲存失敗"));
+    }
+  };
+
   const totalActiveRequests = activeRequests.length;
   const totalPublishedNotes = (bootstrap.notes || []).filter((item) => item.status === "published").length;
 
@@ -649,6 +709,97 @@ export default function AcademicsAdminPage({ shared }) {
                   補登補課資料
                 </button>
               </div>
+            </div>
+          </form>
+        </section>
+        ) : null}
+
+        {adminTab === "makeup" ? (
+        <section className="mt-6 card p-6 sm:p-7">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-violet-500">Reminder</p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">補課提醒設定</h2>
+            <p className="mt-2 text-sm text-slate-500">給同學看的短提醒；適合放小考、範圍、帶教材、改教室等資訊。</p>
+          </div>
+
+          <form className="mt-5 space-y-4" onSubmit={handleSaveMakeupNote_}>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">補課場次</label>
+              <select
+                value={selectedMakeupSessionId}
+                onChange={(event) => setSelectedMakeupSessionId(event.target.value)}
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+              >
+                <option value="">請選擇補課場次</option>
+                {(bootstrap.makeupTargets || []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.sessionDate}｜{item.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">提醒標題</label>
+              <input
+                value={makeupNoteForm.reminderTitle}
+                onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderTitle: event.target.value, sessionId: selectedMakeupSessionId }))}
+                placeholder="例如：本次有小考"
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">提醒內容</label>
+              <textarea
+                value={makeupNoteForm.reminderText}
+                onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderText: event.target.value, sessionId: selectedMakeupSessionId }))}
+                rows={3}
+                placeholder="例如：前 20 分鐘小考，範圍第 3 章 p.45–68。"
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">補充連結文字</label>
+                <input
+                  value={makeupNoteForm.reminderLinkLabel}
+                  onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderLinkLabel: event.target.value, sessionId: selectedMakeupSessionId }))}
+                  placeholder="例如：查看完整說明"
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">補充連結 URL</label>
+                <input
+                  value={makeupNoteForm.reminderLinkUrl}
+                  onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, reminderLinkUrl: event.target.value, sessionId: selectedMakeupSessionId }))}
+                  placeholder="https://..."
+                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">狀態</label>
+              <select
+                value={makeupNoteForm.status}
+                onChange={(event) => setMakeupNoteForm((prev) => ({ ...prev, status: event.target.value, sessionId: selectedMakeupSessionId }))}
+                className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+              >
+                <option value="draft">草稿</option>
+                <option value="published">已發布</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+              >
+                儲存補課提醒
+              </button>
             </div>
           </form>
         </section>
