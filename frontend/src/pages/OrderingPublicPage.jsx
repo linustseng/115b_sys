@@ -62,6 +62,10 @@ function OrderingPublicPage({ shared }) {
       setError("缺少訂餐連結 token。");
       return;
     }
+    if (plan && plan.isClosed) {
+      setError("本次訂餐已超過截止時間，請洽美食組協助訂餐。");
+      return;
+    }
     if (!String(form.guestName || "").trim()) {
       setError("請先填寫姓名。");
       return;
@@ -145,7 +149,9 @@ function OrderingPublicPage({ shared }) {
         ) : (
           <form className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm" onSubmit={handleSubmit}>
             {plan && plan.isClosed ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">這張訂餐已截止。</div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                本次訂餐已超過截止時間，請洽美食組訂餐；此頁面已停止受理送出。
+              </div>
             ) : null}
 
             <div className="space-y-4">
