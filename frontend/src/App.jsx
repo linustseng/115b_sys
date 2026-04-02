@@ -833,6 +833,8 @@ const API_V2_READ_ACTIONS = new Set([
   "getFundSummary",
   // Ordering
   "listOrderPlans",
+  "getOrderPublicLinkAdmin",
+  "getOrderPublicPage",
   "listOrderResponses",
   "listOrderResponsesByStudent",
   // Softball

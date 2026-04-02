@@ -1011,7 +1011,7 @@ export default function AdminPage({
       }
       setPublicOrderLinkForm((prev) => {
         if (String(prev.orderPlanId || "") === String(orderId || "").trim()) {
-          return { ...prev, orderPlanId: String(orderId || "").trim() };
+          return prev;
         }
         return buildDefaultPublicOrderLinkForm(plan, null);
       });
@@ -3604,7 +3604,9 @@ export default function AdminPage({
                       <input value={publicOrderUrl} readOnly placeholder="先啟用並儲存後會產生連結" className="input-sm flex-1" />
                       <button
                         type="button"
-                        onClick={async () => {
+                        onClick={async (event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
                           if (!publicOrderUrl) return;
                           try {
                             await navigator.clipboard.writeText(publicOrderUrl);
