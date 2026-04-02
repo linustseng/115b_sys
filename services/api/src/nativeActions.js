@@ -313,11 +313,15 @@ function isOrderPlanClosed_(plan, overrideCloseAt = "") {
   if (firstText(plan.status).toLowerCase() === "closed") {
     return true;
   }
-  const cutoffText = firstText(overrideCloseAt, plan.closeAt);
+  const cutoffText = firstText(overrideCloseAt, plan.closeAt, plan.cutoffAt);
   if (!cutoffText) {
     return false;
   }
-  const cutoff = new Date(cutoffText);
+  const normalized =
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(cutoffText)
+      ? cutoffText.replace(/\//g, "-").replace(" ", "T")
+      : cutoffText;
+  const cutoff = new Date(normalized);
   if (Number.isNaN(cutoff.getTime())) {
     return false;
   }
@@ -3593,12 +3597,12 @@ export async function dispatchNativeAction({
             id: publicLink.id,
             title: firstText(publicLink.title, plan.title),
             description: firstText(publicLink.description),
-            closeAt: firstText(publicLink.closeAt, plan.closeAt),
+            closeAt: firstText(publicLink.closeAt, plan.closeAt, plan.cutoffAt),
             status: publicLink.status,
           },
           plan: {
             ...plan,
-            closeAt: firstText(publicLink.closeAt, plan.closeAt),
+            closeAt: firstText(publicLink.closeAt, plan.closeAt, plan.cutoffAt),
             publicTitle: firstText(publicLink.title, plan.title),
             publicDescription: firstText(publicLink.description),
             choices: getOrderChoicesForPlan_(plan),
