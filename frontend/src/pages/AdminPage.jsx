@@ -470,6 +470,39 @@ export default function AdminPage({
     comment: "",
   });
 
+  const isOrderPlanClosedForAdmin_ = (plan) => {
+    if (!plan) {
+      return true;
+    }
+    const status = String(plan.status || "").trim().toLowerCase();
+    if (status && status !== "open") {
+      return true;
+    }
+
+    const now = Date.now();
+    const cutoffText = String(plan.cutoffAt || plan.closeAt || "").trim();
+    if (cutoffText) {
+      const normalized =
+        /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(cutoffText)
+          ? cutoffText.replace(/\//g, "-").replace(" ", "T")
+          : cutoffText;
+      const cutoff = new Date(normalized);
+      if (!Number.isNaN(cutoff.getTime()) && now > cutoff.getTime()) {
+        return true;
+      }
+    }
+
+    const dateText = String(plan.date || "").trim();
+    if (dateText) {
+      const mealEnd = new Date(`${dateText}T23:59:59+08:00`);
+      if (!Number.isNaN(mealEnd.getTime()) && now > mealEnd.getTime()) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
   const buildDefaultPublicOrderLinkForm = (plan = null, existing = null) => ({
     id: existing && existing.id ? existing.id : "",
     orderPlanId: plan && plan.id ? plan.id : "",
@@ -3254,6 +3287,7 @@ export default function AdminPage({
                         const isActive = isDraft
                           ? isCreatingOrder && !orderForm.id
                           : normalizeOrderId_(orderActiveId) === normalizeOrderId_(plan.id);
+                        const isClosed = !isDraft && isOrderPlanClosedForAdmin_(plan);
                         return (
                           <button
                             key={plan.id}
@@ -3279,6 +3313,17 @@ export default function AdminPage({
                                 {isDraft ? "先填日期與餐點後儲存" : `${plan.title || "訂餐"} · ${plan.status || "open"}`}
                               </p>
                             </div>
+                            {isClosed ? (
+                              <span
+                                className={`rounded-full px-2 py-1 text-[11px] font-semibold ${
+                                  isActive
+                                    ? "bg-white/15 text-white"
+                                    : "border border-amber-200 bg-amber-50 text-amber-700"
+                                }`}
+                              >
+                                已截止
+                              </span>
+                            ) : null}
                           </button>
                         );
                       })
