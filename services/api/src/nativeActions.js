@@ -313,19 +313,29 @@ function isOrderPlanClosed_(plan, overrideCloseAt = "") {
   if (firstText(plan.status).toLowerCase() === "closed") {
     return true;
   }
+
+  const now = Date.now();
   const cutoffText = firstText(overrideCloseAt, plan.closeAt, plan.cutoffAt);
-  if (!cutoffText) {
-    return false;
+  if (cutoffText) {
+    const normalized =
+      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(cutoffText)
+        ? cutoffText.replace(/\//g, "-").replace(" ", "T")
+        : cutoffText;
+    const cutoff = new Date(normalized);
+    if (!Number.isNaN(cutoff.getTime()) && now > cutoff.getTime()) {
+      return true;
+    }
   }
-  const normalized =
-    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(cutoffText)
-      ? cutoffText.replace(/\//g, "-").replace(" ", "T")
-      : cutoffText;
-  const cutoff = new Date(normalized);
-  if (Number.isNaN(cutoff.getTime())) {
-    return false;
+
+  const planDateText = firstText(plan.date);
+  if (planDateText) {
+    const mealDate = new Date(`${planDateText}T23:59:59+08:00`);
+    if (!Number.isNaN(mealDate.getTime()) && now > mealDate.getTime()) {
+      return true;
+    }
   }
-  return Date.now() > cutoff.getTime();
+
+  return false;
 }
 
 function normalizeDuplicateKey_(value) {
