@@ -2584,7 +2584,7 @@ export default function AdminPage({
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
   const runtimeOrigin = typeof window !== "undefined" ? String(window.location.origin || "").trim() : "";
-  const publicSiteBase = String(runtimeOrigin || PUBLIC_SITE_URL || "").replace(/\/$/, "");
+  const publicSiteBase = String(PUBLIC_SITE_URL || runtimeOrigin || "").replace(/\/$/, "");
   const publicOrderUrl = publicOrderLinkForm.token
     ? `${publicSiteBase}/ordering-public?token=${encodeURIComponent(publicOrderLinkForm.token)}`
     : "";

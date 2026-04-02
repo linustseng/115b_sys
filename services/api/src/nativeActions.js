@@ -1687,6 +1687,9 @@ export async function dispatchNativeAction({
     "refreshSession",
     // Landing can render without login; it will return empty private sections when unauthenticated.
     "listLandingBootstrap",
+    "listOrderPlans",
+    "getOrderPublicPage",
+    "submitOrderPublicResponse",
   ]);
 
   // Helpers
