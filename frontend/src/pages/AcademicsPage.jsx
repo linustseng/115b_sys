@@ -406,11 +406,35 @@ export default function AcademicsPage({ shared }) {
   }, [allCourseCatalog, courseDateWindow]);
 
   const recentPastCourseCatalog = useMemo(() => {
-    return recentCourseCatalog.filter((course) => (course.sessions || []).some((session) => courseDateWindow.pastDates.includes(String(session.sessionDate || "").trim())));
+    return recentCourseCatalog
+      .map((course) => {
+        const sessions = (course.sessions || []).filter((session) =>
+          courseDateWindow.pastDates.includes(String(session.sessionDate || "").trim())
+        );
+        return {
+          ...course,
+          sessions,
+          firstSessionDate: sessions[0] ? String(sessions[0].sessionDate || "") : "",
+          lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
+        };
+      })
+      .filter((course) => course.sessions.length);
   }, [recentCourseCatalog, courseDateWindow]);
 
   const recentFutureCourseCatalog = useMemo(() => {
-    return recentCourseCatalog.filter((course) => (course.sessions || []).some((session) => courseDateWindow.futureDates.includes(String(session.sessionDate || "").trim())));
+    return recentCourseCatalog
+      .map((course) => {
+        const sessions = (course.sessions || []).filter((session) =>
+          courseDateWindow.futureDates.includes(String(session.sessionDate || "").trim())
+        );
+        return {
+          ...course,
+          sessions,
+          firstSessionDate: sessions[0] ? String(sessions[0].sessionDate || "") : "",
+          lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
+        };
+      })
+      .filter((course) => course.sessions.length);
   }, [recentCourseCatalog, courseDateWindow]);
 
   const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
