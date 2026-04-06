@@ -402,7 +402,12 @@ export default function AcademicsPage({ shared }) {
           lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
         };
       })
-      .filter((course) => course.sessions.length);
+      .filter((course) => course.sessions.length)
+      .sort((a, b) => {
+        const left = `${String((a.sessions[0] && a.sessions[0].sessionDate) || "")} ${String((a.sessions[0] && a.sessions[0].startsAt) || "")}`;
+        const right = `${String((b.sessions[0] && b.sessions[0].sessionDate) || "")} ${String((b.sessions[0] && b.sessions[0].startsAt) || "")}`;
+        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
   }, [recentCourseCatalog, courseDateWindow]);
 
   const recentFutureCourseCatalog = useMemo(() => {
@@ -418,7 +423,12 @@ export default function AcademicsPage({ shared }) {
           lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
         };
       })
-      .filter((course) => course.sessions.length);
+      .filter((course) => course.sessions.length)
+      .sort((a, b) => {
+        const left = `${String((a.sessions[0] && a.sessions[0].sessionDate) || "")} ${String((a.sessions[0] && a.sessions[0].startsAt) || "")}`;
+        const right = `${String((b.sessions[0] && b.sessions[0].sessionDate) || "")} ${String((b.sessions[0] && b.sessions[0].startsAt) || "")}`;
+        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
   }, [recentCourseCatalog, courseDateWindow]);
 
   const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
