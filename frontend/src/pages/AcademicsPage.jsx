@@ -43,9 +43,6 @@ function normalizeLinkItems_(note) {
 }
 
 function normalizeNoteItems_(note) {
-  const summaryItems = Array.isArray(note && note.summaryItems)
-    ? note.summaryItems.map((item) => String(item || "").trim()).filter(Boolean)
-    : parseMultilineItems_(note && note.summary);
   const homeworkItems = Array.isArray(note && note.homeworkItems)
     ? note.homeworkItems.map((item) => String(item || "").trim()).filter(Boolean)
     : parseMultilineItems_(note && note.homeworkNotice);
@@ -55,7 +52,6 @@ function normalizeNoteItems_(note) {
   const linkItems = normalizeLinkItems_(note);
 
   return {
-    summaryItems,
     homeworkItems,
     quizItems,
     linkItems,
@@ -112,22 +108,10 @@ function CourseCatalogCard({ unit }) {
           <h3 className="text-lg font-semibold text-slate-900">{unit.title}</h3>
           <p className="mt-1 text-xs text-slate-500">共 {unit.sessions.length} 堂</p>
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-          {unit.lastSessionDate || "時間待補"}
-        </span>
       </div>
       {unit.note ? (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程共用筆記</p>
-          {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-              {unit.note.summaryItems.map((item, index) => (
-                <li key={`summary-${index}`}>{item}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
-          )}
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程筆記連結</p>
 
           {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
             <div className="mt-3 flex flex-col gap-2">
@@ -147,7 +131,7 @@ function CourseCatalogCard({ unit }) {
         </div>
       ) : (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-          這門課目前還沒有上架共用筆記。
+          這門課目前還沒有上架筆記連結。
         </div>
       )}
 

@@ -64,7 +64,6 @@ function buildCourseNoteForm(note, courseId = "") {
   return {
     courseId: courseId || (note && note.courseId) || "",
     title: (note && note.title) || "",
-    summary: toMultilineText_(note && note.summaryItems, (note && note.summary) || ""),
     linkItemsText: toLinkItemsText_(note && note.linkItems, (note && note.linkUrl) || "", (note && note.linkLabel) || ""),
   };
 }
@@ -554,16 +553,15 @@ export default function AcademicsAdminPage({ shared }) {
     setStatus("");
     setError("");
     try {
-      const summaryItems = parseMultilineItems_(courseNoteForm.summary);
       const linkItems = parseLinkItemsText_(courseNoteForm.linkItemsText);
       const firstLink = linkItems[0] || null;
 
       const payload = {
         ...courseNoteForm,
-        summary: summaryItems.join("\n"),
+        summary: "",
         linkUrl: firstLink ? firstLink.url : "",
         linkLabel: firstLink ? firstLink.label : "",
-        summaryItems,
+        summaryItems: [],
         linkItems,
       };
 
@@ -1131,17 +1129,6 @@ export default function AcademicsAdminPage({ shared }) {
                     onChange={(event) => setCourseNoteForm((prev) => ({ ...prev, linkItemsText: event.target.value, courseId: selectedCourseId }))}
                     rows={4}
                     placeholder={"每行一筆\n範例：NotebookLM 摘要 | https://notebooklm.google.com/...\n或只填 URL 也可"}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">課程共用重點（可多筆）</label>
-                  <textarea
-                    value={courseNoteForm.summary}
-                    onChange={(event) => setCourseNoteForm((prev) => ({ ...prev, summary: event.target.value, courseId: selectedCourseId }))}
-                    rows={5}
-                    placeholder={"每行一筆\n例如：課程核心概念、長期提醒、指定閱讀..."}
                     className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                   />
                 </div>
