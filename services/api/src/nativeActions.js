@@ -883,6 +883,383 @@ function sessionNoteToDbRow_(input, actor = null) {
   };
 }
 
+function parseTextLines_(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function normalizeLegacyLinkItems_(raw = {}) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const items = Array.isArray(source.linkItems)
+    ? source.linkItems
+        .map((item) => ({
+          label: firstText(item && item.label),
+          url: firstText(item && item.url),
+        }))
+        .filter((item) => /^https?:\/\//i.test(item.url))
+    : [];
+  if (items.length) {
+    return items;
+  }
+  const linkUrl = firstText(source.linkUrl);
+  if (!/^https?:\/\//i.test(linkUrl)) {
+    return [];
+  }
+  return [
+    {
+      label: firstText(source.linkLabel),
+      url: linkUrl,
+    },
+  ];
+}
+
+function uniqTextItems_(items = []) {
+  return Array.from(new Set((Array.isArray(items) ? items : []).map((item) => firstText(item)).filter(Boolean)));
+}
+
+function uniqLinkItems_(items = []) {
+  const seen = new Set();
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    const label = firstText(item && item.label);
+    const url = firstText(item && item.url);
+    if (!/^https?:\/\//i.test(url)) {
+      return false;
+    }
+    const key = `${label}::${url}`;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  }).map((item) => ({
+    label: firstText(item && item.label),
+    url: firstText(item && item.url),
+  }));
+}
+
+function mapAcademicCourseRow_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    courseKey: firstText(row && row.course_key, raw.courseKey),
+    title: firstText(row && row.title, raw.title),
+    status: firstText(row && row.status, raw.status || "active"),
+    createdAt: firstText(row && row.created_at, raw.createdAt),
+    updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+  };
+}
+
+function mapAcademicCourseSessionRow_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    courseId: firstText(row && row.course_id, raw.courseId),
+    sessionId: firstText(row && row.session_id, raw.sessionId),
+    createdAt: firstText(row && row.created_at, raw.createdAt),
+    updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+  };
+}
+
+function mapAcademicCourseNoteRow_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    courseId: firstText(row && row.course_id, raw.courseId),
+    title: firstText(row && row.title, raw.title),
+    summary: firstText(row && row.summary, raw.summary),
+    linkUrl: firstText(row && row.link_url, raw.linkUrl),
+    linkLabel: firstText(row && row.link_label, raw.linkLabel),
+    updatedBy: firstText(row && row.updated_by, raw.updatedBy),
+    updatedByName: firstText(row && row.updated_by_name, raw.updatedByName),
+    updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+    summaryItems: uniqTextItems_(Array.isArray(raw.summaryItems) ? raw.summaryItems : parseTextLines_(raw.summary || row && row.summary)),
+    linkItems: uniqLinkItems_(normalizeLegacyLinkItems_(raw)),
+  };
+}
+
+function mapAcademicSessionTaskRow_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    sessionId: firstText(row && row.session_id, raw.sessionId),
+    homeworkNotice: firstText(row && row.homework_notice, raw.homeworkNotice),
+    quizNotice: firstText(row && row.quiz_notice, raw.quizNotice),
+    updatedBy: firstText(row && row.updated_by, raw.updatedBy),
+    updatedByName: firstText(row && row.updated_by_name, raw.updatedByName),
+    updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+    homeworkItems: uniqTextItems_(Array.isArray(raw.homeworkItems) ? raw.homeworkItems : parseTextLines_(raw.homeworkNotice || row && row.homework_notice)),
+    quizItems: uniqTextItems_(Array.isArray(raw.quizItems) ? raw.quizItems : parseTextLines_(raw.quizNotice || row && row.quiz_notice)),
+  };
+}
+
+function academicCourseToDbRow_(input, actor = null) {
+  const raw = safeJsonObject(input);
+  const linkedActor = actor && typeof actor === "object" ? actor : {};
+  const id = firstText(raw.id, crypto.randomUUID());
+  const updatedAt = nowIso();
+  const updatedBy = firstText(raw.updatedBy, linkedActor.id || "");
+  const updatedByName = firstText(raw.updatedByName, linkedActor.preferredName || linkedActor.nameZh || linkedActor.name || "");
+  const summaryItems = uniqTextItems_(Array.isArray(raw.summaryItems) ? raw.summaryItems : parseTextLines_(raw.summary));
+  const linkItems = uniqLinkItems_(Array.isArray(raw.linkItems) ? raw.linkItems : normalizeLegacyLinkItems_(raw));
+  const firstLink = linkItems[0] || null;
+  return {
+    id,
+    courseId: firstText(raw.courseId),
+    title: firstText(raw.title),
+    summary: firstText(raw.summary),
+    linkUrl: firstText(raw.linkUrl, firstLink && firstLink.url),
+    linkLabel: firstText(raw.linkLabel, firstLink && firstLink.label ? firstLink.label : raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+    updatedBy,
+    updatedByName,
+    updatedAt,
+    raw: {
+      ...raw,
+      id,
+      courseId: firstText(raw.courseId),
+      title: firstText(raw.title),
+      summary: firstText(raw.summary),
+      linkUrl: firstText(raw.linkUrl, firstLink && firstLink.url),
+      linkLabel: firstText(raw.linkLabel, firstLink && firstLink.label ? firstLink.label : raw.linkUrl ? "NotebookLM / 筆記連結" : ""),
+      summaryItems,
+      linkItems,
+      updatedBy,
+      updatedByName,
+      updatedAt,
+    },
+  };
+}
+
+function academicSessionTaskToDbRow_(input, actor = null) {
+  const raw = safeJsonObject(input);
+  const linkedActor = actor && typeof actor === "object" ? actor : {};
+  const id = firstText(raw.id, crypto.randomUUID());
+  const updatedAt = nowIso();
+  const updatedBy = firstText(raw.updatedBy, linkedActor.id || "");
+  const updatedByName = firstText(raw.updatedByName, linkedActor.preferredName || linkedActor.nameZh || linkedActor.name || "");
+  const homeworkItems = uniqTextItems_(Array.isArray(raw.homeworkItems) ? raw.homeworkItems : parseTextLines_(raw.homeworkNotice));
+  const quizItems = uniqTextItems_(Array.isArray(raw.quizItems) ? raw.quizItems : parseTextLines_(raw.quizNotice));
+  return {
+    id,
+    sessionId: firstText(raw.sessionId),
+    homeworkNotice: firstText(raw.homeworkNotice),
+    quizNotice: firstText(raw.quizNotice),
+    updatedBy,
+    updatedByName,
+    updatedAt,
+    raw: {
+      ...raw,
+      id,
+      sessionId: firstText(raw.sessionId),
+      homeworkNotice: firstText(raw.homeworkNotice),
+      quizNotice: firstText(raw.quizNotice),
+      homeworkItems,
+      quizItems,
+      updatedBy,
+      updatedByName,
+      updatedAt,
+    },
+  };
+}
+
+async function ensureAcademicCourseLayerFresh_(query, sessions = []) {
+  const regularSessions = (Array.isArray(sessions) ? sessions : []).filter((session) => firstText(session && session.classKind) === "regular");
+  if (!regularSessions.length) {
+    return;
+  }
+
+  const now = nowIso();
+  const courseMap = new Map();
+  regularSessions.forEach((session) => {
+    const courseKey = firstText(session && session.courseGroupKey, firstText(session && session.courseGroupTitle, firstText(session && session.title)));
+    if (!courseKey) {
+      return;
+    }
+    if (!courseMap.has(courseKey)) {
+      courseMap.set(courseKey, {
+        id: `acad-course:${courseKey}`,
+        courseKey,
+        title: firstText(session && session.courseGroupTitle, firstText(session && session.title)),
+      });
+    }
+  });
+
+  for (const course of courseMap.values()) {
+    await query(
+      `insert into academic_courses (id, course_key, title, status, raw, created_at, updated_at)
+       values ($1,$2,$3,'active',$4::jsonb,$5,$6)
+       on conflict (course_key) do update set
+         title = excluded.title,
+         raw = academic_courses.raw || excluded.raw,
+         updated_at = excluded.updated_at,
+         synced_at = now()`,
+      [
+        course.id,
+        course.courseKey,
+        course.title,
+        jsonbParam({ id: course.id, courseKey: course.courseKey, title: course.title }, {}),
+        now,
+        now,
+      ]
+    );
+  }
+
+  for (const session of regularSessions) {
+    const courseKey = firstText(session && session.courseGroupKey, firstText(session && session.courseGroupTitle, firstText(session && session.title)));
+    const course = courseMap.get(courseKey);
+    if (!course || !firstText(session && session.id)) {
+      continue;
+    }
+    await query(
+      `insert into academic_course_sessions (course_id, session_id, raw, created_at, updated_at)
+       values ($1,$2,$3::jsonb,$4,$5)
+       on conflict (session_id) do update set
+         course_id = excluded.course_id,
+         raw = academic_course_sessions.raw || excluded.raw,
+         updated_at = excluded.updated_at,
+         synced_at = now()`,
+      [
+        course.id,
+        session.id,
+        jsonbParam({ courseId: course.id, sessionId: session.id, courseKey }, {}),
+        now,
+        now,
+      ]
+    );
+  }
+
+  const legacyNoteResult = await query(
+    `select n.*, s.class_kind, s.raw as session_raw
+       from session_notes n
+       join academic_sessions s on s.id = n.session_id
+      where coalesce(s.class_kind,'') = 'regular'`
+  );
+  const existingCourseNotes = new Map(
+    (await query(`select * from academic_course_notes`)).rows.map((row) => {
+      const item = mapAcademicCourseNoteRow_(row);
+      return [item.courseId, item];
+    })
+  );
+  const existingSessionTasks = new Map(
+    (await query(`select * from academic_session_tasks`)).rows.map((row) => {
+      const item = mapAcademicSessionTaskRow_(row);
+      return [item.sessionId, item];
+    })
+  );
+
+  const courseNoteCandidates = new Map();
+  for (const row of legacyNoteResult.rows) {
+    const note = mapSessionNoteRow(row);
+    const session = regularSessions.find((item) => item.id === note.sessionId);
+    if (!session) {
+      continue;
+    }
+    const courseKey = firstText(session.courseGroupKey, firstText(session.courseGroupTitle, firstText(session.title)));
+    const course = courseMap.get(courseKey);
+    if (!course) {
+      continue;
+    }
+    const raw = safeJsonObject(note.raw);
+    const summaryItems = uniqTextItems_(Array.isArray(raw.summaryItems) ? raw.summaryItems : parseTextLines_(note.summary));
+    const linkItems = uniqLinkItems_(normalizeLegacyLinkItems_(raw));
+    const previous = courseNoteCandidates.get(course.id) || existingCourseNotes.get(course.id) || null;
+    const merged = {
+      courseId: course.id,
+      id: firstText(previous && previous.id, `acad-course-note:${course.id}`),
+      title: firstNonEmptyText(note.title, previous && previous.title, course.title),
+      summary: firstNonEmptyText(note.summary, previous && previous.summary),
+      linkUrl: firstNonEmptyText(note.linkUrl, previous && previous.linkUrl),
+      linkLabel: firstNonEmptyText(note.linkLabel, previous && previous.linkLabel),
+      summaryItems: uniqTextItems_([...(previous && previous.summaryItems ? previous.summaryItems : []), ...summaryItems]),
+      linkItems: uniqLinkItems_([...(previous && previous.linkItems ? previous.linkItems : []), ...linkItems]),
+      updatedBy: firstNonEmptyText(note.createdBy, previous && previous.updatedBy),
+      updatedByName: firstNonEmptyText(note.createdByName, previous && previous.updatedByName),
+      updatedAt: firstNonEmptyText(note.updatedAt, previous && previous.updatedAt, now),
+    };
+    courseNoteCandidates.set(course.id, merged);
+
+    const homeworkItems = uniqTextItems_(Array.isArray(raw.homeworkItems) ? raw.homeworkItems : parseTextLines_(note.homeworkNotice));
+    const quizItems = uniqTextItems_(Array.isArray(raw.quizItems) ? raw.quizItems : parseTextLines_(note.quizNotice));
+    if (homeworkItems.length || quizItems.length || firstText(note.homeworkNotice) || firstText(note.quizNotice)) {
+      const previousTask = existingSessionTasks.get(note.sessionId) || null;
+      existingSessionTasks.set(note.sessionId, {
+        sessionId: note.sessionId,
+        id: firstText(previousTask && previousTask.id, `acad-session-task:${note.sessionId}`),
+        homeworkNotice: firstNonEmptyText(note.homeworkNotice, previousTask && previousTask.homeworkNotice),
+        quizNotice: firstNonEmptyText(note.quizNotice, previousTask && previousTask.quizNotice),
+        homeworkItems: uniqTextItems_([...(previousTask && previousTask.homeworkItems ? previousTask.homeworkItems : []), ...homeworkItems]),
+        quizItems: uniqTextItems_([...(previousTask && previousTask.quizItems ? previousTask.quizItems : []), ...quizItems]),
+        updatedBy: firstNonEmptyText(note.createdBy, previousTask && previousTask.updatedBy),
+        updatedByName: firstNonEmptyText(note.createdByName, previousTask && previousTask.updatedByName),
+        updatedAt: firstNonEmptyText(note.updatedAt, previousTask && previousTask.updatedAt, now),
+      });
+    }
+  }
+
+  for (const candidate of courseNoteCandidates.values()) {
+    const row = academicCourseToDbRow_(candidate, null);
+    await query(
+      `insert into academic_course_notes (
+         id, course_id, title, summary, link_url, link_label,
+         updated_by, updated_by_name, updated_at, raw
+       ) values (
+         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb
+       )
+       on conflict (course_id) do update set
+         id = excluded.id,
+         title = excluded.title,
+         summary = excluded.summary,
+         link_url = excluded.link_url,
+         link_label = excluded.link_label,
+         updated_by = excluded.updated_by,
+         updated_by_name = excluded.updated_by_name,
+         updated_at = excluded.updated_at,
+         raw = excluded.raw,
+         synced_at = now()`,
+      [row.id, row.courseId, row.title, row.summary, row.linkUrl, row.linkLabel, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
+    );
+  }
+
+  for (const task of existingSessionTasks.values()) {
+    const row = academicSessionTaskToDbRow_(task, null);
+    await query(
+      `insert into academic_session_tasks (
+         id, session_id, homework_notice, quiz_notice,
+         updated_by, updated_by_name, updated_at, raw
+       ) values (
+         $1,$2,$3,$4,$5,$6,$7,$8::jsonb
+       )
+       on conflict (session_id) do update set
+         id = excluded.id,
+         homework_notice = excluded.homework_notice,
+         quiz_notice = excluded.quiz_notice,
+         updated_by = excluded.updated_by,
+         updated_by_name = excluded.updated_by_name,
+         updated_at = excluded.updated_at,
+         raw = excluded.raw,
+         synced_at = now()`,
+      [row.id, row.sessionId, row.homeworkNotice, row.quizNotice, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
+    );
+  }
+}
+
+async function loadAcademicCourseLayer_(query, sessions = [], { includeDraftMakeupNotes = false } = {}) {
+  await ensureAcademicCourseLayerFresh_(query, sessions);
+  const courses = (await query(`select * from academic_courses order by coalesce(title,''), id`)).rows.map(mapAcademicCourseRow_);
+  const courseSessions = (await query(`select * from academic_course_sessions order by coalesce(course_id,''), coalesce(session_id,'')`)).rows.map(mapAcademicCourseSessionRow_);
+  const courseNotes = (await query(`select * from academic_course_notes order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(mapAcademicCourseNoteRow_);
+  const sessionTasks = (await query(`select * from academic_session_tasks order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(mapAcademicSessionTaskRow_);
+  const makeupNotesQuery = includeDraftMakeupNotes
+    ? `select n.*, s.class_kind from session_notes n join academic_sessions s on s.id = n.session_id where coalesce(s.class_kind,'') = 'makeup_target' order by coalesce(n.updated_at,'' ) desc, n.id desc`
+    : `select n.*, s.class_kind from session_notes n join academic_sessions s on s.id = n.session_id where coalesce(s.class_kind,'') = 'makeup_target' and coalesce(n.status,'draft') = 'published' order by coalesce(n.published_at,'' ) desc, coalesce(n.updated_at,'' ) desc, n.id desc`;
+  const makeupNotes = (await query(makeupNotesQuery)).rows.map((row) => mapSessionNoteRow(row));
+  return { courses, courseSessions, courseNotes, sessionTasks, makeupNotes };
+}
+
 function makeupRequestToDbRow_(input, actor) {
   const raw = safeJsonObject(input);
   const student = actor && typeof actor === "object" ? actor : {};
@@ -2388,13 +2765,7 @@ export async function dispatchNativeAction({
           sessionsById.set(item.id, item);
         }
       });
-
-      const notesResult = await query(
-        `select * from session_notes
-         where coalesce(status,'draft') = 'published'
-         order by coalesce(published_at,'' ) desc, coalesce(updated_at,'' ) desc, id desc`
-      );
-      const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
+      const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: false });
 
       const myRequestResult = await query(
         `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
@@ -2442,7 +2813,11 @@ export async function dispatchNativeAction({
           sessions,
           regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
           makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
-          notes,
+          courses: courseLayer.courses,
+          courseSessions: courseLayer.courseSessions,
+          courseNotes: courseLayer.courseNotes,
+          sessionTasks: courseLayer.sessionTasks,
+          makeupNotes: courseLayer.makeupNotes,
           myRequests,
           publicRequests,
           summaryByTarget,
@@ -2468,6 +2843,7 @@ export async function dispatchNativeAction({
           sessionsById.set(item.id, item);
         }
       });
+      const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: true });
 
       const requestsResult = await query(
         `select * from makeup_requests
@@ -2481,12 +2857,7 @@ export async function dispatchNativeAction({
       const missingSessions = await loadAcademicSessionsByIds_(query, Array.from(requestSessionIds));
       missingSessions.forEach((item) => sessionsById.set(item.id, item));
 
-      const notesResult = await query(
-        `select * from session_notes
-         order by coalesce(status,'' ) desc, coalesce(published_at,'' ) desc, coalesce(updated_at,'' ) desc, id desc`
-      );
       const studentOptions = await listAcademicStudentOptions_(query);
-      const notes = notesResult.rows.map((row) => mapSessionNoteRow(row));
       const requests = requestsResult.rows.map((row) => mapMakeupRequestRow(row, sessionsById));
       const summaryByTarget = buildMakeupSummaryByTarget_(requests);
       const sessions = Array.from(sessionsById.values()).sort((left, right) => {
@@ -2502,7 +2873,11 @@ export async function dispatchNativeAction({
           regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
           makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
           requests,
-          notes,
+          courses: courseLayer.courses,
+          courseSessions: courseLayer.courseSessions,
+          courseNotes: courseLayer.courseNotes,
+          sessionTasks: courseLayer.sessionTasks,
+          makeupNotes: courseLayer.makeupNotes,
           summaryByTarget,
           students: studentOptions,
         },
@@ -2810,6 +3185,99 @@ export async function dispatchNativeAction({
       return { ok: true, data: { request: mapMakeupRequestRow(refreshed, sessionsById) }, error: null };
     }
 
+    case "upsertAcademicCourseNote": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const payload = safeJsonObject(body.data || body.note || body);
+      const courseId = firstText(payload.courseId);
+      if (!courseId) {
+        return { ok: false, data: null, error: "Missing courseId" };
+      }
+      const courseRow = rowOrNull(await query(`select * from academic_courses where id = $1 limit 1`, [courseId]));
+      if (!courseRow) {
+        return { ok: false, data: null, error: "Course not found" };
+      }
+      const actor = await findStudentProfileById(auth.studentId);
+      const existing = rowOrNull(await query(`select * from academic_course_notes where course_id = $1 limit 1`, [courseId]));
+      const row = academicCourseToDbRow_(
+        {
+          ...safeJsonObject(existing && existing.raw),
+          ...payload,
+          id: firstText(payload.id, existing && existing.id ? existing.id : ""),
+          courseId,
+        },
+        actor || null
+      );
+      await query(
+        `insert into academic_course_notes (
+           id, course_id, title, summary, link_url, link_label,
+           updated_by, updated_by_name, updated_at, raw
+         ) values (
+           $1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb
+         )
+         on conflict (course_id) do update set
+           id = excluded.id,
+           title = excluded.title,
+           summary = excluded.summary,
+           link_url = excluded.link_url,
+           link_label = excluded.link_label,
+           updated_by = excluded.updated_by,
+           updated_by_name = excluded.updated_by_name,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [row.id, row.courseId, row.title, row.summary, row.linkUrl, row.linkLabel, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
+      );
+      const refreshed = rowOrNull(await query(`select * from academic_course_notes where course_id = $1 limit 1`, [courseId]));
+      return { ok: true, data: { note: mapAcademicCourseNoteRow_(refreshed) }, error: null };
+    }
+
+    case "upsertAcademicSessionTask": {
+      await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
+      const payload = safeJsonObject(body.data || body.task || body);
+      const sessionId = firstText(payload.sessionId);
+      if (!sessionId) {
+        return { ok: false, data: null, error: "Missing sessionId" };
+      }
+      const sessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [sessionId]));
+      if (!sessionRow) {
+        return { ok: false, data: null, error: "Session not found" };
+      }
+      if (firstText(sessionRow.class_kind, sessionRow.raw && sessionRow.raw.classKind) !== "regular") {
+        return { ok: false, data: null, error: "Session task only supports regular sessions" };
+      }
+      const actor = await findStudentProfileById(auth.studentId);
+      const existing = rowOrNull(await query(`select * from academic_session_tasks where session_id = $1 limit 1`, [sessionId]));
+      const row = academicSessionTaskToDbRow_(
+        {
+          ...safeJsonObject(existing && existing.raw),
+          ...payload,
+          id: firstText(payload.id, existing && existing.id ? existing.id : ""),
+          sessionId,
+        },
+        actor || null
+      );
+      await query(
+        `insert into academic_session_tasks (
+           id, session_id, homework_notice, quiz_notice,
+           updated_by, updated_by_name, updated_at, raw
+         ) values (
+           $1,$2,$3,$4,$5,$6,$7,$8::jsonb
+         )
+         on conflict (session_id) do update set
+           id = excluded.id,
+           homework_notice = excluded.homework_notice,
+           quiz_notice = excluded.quiz_notice,
+           updated_by = excluded.updated_by,
+           updated_by_name = excluded.updated_by_name,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [row.id, row.sessionId, row.homeworkNotice, row.quizNotice, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
+      );
+      const refreshed = rowOrNull(await query(`select * from academic_session_tasks where session_id = $1 limit 1`, [sessionId]));
+      return { ok: true, data: { task: mapAcademicSessionTaskRow_(refreshed) }, error: null };
+    }
+
     case "upsertSessionNote": {
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
       const payload = safeJsonObject(body.data || body.note || body);
@@ -2820,6 +3288,9 @@ export async function dispatchNativeAction({
       const sessionRow = rowOrNull(await query(`select * from academic_sessions where id = $1 limit 1`, [sessionId]));
       if (!sessionRow) {
         return { ok: false, data: null, error: "Session not found" };
+      }
+      if (firstText(sessionRow.class_kind, sessionRow.raw && sessionRow.raw.classKind) === "regular") {
+        return { ok: false, data: null, error: "Regular course note moved to course/session APIs" };
       }
       const actor = await findStudentProfileById(auth.studentId);
       const existing = rowOrNull(await query(`select * from session_notes where session_id = $1 limit 1`, [sessionId]));

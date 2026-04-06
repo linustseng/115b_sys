@@ -105,97 +105,85 @@ function MakeupReminderCard({ reminder }) {
 }
 
 function CourseCatalogCard({ unit }) {
-  const homeworkItems = Array.isArray(unit.note && unit.note.homeworkItems) ? unit.note.homeworkItems : [];
-  const quizItems = Array.isArray(unit.note && unit.note.quizItems) ? unit.note.quizItems : [];
-  const infoCards = [];
-
-  if (homeworkItems.length || unit.timelineMode === "review") {
-    infoCards.push({
-      key: "homework",
-      title: "作業",
-      toneClassName: "text-amber-500",
-      items: homeworkItems,
-      emptyText: "目前尚無作業通知",
-    });
-  }
-
-  if (quizItems.length || unit.timelineMode !== "review") {
-    infoCards.push({
-      key: "quiz",
-      title: "小考通知",
-      toneClassName: "text-rose-500",
-      items: quizItems,
-      emptyText: "目前尚無小考通知",
-    });
-  }
-
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold text-slate-900">{unit.courseGroupTitle}</h3>
-          <p className="mt-1 text-xs text-slate-500">{unit.sessionDate}｜{unit.slotCount} 個時段</p>
+          <h3 className="text-lg font-semibold text-slate-900">{unit.title}</h3>
+          <p className="mt-1 text-xs text-slate-500">共 {unit.sessions.length} 堂</p>
         </div>
         <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">
-          {unit.mergedSchedule || "時間待補"}
+          {unit.lastSessionDate || "時間待補"}
         </span>
       </div>
-      {unit.location ? <p className="mt-2 text-xs text-slate-500">地點：{unit.location}</p> : null}
-
       {unit.note ? (
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-2xl bg-white px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              {unit.timelineMode === "review" ? "複習重點" : "課前摘要"}
-            </p>
-            {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
-                {unit.note.summaryItems.map((item, index) => (
-                  <li key={`summary-${index}`}>{item}</li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
-            )}
+        <div className="mt-4 rounded-2xl bg-white px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程共用筆記</p>
+          {Array.isArray(unit.note.summaryItems) && unit.note.summaryItems.length ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-slate-700">
+              {unit.note.summaryItems.map((item, index) => (
+                <li key={`summary-${index}`}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm leading-6 text-slate-700">尚未提供</p>
+          )}
 
-            {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
-              <div className="mt-3 flex flex-col gap-2">
-                {unit.note.linkItems.map((item, index) => (
-                  <a
-                    key={`link-${index}`}
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener"
-                    className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
-                  >
-                    {item.label || "開啟筆記連結"}
-                  </a>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <div className="grid gap-3">
-            {infoCards.map((card) => (
-              <div key={card.key} className="rounded-2xl bg-white px-4 py-3">
-                <p className={`text-xs font-semibold uppercase tracking-[0.2em] ${card.toneClassName}`}>{card.title}</p>
-                {card.items.length ? (
-                  <div className="mt-2 rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
-                    <p className="whitespace-pre-line text-sm leading-6 text-slate-700">
-                      {card.items.join("\n")}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="mt-2 text-sm leading-6 text-slate-700">{card.emptyText}</p>
-                )}
-              </div>
-            ))}
-          </div>
+          {Array.isArray(unit.note.linkItems) && unit.note.linkItems.length ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {unit.note.linkItems.map((item, index) => (
+                <a
+                  key={`link-${index}`}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex items-center text-sm font-semibold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-slate-900"
+                >
+                  {item.label || "開啟筆記連結"}
+                </a>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
-          這堂課目前還沒有上架課程摘要 / 筆記 / 作業 / 小考通知。
+          這門課目前還沒有上架共用筆記。
         </div>
       )}
+
+      <div className="mt-4 grid gap-3">
+        {(unit.sessions || []).map((session) => {
+          const homeworkItems = Array.isArray(session.task && session.task.homeworkItems) ? session.task.homeworkItems : [];
+          const quizItems = Array.isArray(session.task && session.task.quizItems) ? session.task.quizItems : [];
+          return (
+            <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-900">{session.sessionDate || "日期待補"}</p>
+                <span className="text-xs text-slate-500">{session.startsAt || session.endsAt ? `${String(session.startsAt || "").slice(-5)} - ${String(session.endsAt || "").slice(-5)}` : "時間待補"}</span>
+              </div>
+              {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
+              <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
+                  {homeworkItems.length ? (
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{homeworkItems.join("\n")}</p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無作業通知</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考</p>
+                  {quizItems.length ? (
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{quizItems.join("\n")}</p>
+                  ) : (
+                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無小考通知</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -223,7 +211,11 @@ export default function AcademicsPage({ shared }) {
     sessions: [],
     regularSessions: [],
     makeupTargets: [],
-    notes: [],
+    courses: [],
+    courseSessions: [],
+    courseNotes: [],
+    sessionTasks: [],
+    makeupNotes: [],
     myRequests: [],
     publicRequests: [],
     summaryByTarget: [],
@@ -245,7 +237,11 @@ export default function AcademicsPage({ shared }) {
         sessions: Array.isArray(result.data && result.data.sessions) ? result.data.sessions : [],
         regularSessions: Array.isArray(result.data && result.data.regularSessions) ? result.data.regularSessions : [],
         makeupTargets: Array.isArray(result.data && result.data.makeupTargets) ? result.data.makeupTargets : [],
-        notes: Array.isArray(result.data && result.data.notes) ? result.data.notes : [],
+        courses: Array.isArray(result.data && result.data.courses) ? result.data.courses : [],
+        courseSessions: Array.isArray(result.data && result.data.courseSessions) ? result.data.courseSessions : [],
+        courseNotes: Array.isArray(result.data && result.data.courseNotes) ? result.data.courseNotes : [],
+        sessionTasks: Array.isArray(result.data && result.data.sessionTasks) ? result.data.sessionTasks : [],
+        makeupNotes: Array.isArray(result.data && result.data.makeupNotes) ? result.data.makeupNotes : [],
         myRequests: Array.isArray(result.data && result.data.myRequests) ? result.data.myRequests : [],
         publicRequests: Array.isArray(result.data && result.data.publicRequests) ? result.data.publicRequests : [],
         summaryByTarget: Array.isArray(result.data && result.data.summaryByTarget) ? result.data.summaryByTarget : [],
@@ -269,7 +265,11 @@ export default function AcademicsPage({ shared }) {
         sessions: [],
         regularSessions: [],
         makeupTargets: [],
-        notes: [],
+        courses: [],
+        courseSessions: [],
+        courseNotes: [],
+        sessionTasks: [],
+        makeupNotes: [],
         myRequests: [],
         publicRequests: [],
         summaryByTarget: [],
@@ -308,9 +308,9 @@ export default function AcademicsPage({ shared }) {
     return map;
   }, [bootstrap.sessions]);
 
-  const notesBySessionId = useMemo(() => {
+  const makeupNotesBySessionId = useMemo(() => {
     const map = new Map();
-    (bootstrap.notes || []).forEach((note) => {
+    (bootstrap.makeupNotes || []).forEach((note) => {
       const items = normalizeNoteItems_(note);
       map.set(note.sessionId, {
         ...note,
@@ -319,7 +319,29 @@ export default function AcademicsPage({ shared }) {
       });
     });
     return map;
-  }, [bootstrap.notes, sessionsById]);
+  }, [bootstrap.makeupNotes, sessionsById]);
+
+  const courseNotesByCourseId = useMemo(() => {
+    const map = new Map();
+    (bootstrap.courseNotes || []).forEach((note) => {
+      map.set(note.courseId, {
+        ...note,
+        ...normalizeNoteItems_(note),
+      });
+    });
+    return map;
+  }, [bootstrap.courseNotes]);
+
+  const sessionTasksBySessionId = useMemo(() => {
+    const map = new Map();
+    (bootstrap.sessionTasks || []).forEach((task) => {
+      map.set(task.sessionId, {
+        ...task,
+        ...normalizeNoteItems_(task),
+      });
+    });
+    return map;
+  }, [bootstrap.sessionTasks]);
 
   const courseDateWindow = useMemo(() => {
     const todayText = new Date().toISOString().slice(0, 10);
@@ -337,176 +359,60 @@ export default function AcademicsPage({ shared }) {
     };
   }, [regularSessions]);
 
-  const recentCourseSessions = useMemo(() => {
-    const selectedDates = new Set([...courseDateWindow.pastDates, ...courseDateWindow.futureDates]);
-    return regularSessions.filter((session) => selectedDates.has(String(session.sessionDate || "").trim()));
-  }, [regularSessions, courseDateWindow]);
-
-  const buildCourseCatalog_ = (sourceSessions) => {
-    const parseMinutes = (value) => {
-      const match = String(value || "").match(/(?:T| )(\d{2}):(\d{2})$/);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : Number.NaN;
-    };
-
-    const units = new Map();
-    (sourceSessions || []).forEach((session) => {
-      const courseGroupTitle = String(session.courseGroupTitle || session.title || "").trim() || "未分類課程";
-      const courseGroupKey = String(session.courseGroupKey || courseGroupTitle || session.id || "").trim();
-      const sessionDate = String(session.sessionDate || "").trim();
-      if (!courseGroupKey || !sessionDate) {
+  const allCourseCatalog = useMemo(() => {
+    const buckets = new Map();
+    (bootstrap.courses || []).forEach((course) => {
+      buckets.set(course.id, {
+        ...course,
+        title: String(course.title || "").trim() || "未命名課程",
+        note: courseNotesByCourseId.get(course.id) || null,
+        sessions: [],
+        firstSessionDate: "",
+        lastSessionDate: "",
+      });
+    });
+    (bootstrap.courseSessions || []).forEach((link) => {
+      const bucket = buckets.get(link.courseId);
+      const session = sessionsById.get(link.sessionId) || null;
+      if (!bucket || !session || String(session.classKind || "") !== "regular") {
         return;
       }
-      const unitKey = `${sessionDate}__${courseGroupKey}`;
-      if (!units.has(unitKey)) {
-        units.set(unitKey, {
-          unitKey,
-          sessionDate,
-          courseGroupKey,
-          courseGroupTitle,
-          slots: [],
-          notes: [],
-        });
-      }
-      const bucket = units.get(unitKey);
-      const slot = {
+      bucket.sessions.push({
         ...session,
-        note: notesBySessionId.get(session.id) || null,
-      };
-      bucket.slots.push(slot);
-      if (slot.note) {
-        bucket.notes.push(slot.note);
-      }
+        task: sessionTasksBySessionId.get(session.id) || null,
+      });
     });
-
-    return Array.from(units.values())
-      .map((unit) => {
-        const sortedSlots = unit.slots.slice().sort((a, b) => {
-          const left = `${String(a.startsAt || "")} ${String(a.endsAt || "")}`;
-          const right = `${String(b.startsAt || "")} ${String(b.endsAt || "")}`;
+    return Array.from(buckets.values())
+      .map((course) => {
+        const sessions = (course.sessions || []).slice().sort((a, b) => {
+          const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
+          const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
           return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
         });
-        const firstSlot = sortedSlots[0] || null;
-        const location = firstSlot ? firstSlot.location : "";
-        const minStart = sortedSlots.reduce((acc, slot) => {
-          const value = parseMinutes(slot.startsAt);
-          return Number.isNaN(value) ? acc : Math.min(acc, value);
-        }, Number.POSITIVE_INFINITY);
-        const maxEnd = sortedSlots.reduce((acc, slot) => {
-          const value = parseMinutes(slot.endsAt);
-          return Number.isNaN(value) ? acc : Math.max(acc, value);
-        }, Number.NEGATIVE_INFINITY);
-        const mergedSchedule =
-          Number.isFinite(minStart) && Number.isFinite(maxEnd)
-            ? `${String(Math.floor(minStart / 60)).padStart(2, "0")}:${String(minStart % 60).padStart(2, "0")} - ${String(
-                Math.floor(maxEnd / 60)
-              ).padStart(2, "0")}:${String(maxEnd % 60).padStart(2, "0")}`
-            : "";
-
-        const primaryNote = unit.notes[0] || null;
-        const todayText = new Date().toISOString().slice(0, 10);
-        const timelineMode = unit.sessionDate <= todayText ? "review" : "preview";
         return {
-          ...unit,
-          slots: sortedSlots,
-          slotCount: sortedSlots.length,
-          location,
-          mergedSchedule,
-          note: primaryNote,
-          timelineMode,
+          ...course,
+          sessions,
+          firstSessionDate: sessions[0] ? String(sessions[0].sessionDate || "") : "",
+          lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
         };
       })
-      .sort((a, b) => {
-        const left = `${a.sessionDate} ${a.mergedSchedule || ""} ${a.courseGroupTitle}`;
-        const right = `${b.sessionDate} ${b.mergedSchedule || ""} ${b.courseGroupTitle}`;
-        return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
-      });
-  };
+      .filter((course) => course.sessions.length)
+      .sort((a, b) => String(a.firstSessionDate || "").localeCompare(String(b.firstSessionDate || ""), "zh-Hant", { numeric: true, sensitivity: "base" }) || String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
+  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionsById, sessionTasksBySessionId]);
 
-  const recentCourseCatalog = useMemo(() => buildCourseCatalog_(recentCourseSessions), [recentCourseSessions, notesBySessionId]);
-  const allCourseCatalog = useMemo(() => buildCourseCatalog_(regularSessions), [regularSessions, notesBySessionId]);
-  const recentPastCourseCatalogRaw = useMemo(
-    () => recentCourseCatalog.filter((unit) => courseDateWindow.pastDates.includes(unit.sessionDate)),
-    [recentCourseCatalog, courseDateWindow]
-  );
+  const recentCourseCatalog = useMemo(() => {
+    const selectedDates = new Set([...courseDateWindow.pastDates, ...courseDateWindow.futureDates]);
+    return allCourseCatalog.filter((course) => (course.sessions || []).some((session) => selectedDates.has(String(session.sessionDate || "").trim())));
+  }, [allCourseCatalog, courseDateWindow]);
+
   const recentPastCourseCatalog = useMemo(() => {
-    const uniqText = (items = []) => Array.from(new Set(items.map((item) => String(item || "").trim()).filter(Boolean)));
-    const uniqLinks = (items = []) => {
-      const seen = new Set();
-      return items.filter((item) => {
-        const key = `${String(item && item.label ? item.label : "").trim()}::${String(item && item.url ? item.url : "").trim()}`;
-        if (!key || seen.has(key)) {
-          return false;
-        }
-        seen.add(key);
-        return true;
-      });
-    };
+    return recentCourseCatalog.filter((course) => (course.sessions || []).some((session) => courseDateWindow.pastDates.includes(String(session.sessionDate || "").trim())));
+  }, [recentCourseCatalog, courseDateWindow]);
 
-    const buckets = new Map();
-    recentPastCourseCatalogRaw.forEach((unit) => {
-      const key = String(unit.courseGroupKey || unit.courseGroupTitle || unit.unitKey || "").trim();
-      if (!key) {
-        return;
-      }
-      if (!buckets.has(key)) {
-        buckets.set(key, {
-          ...unit,
-          unitKey: `review__${key}`,
-          reviewDates: [unit.sessionDate],
-          sourceUnits: [unit],
-        });
-        return;
-      }
-      const bucket = buckets.get(key);
-      bucket.reviewDates.push(unit.sessionDate);
-      bucket.sourceUnits.push(unit);
-      bucket.slotCount += unit.slotCount;
-      bucket.mergedSchedule = bucket.mergedSchedule || unit.mergedSchedule;
-      bucket.location = bucket.location || unit.location;
-      const baseNote = bucket.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
-      const nextNote = unit.note || { summaryItems: [], homeworkItems: [], quizItems: [], linkItems: [] };
-      bucket.note = {
-        ...baseNote,
-        summaryItems: uniqText([...(baseNote.summaryItems || []), ...(nextNote.summaryItems || [])]),
-        homeworkItems: uniqText([...(baseNote.homeworkItems || []), ...(nextNote.homeworkItems || [])]),
-        quizItems: uniqText([...(baseNote.quizItems || []), ...(nextNote.quizItems || [])]),
-        linkItems: uniqLinks([...(baseNote.linkItems || []), ...(nextNote.linkItems || [])]),
-      };
-    });
+  const recentFutureCourseCatalog = useMemo(() => {
+    return recentCourseCatalog.filter((course) => (course.sessions || []).some((session) => courseDateWindow.futureDates.includes(String(session.sessionDate || "").trim())));
+  }, [recentCourseCatalog, courseDateWindow]);
 
-    return Array.from(buckets.values())
-      .map((unit) => {
-        const sortedDates = Array.from(new Set(unit.reviewDates)).sort((a, b) => a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" }));
-        return {
-          ...unit,
-          sessionDate: sortedDates.length > 1 ? `${sortedDates[0]} ~ ${sortedDates[sortedDates.length - 1]}` : sortedDates[0] || unit.sessionDate,
-          reviewDates: sortedDates,
-        };
-      })
-      .sort((a, b) => {
-        const leftDate = a.reviewDates && a.reviewDates[0] ? a.reviewDates[0] : "";
-        const rightDate = b.reviewDates && b.reviewDates[0] ? b.reviewDates[0] : "";
-        const dateCompare = leftDate.localeCompare(rightDate, "zh-Hant", { numeric: true, sensitivity: "base" });
-        if (dateCompare !== 0) {
-          return dateCompare;
-        }
-        const scheduleCompare = String(a.mergedSchedule || "").localeCompare(String(b.mergedSchedule || ""), "zh-Hant", {
-          numeric: true,
-          sensitivity: "base",
-        });
-        if (scheduleCompare !== 0) {
-          return scheduleCompare;
-        }
-        return String(a.courseGroupTitle || "").localeCompare(String(b.courseGroupTitle || ""), "zh-Hant", {
-          numeric: true,
-          sensitivity: "base",
-        });
-      });
-  }, [recentPastCourseCatalogRaw]);
-  const recentFutureCourseCatalog = useMemo(
-    () => recentCourseCatalog.filter((unit) => courseDateWindow.futureDates.includes(unit.sessionDate)),
-    [recentCourseCatalog, courseDateWindow]
-  );
   const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
@@ -604,12 +510,12 @@ export default function AcademicsPage({ shared }) {
       .map((item) => ({
         ...item,
         targetSession: sessionsById.get(item.targetSessionId) || item.targetSession || null,
-        note: notesBySessionId.get(item.targetSessionId) || null,
+        note: makeupNotesBySessionId.get(item.targetSessionId) || null,
         requests: (bootstrap.publicRequests || []).filter(
           (request) => request.status !== "cancelled" && request.targetSessionId === item.targetSessionId
         ),
       }));
-  }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById, notesBySessionId]);
+  }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById, makeupNotesBySessionId]);
 
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
@@ -750,14 +656,14 @@ export default function AcademicsPage({ shared }) {
                   <option value="">請選擇補課場次</option>
                   {makeupTargets.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.sessionDate}｜{item.title}{normalizeMakeupReminder_(notesBySessionId.get(item.id)) ? "｜有提醒" : ""}
+                      {item.sessionDate}｜{item.title}{normalizeMakeupReminder_(makeupNotesBySessionId.get(item.id)) ? "｜有提醒" : ""}
                     </option>
                   ))}
                 </select>
               </div>
 
               {form.targetSessionId ? (
-                <MakeupReminderCard reminder={normalizeMakeupReminder_(notesBySessionId.get(form.targetSessionId))} />
+                <MakeupReminderCard reminder={normalizeMakeupReminder_(makeupNotesBySessionId.get(form.targetSessionId))} />
               ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -830,7 +736,7 @@ export default function AcademicsPage({ shared }) {
                       <span className="rounded-full bg-slate-100 px-2.5 py-1">講義：{item.needHandout ? "需要" : "不需要"}</span>
                     </div>
                     <div className="mt-3">
-                      <MakeupReminderCard reminder={normalizeMakeupReminder_(notesBySessionId.get(item.targetSessionId))} />
+                      <MakeupReminderCard reminder={normalizeMakeupReminder_(makeupNotesBySessionId.get(item.targetSessionId))} />
                     </div>
                     {item.note ? <p className="mt-3 text-xs text-slate-600">備註：{item.note}</p> : null}
                     {item.status !== "cancelled" && item.status !== "completed" ? (
@@ -912,7 +818,7 @@ export default function AcademicsPage({ shared }) {
                   courseScope === "all" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
                 }`}
               >
-                全部課程（22）
+                全部課程（{allCourseCatalog.length}）
               </button>
             </div>
           </div>
@@ -920,7 +826,7 @@ export default function AcademicsPage({ shared }) {
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
             {courseScope === "all" ? (
               courseCatalog.map((unit) => (
-                <CourseCatalogCard key={unit.unitKey} unit={unit} />
+                <CourseCatalogCard key={unit.id} unit={unit} />
               ))
             ) : (
               <div className="space-y-6">
@@ -940,7 +846,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的已上課課程。</div>
                     ) : null}
                     {recentPastCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.unitKey} unit={unit} />
+                      <CourseCatalogCard key={unit.id} unit={unit} />
                     ))}
                   </div>
                 </section>
@@ -961,7 +867,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的即將上課課程。</div>
                     ) : null}
                     {recentFutureCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.unitKey} unit={unit} />
+                      <CourseCatalogCard key={unit.id} unit={unit} />
                     ))}
                   </div>
                 </section>

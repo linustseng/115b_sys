@@ -60,15 +60,20 @@ function toLinkItemsText_(items = [], fallbackUrl = "", fallbackLabel = "") {
   return label ? `${label} | ${url}` : url;
 }
 
-function buildNoteForm(note, sessionId = "") {
+function buildCourseNoteForm(note, courseId = "") {
   return {
-    sessionId: sessionId || (note && note.sessionId) || "",
+    courseId: courseId || (note && note.courseId) || "",
     title: (note && note.title) || "",
     summary: toMultilineText_(note && note.summaryItems, (note && note.summary) || ""),
     linkItemsText: toLinkItemsText_(note && note.linkItems, (note && note.linkUrl) || "", (note && note.linkLabel) || ""),
-    homeworkNotice: toMultilineText_(note && note.homeworkItems, (note && note.homeworkNotice) || ""),
-    quizNotice: toMultilineText_(note && note.quizItems, (note && note.quizNotice) || ""),
-    status: (note && note.status) || "draft",
+  };
+}
+
+function buildSessionTaskForm(task, sessionId = "") {
+  return {
+    sessionId: sessionId || (task && task.sessionId) || "",
+    homeworkNotice: toMultilineText_(task && task.homeworkItems, (task && task.homeworkNotice) || ""),
+    quizNotice: toMultilineText_(task && task.quizItems, (task && task.quizNotice) || ""),
   };
 }
 
@@ -134,12 +139,17 @@ export default function AcademicsAdminPage({ shared }) {
     regularSessions: [],
     makeupTargets: [],
     requests: [],
-    notes: [],
+    courses: [],
+    courseSessions: [],
+    courseNotes: [],
+    sessionTasks: [],
+    makeupNotes: [],
     summaryByTarget: [],
     students: [],
   });
-  const [selectedSessionId, setSelectedSessionId] = useState("");
-  const [noteForm, setNoteForm] = useState(() => buildNoteForm(null, ""));
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [courseNoteForm, setCourseNoteForm] = useState(() => buildCourseNoteForm(null, ""));
+  const [sessionTaskDrafts, setSessionTaskDrafts] = useState({});
   const [selectedMakeupSessionId, setSelectedMakeupSessionId] = useState("");
   const [makeupNoteForm, setMakeupNoteForm] = useState(() => buildMakeupNoteForm(null, ""));
   const [requestDrafts, setRequestDrafts] = useState({});
@@ -166,7 +176,11 @@ export default function AcademicsAdminPage({ shared }) {
         regularSessions: Array.isArray(data.regularSessions) ? data.regularSessions : [],
         makeupTargets: Array.isArray(data.makeupTargets) ? data.makeupTargets : [],
         requests: Array.isArray(data.requests) ? data.requests : [],
-        notes: Array.isArray(data.notes) ? data.notes : [],
+        courses: Array.isArray(data.courses) ? data.courses : [],
+        courseSessions: Array.isArray(data.courseSessions) ? data.courseSessions : [],
+        courseNotes: Array.isArray(data.courseNotes) ? data.courseNotes : [],
+        sessionTasks: Array.isArray(data.sessionTasks) ? data.sessionTasks : [],
+        makeupNotes: Array.isArray(data.makeupNotes) ? data.makeupNotes : [],
         summaryByTarget: Array.isArray(data.summaryByTarget) ? data.summaryByTarget : [],
         students: Array.isArray(data.students) ? data.students : [],
       });
@@ -197,11 +211,56 @@ export default function AcademicsAdminPage({ shared }) {
     return map;
   }, [bootstrap.sessions]);
 
-  const notesBySessionId = useMemo(() => {
+  const makeupNotesBySessionId = useMemo(() => {
     const map = new Map();
-    (bootstrap.notes || []).forEach((item) => map.set(item.sessionId, item));
+    (bootstrap.makeupNotes || []).forEach((item) => map.set(item.sessionId, item));
     return map;
-  }, [bootstrap.notes]);
+  }, [bootstrap.makeupNotes]);
+
+  const courseNotesByCourseId = useMemo(() => {
+    const map = new Map();
+    (bootstrap.courseNotes || []).forEach((item) => map.set(item.courseId, item));
+    return map;
+  }, [bootstrap.courseNotes]);
+
+  const sessionTasksBySessionId = useMemo(() => {
+    const map = new Map();
+    (bootstrap.sessionTasks || []).forEach((item) => map.set(item.sessionId, item));
+    return map;
+  }, [bootstrap.sessionTasks]);
+
+  const courseCatalog = useMemo(() => {
+    const buckets = new Map();
+    (bootstrap.courses || []).forEach((course) => {
+      buckets.set(course.id, {
+        ...course,
+        note: courseNotesByCourseId.get(course.id) || null,
+        sessions: [],
+      });
+    });
+    (bootstrap.courseSessions || []).forEach((link) => {
+      const bucket = buckets.get(link.courseId);
+      const session = sessionsById.get(link.sessionId) || null;
+      if (!bucket || !session || String(session.classKind || "") !== "regular") {
+        return;
+      }
+      bucket.sessions.push({
+        ...session,
+        task: sessionTasksBySessionId.get(session.id) || null,
+      });
+    });
+    return Array.from(buckets.values())
+      .map((course) => ({
+        ...course,
+        sessions: (course.sessions || []).slice().sort((a, b) => {
+          const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
+          const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
+          return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
+        }),
+      }))
+      .filter((course) => course.sessions.length)
+      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
+  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionTasksBySessionId, sessionsById]);
 
   const activeRequests = useMemo(
     () => (bootstrap.requests || []).filter((item) => String(item.status || "") !== "cancelled"),
@@ -262,28 +321,40 @@ export default function AcademicsAdminPage({ shared }) {
   }, [bootstrap.requests, sessionsById, selectedTargetDate]);
 
   useEffect(() => {
-    if (!selectedSessionId) {
-      const firstSessionId = String(((bootstrap.regularSessions || [])[0] && (bootstrap.regularSessions || [])[0].id) || "");
-      if (firstSessionId) {
-        setSelectedSessionId(firstSessionId);
-        setNoteForm(buildNoteForm(notesBySessionId.get(firstSessionId), firstSessionId));
+    if (!selectedCourseId) {
+      const firstCourseId = String(((courseCatalog || [])[0] && (courseCatalog || [])[0].id) || "");
+      if (firstCourseId) {
+        setSelectedCourseId(firstCourseId);
+        setCourseNoteForm(buildCourseNoteForm(courseNotesByCourseId.get(firstCourseId), firstCourseId));
       }
       return;
     }
-    setNoteForm(buildNoteForm(notesBySessionId.get(selectedSessionId), selectedSessionId));
-  }, [selectedSessionId, notesBySessionId, bootstrap.regularSessions]);
+    setCourseNoteForm(buildCourseNoteForm(courseNotesByCourseId.get(selectedCourseId), selectedCourseId));
+  }, [selectedCourseId, courseNotesByCourseId, courseCatalog]);
 
   useEffect(() => {
-    if (!selectedMakeupSessionId) {
-      const firstSessionId = String(((bootstrap.makeupTargets || [])[0] && (bootstrap.makeupTargets || [])[0].id) || "");
+      if (!selectedMakeupSessionId) {
+        const firstSessionId = String(((bootstrap.makeupTargets || [])[0] && (bootstrap.makeupTargets || [])[0].id) || "");
       if (firstSessionId) {
         setSelectedMakeupSessionId(firstSessionId);
-        setMakeupNoteForm(buildMakeupNoteForm(notesBySessionId.get(firstSessionId), firstSessionId));
+        setMakeupNoteForm(buildMakeupNoteForm(makeupNotesBySessionId.get(firstSessionId), firstSessionId));
       }
       return;
     }
-    setMakeupNoteForm(buildMakeupNoteForm(notesBySessionId.get(selectedMakeupSessionId), selectedMakeupSessionId));
-  }, [selectedMakeupSessionId, notesBySessionId, bootstrap.makeupTargets]);
+    setMakeupNoteForm(buildMakeupNoteForm(makeupNotesBySessionId.get(selectedMakeupSessionId), selectedMakeupSessionId));
+  }, [selectedMakeupSessionId, makeupNotesBySessionId, bootstrap.makeupTargets]);
+
+  useEffect(() => {
+    setSessionTaskDrafts((prev) => {
+      const next = { ...prev };
+      courseCatalog.forEach((course) => {
+        (course.sessions || []).forEach((session) => {
+          next[session.id] = next[session.id] || buildSessionTaskForm(session.task, session.id);
+        });
+      });
+      return next;
+    });
+  }, [courseCatalog]);
 
   const formatSessionSchedule_ = (session) => {
     if (!session) {
@@ -474,39 +545,73 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
-  const handleSaveNote_ = async (event) => {
+  const handleSaveCourseNote_ = async (event) => {
     event.preventDefault();
-    if (!noteForm.sessionId) {
+    if (!courseNoteForm.courseId) {
       setError("請先選擇課程。");
       return;
     }
     setStatus("");
     setError("");
     try {
-      const summaryItems = parseMultilineItems_(noteForm.summary);
-      const homeworkItems = parseMultilineItems_(noteForm.homeworkNotice);
-      const quizItems = parseMultilineItems_(noteForm.quizNotice);
-      const linkItems = parseLinkItemsText_(noteForm.linkItemsText);
+      const summaryItems = parseMultilineItems_(courseNoteForm.summary);
+      const linkItems = parseLinkItemsText_(courseNoteForm.linkItemsText);
       const firstLink = linkItems[0] || null;
 
       const payload = {
-        ...noteForm,
+        ...courseNoteForm,
         summary: summaryItems.join("\n"),
-        homeworkNotice: homeworkItems.join("\n"),
-        quizNotice: quizItems.join("\n"),
         linkUrl: firstLink ? firstLink.url : "",
         linkLabel: firstLink ? firstLink.label : "",
         summaryItems,
-        homeworkItems,
-        quizItems,
         linkItems,
       };
 
-      const { result } = await apiRequest({ action: "upsertSessionNote", data: payload });
+      const { result } = await apiRequest({ action: "upsertAcademicCourseNote", data: payload });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
       }
-      setStatus(noteForm.status === "published" ? "摘要已發布。" : "摘要草稿已儲存。");
+      setStatus("課程筆記已儲存。");
+      await loadBootstrap_();
+    } catch (err) {
+      setError(String((err && err.message) || "儲存失敗"));
+    }
+  };
+
+  const updateSessionTaskDraft_ = (sessionId, patch) => {
+    setSessionTaskDrafts((prev) => ({
+      ...prev,
+      [sessionId]: {
+        ...(prev[sessionId] || buildSessionTaskForm(null, sessionId)),
+        ...patch,
+        sessionId,
+      },
+    }));
+  };
+
+  const handleSaveSessionTask_ = async (sessionId) => {
+    const draft = sessionTaskDrafts[sessionId] || buildSessionTaskForm(null, sessionId);
+    if (!sessionId) {
+      setError("缺少堂次資料");
+      return;
+    }
+    setStatus("");
+    setError("");
+    try {
+      const homeworkItems = parseMultilineItems_(draft.homeworkNotice);
+      const quizItems = parseMultilineItems_(draft.quizNotice);
+      const payload = {
+        sessionId,
+        homeworkNotice: homeworkItems.join("\n"),
+        quizNotice: quizItems.join("\n"),
+        homeworkItems,
+        quizItems,
+      };
+      const { result } = await apiRequest({ action: "upsertAcademicSessionTask", data: payload });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "儲存失敗");
+      }
+      setStatus("堂次作業 / 小考已儲存。");
       await loadBootstrap_();
     } catch (err) {
       setError(String((err && err.message) || "儲存失敗"));
@@ -559,7 +664,7 @@ export default function AcademicsAdminPage({ shared }) {
   };
 
   const totalActiveRequests = activeRequests.length;
-  const totalPublishedNotes = (bootstrap.notes || []).filter((item) => item.status === "published").length;
+  const totalPublishedNotes = (bootstrap.courseNotes || []).length;
 
   return (
     <div className="min-h-screen">
@@ -977,111 +1082,131 @@ export default function AcademicsAdminPage({ shared }) {
 
           {adminTab === "courses" ? (
             <section className="card p-6 sm:p-7">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Notes</p>
-              <h2 className="mt-2 text-xl font-semibold text-slate-900">課程摘要 / 筆記管理</h2>
-              <p className="mt-2 text-sm text-slate-500">目前以 NotebookLM / 外部連結為主，系統負責索引與入口。</p>
-            </div>
-
-            <form className="mt-5 space-y-4" onSubmit={handleSaveNote_}>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">選擇課程</label>
-                <select
-                  value={selectedSessionId}
-                  onChange={(event) => setSelectedSessionId(event.target.value)}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                >
-                  <option value="">請選擇課程</option>
-                  {(bootstrap.regularSessions || []).map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.sessionDate}｜{item.title}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">課程共用筆記 / 各堂次作業小考</h2>
+                <p className="mt-2 text-sm text-slate-500">筆記改成課程層共用，作業與小考則分堂次儲存。</p>
               </div>
 
-              {selectedSessionId && sessionsById.get(selectedSessionId) ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                  {formatSessionSchedule_(sessionsById.get(selectedSessionId))}
-                  {sessionsById.get(selectedSessionId).location ? `｜${sessionsById.get(selectedSessionId).location}` : ""}
+              <form className="mt-5 space-y-4" onSubmit={handleSaveCourseNote_}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">選擇課程</label>
+                  <select
+                    value={selectedCourseId}
+                    onChange={(event) => setSelectedCourseId(event.target.value)}
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  >
+                    <option value="">請選擇課程</option>
+                    {courseCatalog.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.title}｜{item.sessions.length} 堂
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedCourseId ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                    {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || [])
+                      .map((session) => formatSessionSchedule_(session))
+                      .filter(Boolean)
+                      .join("｜") || "尚未綁定堂次"}
+                  </div>
+                ) : null}
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">筆記標題</label>
+                  <input
+                    value={courseNoteForm.title}
+                    onChange={(event) => setCourseNoteForm((prev) => ({ ...prev, title: event.target.value, courseId: selectedCourseId }))}
+                    placeholder="例如：經濟導論 共用筆記"
+                    className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">外部連結（可多筆）</label>
+                  <textarea
+                    value={courseNoteForm.linkItemsText}
+                    onChange={(event) => setCourseNoteForm((prev) => ({ ...prev, linkItemsText: event.target.value, courseId: selectedCourseId }))}
+                    rows={4}
+                    placeholder={"每行一筆\n範例：NotebookLM 摘要 | https://notebooklm.google.com/...\n或只填 URL 也可"}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">課程共用重點（可多筆）</label>
+                  <textarea
+                    value={courseNoteForm.summary}
+                    onChange={(event) => setCourseNoteForm((prev) => ({ ...prev, summary: event.target.value, courseId: selectedCourseId }))}
+                    rows={5}
+                    placeholder={"每行一筆\n例如：課程核心概念、長期提醒、指定閱讀..."}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  >
+                    儲存課程筆記
+                  </button>
+                </div>
+              </form>
+
+              {selectedCourseId ? (
+                <div className="mt-8 space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Sessions</p>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">各堂次作業 / 小考</h3>
+                  </div>
+                  {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || []).map((session) => {
+                    const draft = sessionTaskDrafts[session.id] || buildSessionTaskForm(session.task, session.id);
+                    return (
+                      <div key={session.id} className="rounded-3xl border border-slate-200 bg-white p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">{formatSessionSchedule_(session)}</p>
+                            {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveSessionTask_(session.id)}
+                            className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:border-slate-300"
+                          >
+                            儲存本堂內容
+                          </button>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">作業</label>
+                            <textarea
+                              value={draft.homeworkNotice}
+                              onChange={(event) => updateSessionTaskDraft_(session.id, { homeworkNotice: event.target.value })}
+                              rows={4}
+                              placeholder={"每行一筆\n例如：下週前提交個案分析"}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">小考</label>
+                            <textarea
+                              value={draft.quizNotice}
+                              onChange={(event) => updateSessionTaskDraft_(session.id, { quizNotice: event.target.value })}
+                              rows={4}
+                              placeholder={"每行一筆\n例如：下次上課前 10 分鐘小考"}
+                              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               ) : null}
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">標題</label>
-                <input
-                  value={noteForm.title}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, title: event.target.value, sessionId: selectedSessionId }))}
-                  placeholder="例如：經濟導論02 課後摘要"
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">外部連結（可多筆）</label>
-                <textarea
-                  value={noteForm.linkItemsText}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, linkItemsText: event.target.value, sessionId: selectedSessionId }))}
-                  rows={4}
-                  placeholder={"每行一筆\n範例：NotebookLM 摘要 | https://notebooklm.google.com/...\n或只填 URL 也可"}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">摘要（可多筆）</label>
-                <textarea
-                  value={noteForm.summary}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, summary: event.target.value, sessionId: selectedSessionId }))}
-                  rows={5}
-                  placeholder={"每行一筆\n例如：課堂重點、提醒事項、講師提到的重要概念..."}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">作業通知（可多筆）</label>
-                <textarea
-                  value={noteForm.homeworkNotice}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, homeworkNotice: event.target.value, sessionId: selectedSessionId }))}
-                  rows={3}
-                  placeholder={"每行一筆\n例如：下週前提交個案分析\n例如：閱讀指定章節"}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">小考通知（可多筆）</label>
-                <textarea
-                  value={noteForm.quizNotice}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, quizNotice: event.target.value, sessionId: selectedSessionId }))}
-                  rows={3}
-                  placeholder={"每行一筆\n例如：下次上課前 10 分鐘小考\n例如：範圍第 3-4 章"}
-                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">狀態</label>
-                <select
-                  value={noteForm.status}
-                  onChange={(event) => setNoteForm((prev) => ({ ...prev, status: event.target.value, sessionId: selectedSessionId }))}
-                  className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
-                >
-                  <option value="draft">草稿</option>
-                  <option value="published">已發布</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="submit"
-                  className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  儲存摘要
-                </button>
-              </div>
-            </form>
             </section>
           ) : null}
         </section>

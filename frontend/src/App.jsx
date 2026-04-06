@@ -899,6 +899,8 @@ const API_V2_WRITE_ACTIONS = new Set([
   "adminCreateMakeupRequest",
   "cancelMakeupRequest",
   "updateMakeupRequest",
+  "upsertAcademicCourseNote",
+  "upsertAcademicSessionTask",
   "upsertSessionNote",
   "syncAcademicSessionsFromIcs",
   // Softball
