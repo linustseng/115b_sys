@@ -125,30 +125,45 @@ function OrderingPage({ shared }) {
     return new Date() > mealEnd;
   };
 
-  const getPlanChoices_ = (plan) => [
-    {
-      value: "A",
-      label: plan.optionA || "A 餐",
-      image: plan.optionAImage,
-      placeholderIcon: "🍱",
-      placeholderHint: "店家圖片待補",
-    },
-    {
-      value: "B",
-      label: plan.optionB || "B 餐",
-      image: plan.optionBImage,
-      placeholderIcon: "🥡",
-      placeholderHint: "店家圖片待補",
-    },
-    {
-      value: "C",
-      label: plan.optionC || "素食餐",
-      image: plan.optionCImage,
-      placeholderIcon: "🥗",
-      placeholderHint: "素食餐圖片待補",
-    },
-    { value: "NONE", label: "不吃", image: "", placeholderIcon: "🙅", placeholderHint: "本次不訂餐" },
-  ];
+  const hasVegetarianChoice_ = (plan) =>
+    Boolean(String((plan && (plan.optionVegetarian || plan.optionVegetarianImage)) || "").trim());
+
+  const getPlanChoices_ = (plan) => {
+    const hasVegetarianChoice = hasVegetarianChoice_(plan);
+    return [
+      {
+        value: "A",
+        label: plan.optionA || "A 餐",
+        image: plan.optionAImage,
+        placeholderIcon: "🍱",
+        placeholderHint: "店家圖片待補",
+      },
+      {
+        value: "B",
+        label: plan.optionB || "B 餐",
+        image: plan.optionBImage,
+        placeholderIcon: "🥡",
+        placeholderHint: "店家圖片待補",
+      },
+      {
+        value: "C",
+        label: plan.optionC || (hasVegetarianChoice ? "C 餐" : "素食餐"),
+        image: plan.optionCImage,
+        placeholderIcon: "🍛",
+        placeholderHint: "C 餐圖片待補",
+      },
+      ...(hasVegetarianChoice
+        ? [{
+            value: "VEG",
+            label: plan.optionVegetarian || "素食餐",
+            image: plan.optionVegetarianImage,
+            placeholderIcon: "🥗",
+            placeholderHint: "素食餐圖片待補",
+          }]
+        : []),
+      { value: "NONE", label: "不吃", image: "", placeholderIcon: "🙅", placeholderHint: "本次不訂餐" },
+    ];
+  };
 
   const getChoiceLabel_ = (plan, choice) => {
     const normalized = String(choice || "").trim().toUpperCase();

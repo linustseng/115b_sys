@@ -298,10 +298,16 @@ function buildOrderPlanForClient_(row) {
 }
 
 function getOrderChoicesForPlan_(plan) {
+  const hasVegetarianChoice = Boolean(
+    firstText(plan && plan.optionVegetarian, plan && plan.optionVegetarianImage)
+  );
   return [
     { value: "A", label: firstText(plan && plan.optionA, "A 餐"), image: firstText(plan && plan.optionAImage) },
     { value: "B", label: firstText(plan && plan.optionB, "B 餐"), image: firstText(plan && plan.optionBImage) },
-    { value: "C", label: firstText(plan && plan.optionC, "素食餐"), image: firstText(plan && plan.optionCImage) },
+    { value: "C", label: firstText(plan && plan.optionC, hasVegetarianChoice ? "C 餐" : "素食餐"), image: firstText(plan && plan.optionCImage) },
+    ...(hasVegetarianChoice
+      ? [{ value: "VEG", label: firstText(plan && plan.optionVegetarian, "素食餐"), image: firstText(plan && plan.optionVegetarianImage) }]
+      : []),
     { value: "NONE", label: "不吃", image: "" },
   ];
 }

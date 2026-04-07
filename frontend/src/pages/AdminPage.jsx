@@ -97,10 +97,12 @@ export default function AdminPage({
     title: "",
     optionA: "A 餐",
     optionB: "B 餐",
-    optionC: "素食餐",
+    optionC: "C 餐",
+    optionVegetarian: "素食餐",
     optionAImage: "",
     optionBImage: "",
     optionCImage: "",
+    optionVegetarianImage: "",
     cutoffAt: "",
     status: "open",
     notes: "",
@@ -452,14 +454,32 @@ export default function AdminPage({
       title: dateValue ? `訂餐 ${dateValue}` : "",
       optionA: "A 餐",
       optionB: "B 餐",
-      optionC: "素食餐",
+      optionC: "C 餐",
+      optionVegetarian: "素食餐",
       optionAImage: "",
       optionBImage: "",
       optionCImage: "",
+      optionVegetarianImage: "",
       cutoffAt: cutoffAt,
       status: "open",
       notes: "",
     };
+  };
+
+  const hasOrderVegetarianChoice_ = (plan) =>
+    Boolean(String((plan && (plan.optionVegetarian || plan.optionVegetarianImage)) || "").trim());
+
+  const getOrderChoiceOptions_ = (plan) => {
+    const hasVegetarianChoice = hasOrderVegetarianChoice_(plan);
+    return [
+      { value: "A", label: plan.optionA || "A 餐" },
+      { value: "B", label: plan.optionB || "B 餐" },
+      { value: "C", label: plan.optionC || (hasVegetarianChoice ? "C 餐" : "素食餐") },
+      ...(hasVegetarianChoice
+        ? [{ value: "VEG", label: plan.optionVegetarian || "素食餐" }]
+        : []),
+      { value: "NONE", label: "不吃" },
+    ];
   };
 
   const buildDefaultProxyOrderForm = () => ({
@@ -758,10 +778,12 @@ export default function AdminPage({
           title: selected.title || "",
           optionA: selected.optionA || "A 餐",
           optionB: selected.optionB || "B 餐",
-          optionC: selected.optionC || "素食餐",
+          optionC: selected.optionC || (hasOrderVegetarianChoice_(selected) ? "C 餐" : "素食餐"),
+          optionVegetarian: selected.optionVegetarian || "",
           optionAImage: selected.optionAImage || "",
           optionBImage: selected.optionBImage || "",
           optionCImage: selected.optionCImage || "",
+          optionVegetarianImage: selected.optionVegetarianImage || "",
           cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
           status: selected.status || "open",
           notes: selected.notes || "",
@@ -1228,7 +1250,7 @@ export default function AdminPage({
   };
 
   const handleOrderFormChange = (key, value) => {
-    if ((key === "optionAImage" || key === "optionBImage" || key === "optionCImage") && String(value || "").startsWith("data:")) {
+    if ((key === "optionAImage" || key === "optionBImage" || key === "optionCImage" || key === "optionVegetarianImage") && String(value || "").startsWith("data:")) {
       setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
       return;
     }
@@ -1328,7 +1350,8 @@ export default function AdminPage({
     if (
       String(orderForm.optionAImage || "").startsWith("data:") ||
       String(orderForm.optionBImage || "").startsWith("data:") ||
-      String(orderForm.optionCImage || "").startsWith("data:")
+      String(orderForm.optionCImage || "").startsWith("data:") ||
+      String(orderForm.optionVegetarianImage || "").startsWith("data:")
     ) {
       setOrderStatusMessage("圖片請使用網址，請勿貼上 data: 圖片");
       return;
@@ -2632,6 +2655,8 @@ export default function AdminPage({
         acc.B += 1;
       } else if (choice === "C") {
         acc.C += 1;
+      } else if (choice === "VEG") {
+        acc.VEG += 1;
       } else {
         acc.NONE += 1;
       }
@@ -2649,7 +2674,7 @@ export default function AdminPage({
       acc.total += 1;
       return acc;
     },
-    { A: 0, B: 0, C: 0, NONE: 0, total: 0, proxy: 0, public: 0, picked: 0, unpicked: 0 }
+    { A: 0, B: 0, C: 0, VEG: 0, NONE: 0, total: 0, proxy: 0, public: 0, picked: 0, unpicked: 0 }
   );
 
   const getOrderChoiceLabel_ = (choice) => {
@@ -2661,7 +2686,10 @@ export default function AdminPage({
       return orderForm.optionB || "B 餐";
     }
     if (normalized === "C") {
-      return orderForm.optionC || "素食餐";
+      return orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐");
+    }
+    if (normalized === "VEG") {
+      return orderForm.optionVegetarian || "素食餐";
     }
     if (normalized === "NONE") {
       return "不吃";
@@ -2876,7 +2904,10 @@ export default function AdminPage({
   const groupedOrderResponses = [
     { key: "A", label: orderForm.optionA || "A 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "A")) },
     { key: "B", label: orderForm.optionB || "B 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "B")) },
-    { key: "C", label: orderForm.optionC || "素食餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "C")) },
+    { key: "C", label: orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐"), items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "C")) },
+    ...(hasOrderVegetarianChoice_(orderForm)
+      ? [{ key: "VEG", label: orderForm.optionVegetarian || "素食餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "VEG")) }]
+      : []),
     { key: "NONE", label: "不吃", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "NONE")) },
   ].map((group) => {
     const filteredItems = group.items.filter((item) => matchesOrderRosterFilter_(item));
@@ -3351,7 +3382,7 @@ export default function AdminPage({
                       className="input-sm"
                     />
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-4">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium text-slate-700">選項 A</label>
                       <input
@@ -3376,8 +3407,16 @@ export default function AdminPage({
                         className="input-sm"
                       />
                     </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium text-slate-700">素食</label>
+                      <input
+                        value={orderForm.optionVegetarian}
+                        onChange={(event) => handleOrderFormChange("optionVegetarian", event.target.value)}
+                        className="input-sm"
+                      />
+                    </div>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid gap-3 sm:grid-cols-4">
                     <div
                       className="grid gap-2"
                       onDragOver={(event) => event.preventDefault()}
@@ -3431,7 +3470,7 @@ export default function AdminPage({
                       onDragOver={(event) => event.preventDefault()}
                       onDrop={(event) => handleOrderImageDrop("optionCImage", event)}
                     >
-                      <label className="text-sm font-medium text-slate-700">素食餐圖片</label>
+                      <label className="text-sm font-medium text-slate-700">C 餐圖片</label>
                       <input
                         value={orderForm.optionCImage}
                         onChange={(event) =>
@@ -3444,6 +3483,30 @@ export default function AdminPage({
                       {orderForm.optionCImage ? (
                         <img
                           src={orderForm.optionCImage}
+                          alt="C 餐"
+                          className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
+                          loading="lazy"
+                        />
+                      ) : null}
+                    </div>
+                    <div
+                      className="grid gap-2"
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => handleOrderImageDrop("optionVegetarianImage", event)}
+                    >
+                      <label className="text-sm font-medium text-slate-700">素食餐圖片</label>
+                      <input
+                        value={orderForm.optionVegetarianImage}
+                        onChange={(event) =>
+                          handleOrderFormChange("optionVegetarianImage", event.target.value)
+                        }
+                        placeholder="貼上圖片網址或拖曳圖片"
+                        className="input-sm"
+                      />
+                      <p className="text-xs text-slate-400">請貼上圖片網址（https://...）</p>
+                      {orderForm.optionVegetarianImage ? (
+                        <img
+                          src={orderForm.optionVegetarianImage}
                           alt="素食餐"
                           className="h-28 w-full rounded-2xl border border-slate-200 object-cover"
                           loading="lazy"
@@ -3549,10 +3612,9 @@ export default function AdminPage({
                       }
                       className="input-sm"
                     >
-                      <option value="A">{orderForm.optionA || "A 餐"}</option>
-                      <option value="B">{orderForm.optionB || "B 餐"}</option>
-                      <option value="C">{orderForm.optionC || "素食餐"}</option>
-                      <option value="NONE">不吃</option>
+                      {getOrderChoiceOptions_(orderForm).map((choice) => (
+                        <option key={choice.value} value={choice.value}>{choice.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="grid gap-2 lg:col-span-2">
@@ -3698,7 +3760,7 @@ export default function AdminPage({
                     {activeOrderLabel || "尚未選擇訂餐日期"}
                   </span>
                 </div>
-                <div className="mt-4 grid gap-3 sm:grid-cols-8">
+                <div className="mt-4 grid gap-3 sm:grid-cols-10">
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">總數</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
@@ -3712,9 +3774,15 @@ export default function AdminPage({
                     <p className="text-lg font-semibold text-slate-900">{orderStats.B}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <p className="text-xs text-slate-400">素食餐</p>
+                    <p className="text-xs text-slate-400">{orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐")}</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.C}</p>
                   </div>
+                  {hasOrderVegetarianChoice_(orderForm) ? (
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                      <p className="text-xs text-slate-400">{orderForm.optionVegetarian || "素食餐"}</p>
+                      <p className="text-lg font-semibold text-slate-900">{orderStats.VEG}</p>
+                    </div>
+                  ) : null}
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                     <p className="text-xs text-slate-400">不吃</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.NONE}</p>
@@ -3756,17 +3824,14 @@ export default function AdminPage({
                   <div className="flex flex-wrap items-center gap-2">
                     {[
                       { key: "ALL", label: "全部" },
-                      { key: "A", label: orderForm.optionA || "A 餐" },
-                      { key: "B", label: orderForm.optionB || "B 餐" },
-                      { key: "C", label: orderForm.optionC || "素食餐" },
-                      { key: "NONE", label: "不吃" },
+                      ...getOrderChoiceOptions_(orderForm),
                     ].map((item) => (
                       <button
                         key={item.key}
                         type="button"
-                        onClick={() => setOrderMealFocus(item.key)}
+                        onClick={() => setOrderMealFocus(item.key || item.value)}
                         className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                          orderMealFocus === item.key
+                          orderMealFocus === (item.key || item.value)
                             ? "bg-slate-900 text-white"
                             : "border border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                         }`}
