@@ -56,10 +56,22 @@ export async function resolveAndOpenAttachment_(item, apiRequest) {
   const attachment = item && typeof item === "object" ? item : {};
   const attachmentName = String(attachment.name || attachment.originalName || "附件預覽").trim() || "附件預覽";
   const existingUrl = String(attachment.url || "").trim();
+  const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
+  const attachmentSource = String(attachment.source || "").trim().toLowerCase();
+  const isManagedAttachment = Boolean(attachmentId) && attachmentSource !== "legacy_url";
+
+  if (isManagedAttachment && typeof apiRequest === "function") {
+    const { result } = await apiRequest({ action: "getAttachmentAccessUrl", attachmentId });
+    if (!result || !result.ok || !result.data || !result.data.url) {
+      throw new Error((result && result.error) || "附件連結暫時無法取得");
+    }
+    return openAttachmentUrl_(result.data.url, result.data.name || attachmentName);
+  }
+
   if (existingUrl) {
     return openAttachmentUrl_(existingUrl, attachmentName);
   }
-  const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
+
   if (!attachmentId || typeof apiRequest !== "function") {
     return false;
   }
