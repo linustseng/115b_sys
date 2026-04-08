@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab = "pending" }) {
   const {
@@ -969,15 +970,14 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
                   <p className="text-xs font-semibold text-slate-600">附件</p>
                   <div className="mt-2 space-y-2">
                     {parseFinanceAttachments_(selectedRequest.attachments).map((item, index) => (
-                      <a
+                      <button
                         key={`${item.url}-${index}`}
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 hover:border-slate-300"
+                        type="button"
+                        onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                        className="block w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-600 hover:border-slate-300"
                       >
                         {item.name || item.url}
-                      </a>
+                      </button>
                     ))}
                   </div>
                 </div>
