@@ -52,20 +52,32 @@ export function openAttachmentUrl_(url, name = "附件預覽") {
   return true;
 }
 
+export function isManagedAttachment_(item) {
+  const attachment = item && typeof item === "object" ? item : {};
+  const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
+  const attachmentSource = String(attachment.source || "").trim().toLowerCase();
+  return Boolean(attachmentId) && attachmentSource !== "legacy_url";
+}
+
+async function fetchFreshAttachmentUrl_(attachmentId, apiRequest) {
+  const { result } = await apiRequest({ action: "getAttachmentAccessUrl", attachmentId });
+  if (!result || !result.ok || !result.data || !result.data.url) {
+    throw new Error((result && result.error) || "附件連結暫時無法取得");
+  }
+  return result.data;
+}
+
 export async function resolveAndOpenAttachment_(item, apiRequest) {
   const attachment = item && typeof item === "object" ? item : {};
   const attachmentName = String(attachment.name || attachment.originalName || "附件預覽").trim() || "附件預覽";
   const existingUrl = String(attachment.url || "").trim();
   const attachmentId = String(attachment.attachmentId || attachment.id || "").trim();
-  const attachmentSource = String(attachment.source || "").trim().toLowerCase();
-  const isManagedAttachment = Boolean(attachmentId) && attachmentSource !== "legacy_url";
 
-  if (isManagedAttachment && typeof apiRequest === "function") {
-    const { result } = await apiRequest({ action: "getAttachmentAccessUrl", attachmentId });
-    if (!result || !result.ok || !result.data || !result.data.url) {
-      throw new Error((result && result.error) || "附件連結暫時無法取得");
-    }
-    return openAttachmentUrl_(result.data.url, result.data.name || attachmentName);
+  // 規則：系統管理的附件不要直接信任 item.url。
+  // signed URL 可能是舊的，開啟時一律向後端重取新的 access URL。
+  if (isManagedAttachment_(attachment) && typeof apiRequest === "function") {
+    const data = await fetchFreshAttachmentUrl_(attachmentId, apiRequest);
+    return openAttachmentUrl_(data.url, data.name || attachmentName);
   }
 
   if (existingUrl) {
@@ -75,9 +87,6 @@ export async function resolveAndOpenAttachment_(item, apiRequest) {
   if (!attachmentId || typeof apiRequest !== "function") {
     return false;
   }
-  const { result } = await apiRequest({ action: "getAttachmentAccessUrl", attachmentId });
-  if (!result || !result.ok || !result.data || !result.data.url) {
-    throw new Error((result && result.error) || "附件連結暫時無法取得");
-  }
-  return openAttachmentUrl_(result.data.url, result.data.name || attachmentName);
+  const data = await fetchFreshAttachmentUrl_(attachmentId, apiRequest);
+  return openAttachmentUrl_(data.url, data.name || attachmentName);
 }
