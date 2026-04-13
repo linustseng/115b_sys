@@ -1507,6 +1507,35 @@ export default function AdminPage({
     }
   };
 
+  const handleRestoreOrderAuditVersion = async (item) => {
+    if (!item || !item.versionId) {
+      return;
+    }
+    const entityLabel = item.entityType === "ordering_public_link" ? "外部訂餐入口" : "訂餐設定";
+    if (!window.confirm(`確定要回復這筆${entityLabel}到 ${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt} 的版本嗎？`)) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setOrderStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "restoreOrderAuditVersion", versionId: item.versionId });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "回復失敗");
+      }
+      await loadOrderPlans();
+      if (orderActiveId) {
+        await loadOrderAuditEvents(normalizeOrderId_(orderActiveId));
+        await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan, { resetDraft: true });
+      }
+      setOrderStatusMessage(`已回復${entityLabel}`);
+    } catch (err) {
+      setOrderStatusMessage(err.message || "回復失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleEditProxyOrder = (item) => {
     setProxyOrderForm({
       id: item.id || "",
@@ -3628,23 +3657,57 @@ export default function AdminPage({
                   {orderAuditLoading ? (
                     <p className="text-slate-400">載入中...</p>
                   ) : orderAuditEvents.length ? (
-                    orderAuditEvents.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex min-w-0 flex-wrap items-center gap-2">
-                            <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                              {item.entityType}
-                            </span>
+                    orderAuditEvents.map((item) => {
+                      const diffEntries = Object.entries(item.diff || {});
+                      return (
+                        <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                                  {item.entityType}
+                                </span>
+                                {item.revisionNo ? (
+                                  <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                    r{item.revisionNo}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                                <span>{item.actorName || item.actorId || 'system'}</span>
+                                {item.action ? <span>· {item.action}</span> : null}
+                                <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
+                              </div>
+                              {diffEntries.length ? (
+                                <div className="mt-2 space-y-1">
+                                  {diffEntries.slice(0, 6).map(([key, value]) => (
+                                    <div key={key} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+                                      <span className="font-semibold text-slate-700">{key}</span>
+                                      <span className="mx-1 text-slate-400">:</span>
+                                      <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                      <span className="mx-1 text-slate-400">→</span>
+                                      <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                    </div>
+                                  ))}
+                                  {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
+                                </div>
+                              ) : null}
+                            </div>
+                            {item.versionId ? (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => handleRestoreOrderAuditVersion(item)}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                              >
+                                回復到這版
+                              </button>
+                            ) : null}
                           </div>
-                          <span className="text-[11px] text-slate-400">{formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-                          <span>{item.actorName || item.actorId || 'system'}</span>
-                          {item.action ? <span>· {item.action}</span> : null}
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="text-slate-400">目前沒有異動紀錄。</p>
                   )}

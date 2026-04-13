@@ -293,6 +293,70 @@ function generateOrderingPublicToken_() {
   return crypto.randomBytes(18).toString("base64url");
 }
 
+function diffSnapshotsForAudit_(beforeSnapshot = {}, afterSnapshot = {}) {
+  const before = beforeSnapshot && typeof beforeSnapshot === "object" ? beforeSnapshot : {};
+  const after = afterSnapshot && typeof afterSnapshot === "object" ? afterSnapshot : {};
+  const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).sort((a, b) => a.localeCompare(b, "en"));
+  const changedFields = [];
+  const diff = {};
+  for (const key of keys) {
+    const beforeValue = JSON.stringify(before[key] ?? null);
+    const afterValue = JSON.stringify(after[key] ?? null);
+    if (beforeValue === afterValue) {
+      continue;
+    }
+    changedFields.push(key);
+    diff[key] = {
+      before: before[key] ?? null,
+      after: after[key] ?? null,
+    };
+  }
+  return { changedFields, diff };
+}
+
+function buildOrderPlanRowFromSnapshot_(snapshot = {}, currentRow = null, nextRevision = 1, batchId = "", actor = null) {
+  const raw = safeJsonObject(snapshot);
+  const updatedAt = nowIso();
+  return {
+    id: firstText(snapshot.id, currentRow && currentRow.id),
+    date: firstText(snapshot.date),
+    title: firstText(snapshot.title),
+    description: firstText(snapshot.description),
+    closeAt: firstText(snapshot.closeAt),
+    vendor: firstText(snapshot.vendor),
+    items: Array.isArray(snapshot.items) ? snapshot.items : safeJsonArray(snapshot.items),
+    status: firstText(snapshot.status),
+    createdAt: firstNonEmptyText(currentRow && currentRow.created_at, snapshot.createdAt, updatedAt),
+    updatedAt,
+    raw,
+    revisionNo: nextRevision,
+    lastChangeBatchId: batchId,
+    lastChangedBy: firstText(actor && actor.actorId),
+    lastChangedByName: firstText(actor && actor.actorName),
+  };
+}
+
+function buildOrderingPublicLinkRowFromSnapshot_(snapshot = {}, currentRow = null, nextRevision = 1, batchId = "", actor = null) {
+  const raw = safeJsonObject(snapshot);
+  const updatedAt = nowIso();
+  return {
+    id: firstText(snapshot.id, currentRow && currentRow.id),
+    orderPlanId: firstText(snapshot.orderPlanId, currentRow && currentRow.order_plan_id),
+    token: firstNonEmptyText(snapshot.token, currentRow && currentRow.token, generateOrderingPublicToken_()),
+    title: firstText(snapshot.title),
+    description: firstText(snapshot.description),
+    closeAt: firstText(snapshot.closeAt),
+    status: firstText(snapshot.status, "active"),
+    createdAt: firstNonEmptyText(currentRow && currentRow.created_at, snapshot.createdAt, updatedAt),
+    updatedAt,
+    raw,
+    revisionNo: nextRevision,
+    lastChangeBatchId: batchId,
+    lastChangedBy: firstText(actor && actor.actorId),
+    lastChangedByName: firstText(actor && actor.actorName),
+  };
+}
+
 function buildOrderPlanForClient_(row) {
   const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
   return {
@@ -4084,17 +4148,24 @@ export async function dispatchNativeAction({
       }
       const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
       const result = await query(
-        `select *
-           from audit_events
-          where (entity_type = 'order_plan' and entity_id = $1)
-             or (parent_entity_type = 'order_plan' and parent_entity_id = $1)
-          order by created_at desc
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+           from audit_events e
+           left join audit_entity_versions v
+             on v.batch_id = e.batch_id
+            and v.entity_type = e.entity_type
+            and v.entity_id = e.entity_id
+            and v.action = e.action
+          where (e.entity_type = 'order_plan' and e.entity_id = $1)
+             or (e.parent_entity_type = 'order_plan' and e.parent_entity_id = $1)
+          order by e.created_at desc
           limit $2`,
         [orderPlanId, limit]
       );
       const events = result.rows.map((row) => ({
         id: firstText(row.id),
         batchId: firstText(row.batch_id),
+        versionId: firstText(row.version_id),
+        revisionNo: row.version_revision_no != null ? Number(row.version_revision_no) || 0 : 0,
         entityType: firstText(row.entity_type),
         entityId: firstText(row.entity_id),
         parentEntityType: firstText(row.parent_entity_type),
@@ -4108,6 +4179,144 @@ export async function dispatchNativeAction({
         diff: safeJsonObject(row.diff),
       }));
       return { ok: true, data: { events }, error: null };
+    }
+
+    case "restoreOrderAuditVersion": {
+      await requireGroupAccess(["I", "E"]);
+      const versionId = firstText(body.versionId || body.id);
+      if (!versionId) {
+        return { ok: false, data: null, error: "Missing versionId" };
+      }
+      const result = await withTransaction(async (client) => {
+        const txQuery = (text, params = []) => client.query(text, params);
+        const actorId = firstText(auth && auth.studentId);
+        const actorName = firstText(auth && auth.profile && auth.profile.name, actorId || "system");
+        const actorEmail = firstText(auth && auth.profile && auth.profile.email);
+        const versionRow = rowOrNull(await txQuery(`select * from audit_entity_versions where id = $1 limit 1 for update`, [versionId]));
+        if (!versionRow) {
+          return { ok: false, data: null, error: "Version not found" };
+        }
+        const entityType = firstText(versionRow.entity_type);
+        if (!["order_plan", "ordering_public_link"].includes(entityType)) {
+          return { ok: false, data: null, error: "Unsupported restore target" };
+        }
+        const targetSnapshot = safeJsonObject(versionRow.after_data);
+        if (!Object.keys(targetSnapshot).length) {
+          return { ok: false, data: null, error: "Version snapshot is empty" };
+        }
+
+        const batchId = `audit_batch:${crypto.randomUUID()}`;
+        const createdAt = nowIso();
+        await txQuery(
+          `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreOrderAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
+        );
+
+        if (entityType === 'order_plan') {
+          const orderPlanId = firstText(versionRow.entity_id, targetSnapshot.id);
+          const currentRow = rowOrNull(await txQuery(`select * from order_plans where id = $1 limit 1 for update`, [orderPlanId]));
+          const currentSnapshot = currentRow ? buildOrderPlanForClient_(currentRow) : {};
+          const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
+          const nextRow = buildOrderPlanRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, { actorId, actorName });
+          await txQuery(
+            `insert into order_plans (
+               id, date, title, description, close_at, vendor, items, status, raw, created_at, updated_at,
+               revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+             ) values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16)
+             on conflict (id) do update set
+               date = excluded.date,
+               title = excluded.title,
+               description = excluded.description,
+               close_at = excluded.close_at,
+               vendor = excluded.vendor,
+               items = excluded.items,
+               status = excluded.status,
+               raw = excluded.raw,
+               updated_at = excluded.updated_at,
+               revision_no = excluded.revision_no,
+               last_change_batch_id = excluded.last_change_batch_id,
+               last_changed_at = excluded.last_changed_at,
+               last_changed_by = excluded.last_changed_by,
+               last_changed_by_name = excluded.last_changed_by_name,
+               synced_at = now()`,
+            [nextRow.id, nextRow.date, nextRow.title, nextRow.description, nextRow.closeAt, nextRow.vendor, jsonbParam(nextRow.items, []), nextRow.status, jsonbParam(nextRow.raw, {}), nextRow.createdAt, nextRow.updatedAt, nextRow.revisionNo, batchId, nextRow.updatedAt, actorId, actorName]
+          );
+          const afterRow = rowOrNull(await txQuery(`select * from order_plans where id = $1 limit 1`, [orderPlanId]));
+          const afterSnapshot = afterRow ? buildOrderPlanForClient_(afterRow) : targetSnapshot;
+          const { changedFields, diff } = diffSnapshotsForAudit_(currentSnapshot, afterSnapshot);
+          const newVersionId = `audit_version:${crypto.randomUUID()}`;
+          const eventId = `audit_event:${crypto.randomUUID()}`;
+          await txQuery(
+            `insert into audit_entity_versions (id, batch_id, entity_type, entity_id, action, revision_no, before_data, after_data, changed_fields, source_updated_at, actor_id, actor_name, created_at, raw)
+             values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14::jsonb)`,
+            [newVersionId, batchId, 'order_plan', orderPlanId, 'restore', nextRevision, jsonbParam(currentSnapshot, {}), jsonbParam(afterSnapshot, {}), changedFields, nextRow.updatedAt, actorId, actorName, nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId, diff }, {})]
+          );
+          await txQuery(
+            `insert into audit_events (id, batch_id, entity_type, entity_id, action, actor_id, actor_name, summary, diff, severity, created_at, raw)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12::jsonb)`,
+            [eventId, batchId, 'order_plan', orderPlanId, 'restore', actorId, actorName, `回復訂餐 ${firstText(afterSnapshot.date, orderPlanId)}`, jsonbParam(diff, {}), 'warning', nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId }, {})]
+          );
+          await txQuery(
+            `insert into audit_restores (id, restore_batch_id, target_entity_type, target_entity_id, restored_from_version_id, previous_revision_no, restored_revision_no, actor_id, actor_name, created_at, raw)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+            [`audit_restore:${crypto.randomUUID()}`, batchId, 'order_plan', orderPlanId, versionId, currentRow ? Number(currentRow.revision_no || 1) : null, nextRevision, actorId, actorName, nextRow.updatedAt, jsonbParam({}, {})]
+          );
+          await txQuery(`update audit_change_batches set status = 'committed', committed_at = $2 where id = $1`, [batchId, nextRow.updatedAt]);
+          return { ok: true, data: { plan: afterSnapshot, batchId, revisionNo: nextRevision }, error: null };
+        }
+
+        const linkId = firstText(versionRow.entity_id, targetSnapshot.id);
+        const currentRow = rowOrNull(await txQuery(`select * from ordering_public_links where id = $1 limit 1 for update`, [linkId]));
+        const currentSnapshot = currentRow ? normalizeOrderingPublicLinkRow(currentRow) : {};
+        const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
+        const nextRow = buildOrderingPublicLinkRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, { actorId, actorName });
+        await txQuery(
+          `insert into ordering_public_links (
+             id, order_plan_id, token, title, description, close_at, status, raw, created_at, updated_at,
+             revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+           ) values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15)
+           on conflict (id) do update set
+             order_plan_id = excluded.order_plan_id,
+             token = excluded.token,
+             title = excluded.title,
+             description = excluded.description,
+             close_at = excluded.close_at,
+             status = excluded.status,
+             raw = excluded.raw,
+             updated_at = excluded.updated_at,
+             revision_no = excluded.revision_no,
+             last_change_batch_id = excluded.last_change_batch_id,
+             last_changed_at = excluded.last_changed_at,
+             last_changed_by = excluded.last_changed_by,
+             last_changed_by_name = excluded.last_changed_by_name,
+             synced_at = now()`,
+          [nextRow.id, nextRow.orderPlanId, nextRow.token, nextRow.title, nextRow.description, nextRow.closeAt, nextRow.status, jsonbParam(nextRow.raw, {}), nextRow.createdAt, nextRow.updatedAt, nextRow.revisionNo, batchId, nextRow.updatedAt, actorId, actorName]
+        );
+        const afterRow = rowOrNull(await txQuery(`select * from ordering_public_links where id = $1 limit 1`, [linkId]));
+        const afterSnapshot = afterRow ? normalizeOrderingPublicLinkRow(afterRow) : targetSnapshot;
+        const { changedFields, diff } = diffSnapshotsForAudit_(currentSnapshot, afterSnapshot);
+        const newVersionId = `audit_version:${crypto.randomUUID()}`;
+        const eventId = `audit_event:${crypto.randomUUID()}`;
+        await txQuery(
+          `insert into audit_entity_versions (id, batch_id, entity_type, entity_id, parent_entity_type, parent_entity_id, action, revision_no, before_data, after_data, changed_fields, source_updated_at, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11,$12,$13,$14,$15,$16::jsonb)`,
+          [newVersionId, batchId, 'ordering_public_link', linkId, 'order_plan', nextRow.orderPlanId, 'restore', nextRevision, jsonbParam(currentSnapshot, {}), jsonbParam(afterSnapshot, {}), changedFields, nextRow.updatedAt, actorId, actorName, nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId, diff }, {})]
+        );
+        await txQuery(
+          `insert into audit_events (id, batch_id, entity_type, entity_id, parent_entity_type, parent_entity_id, action, actor_id, actor_name, summary, diff, severity, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14::jsonb)`,
+          [eventId, batchId, 'ordering_public_link', linkId, 'order_plan', nextRow.orderPlanId, 'restore', actorId, actorName, `回復外部訂餐入口 ${nextRow.orderPlanId}`, jsonbParam(diff, {}), 'warning', nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId }, {})]
+        );
+        await txQuery(
+          `insert into audit_restores (id, restore_batch_id, target_entity_type, target_entity_id, restored_from_version_id, previous_revision_no, restored_revision_no, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+          [`audit_restore:${crypto.randomUUID()}`, batchId, 'ordering_public_link', linkId, versionId, currentRow ? Number(currentRow.revision_no || 1) : null, nextRevision, actorId, actorName, nextRow.updatedAt, jsonbParam({}, {})]
+        );
+        await txQuery(`update audit_change_batches set status = 'committed', committed_at = $2 where id = $1`, [batchId, nextRow.updatedAt]);
+        return { ok: true, data: { publicLink: afterSnapshot, batchId, revisionNo: nextRevision }, error: null };
+      });
+      return result;
     }
 
     case "getOrderPublicPage": {
