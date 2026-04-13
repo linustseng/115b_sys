@@ -535,6 +535,11 @@ function toEventPayload(row) {
     status: row.status || "",
     category: row.category || "",
     formSchema: row.form_schema || {},
+    revisionNo: Number(row.revision_no || 0) || 0,
+    lastChangeBatchId: row.last_change_batch_id || "",
+    lastChangedAt: row.last_changed_at || "",
+    lastChangedBy: row.last_changed_by || "",
+    lastChangedByName: row.last_changed_by_name || "",
   };
 }
 

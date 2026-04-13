@@ -49,6 +49,8 @@ export default function AdminPage({
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState("");
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
+  const [eventAuditEvents, setEventAuditEvents] = useState([]);
+  const [eventAuditLoading, setEventAuditLoading] = useState(false);
   const [eventListId, setEventListId] = useState("");
   const [activeTab, setActiveTab] = useState(() =>
     allowedTabs.includes(initialTab) ? initialTab : allowedTabs[0]
@@ -74,6 +76,7 @@ export default function AdminPage({
     allowCompanions: "yes",
     allowBringDrinks: "yes",
     attachments: "[]",
+    revisionNo: 0,
   });
   const [registrationForm, setRegistrationForm] = useState({
     id: "",
@@ -571,7 +574,27 @@ export default function AdminPage({
       allowCompanions: "yes",
       allowBringDrinks: "yes",
       attachments: "[]",
+      revisionNo: 0,
     };
+  };
+
+  const loadEventAuditEvents = async (eventId) => {
+    if (!eventId) {
+      setEventAuditEvents([]);
+      return;
+    }
+    setEventAuditLoading(true);
+    try {
+      const { result } = await apiRequest({ action: "listEventAuditEvents", eventId, limit: 20 });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "載入異動紀錄失敗");
+      }
+      setEventAuditEvents(result.data && result.data.events ? result.data.events : []);
+    } catch (err) {
+      setEventAuditEvents([]);
+    } finally {
+      setEventAuditLoading(false);
+    }
   };
 
   const loadEvents = async () => {
@@ -862,7 +885,9 @@ export default function AdminPage({
       allowCompanions: event.allowCompanions || "yes",
       allowBringDrinks: event.allowBringDrinks || "yes",
       attachments: event.attachments || "[]",
+      revisionNo: Number(event.revisionNo || 0) || 0,
     });
+    loadEventAuditEvents(event.id || "");
   };
 
   const handleSelectEventForEdit = (eventId) => {
@@ -1935,7 +1960,10 @@ export default function AdminPage({
     }
     setSaving(true);
     try {
-      const { result } = await apiRequest({ action: "deleteEvent", eventId: eventId });
+      const currentRevision = Number(
+        (events.find((item) => String(item.id || "").trim() === String(eventId).trim()) || {}).revisionNo || 0
+      ) || 0;
+      const { result } = await apiRequest({ action: "deleteEvent", eventId: eventId, expectedRevision: currentRevision });
       if (!result.ok) {
         throw new Error(result.error || "刪除失敗");
       }
@@ -1943,6 +1971,7 @@ export default function AdminPage({
       if (activeId === eventId) {
         setActiveId("");
         setIsEventFormOpen(false);
+        setEventAuditEvents([]);
       }
     } catch (err) {
       setError(err.message || "刪除失敗");
@@ -1957,7 +1986,7 @@ export default function AdminPage({
     setError("");
     try {
       const action = activeId ? "updateEvent" : "createEvent";
-      const { result } = await apiRequest({ action: action, data: form });
+      const { result } = await apiRequest({ action: action, expectedRevision: Number(form.revisionNo || 0) || 0, data: form });
       if (!result.ok) {
         throw new Error(result.error || "儲存失敗");
       }
@@ -1970,9 +1999,62 @@ export default function AdminPage({
       setActiveId("");
       setIsEventFormOpen(false);
       setForm(buildDefaultForm(events));
+      setEventAuditEvents([]);
       await loadEvents();
     } catch (err) {
       setError(err.message || "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRestoreEventAuditVersion = async (item) => {
+    if (!item || !item.versionId) {
+      return;
+    }
+    if (!window.confirm(`確定要回復這版活動設定嗎？\n\n時間：${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}`)) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "restoreEventAuditVersion", versionId: item.versionId });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "回復失敗");
+      }
+      const restoredEvent = result.data && result.data.event ? result.data.event : null;
+      if (restoredEvent) {
+        setForm({
+          id: restoredEvent.id || "",
+          title: restoredEvent.title || "",
+          description: restoredEvent.description || "",
+          startAt: normalizeEventDateTimeValue_(restoredEvent.startAt),
+          endAt: normalizeEventDateTimeValue_(restoredEvent.endAt),
+          location: restoredEvent.location || "",
+          address: restoredEvent.address || "",
+          registrationOpenAt: normalizeEventDateTimeValue_(restoredEvent.registrationOpenAt),
+          registrationCloseAt: normalizeEventDateTimeValue_(restoredEvent.registrationCloseAt),
+          checkinOpenAt: normalizeEventDateTimeValue_(restoredEvent.checkinOpenAt),
+          checkinCloseAt: normalizeEventDateTimeValue_(restoredEvent.checkinCloseAt),
+          registerUrl: restoredEvent.registerUrl || "",
+          checkinUrl: restoredEvent.checkinUrl || "",
+          capacity: restoredEvent.capacity || "",
+          status: restoredEvent.status || "draft",
+          category: restoredEvent.category || "gathering",
+          allowCompanions: restoredEvent.allowCompanions || "yes",
+          allowBringDrinks: restoredEvent.allowBringDrinks || "yes",
+          attachments: restoredEvent.attachments || "[]",
+          revisionNo: Number(restoredEvent.revisionNo || 0) || 0,
+        });
+      }
+      await loadEvents();
+      const restoredId = (restoredEvent && restoredEvent.id) || item.entityId || activeId;
+      if (restoredId) {
+        await loadEventAuditEvents(restoredId);
+      }
+      setError("");
+    } catch (err) {
+      setError(err.message || "回復失敗");
     } finally {
       setSaving(false);
     }
@@ -5676,6 +5758,11 @@ export default function AdminPage({
               >
                 {saving ? "儲存中..." : activeId ? "更新活動" : "新增活動"}
               </button>
+              {activeId ? (
+                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                  revision {Number(form.revisionNo || 0) || 0}
+                </span>
+              ) : null}
               {!activeId ? (
                 <button
                   type="button"
@@ -5700,6 +5787,76 @@ export default function AdminPage({
               ) : null}
             </div>
           </form>
+          {activeId ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-semibold text-slate-900">最近異動紀錄</p>
+                  <p className="mt-1 text-xs text-slate-500">顯示這筆活動最近的版本與欄位差異。</p>
+                </div>
+                <span className="text-xs text-slate-400">{form.title || form.id || "未選擇活動"}</span>
+              </div>
+              <div className="mt-4 space-y-2 text-xs text-slate-600">
+                {eventAuditLoading ? (
+                  <p className="text-slate-400">載入中...</p>
+                ) : eventAuditEvents.length ? (
+                  eventAuditEvents.map((item) => {
+                    const diffEntries = Object.entries(item.diff || {});
+                    return (
+                      <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                                {item.entityType}
+                              </span>
+                              {item.revisionNo ? (
+                                <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                  r{item.revisionNo}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                              <span>{item.actorName || item.actorId || 'system'}</span>
+                              {item.action ? <span>· {item.action}</span> : null}
+                              <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
+                            </div>
+                            {diffEntries.length ? (
+                              <div className="mt-2 space-y-1">
+                                {diffEntries.slice(0, 6).map(([key, value]) => (
+                                  <div key={key} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
+                                    <span className="font-semibold text-slate-700">{key}</span>
+                                    <span className="mx-1 text-slate-400">:</span>
+                                    <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                    <span className="mx-1 text-slate-400">→</span>
+                                    <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                  </div>
+                                ))}
+                                {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
+                              </div>
+                            ) : null}
+                          </div>
+                          {item.versionId ? (
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => handleRestoreEventAuditVersion(item)}
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                            >
+                              回復到這版
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-slate-400">目前沒有異動紀錄。</p>
+                )}
+              </div>
+            </div>
+          ) : null}
         </section>
         ) : null}
 

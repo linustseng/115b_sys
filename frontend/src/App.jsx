@@ -780,6 +780,7 @@ const API_POST_ACTIONS = new Set([
   "getCheckinBootstrap",
   "getRegistrationBootstrap",
   "listEvents",
+  "listEventAuditEvents",
   "listFinanceApplicantBootstrap",
   "listFinanceBootstrap",
   "listFundEvents",
@@ -796,6 +797,7 @@ const API_POST_ACTIONS = new Set([
 
 const API_V2_READ_ACTIONS = new Set([
   "listEvents",
+  "listEventAuditEvents",
   "listHomeBootstrap",
   "listLandingBootstrap",
   "listAdminBootstrap",
@@ -874,6 +876,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "createEvent",
   "updateEvent",
   "deleteEvent",
+  "restoreEventAuditVersion",
   // Finance / approvals (DB v2 cutover)
   "createFinanceRequest",
   "adminCreateFinanceRequest",

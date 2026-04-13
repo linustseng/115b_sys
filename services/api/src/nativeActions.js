@@ -357,6 +357,67 @@ function buildOrderingPublicLinkRowFromSnapshot_(snapshot = {}, currentRow = nul
   };
 }
 
+function normalizeEventRowForClient_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    title: firstText(row && row.title, raw.title),
+    description: firstText(row && row.description, raw.description),
+    startAt: firstText(row && row.start_at, raw.startAt || raw.start_at),
+    endAt: firstText(row && row.end_at, raw.endAt || raw.end_at),
+    location: firstText(row && row.location, raw.location),
+    address: firstText(row && row.address, raw.address),
+    registrationOpenAt: firstText(row && row.registration_open_at, raw.registrationOpenAt || raw.registration_open_at),
+    registrationCloseAt: firstText(row && row.registration_close_at, raw.registrationCloseAt || raw.registration_close_at),
+    checkinOpenAt: firstText(row && row.checkin_open_at, raw.checkinOpenAt || raw.checkin_open_at),
+    checkinCloseAt: firstText(row && row.checkin_close_at, raw.checkinCloseAt || raw.checkin_close_at),
+    registerUrl: firstText(row && row.register_url, raw.registerUrl || raw.register_url),
+    checkinUrl: firstText(row && row.checkin_url, raw.checkinUrl || raw.checkin_url),
+    capacity: row && row.capacity == null ? firstText(raw.capacity) : String(row && row.capacity != null ? row.capacity : ""),
+    status: firstText(row && row.status, raw.status),
+    category: firstText(row && row.category, raw.category),
+    formSchema: row && row.form_schema && typeof row.form_schema === "object" ? row.form_schema : safeJsonObject(raw.formSchema || raw.form_schema),
+    revisionNo: Number((row && row.revision_no) || raw.revisionNo || 0) || 0,
+    lastChangeBatchId: firstText(row && row.last_change_batch_id, raw.lastChangeBatchId),
+    lastChangedAt: asIsoText_(row && row.last_changed_at) || firstText(raw.lastChangedAt),
+    lastChangedBy: firstText(row && row.last_changed_by, raw.lastChangedBy),
+    lastChangedByName: firstText(row && row.last_changed_by_name, raw.lastChangedByName),
+  };
+}
+
+function buildEventRowFromSnapshot_(snapshot = {}, currentRow = null, nextRevision = 1, batchId = "", actor = null) {
+  const raw = safeJsonObject(snapshot);
+  const updatedAt = nowIso();
+  const capacityText = firstText(snapshot.capacity, currentRow && currentRow.capacity);
+  const createdAt = firstNonEmptyText(raw.createdAt, snapshot.createdAt, updatedAt);
+  return {
+    id: firstText(snapshot.id, currentRow && currentRow.id),
+    title: firstText(snapshot.title),
+    description: firstText(snapshot.description),
+    startAt: firstText(snapshot.startAt || snapshot.start_at),
+    endAt: firstText(snapshot.endAt || snapshot.end_at),
+    location: firstText(snapshot.location),
+    address: firstText(snapshot.address),
+    registrationOpenAt: firstText(snapshot.registrationOpenAt || snapshot.registration_open_at),
+    registrationCloseAt: firstText(snapshot.registrationCloseAt || snapshot.registration_close_at),
+    checkinOpenAt: firstText(snapshot.checkinOpenAt || snapshot.checkin_open_at),
+    checkinCloseAt: firstText(snapshot.checkinCloseAt || snapshot.checkin_close_at),
+    registerUrl: firstText(snapshot.registerUrl || snapshot.register_url),
+    checkinUrl: firstText(snapshot.checkinUrl || snapshot.checkin_url),
+    capacity: capacityText === "" ? null : Number(capacityText),
+    status: firstText(snapshot.status),
+    category: firstText(snapshot.category),
+    formSchema: safeJsonObject(snapshot.formSchema || snapshot.form_schema),
+    raw: { ...raw, createdAt, updatedAt },
+    revisionNo: nextRevision,
+    updatedAt,
+    lastChangeBatchId: batchId,
+    lastChangedBy: firstText(actor && actor.actorId),
+    lastChangedByName: firstText(actor && actor.actorName),
+  };
+}
+
 function buildOrderPlanForClient_(row) {
   const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
   return {
@@ -2415,10 +2476,35 @@ export async function dispatchNativeAction({
       if (!eventId) {
         return { ok: false, data: null, error: "Missing eventId" };
       }
-      await query(`delete from events where id = $1`, [eventId]);
-      await query(`delete from registrations where event_id = $1`, [eventId]);
-      await query(`delete from checkins where event_id = $1`, [eventId]);
-      return { ok: true, data: { id: eventId }, error: null };
+      const result = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "admin_ui",
+        reason: "deleteEvent",
+        entityType: "event",
+        entityId: eventId,
+        expectedRevision: body.expectedRevision,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from events where id = $1 limit 1 for update`, [eventId])),
+        mutate: async ({ txQuery, current }) => {
+          if (!current) {
+            throw new Error("活動不存在");
+          }
+          await txQuery(`delete from checkins where event_id = $1`, [eventId]);
+          await txQuery(`delete from registrations where event_id = $1`, [eventId]);
+          await txQuery(`delete from events where id = $1`, [eventId]);
+          return {
+            action: "delete",
+            after: null,
+            returnValue: { id: eventId },
+          };
+        },
+        buildSnapshot: (row) => normalizeEventRowForClient_(row),
+        buildEvent: ({ action, beforeSnapshot }) => ({
+          summary: action === "delete" ? `刪除活動 ${firstText(beforeSnapshot && beforeSnapshot.title, eventId)}` : `更新活動 ${eventId}`,
+          severity: "warning",
+        }),
+      });
+      return { ok: true, data: { id: eventId, revisionNo: result.revisionNo }, error: null };
     }
 
     case "createEvent":
@@ -2433,76 +2519,244 @@ export async function dispatchNativeAction({
         ...data,
         id,
       };
-      await query(
-        `insert into events (
-          id, title, description, start_at, end_at, location, address,
-          registration_open_at, registration_close_at, checkin_open_at, checkin_close_at,
-          register_url, checkin_url, capacity, status, category, form_schema, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::jsonb)
-        on conflict (id) do update set
-          title=excluded.title,
-          description=excluded.description,
-          start_at=excluded.start_at,
-          end_at=excluded.end_at,
-          location=excluded.location,
-          address=excluded.address,
-          registration_open_at=excluded.registration_open_at,
-          registration_close_at=excluded.registration_close_at,
-          checkin_open_at=excluded.checkin_open_at,
-          checkin_close_at=excluded.checkin_close_at,
-          register_url=excluded.register_url,
-          checkin_url=excluded.checkin_url,
-          capacity=excluded.capacity,
-          status=excluded.status,
-          category=excluded.category,
-          form_schema=excluded.form_schema,
-          raw=excluded.raw,
-          synced_at=now()`,
-        [
-          id,
-          firstText(normalized.title),
-          firstText(normalized.description),
-          firstText(normalized.startAt || normalized.start_at),
-          firstText(normalized.endAt || normalized.end_at),
-          firstText(normalized.location),
-          firstText(normalized.address),
-          firstText(normalized.registrationOpenAt || normalized.registration_open_at),
-          firstText(normalized.registrationCloseAt || normalized.registration_close_at),
-          firstText(normalized.checkinOpenAt || normalized.checkin_open_at),
-          firstText(normalized.checkinCloseAt || normalized.checkin_close_at),
-          firstText(normalized.registerUrl || normalized.register_url),
-          firstText(normalized.checkinUrl || normalized.checkin_url),
-          normalized.capacity == null || normalized.capacity === "" ? null : Number(normalized.capacity),
-          firstText(normalized.status),
-          firstText(normalized.category),
-          jsonbParam(safeJsonObject(normalized.formSchema || normalized.form_schema), {}),
-          jsonbParam(normalized, {}),
-        ]
-      );
-      const result = await query(`select * from events where id = $1 limit 1`, [id]);
-      const row = rowOrNull(result);
-      const event = row
-        ? {
-            id: row.id,
-            title: row.title || "",
-            description: row.description || "",
-            startAt: row.start_at || "",
-            endAt: row.end_at || "",
-            location: row.location || "",
-            address: row.address || "",
-            registrationOpenAt: row.registration_open_at || "",
-            registrationCloseAt: row.registration_close_at || "",
-            checkinOpenAt: row.checkin_open_at || "",
-            checkinCloseAt: row.checkin_close_at || "",
-            registerUrl: row.register_url || "",
-            checkinUrl: row.checkin_url || "",
-            capacity: row.capacity == null ? "" : String(row.capacity),
-            status: row.status || "",
-            category: row.category || "",
-            formSchema: row.form_schema || {},
-          }
-        : null;
+      const result = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "admin_ui",
+        reason: name,
+        entityType: "event",
+        entityId: id,
+        expectedRevision: body.expectedRevision,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from events where id = $1 limit 1 for update`, [id])),
+        mutate: async ({ txQuery, nextRevision, batchId, actor }) => {
+          const nextRow = buildEventRowFromSnapshot_(normalized, null, nextRevision, batchId, actor);
+          await txQuery(
+            `insert into events (
+              id, title, description, start_at, end_at, location, address,
+              registration_open_at, registration_close_at, checkin_open_at, checkin_close_at,
+              register_url, checkin_url, capacity, status, category, form_schema, raw,
+              revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::jsonb,$19,$20,$21,$22,$23)
+            on conflict (id) do update set
+              title=excluded.title,
+              description=excluded.description,
+              start_at=excluded.start_at,
+              end_at=excluded.end_at,
+              location=excluded.location,
+              address=excluded.address,
+              registration_open_at=excluded.registration_open_at,
+              registration_close_at=excluded.registration_close_at,
+              checkin_open_at=excluded.checkin_open_at,
+              checkin_close_at=excluded.checkin_close_at,
+              register_url=excluded.register_url,
+              checkin_url=excluded.checkin_url,
+              capacity=excluded.capacity,
+              status=excluded.status,
+              category=excluded.category,
+              form_schema=excluded.form_schema,
+              raw=excluded.raw,
+              revision_no=excluded.revision_no,
+              last_change_batch_id=excluded.last_change_batch_id,
+              last_changed_at=excluded.last_changed_at,
+              last_changed_by=excluded.last_changed_by,
+              last_changed_by_name=excluded.last_changed_by_name,
+              synced_at=now()`,
+            [
+              nextRow.id,
+              nextRow.title,
+              nextRow.description,
+              nextRow.startAt,
+              nextRow.endAt,
+              nextRow.location,
+              nextRow.address,
+              nextRow.registrationOpenAt,
+              nextRow.registrationCloseAt,
+              nextRow.checkinOpenAt,
+              nextRow.checkinCloseAt,
+              nextRow.registerUrl,
+              nextRow.checkinUrl,
+              nextRow.capacity,
+              nextRow.status,
+              nextRow.category,
+              jsonbParam(nextRow.formSchema, {}),
+              jsonbParam(nextRow.raw, {}),
+              nextRow.revisionNo,
+              batchId,
+              nextRow.updatedAt,
+              nextRow.lastChangedBy,
+              nextRow.lastChangedByName,
+            ]
+          );
+        },
+        loadAfter: async (txQuery) => rowOrNull(await txQuery(`select * from events where id = $1 limit 1`, [id])),
+        buildSnapshot: (row) => normalizeEventRowForClient_(row),
+        buildEvent: ({ action, afterSnapshot, changedFields }) => ({
+          summary:
+            action === "create"
+              ? `建立活動 ${firstText(afterSnapshot && afterSnapshot.title, id)}`
+              : `更新活動 ${firstText(afterSnapshot && afterSnapshot.title, id)}${changedFields.length ? `（${changedFields.slice(0, 4).join(", ")}）` : ""}`,
+          severity: changedFields.includes("startAt") || changedFields.includes("registrationCloseAt") ? "warning" : "info",
+        }),
+      });
+      const event = result.after ? normalizeEventRowForClient_(result.after) : null;
       return { ok: true, data: { event }, error: null };
+    }
+
+    case "listEventAuditEvents": {
+      await requireGroupAccess(["C", "E"]);
+      const eventId = firstText(body.eventId || body.id);
+      if (!eventId) {
+        return { ok: true, data: { events: [] }, error: null };
+      }
+      const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
+      const result = await query(
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+           from audit_events e
+           left join audit_entity_versions v
+             on v.batch_id = e.batch_id
+            and v.entity_type = e.entity_type
+            and v.entity_id = e.entity_id
+            and v.action = e.action
+          where e.entity_type = 'event' and e.entity_id = $1
+          order by e.created_at desc
+          limit $2`,
+        [eventId, limit]
+      );
+      const events = result.rows.map((row) => ({
+        id: firstText(row.id),
+        batchId: firstText(row.batch_id),
+        versionId: firstText(row.version_id),
+        revisionNo: row.version_revision_no != null ? Number(row.version_revision_no) || 0 : 0,
+        entityType: firstText(row.entity_type),
+        entityId: firstText(row.entity_id),
+        action: firstText(row.action),
+        actorId: firstText(row.actor_id),
+        actorName: firstText(row.actor_name),
+        summary: firstText(row.summary),
+        severity: firstText(row.severity, 'info'),
+        createdAt: asIsoText_(row.created_at),
+        diff: safeJsonObject(row.diff),
+      }));
+      return { ok: true, data: { events }, error: null };
+    }
+
+    case "restoreEventAuditVersion": {
+      await requireGroupAccess(["C", "E"]);
+      const versionId = firstText(body.versionId || body.id);
+      if (!versionId) {
+        return { ok: false, data: null, error: "Missing versionId" };
+      }
+      const result = await withTransaction(async (client) => {
+        const txQuery = (text, params = []) => client.query(text, params);
+        const actorId = firstText(auth && auth.studentId);
+        const actorName = firstText(auth && auth.profile && auth.profile.name, actorId || "system");
+        const actorEmail = firstText(auth && auth.profile && auth.profile.email);
+        const versionRow = rowOrNull(await txQuery(`select * from audit_entity_versions where id = $1 limit 1 for update`, [versionId]));
+        if (!versionRow) {
+          return { ok: false, data: null, error: "Version not found" };
+        }
+        if (firstText(versionRow.entity_type) !== 'event') {
+          return { ok: false, data: null, error: "Unsupported restore target" };
+        }
+        const targetSnapshot = safeJsonObject(versionRow.after_data);
+        const fallbackSnapshot = safeJsonObject(versionRow.before_data);
+        const snapshot = Object.keys(targetSnapshot).length ? targetSnapshot : fallbackSnapshot;
+        if (!Object.keys(snapshot).length) {
+          return { ok: false, data: null, error: "Version snapshot is empty" };
+        }
+        const batchId = `audit_batch:${crypto.randomUUID()}`;
+        const createdAt = nowIso();
+        await txQuery(
+          `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreEventAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
+        );
+        const eventId = firstText(versionRow.entity_id, snapshot.id);
+        const currentRow = rowOrNull(await txQuery(`select * from events where id = $1 limit 1 for update`, [eventId]));
+        const currentSnapshot = currentRow ? normalizeEventRowForClient_(currentRow) : {};
+        const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
+        const nextRow = buildEventRowFromSnapshot_(snapshot, currentRow, nextRevision, batchId, { actorId, actorName });
+        await txQuery(
+          `insert into events (
+            id, title, description, start_at, end_at, location, address,
+            registration_open_at, registration_close_at, checkin_open_at, checkin_close_at,
+            register_url, checkin_url, capacity, status, category, form_schema, raw,
+            revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18::jsonb,$19,$20,$21,$22,$23)
+          on conflict (id) do update set
+            title=excluded.title,
+            description=excluded.description,
+            start_at=excluded.start_at,
+            end_at=excluded.end_at,
+            location=excluded.location,
+            address=excluded.address,
+            registration_open_at=excluded.registration_open_at,
+            registration_close_at=excluded.registration_close_at,
+            checkin_open_at=excluded.checkin_open_at,
+            checkin_close_at=excluded.checkin_close_at,
+            register_url=excluded.register_url,
+            checkin_url=excluded.checkin_url,
+            capacity=excluded.capacity,
+            status=excluded.status,
+            category=excluded.category,
+            form_schema=excluded.form_schema,
+            raw=excluded.raw,
+            revision_no=excluded.revision_no,
+            last_change_batch_id=excluded.last_change_batch_id,
+            last_changed_at=excluded.last_changed_at,
+            last_changed_by=excluded.last_changed_by,
+            last_changed_by_name=excluded.last_changed_by_name,
+            synced_at=now()`,
+          [
+            nextRow.id,
+            nextRow.title,
+            nextRow.description,
+            nextRow.startAt,
+            nextRow.endAt,
+            nextRow.location,
+            nextRow.address,
+            nextRow.registrationOpenAt,
+            nextRow.registrationCloseAt,
+            nextRow.checkinOpenAt,
+            nextRow.checkinCloseAt,
+            nextRow.registerUrl,
+            nextRow.checkinUrl,
+            nextRow.capacity,
+            nextRow.status,
+            nextRow.category,
+            jsonbParam(nextRow.formSchema, {}),
+            jsonbParam(nextRow.raw, {}),
+            nextRow.revisionNo,
+            batchId,
+            nextRow.updatedAt,
+            nextRow.lastChangedBy,
+            nextRow.lastChangedByName,
+          ]
+        );
+        const afterRow = rowOrNull(await txQuery(`select * from events where id = $1 limit 1`, [eventId]));
+        const afterSnapshot = afterRow ? normalizeEventRowForClient_(afterRow) : snapshot;
+        const { changedFields, diff } = diffSnapshotsForAudit_(currentSnapshot, afterSnapshot);
+        const newVersionId = `audit_version:${crypto.randomUUID()}`;
+        const eventAuditId = `audit_event:${crypto.randomUUID()}`;
+        await txQuery(
+          `insert into audit_entity_versions (id, batch_id, entity_type, entity_id, action, revision_no, before_data, after_data, changed_fields, source_updated_at, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14::jsonb)`,
+          [newVersionId, batchId, 'event', eventId, 'restore', nextRevision, jsonbParam(currentSnapshot, {}), jsonbParam(afterSnapshot, {}), changedFields, nextRow.updatedAt, actorId, actorName, nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId, diff }, {})]
+        );
+        await txQuery(
+          `insert into audit_events (id, batch_id, entity_type, entity_id, action, actor_id, actor_name, summary, diff, severity, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12::jsonb)`,
+          [eventAuditId, batchId, 'event', eventId, 'restore', actorId, actorName, `回復活動 ${firstText(afterSnapshot.title, eventId)}`, jsonbParam(diff, {}), 'warning', nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId }, {})]
+        );
+        await txQuery(
+          `insert into audit_restores (id, restore_batch_id, target_entity_type, target_entity_id, restored_from_version_id, previous_revision_no, restored_revision_no, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+          [`audit_restore:${crypto.randomUUID()}`, batchId, 'event', eventId, versionId, currentRow ? Number(currentRow.revision_no || 1) : null, nextRevision, actorId, actorName, nextRow.updatedAt, jsonbParam({}, {})]
+        );
+        await txQuery(`update audit_change_batches set status = 'committed', committed_at = $2 where id = $1`, [batchId, nextRow.updatedAt]);
+        return { ok: true, data: { event: afterSnapshot, batchId, revisionNo: nextRevision }, error: null };
+      });
+      return result;
     }
 
     case "updateRegistration": {
