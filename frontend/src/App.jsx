@@ -1682,10 +1682,62 @@ async function requestWithReadRetry_(payload) {
 }
 
 let authRecoveryInFlight_ = null;
+let globalReauthTriggered_ = false;
+
+function isAuthReauthMessage_(message) {
+  const normalized = String(message || "").trim();
+  const lower = normalized.toLowerCase();
+  return Boolean(
+    normalized === "Unauthorized" ||
+      normalized.includes("登入已過期") ||
+      normalized.includes("重新登入") ||
+      normalized.includes("請重新") ||
+      lower.includes("invalid google token") ||
+      lower.includes("google 驗證失敗") ||
+      lower.includes("silent login unavailable") ||
+      lower.includes("no credential") ||
+      lower.includes("fedcm")
+  );
+}
 
 function isUnauthorizedResponse_(response) {
   const result = response && response.result ? response.result : null;
   return Boolean(result && result.ok === false && String(result.error || "") === "Unauthorized");
+}
+
+function isAuthReauthResponse_(response) {
+  const result = response && response.result ? response.result : null;
+  return Boolean(result && result.ok === false && isAuthReauthMessage_(result.error || ""));
+}
+
+function triggerGlobalReauth_(reason) {
+  if (typeof window === "undefined" || globalReauthTriggered_) {
+    return;
+  }
+  globalReauthTriggered_ = true;
+  clearReadResponseCache_();
+  storeGoogleIdToken_("");
+  storeAdminSession_(null);
+  try {
+    window.sessionStorage.setItem(
+      "emba115b.reauth_reason",
+      JSON.stringify({ reason: String(reason || ""), at: Date.now() })
+    );
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  const currentPath = `${window.location.pathname || "/"}${window.location.search || ""}`;
+  const targetUrl = new URL("/", window.location.origin);
+  targetUrl.searchParams.set("reauth", "1");
+  if (currentPath && currentPath !== "/") {
+    targetUrl.searchParams.set("from", currentPath);
+  }
+  const nextHref = `${targetUrl.pathname}${targetUrl.search}`;
+  if (`${window.location.pathname || "/"}${window.location.search || ""}` === nextHref) {
+    window.location.reload();
+    return;
+  }
+  window.location.assign(nextHref);
 }
 
 function shouldSkipAutoAuthRecovery_(payload) {
@@ -1824,24 +1876,39 @@ async function recoverStoredAuthSession_() {
 function apiRequest(payload) {
   const requestPayload = payload || {};
   const executeRequest_ = async () => {
-    const response = await dispatchRawApiRequest_(requestPayload);
-    if (shouldSkipAutoAuthRecovery_(requestPayload) || !isUnauthorizedResponse_(response)) {
-      return response;
-    }
+    try {
+      const response = await dispatchRawApiRequest_(requestPayload);
+      if (shouldSkipAutoAuthRecovery_(requestPayload) || !isUnauthorizedResponse_(response)) {
+        if (isAuthReauthResponse_(response)) {
+          triggerGlobalReauth_(response && response.result ? response.result.error : "");
+        }
+        return response;
+      }
 
-    const recovery = await recoverStoredAuthSession_();
-    if (!recovery || !recovery.recovered) {
-      return response;
-    }
+      const recovery = await recoverStoredAuthSession_();
+      if (!recovery || !recovery.recovered) {
+        triggerGlobalReauth_(response && response.result ? response.result.error : "");
+        return response;
+      }
 
-    const retryPayload = { ...(requestPayload || {}) };
-    if (recovery.sessionToken) {
-      retryPayload.sessionToken = recovery.sessionToken;
+      const retryPayload = { ...(requestPayload || {}) };
+      if (recovery.sessionToken) {
+        retryPayload.sessionToken = recovery.sessionToken;
+      }
+      if (recovery.idToken && String((requestPayload && requestPayload.idToken) || "").trim()) {
+        retryPayload.idToken = recovery.idToken;
+      }
+      const retryResponse = await dispatchRawApiRequest_(retryPayload);
+      if (isAuthReauthResponse_(retryResponse)) {
+        triggerGlobalReauth_(retryResponse && retryResponse.result ? retryResponse.result.error : "");
+      }
+      return retryResponse;
+    } catch (error) {
+      if (isAuthReauthMessage_(error && error.message ? error.message : "")) {
+        triggerGlobalReauth_(error && error.message ? error.message : "");
+      }
+      throw error;
     }
-    if (recovery.idToken && String((requestPayload && requestPayload.idToken) || "").trim()) {
-      retryPayload.idToken = recovery.idToken;
-    }
-    return dispatchRawApiRequest_(retryPayload);
   };
 
   if (!isReadAction_(requestPayload)) {
