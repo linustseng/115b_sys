@@ -89,6 +89,8 @@ export default function AdminPage({
   const [registrationEventId, setRegistrationEventId] = useState("");
   const [checkinEventId, setCheckinEventId] = useState("");
   const [orderStatusMessage, setOrderStatusMessage] = useState("");
+  const [orderAuditEvents, setOrderAuditEvents] = useState([]);
+  const [orderAuditLoading, setOrderAuditLoading] = useState(false);
   const [unsubmittedOrderCopyStatus, setUnsubmittedOrderCopyStatus] = useState("");
   const [dietaryQuery, setDietaryQuery] = useState("");
   const [orderForm, setOrderForm] = useState({
@@ -106,6 +108,7 @@ export default function AdminPage({
     cutoffAt: "",
     status: "open",
     notes: "",
+    revisionNo: 0,
   });
   const [proxyOrderForm, setProxyOrderForm] = useState({
     id: "",
@@ -122,6 +125,7 @@ export default function AdminPage({
     closeAt: "",
     status: "disabled",
     token: "",
+    revisionNo: 0,
   });
   const [studentsQuery, setStudentsQuery] = useState("");
   const [studentsGroupFilter, setStudentsGroupFilter] = useState("all");
@@ -463,6 +467,7 @@ export default function AdminPage({
       cutoffAt: cutoffAt,
       status: "open",
       notes: "",
+      revisionNo: 0,
     };
   };
 
@@ -531,6 +536,7 @@ export default function AdminPage({
     closeAt: normalizeDateTimeInput_(existing && existing.closeAt ? existing.closeAt : plan && plan.cutoffAt ? plan.cutoffAt : ""),
     status: existing && existing.status ? existing.status : "disabled",
     token: existing && existing.token ? existing.token : "",
+    revisionNo: Number((existing && existing.revisionNo) || 0) || 0,
   });
 
   const buildDefaultForm = (items) => {
@@ -767,6 +773,7 @@ export default function AdminPage({
     if (orderActiveId) {
       const normalizedId = normalizeOrderId_(orderActiveId);
       loadOrderResponses(normalizedId);
+      loadOrderAuditEvents(normalizedId);
       setProxyOrderForm(buildDefaultProxyOrderForm());
       const selected = orderPlans.find(
         (plan) => normalizeOrderId_(plan.id) === normalizedId
@@ -787,6 +794,7 @@ export default function AdminPage({
           cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
           status: selected.status || "open",
           notes: selected.notes || "",
+          revisionNo: Number(selected.revisionNo || 0) || 0,
         });
         loadOrderPublicLink(normalizedId, selected, { resetDraft: true });
       }
@@ -1073,6 +1081,25 @@ export default function AdminPage({
     }
   };
 
+  const loadOrderAuditEvents = async (orderId) => {
+    if (!orderId) {
+      setOrderAuditEvents([]);
+      return;
+    }
+    setOrderAuditLoading(true);
+    try {
+      const { result } = await apiRequest({ action: "listOrderAuditEvents", orderPlanId: orderId, limit: 20 });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "載入異動紀錄失敗");
+      }
+      setOrderAuditEvents(result.data && result.data.events ? result.data.events : []);
+    } catch (err) {
+      setOrderAuditEvents([]);
+    } finally {
+      setOrderAuditLoading(false);
+    }
+  };
+
   const handleRegistrationEdit = (registration) => {
     setRegistrationForm({
       id: registration.id || "",
@@ -1294,6 +1321,7 @@ export default function AdminPage({
     setOrderActiveId("");
     setOrderForm(buildDefaultOrderForm());
     setOrderResponses([]);
+    setOrderAuditEvents([]);
     setProxyOrderForm(buildDefaultProxyOrderForm());
     setOrderStatusMessage("");
   };
@@ -1328,6 +1356,7 @@ export default function AdminPage({
       setOrderActiveId("");
       setOrderForm(buildDefaultOrderForm());
       setOrderResponses([]);
+      setOrderAuditEvents([]);
       setProxyOrderForm(buildDefaultProxyOrderForm());
       await loadOrderPlans();
       const deletedResponses = Number((result.data && result.data.deletedResponses) || 0);
@@ -1365,6 +1394,7 @@ export default function AdminPage({
         const response = await apiRequest({
           action: "updateOrderPlan",
           id: orderForm.id,
+          expectedRevision: Number(orderForm.revisionNo || 0) || 0,
           data: orderForm,
         });
         result = response.result;
@@ -1386,10 +1416,17 @@ export default function AdminPage({
       await loadOrderPlans();
       if (returnedId) {
         setOrderActiveId(normalizeOrderId_(returnedId));
+        await loadOrderAuditEvents(normalizeOrderId_(returnedId));
       }
       setIsCreatingOrder(false);
       setOrderStatusMessage(isCreate ? "已新增訂餐日期" : "已更新訂餐設定");
     } catch (err) {
+      if (String(err.message || "").includes("重新整理") || String(err.message || "").includes("不能直接修改日期")) {
+        await loadOrderPlans();
+        if (orderActiveId) {
+          await loadOrderAuditEvents(normalizeOrderId_(orderActiveId));
+        }
+      }
       setOrderStatusMessage(err.message || "儲存失敗");
     } finally {
       setSaving(false);
@@ -1445,6 +1482,7 @@ export default function AdminPage({
     try {
       const { result } = await apiRequest({
         action: "upsertOrderPublicLink",
+        expectedRevision: Number(publicOrderLinkForm.revisionNo || 0) || 0,
         data: {
           ...publicOrderLinkForm,
           orderPlanId: normalizeOrderId_(orderActiveId),
@@ -1460,6 +1498,7 @@ export default function AdminPage({
         publicOrderLinkDraftTouchedRef.current = false;
       }
       await loadOrderPublicLink(normalizeOrderId_(orderActiveId), activeOrderPlan, { resetDraft: true });
+      await loadOrderAuditEvents(normalizeOrderId_(orderActiveId));
       setOrderStatusMessage(publicOrderLinkForm.status === "active" ? "已更新外部訂餐入口" : "已儲存外部訂餐設定");
     } catch (err) {
       setOrderStatusMessage(err.message || "儲存失敗");
@@ -3561,6 +3600,11 @@ export default function AdminPage({
                     >
                       {orderForm.id ? "刪除訂餐日期" : "取消新增"}
                     </button>
+                    {orderForm.id ? (
+                      <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                        revision {Number(orderForm.revisionNo || 0) || 0}
+                      </span>
+                    ) : null}
                     {orderStatusMessage ? (
                       <span className="text-xs font-semibold text-amber-600">
                         {orderStatusMessage}
@@ -3568,6 +3612,43 @@ export default function AdminPage({
                     ) : null}
                   </div>
                 </form>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">最近異動紀錄</p>
+                    <p className="mt-1 text-xs text-slate-500">顯示目前訂餐與其外部入口的最近版本事件。</p>
+                  </div>
+                  <span className="text-xs text-slate-400">
+                    {activeOrderLabel ? `目前套用 ${activeOrderLabel}` : "請先選擇訂餐日期"}
+                  </span>
+                </div>
+                <div className="mt-4 space-y-2 text-xs text-slate-600">
+                  {orderAuditLoading ? (
+                    <p className="text-slate-400">載入中...</p>
+                  ) : orderAuditEvents.length ? (
+                    orderAuditEvents.map((item) => (
+                      <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                              {item.entityType}
+                            </span>
+                          </div>
+                          <span className="text-[11px] text-slate-400">{formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                          <span>{item.actorName || item.actorId || 'system'}</span>
+                          {item.action ? <span>· {item.action}</span> : null}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400">目前沒有異動紀錄。</p>
+                  )}
+                </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5">

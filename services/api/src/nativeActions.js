@@ -4076,6 +4076,40 @@ export async function dispatchNativeAction({
       return { ok: true, data: { publicLink }, error: null };
     }
 
+    case "listOrderAuditEvents": {
+      await requireGroupAccess(["I", "E"]);
+      const orderPlanId = firstText(body.orderPlanId || body.order_id || body.id);
+      if (!orderPlanId) {
+        return { ok: true, data: { events: [] }, error: null };
+      }
+      const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
+      const result = await query(
+        `select *
+           from audit_events
+          where (entity_type = 'order_plan' and entity_id = $1)
+             or (parent_entity_type = 'order_plan' and parent_entity_id = $1)
+          order by created_at desc
+          limit $2`,
+        [orderPlanId, limit]
+      );
+      const events = result.rows.map((row) => ({
+        id: firstText(row.id),
+        batchId: firstText(row.batch_id),
+        entityType: firstText(row.entity_type),
+        entityId: firstText(row.entity_id),
+        parentEntityType: firstText(row.parent_entity_type),
+        parentEntityId: firstText(row.parent_entity_id),
+        action: firstText(row.action),
+        actorId: firstText(row.actor_id),
+        actorName: firstText(row.actor_name),
+        summary: firstText(row.summary),
+        severity: firstText(row.severity, 'info'),
+        createdAt: asIsoText_(row.created_at),
+        diff: safeJsonObject(row.diff),
+      }));
+      return { ok: true, data: { events }, error: null };
+    }
+
     case "getOrderPublicPage": {
       const token = firstText(body.token || body.publicToken);
       if (!token) {
