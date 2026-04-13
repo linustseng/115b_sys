@@ -16,6 +16,7 @@ import {
   hydrateAttachmentItems,
   normalizeAttachmentItems,
 } from "./attachments.js";
+import { applyVersionedMutation } from "./versioning.js";
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -260,6 +261,13 @@ function toOrderPlanRow(input) {
   };
 }
 
+function asIsoText_(value, fallback = "") {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  return firstText(value, fallback);
+}
+
 function normalizeOrderingPublicLinkRow(row) {
   const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
   return {
@@ -270,9 +278,14 @@ function normalizeOrderingPublicLinkRow(row) {
     title: firstText(row && row.title, raw.title),
     description: firstText(row && row.description, raw.description),
     closeAt: firstText(row && row.close_at, raw.closeAt),
-    status: firstText(row && row.status, raw.status, "active"),
+    status: firstText(row && row.status, raw.status || "active"),
     createdAt: firstText(row && row.created_at, raw.createdAt),
     updatedAt: firstText(row && row.updated_at, raw.updatedAt),
+    revisionNo: row && row.revision_no != null ? Number(row.revision_no) || 1 : 1,
+    lastChangeBatchId: firstText(row && row.last_change_batch_id, raw.lastChangeBatchId),
+    lastChangedAt: asIsoText_(row && row.last_changed_at, raw.lastChangedAt),
+    lastChangedBy: firstText(row && row.last_changed_by, raw.lastChangedBy),
+    lastChangedByName: firstText(row && row.last_changed_by_name, raw.lastChangedByName),
   };
 }
 
@@ -294,6 +307,11 @@ function buildOrderPlanForClient_(row) {
     status: row && row.status ? row.status : "",
     createdAt: row && row.created_at ? row.created_at : "",
     updatedAt: row && row.updated_at ? row.updated_at : "",
+    revisionNo: row && row.revision_no != null ? Number(row.revision_no) || 1 : 1,
+    lastChangeBatchId: firstText(row && row.last_change_batch_id, raw.lastChangeBatchId),
+    lastChangedAt: asIsoText_(row && row.last_changed_at, raw.lastChangedAt),
+    lastChangedBy: firstText(row && row.last_changed_by, raw.lastChangedBy),
+    lastChangedByName: firstText(row && row.last_changed_by_name, raw.lastChangedByName),
   };
 }
 
@@ -4100,50 +4118,93 @@ export async function dispatchNativeAction({
       };
     }
 
-    case "createOrderPlan": {
-      await requireGroupAccess(["I", "E"]);
-      const row = toOrderPlanRow(body.data || body.plan || body);
-      await query(
-        `insert into order_plans (id, date, title, description, close_at, vendor, items, status, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11)
-         on conflict (id) do update set
-           date = excluded.date,
-           title = excluded.title,
-           description = excluded.description,
-           close_at = excluded.close_at,
-           vendor = excluded.vendor,
-           items = excluded.items,
-           status = excluded.status,
-           raw = excluded.raw,
-           updated_at = excluded.updated_at,
-           synced_at = now()`,
-        [
-          row.id,
-          row.date,
-          row.title,
-          row.description,
-          row.closeAt,
-          row.vendor,
-          jsonbParam(row.items, []),
-          row.status,
-          jsonbParam(row.raw, {}),
-          row.createdAt,
-          row.updatedAt,
-        ]
-      );
-      return { ok: true, data: { id: row.id, plan: row }, error: null };
-    }
-
+    case "createOrderPlan":
     case "updateOrderPlan": {
       await requireGroupAccess(["I", "E"]);
       const row = toOrderPlanRow(body.data || body.plan || body);
-      await query(
-        `update order_plans set
-           date=$2,title=$3,description=$4,close_at=$5,vendor=$6,items=$7::jsonb,status=$8,raw=$9::jsonb,updated_at=$10,synced_at=now()
-         where id=$1`,
-        [row.id, row.date, row.title, row.description, row.closeAt, row.vendor, jsonbParam(row.items, []), row.status, jsonbParam(row.raw, {}), row.updatedAt]
-      );
-      return { ok: true, data: { id: row.id, plan: row }, error: null };
+      const expectedRevision = firstText(body.expectedRevision, row.raw.expectedRevision);
+      const result = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "admin_ui",
+        reason: name,
+        entityType: "order_plan",
+        entityId: row.id,
+        expectedRevision,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from order_plans where id = $1 limit 1 for update`, [row.id])),
+        mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          if (current && firstText(current.date) !== row.date) {
+            const responseCountResult = await txQuery(`select count(*)::int as count from order_responses where order_id = $1`, [row.id]);
+            const responseCount = Number((responseCountResult.rows[0] && responseCountResult.rows[0].count) || 0);
+            if (responseCount > 0) {
+              const error = new Error(`這筆訂餐已有 ${responseCount} 份回覆，不能直接修改日期，請改用另存新訂餐。`);
+              error.statusCode = 409;
+              error.code = "ORDER_PLAN_DATE_LOCKED";
+              throw error;
+            }
+          }
+          await txQuery(
+            `insert into order_plans (
+               id, date, title, description, close_at, vendor, items, status, raw, created_at, updated_at,
+               revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+             )
+             values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9::jsonb,$10,$11,$12,$13,$14,$15,$16)
+             on conflict (id) do update set
+               date = excluded.date,
+               title = excluded.title,
+               description = excluded.description,
+               close_at = excluded.close_at,
+               vendor = excluded.vendor,
+               items = excluded.items,
+               status = excluded.status,
+               raw = excluded.raw,
+               updated_at = excluded.updated_at,
+               revision_no = excluded.revision_no,
+               last_change_batch_id = excluded.last_change_batch_id,
+               last_changed_at = excluded.last_changed_at,
+               last_changed_by = excluded.last_changed_by,
+               last_changed_by_name = excluded.last_changed_by_name,
+               synced_at = now()`,
+            [
+              row.id,
+              row.date,
+              row.title,
+              row.description,
+              row.closeAt,
+              row.vendor,
+              jsonbParam(row.items, []),
+              row.status,
+              jsonbParam(row.raw, {}),
+              current ? firstText(current.created_at, row.createdAt) : row.createdAt,
+              row.updatedAt,
+              nextRevision,
+              batchId,
+              row.updatedAt,
+              actor.actorId,
+              actor.actorName,
+            ]
+          );
+          const after = rowOrNull(await txQuery(`select * from order_plans where id = $1 limit 1`, [row.id]));
+          return {
+            action: current ? "update" : "create",
+            after,
+            returnValue: {
+              id: row.id,
+              plan: after ? buildOrderPlanForClient_(after) : buildOrderPlanForClient_({ ...row, revision_no: nextRevision }),
+            },
+          };
+        },
+        buildSnapshot: (currentRow) => buildOrderPlanForClient_(currentRow),
+        buildEvent: ({ action, beforeSnapshot, afterSnapshot, changedFields, diff }) => ({
+          summary:
+            action === "create"
+              ? `建立訂餐 ${firstText(afterSnapshot && afterSnapshot.date, row.date)}`
+              : `更新訂餐 ${firstText(afterSnapshot && afterSnapshot.date, beforeSnapshot && beforeSnapshot.date, row.date)}（${changedFields.join(", ") || "無欄位差異"}）`,
+          diff,
+          severity: changedFields.includes("date") ? "warning" : "info",
+        }),
+      });
+      return { ok: true, data: { id: row.id, plan: result.plan, batchId: result.batchId, revisionNo: result.revisionNo }, error: null };
     }
 
     case "upsertOrderPublicLink": {
@@ -4166,8 +4227,8 @@ export async function dispatchNativeAction({
         title: firstText(data.title),
         description: firstText(data.description),
         closeAt: firstText(data.closeAt),
-        status: firstText(data.status, data.enabled === false ? "disabled" : "active", "active"),
-        createdAt: firstText(data.createdAt, existing && existing.created_at, now),
+        status: firstText(data.status, data.enabled === false ? "disabled" : "active"),
+        createdAt: firstNonEmptyText(data.createdAt, existing && existing.created_at, now),
         updatedAt: now,
       };
       const raw = {
@@ -4181,33 +4242,88 @@ export async function dispatchNativeAction({
         status: row.status,
         enabled: row.status === "active",
       };
-      await query(
-        `insert into ordering_public_links (id, order_plan_id, token, title, description, close_at, status, raw, created_at, updated_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
-         on conflict (id) do update set
-           order_plan_id = excluded.order_plan_id,
-           token = excluded.token,
-           title = excluded.title,
-           description = excluded.description,
-           close_at = excluded.close_at,
-           status = excluded.status,
-           raw = excluded.raw,
-           updated_at = excluded.updated_at,
-           synced_at = now()`,
-        [row.id, row.orderPlanId, row.token, row.title, row.description, row.closeAt, row.status, jsonbParam(raw, {}), row.createdAt, row.updatedAt]
-      );
-      return { ok: true, data: { publicLink: normalizeOrderingPublicLinkRow({
-        id: row.id,
-        order_plan_id: row.orderPlanId,
-        token: row.token,
-        title: row.title,
-        description: row.description,
-        close_at: row.closeAt,
-        status: row.status,
-        created_at: row.createdAt,
-        updated_at: row.updatedAt,
-        raw,
-      }) }, error: null };
+      const expectedRevision = firstNonEmptyText(body.expectedRevision, data.expectedRevision, existing && existing.revision_no);
+      const result = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "admin_ui",
+        reason: name,
+        entityType: "ordering_public_link",
+        entityId: row.id,
+        expectedRevision,
+        parentEntityType: "order_plan",
+        parentEntityId: orderPlanId,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from ordering_public_links where id = $1 limit 1 for update`, [row.id])),
+        mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          await txQuery(
+            `insert into ordering_public_links (
+               id, order_plan_id, token, title, description, close_at, status, raw, created_at, updated_at,
+               revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+             )
+             values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11,$12,$13,$14,$15)
+             on conflict (id) do update set
+               order_plan_id = excluded.order_plan_id,
+               token = excluded.token,
+               title = excluded.title,
+               description = excluded.description,
+               close_at = excluded.close_at,
+               status = excluded.status,
+               raw = excluded.raw,
+               updated_at = excluded.updated_at,
+               revision_no = excluded.revision_no,
+               last_change_batch_id = excluded.last_change_batch_id,
+               last_changed_at = excluded.last_changed_at,
+               last_changed_by = excluded.last_changed_by,
+               last_changed_by_name = excluded.last_changed_by_name,
+               synced_at = now()`,
+            [
+              row.id,
+              row.orderPlanId,
+              row.token,
+              row.title,
+              row.description,
+              row.closeAt,
+              row.status,
+              jsonbParam(raw, {}),
+              current ? firstText(current.created_at, row.createdAt) : row.createdAt,
+              row.updatedAt,
+              nextRevision,
+              batchId,
+              row.updatedAt,
+              actor.actorId,
+              actor.actorName,
+            ]
+          );
+          const after = rowOrNull(await txQuery(`select * from ordering_public_links where id = $1 limit 1`, [row.id]));
+          return {
+            action: current ? "update" : "create",
+            after,
+            returnValue: {
+              publicLink: after ? normalizeOrderingPublicLinkRow(after) : normalizeOrderingPublicLinkRow({
+                id: row.id,
+                order_plan_id: row.orderPlanId,
+                token: row.token,
+                title: row.title,
+                description: row.description,
+                close_at: row.closeAt,
+                status: row.status,
+                created_at: row.createdAt,
+                updated_at: row.updatedAt,
+                revision_no: nextRevision,
+                raw,
+              }),
+            },
+          };
+        },
+        buildSnapshot: (currentRow) => normalizeOrderingPublicLinkRow(currentRow),
+        buildEvent: ({ action, diff }) => ({
+          summary: action === "create" ? `建立外部訂餐入口 ${orderPlanId}` : `更新外部訂餐入口 ${orderPlanId}`,
+          diff,
+          parentEntityType: "order_plan",
+          parentEntityId: orderPlanId,
+        }),
+      });
+      return { ok: true, data: { publicLink: result.publicLink, batchId: result.batchId, revisionNo: result.revisionNo }, error: null };
     }
 
     case "submitOrderPublicResponse": {
