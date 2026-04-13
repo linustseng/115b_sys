@@ -100,6 +100,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState(false);
   const [authRecovering, setAuthRecovering] = useState(false);
+  const [reauthBannerMessage, setReauthBannerMessage] = useState("");
   const authRestoring = hasGoogleLogin && needsReauth && (!authRestoreResolved || authRecovering);
   const shouldShowReauthPrompt = hasGoogleLogin && needsReauth && authRestoreResolved && !authRecovering;
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
@@ -241,6 +242,39 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setLoginCollapsed(false);
     }
   }, [shouldShowReauthPrompt]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const search = new URLSearchParams(window.location.search || "");
+    const hintedReauth = search.get("reauth") === "1";
+    let reason = "";
+    try {
+      const raw = window.sessionStorage.getItem("emba115b.reauth_reason");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        reason = String((parsed && parsed.reason) || "").trim();
+        window.sessionStorage.removeItem("emba115b.reauth_reason");
+      }
+    } catch (error) {
+      // Ignore storage failures.
+    }
+    if (!hintedReauth && !reason) {
+      return;
+    }
+    setReauthBannerMessage(
+      shouldDowngradeToReauthState_(reason)
+        ? "登入狀態已失效，請重新登入後再繼續使用。"
+        : "目前需要重新登入後才能繼續使用。"
+    );
+    if (hintedReauth) {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("reauth");
+      nextUrl.searchParams.delete("from");
+      window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (!hasGoogleLogin || !needsReauth || authRecovering) {
@@ -1100,6 +1134,11 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               </div>
             ) : !loginCollapsed ? (
               <>
+                {reauthBannerMessage ? (
+                  <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm text-amber-900">
+                    {reauthBannerMessage}
+                  </div>
+                ) : null}
                 <div className="mt-4">
                   <GoogleSigninPanel
                     title={shouldShowReauthPrompt ? "重新登入" : "Google 登入"}
