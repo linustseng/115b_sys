@@ -5758,7 +5758,7 @@ export async function dispatchNativeAction({
             severity: changedFields.includes("status") ? "warning" : "info",
           }),
         });
-        return { ok: true, data: { id: requestId, status: mutation.returnValue && mutation.returnValue.status ? mutation.returnValue.status : "" }, error: null };
+        return { ok: true, data: { id: requestId, status: mutation && mutation.status ? mutation.status : "" }, error: null };
       }
 
       // Full update mode (draft/update/submit): update the full record.
