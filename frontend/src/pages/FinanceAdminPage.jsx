@@ -47,6 +47,8 @@ function FinanceAdminPage({ shared }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [financeAuditEvents, setFinanceAuditEvents] = useState([]);
+  const [financeAuditLoading, setFinanceAuditLoading] = useState(false);
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [financeRoles, setFinanceRoles] = useState([]);
   const [financeCategories, setFinanceCategories] = useState([]);
@@ -203,6 +205,25 @@ function FinanceAdminPage({ shared }) {
       setError(err.message || "載入失敗");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFinanceAuditEvents = async (requestId) => {
+    if (!requestId) {
+      setFinanceAuditEvents([]);
+      return;
+    }
+    setFinanceAuditLoading(true);
+    try {
+      const { result } = await apiRequest({ action: "listFinanceAuditEvents", requestId, limit: 20 });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "載入異動紀錄失敗");
+      }
+      setFinanceAuditEvents(result.data && result.data.events ? result.data.events : []);
+    } catch (err) {
+      setFinanceAuditEvents([]);
+    } finally {
+      setFinanceAuditLoading(false);
     }
   };
 
@@ -623,6 +644,7 @@ function FinanceAdminPage({ shared }) {
 
   useEffect(() => {
     loadActions(selectedId);
+    loadFinanceAuditEvents(selectedId);
   }, [selectedId]);
 
   useEffect(() => {
@@ -999,6 +1021,36 @@ function FinanceAdminPage({ shared }) {
 
   const resolvedActorName = adminDisplayName || actorName || "";
 
+  const handleRestoreFinanceAuditVersion = async (item) => {
+    if (!item || !item.versionId) {
+      return;
+    }
+    if (!window.confirm(`確定要回復這版財務申請嗎？\n\n時間：${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}`)) {
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      const { result } = await apiRequest({ action: "restoreFinanceAuditVersion", versionId: item.versionId });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "回復失敗");
+      }
+      await loadRequests();
+      const restoredId = (result.data && result.data.request && result.data.request.id) || item.entityId || selectedId;
+      if (restoredId) {
+        setSelectedId(restoredId);
+        await loadActions(restoredId);
+        await loadFinanceAuditEvents(restoredId);
+      }
+      setStatusMessage("已回復到指定版本");
+    } catch (err) {
+      setError(err.message || "回復失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAction = async (actionType) => {
     if (!selectedRequest || !selectedRequest.id) {
       return;
@@ -1010,6 +1062,7 @@ function FinanceAdminPage({ shared }) {
       const { result } = await apiRequest({
         action: "updateFinanceRequest",
         id: selectedRequest.id,
+        expectedRevision: Number(selectedRequest.revisionNo || 0) || 0,
         requestAction: actionType,
         actorRole: role,
         actorName: resolvedActorName,
@@ -1024,6 +1077,7 @@ function FinanceAdminPage({ shared }) {
       setActorNote("");
       await loadRequests();
       await loadActions(selectedRequest.id);
+      await loadFinanceAuditEvents(selectedRequest.id);
     } catch (err) {
       setError(err.message || "更新失敗");
     } finally {
@@ -1864,9 +1918,11 @@ function FinanceAdminPage({ shared }) {
                 <div>
                   <p className="font-semibold text-slate-900">{selectedRequest.title}</p>
                   <p className="text-xs text-slate-500">
-                    {selectedRequest.id} ·{" "}
-                    {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
+                    {selectedRequest.id} · {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
                   </p>
+                  <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
+                    revision {Number(selectedRequest.revisionNo || 0) || 0}
+                  </div>
                 </div>
                   <div className="grid gap-2 text-xs text-slate-500">
                     <div>
@@ -2038,18 +2094,14 @@ function FinanceAdminPage({ shared }) {
                     <p className="font-semibold text-slate-900">流程紀錄</p>
                     {latestAction ? (
                       <p className="mt-1 text-xs text-slate-500">
-                        最近審核人：{latestAction.actorName || "—"} ·{" "}
-                        {FINANCE_ROLE_LABELS[latestAction.actorRole] ||
-                          latestAction.actorRole ||
-                          "-"}
+                        最近審核人：{latestAction.actorName || "—"} · {FINANCE_ROLE_LABELS[latestAction.actorRole] || latestAction.actorRole || "-"}
                       </p>
                     ) : null}
                     <div className="mt-2 space-y-2">
                       {sortedActions.map((item) => (
                         <div key={item.id} className="flex flex-wrap items-center justify-between gap-2">
                           <span>
-                            {item.action} · {FINANCE_ROLE_LABELS[item.actorRole] || item.actorRole || "-"}{" "}
-                            {item.actorName || ""}
+                            {item.action} · {FINANCE_ROLE_LABELS[item.actorRole] || item.actorRole || "-"} {item.actorName || ""}
                           </span>
                           <span className="text-slate-400">
                             {formatDisplayDate_(item.createdAt, { withTime: true })}
@@ -2059,6 +2111,70 @@ function FinanceAdminPage({ shared }) {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-900">版本異動紀錄</p>
+                  <p className="mt-1 text-xs text-slate-500">顯示這筆財務申請最近的版本與欄位差異。</p>
+                  <div className="mt-3 space-y-2">
+                    {financeAuditLoading ? (
+                      <p className="text-slate-400">載入中...</p>
+                    ) : financeAuditEvents.length ? (
+                      financeAuditEvents.map((item) => {
+                        const diffEntries = Object.entries(item.diff || {});
+                        return (
+                          <div key={item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
+                                    {item.entityType}
+                                  </span>
+                                  {item.revisionNo ? (
+                                    <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                      r{item.revisionNo}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                                  <span>{item.actorName || item.actorId || 'system'}</span>
+                                  {item.action ? <span>· {item.action}</span> : null}
+                                  <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
+                                </div>
+                                {diffEntries.length ? (
+                                  <div className="mt-2 space-y-1">
+                                    {diffEntries.slice(0, 6).map(([key, value]) => (
+                                      <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
+                                        <span className="font-semibold text-slate-700">{key}</span>
+                                        <span className="mx-1 text-slate-400">:</span>
+                                        <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                        <span className="mx-1 text-slate-400">→</span>
+                                        <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                      </div>
+                                    ))}
+                                    {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                              {item.versionId ? (
+                                <button
+                                  type="button"
+                                  disabled={loading}
+                                  onClick={() => handleRestoreFinanceAuditVersion(item)}
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                                >
+                                  回復到這版
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <p className="text-slate-400">目前沒有異動紀錄。</p>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-500">請先選擇案件。</p>

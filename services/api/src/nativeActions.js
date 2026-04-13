@@ -241,6 +241,119 @@ function toFinanceRequestRow(input) {
   };
 }
 
+function normalizeFinanceRequestRowForClient_(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    type: firstText(raw.type, row && row.type),
+    title: firstText(raw.title, row && row.title),
+    description: firstText(raw.description, row && row.description),
+    categoryType: firstText(raw.categoryType, row && row.category_type),
+    amountEstimated:
+      raw.amountEstimated != null && raw.amountEstimated !== ""
+        ? raw.amountEstimated
+        : row && row.amount_estimated != null
+        ? row.amount_estimated
+        : "",
+    amountActual:
+      raw.amountActual != null && raw.amountActual !== ""
+        ? raw.amountActual
+        : row && row.amount_actual != null
+        ? row.amount_actual
+        : "",
+    currency: firstText(raw.currency, row && row.currency, "TWD"),
+    paymentMethod: firstText(raw.paymentMethod, row && row.payment_method),
+    vendorName: firstText(raw.vendorName, row && row.vendor_name),
+    payeeName: firstText(raw.payeeName, row && row.payee_name),
+    payeeBank: firstText(raw.payeeBank, row && row.payee_bank),
+    payeeBankCode: firstText(raw.payeeBankCode, raw.payeeBank, row && row.payee_bank),
+    payeeAccount: firstText(raw.payeeAccount, row && row.payee_account),
+    relatedPurchaseId: firstText(raw.relatedPurchaseId, row && row.related_purchase_id),
+    noPurchaseReason: firstText(raw.noPurchaseReason, row && row.no_purchase_reason),
+    expectedClearDate: firstText(raw.expectedClearDate, row && row.expected_clear_date),
+    attachments: Array.isArray(raw.attachments) ? raw.attachments : safeJsonArray(row && row.attachments),
+    status: firstText(raw.status, row && row.status),
+    applicantId: firstText(raw.applicantId, row && row.applicant_id),
+    applicantName: firstText(raw.applicantName, row && row.applicant_name),
+    applicantRole: firstText(raw.applicantRole),
+    applicantDepartment: firstText(raw.applicantDepartment, row && row.applicant_department),
+    applicantEmail: normalizeEmail(firstText(raw.applicantEmail)),
+    workflowCreatedByRole: firstText(raw.workflowCreatedByRole),
+    manualCreatedBy: firstText(raw.manualCreatedBy),
+    manualCreatedByName: firstText(raw.manualCreatedByName),
+    manualCreatedAt: firstText(raw.manualCreatedAt),
+    submittedAt: firstText(raw.submittedAt),
+    createdAt: firstText(raw.createdAt, row && row.created_at),
+    updatedAt: firstText(raw.updatedAt, row && row.updated_at),
+    revisionNo: Number((row && row.revision_no) || raw.revisionNo || 0) || 0,
+    lastChangeBatchId: firstText(row && row.last_change_batch_id, raw.lastChangeBatchId),
+    lastChangedAt: asIsoText_(row && row.last_changed_at, raw.lastChangedAt),
+    lastChangedBy: firstText(row && row.last_changed_by, raw.lastChangedBy),
+    lastChangedByName: firstText(row && row.last_changed_by_name, raw.lastChangedByName),
+  };
+}
+
+function buildFinanceRequestRowFromSnapshot_(snapshot = {}, currentRow = null, nextRevision = 1, batchId = "", actor = null) {
+  const currentSnapshot = currentRow ? normalizeFinanceRequestRowForClient_(currentRow) : {};
+  const raw = safeJsonObject(snapshot);
+  const updatedAt = nowIso();
+  const createdAt = firstNonEmptyText(currentSnapshot.createdAt, raw.createdAt, snapshot.createdAt, updatedAt);
+  const applicantEmail = normalizeEmail(firstText(raw.applicantEmail, currentSnapshot.applicantEmail));
+  return {
+    id: firstText(snapshot.id, currentRow && currentRow.id),
+    type: firstText(snapshot.type, currentSnapshot.type),
+    title: firstText(snapshot.title, currentSnapshot.title),
+    description: firstText(snapshot.description, currentSnapshot.description),
+    categoryType: firstText(snapshot.categoryType, currentSnapshot.categoryType),
+    amountEstimated:
+      snapshot.amountEstimated == null || snapshot.amountEstimated === ""
+        ? currentSnapshot.amountEstimated == null || currentSnapshot.amountEstimated === ""
+          ? null
+          : Number(String(currentSnapshot.amountEstimated).replace(/,/g, ""))
+        : Number(String(snapshot.amountEstimated).replace(/,/g, "")),
+    amountActual:
+      snapshot.amountActual == null || snapshot.amountActual === ""
+        ? currentSnapshot.amountActual == null || currentSnapshot.amountActual === ""
+          ? null
+          : Number(String(currentSnapshot.amountActual).replace(/,/g, ""))
+        : Number(String(snapshot.amountActual).replace(/,/g, "")),
+    currency: firstNonEmptyText(snapshot.currency, currentSnapshot.currency, "TWD"),
+    paymentMethod: firstText(snapshot.paymentMethod, currentSnapshot.paymentMethod),
+    vendorName: firstText(snapshot.vendorName, currentSnapshot.vendorName),
+    payeeName: firstText(snapshot.payeeName, currentSnapshot.payeeName),
+    payeeBank: firstNonEmptyText(snapshot.payeeBankCode, snapshot.payeeBank, currentSnapshot.payeeBankCode, currentSnapshot.payeeBank),
+    payeeAccount: firstText(snapshot.payeeAccount, currentSnapshot.payeeAccount),
+    relatedPurchaseId: firstText(snapshot.relatedPurchaseId, currentSnapshot.relatedPurchaseId),
+    noPurchaseReason: firstText(snapshot.noPurchaseReason, currentSnapshot.noPurchaseReason),
+    expectedClearDate: firstText(snapshot.expectedClearDate, currentSnapshot.expectedClearDate),
+    attachments: Array.isArray(snapshot.attachments) ? snapshot.attachments : safeJsonArray(snapshot.attachments || currentSnapshot.attachments),
+    status: firstNonEmptyText(snapshot.status, currentSnapshot.status, "draft"),
+    applicantId: firstText(snapshot.applicantId, currentSnapshot.applicantId),
+    applicantName: firstText(snapshot.applicantName, currentSnapshot.applicantName),
+    applicantDepartment: firstText(snapshot.applicantDepartment, currentSnapshot.applicantDepartment),
+    createdAt,
+    updatedAt,
+    revisionNo: nextRevision,
+    lastChangeBatchId: batchId,
+    lastChangedBy: firstText(actor && actor.actorId),
+    lastChangedByName: firstText(actor && actor.actorName),
+    raw: {
+      ...currentSnapshot,
+      ...raw,
+      id: firstText(snapshot.id, currentRow && currentRow.id),
+      applicantEmail,
+      createdAt,
+      updatedAt,
+      revisionNo: nextRevision,
+      lastChangeBatchId: batchId,
+      lastChangedAt: updatedAt,
+      lastChangedBy: firstText(actor && actor.actorId),
+      lastChangedByName: firstText(actor && actor.actorName),
+    },
+  };
+}
+
 function toOrderPlanRow(input) {
   const raw = safeJsonObject(input);
   const id = firstText(raw.id, crypto.randomUUID());
@@ -1670,47 +1783,7 @@ function buildStudentIdByEmailMap_(rows) {
 }
 
 function mapFinanceRequestRow(row) {
-  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
-  return {
-    ...raw,
-    id: firstText(row && row.id ? row.id : raw.id),
-    type: firstText(raw.type, row && row.type ? row.type : ""),
-    title: firstText(raw.title, row && row.title ? row.title : ""),
-    description: firstText(raw.description, row && row.description ? row.description : ""),
-    categoryType: firstText(raw.categoryType, row && row.category_type ? row.category_type : ""),
-    amountEstimated:
-      raw.amountEstimated != null && raw.amountEstimated !== ""
-        ? raw.amountEstimated
-        : row && row.amount_estimated != null
-        ? row.amount_estimated
-        : "",
-    amountActual:
-      raw.amountActual != null && raw.amountActual !== ""
-        ? raw.amountActual
-        : row && row.amount_actual != null
-        ? row.amount_actual
-        : "",
-    currency: firstText(raw.currency, row && row.currency ? row.currency : "TWD"),
-    paymentMethod: firstText(raw.paymentMethod, row && row.payment_method ? row.payment_method : ""),
-    vendorName: firstText(raw.vendorName, row && row.vendor_name ? row.vendor_name : ""),
-    payeeName: firstText(raw.payeeName, row && row.payee_name ? row.payee_name : ""),
-    payeeBank: firstText(raw.payeeBank, row && row.payee_bank ? row.payee_bank : ""),
-    payeeBankCode: firstText(raw.payeeBankCode, firstText(raw.payeeBank, row && row.payee_bank ? row.payee_bank : "")),
-    payeeAccount: firstText(raw.payeeAccount, row && row.payee_account ? row.payee_account : ""),
-    relatedPurchaseId: firstText(raw.relatedPurchaseId, row && row.related_purchase_id ? row.related_purchase_id : ""),
-    noPurchaseReason: firstText(raw.noPurchaseReason, row && row.no_purchase_reason ? row.no_purchase_reason : ""),
-    expectedClearDate: firstText(raw.expectedClearDate, row && row.expected_clear_date ? row.expected_clear_date : ""),
-    attachments: Array.isArray(raw.attachments) ? raw.attachments : safeJsonArray(row && row.attachments),
-    status: firstText(raw.status, row && row.status ? row.status : ""),
-    applicantId: firstText(raw.applicantId, row && row.applicant_id ? row.applicant_id : ""),
-    applicantName: firstText(raw.applicantName, row && row.applicant_name ? row.applicant_name : ""),
-    applicantRole: firstText(raw.applicantRole),
-    applicantDepartment: firstText(raw.applicantDepartment, row && row.applicant_department ? row.applicant_department : ""),
-    applicantEmail: normalizeEmail(firstText(raw.applicantEmail)),
-    submittedAt: firstText(raw.submittedAt),
-    createdAt: firstText(raw.createdAt, row && row.created_at ? row.created_at : ""),
-    updatedAt: firstText(raw.updatedAt, row && row.updated_at ? row.updated_at : ""),
-  };
+  return normalizeFinanceRequestRowForClient_(row);
 }
 
 function mapFinanceActionRow(row) {
@@ -5275,7 +5348,6 @@ export async function dispatchNativeAction({
     case "createFinanceRequest": {
       requireAuth();
       const row = toFinanceRequestRow(body.data || body.request || body);
-      // lock applicant to current user when not provided
       if (!row.applicantId) {
         row.applicantId = auth.studentId;
       }
@@ -5283,7 +5355,6 @@ export async function dispatchNativeAction({
       if (!row.applicantName && student && student.name) {
         row.applicantName = student.name;
       }
-
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
       const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
       if (!applicantDepartmentCheck.ok) {
@@ -5295,17 +5366,9 @@ export async function dispatchNativeAction({
       if (!normalizedStatus || normalizedStatus === "pending_lead") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
       }
-
       const applicantEmail = normalizeEmail(
-        firstText(
-          student && student.email ? student.email : "",
-          firstText(
-            row.raw && row.raw.applicantEmail,
-            auth && auth.profile && auth.profile.email ? auth.profile.email : ""
-          )
-        )
+        firstText(student && student.email ? student.email : "", firstText(row.raw && row.raw.applicantEmail, auth && auth.profile && auth.profile.email ? auth.profile.email : ""))
       );
-
       row.raw = {
         ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
         id: row.id,
@@ -5331,83 +5394,109 @@ export async function dispatchNativeAction({
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
         applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
-        applicantEmail: applicantEmail,
+        applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
-        submittedAt:
-          row.status !== "draft"
-            ? firstText(row.raw && row.raw.submittedAt, nowIso())
-            : firstText(row.raw && row.raw.submittedAt),
+        submittedAt: row.status !== "draft" ? firstText(row.raw && row.raw.submittedAt, nowIso()) : firstText(row.raw && row.raw.submittedAt),
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
       };
-      await query(
-        `insert into finance_requests (
-          id, type, title, description, category_type,
-          amount_estimated, amount_actual, currency, payment_method,
-          vendor_name, payee_name, payee_bank, payee_account,
-          related_purchase_id, no_purchase_reason, expected_clear_date,
-          attachments, status,
-          applicant_id, applicant_name, applicant_department,
-          created_at, updated_at, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb)
-        on conflict (id) do update set
-          type=excluded.type,
-          title=excluded.title,
-          description=excluded.description,
-          category_type=excluded.category_type,
-          amount_estimated=excluded.amount_estimated,
-          amount_actual=excluded.amount_actual,
-          currency=excluded.currency,
-          payment_method=excluded.payment_method,
-          vendor_name=excluded.vendor_name,
-          payee_name=excluded.payee_name,
-          payee_bank=excluded.payee_bank,
-          payee_account=excluded.payee_account,
-          related_purchase_id=excluded.related_purchase_id,
-          no_purchase_reason=excluded.no_purchase_reason,
-          expected_clear_date=excluded.expected_clear_date,
-          attachments=excluded.attachments,
-          status=excluded.status,
-          applicant_id=excluded.applicant_id,
-          applicant_name=excluded.applicant_name,
-          applicant_department=excluded.applicant_department,
-          updated_at=excluded.updated_at,
-          raw=excluded.raw,
-          synced_at=now()`,
-        [
-          row.id,
-          row.type,
-          row.title,
-          row.description,
-          row.categoryType,
-          row.amountEstimated,
-          row.amountActual,
-          row.currency,
-          row.paymentMethod,
-          row.vendorName,
-          row.payeeName,
-          row.payeeBank,
-          row.payeeAccount,
-          row.relatedPurchaseId,
-          row.noPurchaseReason,
-          row.expectedClearDate,
-          jsonbParam(row.attachments, []),
-          row.status,
-          row.applicantId,
-          row.applicantName,
-          row.applicantDepartment,
-          row.createdAt,
-          row.updatedAt,
-          jsonbParam(row.raw, {}),
-        ]
-      );
-      await claimAttachments(query, {
-        attachmentIds: extractAttachmentIds(row.attachments),
+      const mutation = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "finance_portal",
+        reason: "createFinanceRequest",
         entityType: "finance_request",
         entityId: row.id,
-        uploadedBy: auth.studentId,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
+        mutate: async ({ txQuery, nextRevision, batchId, actor }) => {
+          const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, null, nextRevision, batchId, actor);
+          await txQuery(
+            `insert into finance_requests (
+              id, type, title, description, category_type,
+              amount_estimated, amount_actual, currency, payment_method,
+              vendor_name, payee_name, payee_bank, payee_account,
+              related_purchase_id, no_purchase_reason, expected_clear_date,
+              attachments, status,
+              applicant_id, applicant_name, applicant_department,
+              created_at, updated_at, raw,
+              revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)
+            on conflict (id) do update set
+              type=excluded.type,
+              title=excluded.title,
+              description=excluded.description,
+              category_type=excluded.category_type,
+              amount_estimated=excluded.amount_estimated,
+              amount_actual=excluded.amount_actual,
+              currency=excluded.currency,
+              payment_method=excluded.payment_method,
+              vendor_name=excluded.vendor_name,
+              payee_name=excluded.payee_name,
+              payee_bank=excluded.payee_bank,
+              payee_account=excluded.payee_account,
+              related_purchase_id=excluded.related_purchase_id,
+              no_purchase_reason=excluded.no_purchase_reason,
+              expected_clear_date=excluded.expected_clear_date,
+              attachments=excluded.attachments,
+              status=excluded.status,
+              applicant_id=excluded.applicant_id,
+              applicant_name=excluded.applicant_name,
+              applicant_department=excluded.applicant_department,
+              updated_at=excluded.updated_at,
+              raw=excluded.raw,
+              revision_no=excluded.revision_no,
+              last_change_batch_id=excluded.last_change_batch_id,
+              last_changed_at=excluded.last_changed_at,
+              last_changed_by=excluded.last_changed_by,
+              last_changed_by_name=excluded.last_changed_by_name,
+              synced_at=now()`,
+            [
+              nextRow.id,
+              nextRow.type,
+              nextRow.title,
+              nextRow.description,
+              nextRow.categoryType,
+              nextRow.amountEstimated,
+              nextRow.amountActual,
+              nextRow.currency,
+              nextRow.paymentMethod,
+              nextRow.vendorName,
+              nextRow.payeeName,
+              nextRow.payeeBank,
+              nextRow.payeeAccount,
+              nextRow.relatedPurchaseId,
+              nextRow.noPurchaseReason,
+              nextRow.expectedClearDate,
+              jsonbParam(nextRow.attachments, []),
+              nextRow.status,
+              nextRow.applicantId,
+              nextRow.applicantName,
+              nextRow.applicantDepartment,
+              nextRow.createdAt,
+              nextRow.updatedAt,
+              jsonbParam(nextRow.raw, {}),
+              nextRow.revisionNo,
+              batchId,
+              nextRow.updatedAt,
+              nextRow.lastChangedBy,
+              nextRow.lastChangedByName,
+            ]
+          );
+          await claimAttachments(txQuery, {
+            attachmentIds: extractAttachmentIds(nextRow.attachments),
+            entityType: "finance_request",
+            entityId: nextRow.id,
+            uploadedBy: auth.studentId,
+          });
+        },
+        loadAfter: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [row.id])),
+        buildSnapshot: (current) => normalizeFinanceRequestRowForClient_(current),
+        buildEvent: ({ action, afterSnapshot, changedFields }) => ({
+          summary: action === "create" ? `建立財務申請 ${firstText(afterSnapshot && afterSnapshot.title, row.id)}` : `更新財務申請 ${row.id}`,
+          severity: changedFields.includes("status") ? "warning" : "info",
+        }),
       });
-      return { ok: true, data: { id: row.id }, error: null };
+      return { ok: true, data: { id: row.id, revisionNo: mutation.revisionNo }, error: null };
     }
 
     case "adminCreateFinanceRequest": {
@@ -5422,15 +5511,10 @@ export async function dispatchNativeAction({
       if (!row.applicantName && student && student.name) {
         row.applicantName = student.name;
       }
-
       const now = nowIso();
       const manualCreatedBy = auth.studentId;
-      const manualCreatedByName = firstText(
-        body.manualCreatedByName,
-        firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId)
-      );
+      const manualCreatedByName = firstText(body.manualCreatedByName, firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId));
       const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
-
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
       const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
       if (!applicantDepartmentCheck.ok) {
@@ -5441,11 +5525,7 @@ export async function dispatchNativeAction({
       if (!normalizedStatus || normalizedStatus === "pending_lead") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
       }
-
-      const applicantEmail = normalizeEmail(
-        firstText(student && student.email ? student.email : "", row.raw && row.raw.applicantEmail)
-      );
-
+      const applicantEmail = normalizeEmail(firstText(student && student.email ? student.email : "", row.raw && row.raw.applicantEmail));
       row.raw = {
         ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
         id: row.id,
@@ -5471,87 +5551,92 @@ export async function dispatchNativeAction({
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
         applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
-        applicantEmail: applicantEmail,
+        applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
-        submittedAt:
-          row.status !== "draft"
-            ? firstText(row.raw && row.raw.submittedAt, nowIso())
-            : firstText(row.raw && row.raw.submittedAt),
+        submittedAt: row.status !== "draft" ? firstText(row.raw && row.raw.submittedAt, nowIso()) : firstText(row.raw && row.raw.submittedAt),
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         manualCreatedBy,
         manualCreatedByName,
         manualCreatedAt: now,
       };
-      await query(
-        `insert into finance_requests (
-          id, type, title, description, category_type,
-          amount_estimated, amount_actual, currency, payment_method,
-          vendor_name, payee_name, payee_bank, payee_account,
-          related_purchase_id, no_purchase_reason, expected_clear_date,
-          attachments, status,
-          applicant_id, applicant_name, applicant_department,
-          created_at, updated_at, raw
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb)
-        on conflict (id) do update set
-          type=excluded.type,
-          title=excluded.title,
-          description=excluded.description,
-          category_type=excluded.category_type,
-          amount_estimated=excluded.amount_estimated,
-          amount_actual=excluded.amount_actual,
-          currency=excluded.currency,
-          payment_method=excluded.payment_method,
-          vendor_name=excluded.vendor_name,
-          payee_name=excluded.payee_name,
-          payee_bank=excluded.payee_bank,
-          payee_account=excluded.payee_account,
-          related_purchase_id=excluded.related_purchase_id,
-          no_purchase_reason=excluded.no_purchase_reason,
-          expected_clear_date=excluded.expected_clear_date,
-          attachments=excluded.attachments,
-          status=excluded.status,
-          applicant_id=excluded.applicant_id,
-          applicant_name=excluded.applicant_name,
-          applicant_department=excluded.applicant_department,
-          updated_at=excluded.updated_at,
-          raw=excluded.raw,
-          synced_at=now()`,
-        [
-          row.id,
-          row.type,
-          row.title,
-          row.description,
-          row.categoryType,
-          row.amountEstimated,
-          row.amountActual,
-          row.currency,
-          row.paymentMethod,
-          row.vendorName,
-          row.payeeName,
-          row.payeeBank,
-          row.payeeAccount,
-          row.relatedPurchaseId,
-          row.noPurchaseReason,
-          row.expectedClearDate,
-          jsonbParam(row.attachments, []),
-          row.status,
-          row.applicantId,
-          row.applicantName,
-          row.applicantDepartment,
-          row.createdAt,
-          row.updatedAt,
-          jsonbParam(row.raw, {}),
-        ]
-      );
-      await claimAttachments(query, {
-        attachmentIds: extractAttachmentIds(row.attachments),
+      const mutation = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: "finance_admin",
+        reason: "adminCreateFinanceRequest",
         entityType: "finance_request",
         entityId: row.id,
-        uploadedBy: auth.studentId,
-        allowUnowned: true,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
+        mutate: async ({ txQuery, nextRevision, batchId, actor }) => {
+          const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, null, nextRevision, batchId, actor);
+          await txQuery(
+            `insert into finance_requests (
+              id, type, title, description, category_type,
+              amount_estimated, amount_actual, currency, payment_method,
+              vendor_name, payee_name, payee_bank, payee_account,
+              related_purchase_id, no_purchase_reason, expected_clear_date,
+              attachments, status,
+              applicant_id, applicant_name, applicant_department,
+              created_at, updated_at, raw,
+              revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)
+            on conflict (id) do update set
+              type=excluded.type,
+              title=excluded.title,
+              description=excluded.description,
+              category_type=excluded.category_type,
+              amount_estimated=excluded.amount_estimated,
+              amount_actual=excluded.amount_actual,
+              currency=excluded.currency,
+              payment_method=excluded.payment_method,
+              vendor_name=excluded.vendor_name,
+              payee_name=excluded.payee_name,
+              payee_bank=excluded.payee_bank,
+              payee_account=excluded.payee_account,
+              related_purchase_id=excluded.related_purchase_id,
+              no_purchase_reason=excluded.no_purchase_reason,
+              expected_clear_date=excluded.expected_clear_date,
+              attachments=excluded.attachments,
+              status=excluded.status,
+              applicant_id=excluded.applicant_id,
+              applicant_name=excluded.applicant_name,
+              applicant_department=excluded.applicant_department,
+              updated_at=excluded.updated_at,
+              raw=excluded.raw,
+              revision_no=excluded.revision_no,
+              last_change_batch_id=excluded.last_change_batch_id,
+              last_changed_at=excluded.last_changed_at,
+              last_changed_by=excluded.last_changed_by,
+              last_changed_by_name=excluded.last_changed_by_name,
+              synced_at=now()`,
+            [
+              nextRow.id, nextRow.type, nextRow.title, nextRow.description, nextRow.categoryType,
+              nextRow.amountEstimated, nextRow.amountActual, nextRow.currency, nextRow.paymentMethod,
+              nextRow.vendorName, nextRow.payeeName, nextRow.payeeBank, nextRow.payeeAccount,
+              nextRow.relatedPurchaseId, nextRow.noPurchaseReason, nextRow.expectedClearDate,
+              jsonbParam(nextRow.attachments, []), nextRow.status,
+              nextRow.applicantId, nextRow.applicantName, nextRow.applicantDepartment,
+              nextRow.createdAt, nextRow.updatedAt, jsonbParam(nextRow.raw, {}),
+              nextRow.revisionNo, batchId, nextRow.updatedAt, nextRow.lastChangedBy, nextRow.lastChangedByName,
+            ]
+          );
+          await claimAttachments(txQuery, {
+            attachmentIds: extractAttachmentIds(nextRow.attachments),
+            entityType: "finance_request",
+            entityId: nextRow.id,
+            uploadedBy: auth.studentId,
+            allowUnowned: true,
+          });
+        },
+        loadAfter: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [row.id])),
+        buildSnapshot: (current) => normalizeFinanceRequestRowForClient_(current),
+        buildEvent: ({ action, afterSnapshot }) => ({
+          summary: action === "create" ? `代建財務申請 ${firstText(afterSnapshot && afterSnapshot.title, row.id)}` : `更新財務申請 ${row.id}`,
+          severity: "warning",
+        }),
       });
-      return { ok: true, data: { id: row.id }, error: null };
+      return { ok: true, data: { id: row.id, revisionNo: mutation.revisionNo }, error: null };
     }
 
     case "updateFinanceRequest": {
@@ -5567,123 +5652,113 @@ export async function dispatchNativeAction({
 
       // Workflow transition mode (withdraw/approve/return) - do NOT overwrite the full record.
       if (requestAction && !hasData) {
-        const existingResult = await query(`select * from finance_requests where id = $1 limit 1`, [requestId]);
-        const existingRow = rowOrNull(existingResult);
-        if (!existingRow) {
-          return { ok: false, data: null, error: "Request not found" };
-        }
-
-        const existingRaw = existingRow.raw && typeof existingRow.raw === "object" ? existingRow.raw : {};
-        const existingRecord = mapFinanceRequestRow(existingRow);
-        const fromStatus = String(existingRecord.status || "").trim() || "draft";
-
-        const manualCreatedBy = firstText(existingRaw && typeof existingRaw === "object" ? existingRaw.manualCreatedBy : "");
-        const isOwner =
-          String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim() ||
-          (manualCreatedBy && String(manualCreatedBy).trim() === String(auth.studentId || "").trim());
-
-        let toStatus = fromStatus;
-        let approvalContext = null;
-        if (requestAction === "withdraw") {
-          if (!isOwner) {
-            const error = new Error("Unauthorized");
-            error.statusCode = 403;
-            throw error;
-          }
-          toStatus = "withdrawn";
-        } else if (requestAction === "return" || requestAction === "approve") {
-          const actorRole = firstText(body.actorRole).toLowerCase();
-          if (!actorRole) {
-            const error = new Error("Unauthorized");
-            error.statusCode = 403;
-            throw error;
-          }
-
-          approvalContext = await loadFinanceApprovalContext_();
-          const { memberships, financeRoles, studentIdByEmail } = approvalContext;
-
-          const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
-          const canApprove = canFinanceActorApprove_(
-            existingRecord,
-            actorRole,
-            auth.studentId,
-            actorEmail,
-            memberships,
-            financeRoles,
-            studentIdByEmail
-          );
-          if (!canApprove) {
-            const error = new Error("Unauthorized");
-            error.statusCode = 403;
-            throw error;
-          }
-
-          if (requestAction === "return") {
-            toStatus = "returned";
-          } else {
-            toStatus = resolveFinanceNextStatus_(existingRecord, actorRole, financeRoles, studentIdByEmail);
-          }
-        } else {
-          return { ok: false, data: null, error: `Unsupported requestAction: ${requestAction}` };
-        }
-
-        const now = nowIso();
-        const resolvedApplicantRole =
-          approvalContext && !firstText(existingRaw.applicantRole)
-            ? resolveApplicantGroupRoleByMemberships_(existingRecord, approvalContext.memberships, approvalContext.studentIdByEmail)
-            : "";
-        const nextRaw = {
-          ...existingRaw,
-          status: toStatus,
-          applicantRole: firstText(existingRaw.applicantRole, resolvedApplicantRole),
-          updatedAt: now,
-        };
-
-        await query(
-          `update finance_requests set status=$2, updated_at=$3, raw=$4::jsonb, synced_at=now() where id=$1`,
-          [requestId, toStatus, now, jsonbParam(nextRaw, {})]
-        );
-
-        // Record workflow action for approvals UI.
-        const actionId = crypto.randomUUID();
-        const actorName = firstText(
-          body.actorName,
-          firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId)
-        );
-        const actorRole = firstText(body.actorRole);
-        const notes = firstText(body.actorNote, body.notes);
-        const actionRaw = {
-          id: actionId,
-          requestId: requestId,
-          actorId: auth.studentId,
-          actorName: actorName,
-          actorRole: actorRole,
-          action: requestAction,
-          actionType: requestAction,
-          fromStatus: fromStatus,
-          toStatus: toStatus,
-          notes: notes,
-          createdAt: now,
-        };
-        await query(
-          `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
-           on conflict (id) do nothing`,
-          [
-            actionId,
-            requestId,
-            auth.studentId,
-            actorName,
-            requestAction,
-            fromStatus,
-            toStatus,
-            notes,
-            now,
-            jsonbParam(actionRaw, {}),
-          ]
-        );
-
-        return { ok: true, data: { id: requestId, status: toStatus }, error: null };
+        const mutation = await applyVersionedMutation({
+          withTransaction,
+          actor: auth,
+          source: "finance_workflow",
+          reason: `updateFinanceRequest:${requestAction}`,
+          entityType: "finance_request",
+          entityId: requestId,
+          expectedRevision: body.expectedRevision,
+          loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [requestId])),
+          mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+            if (!current) {
+              return { returnValue: { id: requestId, status: "" }, after: null };
+            }
+            const existingRaw = current.raw && typeof current.raw === "object" ? current.raw : {};
+            const existingRecord = mapFinanceRequestRow(current);
+            const fromStatus = String(existingRecord.status || "").trim() || "draft";
+            const manualCreatedBy = firstText(existingRaw && typeof existingRaw === "object" ? existingRaw.manualCreatedBy : "");
+            const isOwner =
+              String(existingRecord.applicantId || "").trim() === String(auth.studentId || "").trim() ||
+              (manualCreatedBy && String(manualCreatedBy).trim() === String(auth.studentId || "").trim());
+            let toStatus = fromStatus;
+            let approvalContext = null;
+            if (requestAction === "withdraw") {
+              if (!isOwner) {
+                const error = new Error("Unauthorized");
+                error.statusCode = 403;
+                throw error;
+              }
+              toStatus = "withdrawn";
+            } else if (requestAction === "return" || requestAction === "approve") {
+              const actorRole = firstText(body.actorRole).toLowerCase();
+              if (!actorRole) {
+                const error = new Error("Unauthorized");
+                error.statusCode = 403;
+                throw error;
+              }
+              approvalContext = await loadFinanceApprovalContext_();
+              const { memberships, financeRoles, studentIdByEmail } = approvalContext;
+              const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+              const canApprove = canFinanceActorApprove_(existingRecord, actorRole, auth.studentId, actorEmail, memberships, financeRoles, studentIdByEmail);
+              if (!canApprove) {
+                const error = new Error("Unauthorized");
+                error.statusCode = 403;
+                throw error;
+              }
+              toStatus = requestAction === "return" ? "returned" : resolveFinanceNextStatus_(existingRecord, actorRole, financeRoles, studentIdByEmail);
+            } else {
+              return { returnValue: { id: requestId, status: fromStatus }, after: current };
+            }
+            const now = nowIso();
+            const resolvedApplicantRole =
+              approvalContext && !firstText(existingRaw.applicantRole)
+                ? resolveApplicantGroupRoleByMemberships_(existingRecord, approvalContext.memberships, approvalContext.studentIdByEmail)
+                : "";
+            const nextRaw = {
+              ...existingRaw,
+              status: toStatus,
+              applicantRole: firstText(existingRaw.applicantRole, resolvedApplicantRole),
+              updatedAt: now,
+              revisionNo: nextRevision,
+              lastChangeBatchId: batchId,
+              lastChangedAt: now,
+              lastChangedBy: actor.actorId,
+              lastChangedByName: actor.actorName,
+            };
+            await txQuery(
+              `update finance_requests
+                  set status=$2, updated_at=$3, raw=$4::jsonb,
+                      revision_no=$5, last_change_batch_id=$6, last_changed_at=$7, last_changed_by=$8, last_changed_by_name=$9,
+                      synced_at=now()
+                where id=$1`,
+              [requestId, toStatus, now, jsonbParam(nextRaw, {}), nextRevision, batchId, now, actor.actorId, actor.actorName]
+            );
+            const actionId = crypto.randomUUID();
+            const actorName = firstText(body.actorName, firstText(auth.profile && auth.profile.name ? auth.profile.name : "", auth.studentId));
+            const actorRole = firstText(body.actorRole);
+            const notes = firstText(body.actorNote, body.notes);
+            const actionRaw = {
+              id: actionId,
+              requestId,
+              actorId: auth.studentId,
+              actorName,
+              actorRole,
+              action: requestAction,
+              actionType: requestAction,
+              fromStatus,
+              toStatus,
+              notes,
+              createdAt: now,
+            };
+            await txQuery(
+              `insert into finance_actions (id, request_id, actor_id, actor_name, action_type, from_status, to_status, notes, created_at, raw)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)
+               on conflict (id) do nothing`,
+              [actionId, requestId, auth.studentId, actorName, requestAction, fromStatus, toStatus, notes, now, jsonbParam(actionRaw, {})]
+            );
+            const after = rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [requestId]));
+            return { action: "update", after, returnValue: { id: requestId, status: toStatus } };
+          },
+          loadAfter: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [requestId])),
+          buildSnapshot: (current) => normalizeFinanceRequestRowForClient_(current),
+          buildEvent: ({ changedFields, afterSnapshot }) => ({
+            summary: `${requestAction === "approve" ? "核准" : requestAction === "return" ? "退回" : "撤回"}財務申請 ${firstText(afterSnapshot && afterSnapshot.title, requestId)}`,
+            severity: changedFields.includes("status") ? "warning" : "info",
+          }),
+        });
+        return { ok: true, data: { id: requestId, status: mutation.returnValue && mutation.returnValue.status ? mutation.returnValue.status : "" }, error: null };
       }
 
       // Full update mode (draft/update/submit): update the full record.
@@ -5692,7 +5767,6 @@ export async function dispatchNativeAction({
       if (!row.id) {
         return { ok: false, data: null, error: "Missing id" };
       }
-
       const existing = await query(`select * from finance_requests where id = $1 limit 1`, [row.id]);
       const existingRow = rowOrNull(existing);
       const existingRecord = existingRow ? mapFinanceRequestRow(existingRow) : null;
@@ -5712,17 +5786,12 @@ export async function dispatchNativeAction({
         error.statusCode = 403;
         throw error;
       }
-
       row.applicantId = firstText(row.applicantId, existingRecord && existingRecord.applicantId ? existingRecord.applicantId : auth.studentId);
-      row.applicantDepartment = firstText(
-        row.applicantDepartment,
-        existingRecord && existingRecord.applicantDepartment ? existingRecord.applicantDepartment : ""
-      );
+      row.applicantDepartment = firstText(row.applicantDepartment, existingRecord && existingRecord.applicantDepartment ? existingRecord.applicantDepartment : "");
       const applicantProfile = await findStudentProfileById(row.applicantId);
       if (!row.applicantName && applicantProfile && applicantProfile.name) {
         row.applicantName = applicantProfile.name;
       }
-
       const applicantMemberships = await listMembershipsByStudentId(row.applicantId);
       const applicantDepartmentCheck = ensureFinanceApplicantDepartmentAllowed_(row, applicantMemberships);
       if (!applicantDepartmentCheck.ok) {
@@ -5734,24 +5803,10 @@ export async function dispatchNativeAction({
       if (normalizedAction === "submit" || !normalizedStatus || normalizedStatus === "pending_lead") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
       }
-
       const applicantEmail = normalizeEmail(
-        firstText(
-          applicantProfile && applicantProfile.email ? applicantProfile.email : "",
-          firstText(
-            row.raw && row.raw.applicantEmail,
-            firstText(
-              existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "",
-              auth && auth.profile && auth.profile.email ? auth.profile.email : ""
-            )
-          )
-        )
+        firstText(applicantProfile && applicantProfile.email ? applicantProfile.email : "", firstText(row.raw && row.raw.applicantEmail, firstText(existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "", auth && auth.profile && auth.profile.email ? auth.profile.email : "")))
       );
-      const workflowCreatedByRole = firstText(
-        existingRaw.workflowCreatedByRole,
-        await resolveFinanceWorkflowRoleForActor_(query, manualCreatedBy)
-      );
-
+      const workflowCreatedByRole = firstText(existingRaw.workflowCreatedByRole, await resolveFinanceWorkflowRoleForActor_(query, manualCreatedBy));
       row.raw = {
         ...((existingRow && existingRow.raw && typeof existingRow.raw === "object" && existingRow.raw) || {}),
         ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
@@ -5777,66 +5832,234 @@ export async function dispatchNativeAction({
         applicantId: row.applicantId,
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
-        applicantRole: firstText(
-          row.raw && row.raw.applicantRole,
-          firstText(existingRecord && existingRecord.applicantRole ? existingRecord.applicantRole : "", applicantRole)
-        ),
-        applicantEmail: applicantEmail,
+        applicantRole: firstText(row.raw && row.raw.applicantRole, firstText(existingRecord && existingRecord.applicantRole ? existingRecord.applicantRole : "", applicantRole)),
+        applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
           normalizedAction === "submit" || row.status !== "draft"
-            ? firstText(
-                row.raw && row.raw.submittedAt,
-                firstText(existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : "", nowIso())
-              )
+            ? firstText(row.raw && row.raw.submittedAt, firstText(existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : "", nowIso()))
             : firstText(row.raw && row.raw.submittedAt, existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : ""),
         createdAt: firstText(existingRecord && existingRecord.createdAt ? existingRecord.createdAt : "", row.createdAt),
         updatedAt: row.updatedAt,
       };
-      await query(
-        `update finance_requests set
-          type=$2,title=$3,description=$4,category_type=$5,
-          amount_estimated=$6,amount_actual=$7,currency=$8,payment_method=$9,
-          vendor_name=$10,payee_name=$11,payee_bank=$12,payee_account=$13,
-          related_purchase_id=$14,no_purchase_reason=$15,expected_clear_date=$16,
-          attachments=$17::jsonb,status=$18,
-          applicant_id=$19,applicant_name=$20,applicant_department=$21,
-          updated_at=$22,raw=$23::jsonb,synced_at=now()
-        where id=$1`,
-        [
-          row.id,
-          row.type,
-          row.title,
-          row.description,
-          row.categoryType,
-          row.amountEstimated,
-          row.amountActual,
-          row.currency,
-          row.paymentMethod,
-          row.vendorName,
-          row.payeeName,
-          row.payeeBank,
-          row.payeeAccount,
-          row.relatedPurchaseId,
-          row.noPurchaseReason,
-          row.expectedClearDate,
-          jsonbParam(row.attachments, []),
-          row.status,
-          row.applicantId,
-          row.applicantName,
-          row.applicantDepartment,
-          row.updatedAt,
-          jsonbParam(row.raw, {}),
-        ]
-      );
-      await claimAttachments(query, {
-        attachmentIds: extractAttachmentIds(row.attachments),
+      const mutation = await applyVersionedMutation({
+        withTransaction,
+        actor: auth,
+        source: isAdmin ? "finance_admin" : "finance_portal",
+        reason: `updateFinanceRequest:${normalizedAction || 'save'}`,
         entityType: "finance_request",
         entityId: row.id,
-        uploadedBy: auth.studentId,
-        allowUnowned: true,
+        expectedRevision: body.expectedRevision,
+        loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
+        mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, current, nextRevision, batchId, actor);
+          await txQuery(
+            `update finance_requests set
+              type=$2,title=$3,description=$4,category_type=$5,
+              amount_estimated=$6,amount_actual=$7,currency=$8,payment_method=$9,
+              vendor_name=$10,payee_name=$11,payee_bank=$12,payee_account=$13,
+              related_purchase_id=$14,no_purchase_reason=$15,expected_clear_date=$16,
+              attachments=$17::jsonb,status=$18,
+              applicant_id=$19,applicant_name=$20,applicant_department=$21,
+              updated_at=$22,raw=$23::jsonb,
+              revision_no=$24,last_change_batch_id=$25,last_changed_at=$26,last_changed_by=$27,last_changed_by_name=$28,
+              synced_at=now()
+            where id=$1`,
+            [
+              row.id,
+              nextRow.type,
+              nextRow.title,
+              nextRow.description,
+              nextRow.categoryType,
+              nextRow.amountEstimated,
+              nextRow.amountActual,
+              nextRow.currency,
+              nextRow.paymentMethod,
+              nextRow.vendorName,
+              nextRow.payeeName,
+              nextRow.payeeBank,
+              nextRow.payeeAccount,
+              nextRow.relatedPurchaseId,
+              nextRow.noPurchaseReason,
+              nextRow.expectedClearDate,
+              jsonbParam(nextRow.attachments, []),
+              nextRow.status,
+              nextRow.applicantId,
+              nextRow.applicantName,
+              nextRow.applicantDepartment,
+              nextRow.updatedAt,
+              jsonbParam(nextRow.raw, {}),
+              nextRow.revisionNo,
+              batchId,
+              nextRow.updatedAt,
+              nextRow.lastChangedBy,
+              nextRow.lastChangedByName,
+            ]
+          );
+          await claimAttachments(txQuery, {
+            attachmentIds: extractAttachmentIds(nextRow.attachments),
+            entityType: "finance_request",
+            entityId: row.id,
+            uploadedBy: auth.studentId,
+            allowUnowned: true,
+          });
+        },
+        loadAfter: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [row.id])),
+        buildSnapshot: (current) => normalizeFinanceRequestRowForClient_(current),
+        buildEvent: ({ changedFields, afterSnapshot }) => ({
+          summary: normalizedAction === "submit" ? `送出財務申請 ${firstText(afterSnapshot && afterSnapshot.title, row.id)}` : `更新財務申請 ${firstText(afterSnapshot && afterSnapshot.title, row.id)}`,
+          severity: changedFields.includes("status") || changedFields.includes("amountActual") || changedFields.includes("amountEstimated") ? "warning" : "info",
+        }),
       });
-      return { ok: true, data: { id: row.id }, error: null };
+      return { ok: true, data: { id: row.id, revisionNo: mutation.revisionNo }, error: null };
+    }
+
+    case "listFinanceAuditEvents": {
+      requireAuth();
+      const requestId = firstText(body.requestId || body.id);
+      if (!requestId) {
+        return { ok: true, data: { events: [] }, error: null };
+      }
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const isAdmin = canAccessByGroups(memberships, ["D", "E"]);
+      if (!isAdmin) {
+        const requestResult = await query(`select * from finance_requests where id = $1 limit 1`, [requestId]);
+        const requestRow = rowOrNull(requestResult);
+        if (!requestRow) {
+          return { ok: true, data: { events: [] }, error: null };
+        }
+        const canView = await canViewFinanceRequest_(mapFinanceRequestRow(requestRow));
+        if (!canView) {
+          const error = new Error("Unauthorized");
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+      const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
+      const result = await query(
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+           from audit_events e
+           left join audit_entity_versions v
+             on v.batch_id = e.batch_id
+            and v.entity_type = e.entity_type
+            and v.entity_id = e.entity_id
+            and v.action = e.action
+          where e.entity_type = 'finance_request' and e.entity_id = $1
+          order by e.created_at desc
+          limit $2`,
+        [requestId, limit]
+      );
+      const events = result.rows.map((row) => ({
+        id: firstText(row.id),
+        batchId: firstText(row.batch_id),
+        versionId: firstText(row.version_id),
+        revisionNo: row.version_revision_no != null ? Number(row.version_revision_no) || 0 : 0,
+        entityType: firstText(row.entity_type),
+        entityId: firstText(row.entity_id),
+        action: firstText(row.action),
+        actorId: firstText(row.actor_id),
+        actorName: firstText(row.actor_name),
+        summary: firstText(row.summary),
+        severity: firstText(row.severity, 'info'),
+        createdAt: asIsoText_(row.created_at),
+        diff: safeJsonObject(row.diff),
+      }));
+      return { ok: true, data: { events }, error: null };
+    }
+
+    case "restoreFinanceAuditVersion": {
+      await requireGroupAccess(["D", "E"]);
+      const versionId = firstText(body.versionId || body.id);
+      if (!versionId) {
+        return { ok: false, data: null, error: "Missing versionId" };
+      }
+      const result = await withTransaction(async (client) => {
+        const txQuery = (text, params = []) => client.query(text, params);
+        const actorInfo = { actorId: firstText(auth && auth.studentId), actorName: firstText(auth && auth.profile && auth.profile.name, auth && auth.studentId), actorEmail: firstText(auth && auth.profile && auth.profile.email) };
+        const versionRow = rowOrNull(await txQuery(`select * from audit_entity_versions where id = $1 limit 1 for update`, [versionId]));
+        if (!versionRow || firstText(versionRow.entity_type) !== 'finance_request') {
+          return { ok: false, data: null, error: "Version not found" };
+        }
+        const targetSnapshot = safeJsonObject(versionRow.after_data);
+        if (!Object.keys(targetSnapshot).length) {
+          return { ok: false, data: null, error: "Version snapshot is empty" };
+        }
+        const requestId = firstText(versionRow.entity_id, targetSnapshot.id);
+        const batchId = `audit_batch:${crypto.randomUUID()}`;
+        const createdAt = nowIso();
+        await txQuery(
+          `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [batchId, 'finance_admin', actorInfo.actorId, actorInfo.actorName, actorInfo.actorEmail, 'restoreFinanceAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
+        );
+        const currentRow = rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [requestId]));
+        const currentSnapshot = currentRow ? normalizeFinanceRequestRowForClient_(currentRow) : {};
+        const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
+        const nextRow = buildFinanceRequestRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, actorInfo);
+        await txQuery(
+          `insert into finance_requests (
+            id, type, title, description, category_type,
+            amount_estimated, amount_actual, currency, payment_method,
+            vendor_name, payee_name, payee_bank, payee_account,
+            related_purchase_id, no_purchase_reason, expected_clear_date,
+            attachments, status,
+            applicant_id, applicant_name, applicant_department,
+            created_at, updated_at, raw,
+            revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
+          ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)
+          on conflict (id) do update set
+            type=excluded.type, title=excluded.title, description=excluded.description, category_type=excluded.category_type,
+            amount_estimated=excluded.amount_estimated, amount_actual=excluded.amount_actual, currency=excluded.currency, payment_method=excluded.payment_method,
+            vendor_name=excluded.vendor_name, payee_name=excluded.payee_name, payee_bank=excluded.payee_bank, payee_account=excluded.payee_account,
+            related_purchase_id=excluded.related_purchase_id, no_purchase_reason=excluded.no_purchase_reason, expected_clear_date=excluded.expected_clear_date,
+            attachments=excluded.attachments, status=excluded.status,
+            applicant_id=excluded.applicant_id, applicant_name=excluded.applicant_name, applicant_department=excluded.applicant_department,
+            updated_at=excluded.updated_at, raw=excluded.raw,
+            revision_no=excluded.revision_no, last_change_batch_id=excluded.last_change_batch_id, last_changed_at=excluded.last_changed_at,
+            last_changed_by=excluded.last_changed_by, last_changed_by_name=excluded.last_changed_by_name,
+            synced_at=now()`,
+          [
+            nextRow.id, nextRow.type, nextRow.title, nextRow.description, nextRow.categoryType,
+            nextRow.amountEstimated, nextRow.amountActual, nextRow.currency, nextRow.paymentMethod,
+            nextRow.vendorName, nextRow.payeeName, nextRow.payeeBank, nextRow.payeeAccount,
+            nextRow.relatedPurchaseId, nextRow.noPurchaseReason, nextRow.expectedClearDate,
+            jsonbParam(nextRow.attachments, []), nextRow.status,
+            nextRow.applicantId, nextRow.applicantName, nextRow.applicantDepartment,
+            nextRow.createdAt, nextRow.updatedAt, jsonbParam(nextRow.raw, {}),
+            nextRow.revisionNo, batchId, nextRow.updatedAt, nextRow.lastChangedBy, nextRow.lastChangedByName,
+          ]
+        );
+        await claimAttachments(txQuery, {
+          attachmentIds: extractAttachmentIds(nextRow.attachments),
+          entityType: 'finance_request',
+          entityId: nextRow.id,
+          uploadedBy: actorInfo.actorId,
+          allowUnowned: true,
+        });
+        const afterRow = rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1`, [requestId]));
+        const afterSnapshot = afterRow ? normalizeFinanceRequestRowForClient_(afterRow) : targetSnapshot;
+        const { changedFields, diff } = diffSnapshotsForAudit_(currentSnapshot, afterSnapshot);
+        const newVersionId = `audit_version:${crypto.randomUUID()}`;
+        const eventAuditId = `audit_event:${crypto.randomUUID()}`;
+        await txQuery(
+          `insert into audit_entity_versions (id, batch_id, entity_type, entity_id, action, revision_no, before_data, after_data, changed_fields, source_updated_at, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14::jsonb)`,
+          [newVersionId, batchId, 'finance_request', requestId, 'restore', nextRevision, jsonbParam(currentSnapshot, {}), jsonbParam(afterSnapshot, {}), changedFields, nextRow.updatedAt, actorInfo.actorId, actorInfo.actorName, nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId, diff }, {})]
+        );
+        await txQuery(
+          `insert into audit_events (id, batch_id, entity_type, entity_id, action, actor_id, actor_name, summary, diff, severity, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12::jsonb)`,
+          [eventAuditId, batchId, 'finance_request', requestId, 'restore', actorInfo.actorId, actorInfo.actorName, `回復財務申請 ${firstText(afterSnapshot.title, requestId)}`, jsonbParam(diff, {}), 'warning', nextRow.updatedAt, jsonbParam({ restoredFromVersionId: versionId }, {})]
+        );
+        await txQuery(
+          `insert into audit_restores (id, restore_batch_id, target_entity_type, target_entity_id, restored_from_version_id, previous_revision_no, restored_revision_no, actor_id, actor_name, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
+          [`audit_restore:${crypto.randomUUID()}`, batchId, 'finance_request', requestId, versionId, currentRow ? Number(currentRow.revision_no || 1) : null, nextRevision, actorInfo.actorId, actorInfo.actorName, nextRow.updatedAt, jsonbParam({}, {})]
+        );
+        await txQuery(`update audit_change_batches set status = 'committed', committed_at = $2 where id = $1`, [batchId, nextRow.updatedAt]);
+        return { ok: true, data: { request: afterSnapshot, batchId, revisionNo: nextRevision }, error: null };
+      });
+      return result;
     }
 
     case "listFinanceRequests": {
