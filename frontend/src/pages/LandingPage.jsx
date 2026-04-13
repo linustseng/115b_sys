@@ -160,6 +160,21 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }));
   const [birthdaySummaryLoaded, setBirthdaySummaryLoaded] = useState(false);
   const [birthdaySummaryError, setBirthdaySummaryError] = useState("");
+  const shouldDowngradeToReauthState_ = (message) => {
+    const normalized = String(message || "").trim();
+    const lower = normalized.toLowerCase();
+    return Boolean(
+      normalized === "Unauthorized" ||
+        normalized.includes("登入已過期") ||
+        normalized.includes("重新登入") ||
+        normalized.includes("請重新") ||
+        lower.includes("invalid google token") ||
+        lower.includes("google 驗證失敗") ||
+        lower.includes("silent login unavailable") ||
+        lower.includes("no credential") ||
+        lower.includes("fedcm")
+    );
+  };
   const downgradeToReauthState_ = () => {
     setAuthRestoreResolved(false);
     storeGoogleIdToken_("");
@@ -360,7 +375,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               return;
             }
             if (!result || !result.ok) {
-              if (String((result && result.error) || "") === "Unauthorized") {
+              if (shouldDowngradeToReauthState_(String((result && result.error) || ""))) {
                 downgradeToReauthState_();
               }
               return;
@@ -409,7 +424,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           return;
         }
         const message = String((error && error.message) || "通知載入失敗");
-        if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
+        if (shouldDowngradeToReauthState_(message)) {
           downgradeToReauthState_();
           return;
         }
@@ -446,7 +461,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         if (result && result.ok) {
           setSoftballAdminAllowed(Boolean(result.data && result.data.allowed));
         } else {
-          if (String((result && result.error) || "") === "Unauthorized") {
+          if (shouldDowngradeToReauthState_(String((result && result.error) || ""))) {
             downgradeToReauthState_();
             return;
           }
