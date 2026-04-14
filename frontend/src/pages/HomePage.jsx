@@ -401,9 +401,15 @@ function HomePage({
   };
 
   const handleLookup = async (emailValue) => {
+    if (!effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email) {
+      setLookupError("請先使用 Google 登入後再查詢我的報名紀錄。");
+      setMyRegistrations([]);
+      setCheckinStatuses({});
+      return;
+    }
     const normalizedEmail = String(emailValue || "").trim().toLowerCase();
     if (!normalizedEmail) {
-      setLookupError("請先輸入 Email 以查詢報名紀錄。");
+      setLookupError("請先使用 Google 登入後再查詢我的報名紀錄。");
       setMyRegistrations([]);
       setCheckinStatuses({});
       return;
@@ -467,7 +473,7 @@ function HomePage({
             <div>
               <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
               <p className="mt-2 text-sm text-slate-500">
-                用 Email 查詢報名紀錄。活動列表僅限登入後查看。
+                請先登入 Google 後查詢自己的報名紀錄。活動列表僅限登入後查看。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -511,16 +517,16 @@ function HomePage({
                   autoComplete="email"
                   autoCapitalize="none"
                   autoCorrect="off"
-                  disabled={Boolean(effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email)}
+                  disabled={!effectiveGoogleLinkedStudent || Boolean(effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email)}
                   className="input-base"
                 />
               </div>
               <button
                 onClick={() => handleLookup(lookupEmail)}
-                disabled={lookupLoading}
+                disabled={lookupLoading || !effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email}
                 className="btn-primary"
               >
-                {lookupLoading ? "查詢中..." : "查詢我的報名"}
+                {lookupLoading ? "查詢中..." : effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email ? "查詢我的報名" : "請先登入後查詢"}
               </button>
               {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email ? (
                 <a
