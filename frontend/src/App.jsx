@@ -3381,6 +3381,8 @@ function AppShell() {
         formatEventSchedule_={formatEventSchedule_}
         getCategoryLabel_={getCategoryLabel_}
         loadStoredGoogleStudent_={loadStoredGoogleStudent_}
+        loadStoredGoogleIdToken_={loadStoredGoogleIdToken_}
+        loadStoredAdminSession_={loadStoredAdminSession_}
         GoogleSigninPanel={GoogleSigninPanel}
       />
     );

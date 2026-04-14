@@ -16,6 +16,7 @@ function RegistrationPage({ shared }) {
     loadCachedEventInfo_,
     saveCachedEventInfo_,
     loadStoredGoogleStudent_,
+    loadStoredGoogleIdToken_,
     storeGoogleStudent_,
     hasDrinkSelection_,
     normalizeCustomFieldsForSubmit_,
@@ -79,6 +80,28 @@ function RegistrationPage({ shared }) {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitSuccessType, setSubmitSuccessType] = useState("");
   const bootstrapCacheRef = useRef({});
+  const hasUsableGoogleAuth_ = () => {
+    try {
+      const rawSession = window.localStorage.getItem("emba115b.adminSession");
+      const session = rawSession ? JSON.parse(rawSession) : null;
+      const hasSession = Boolean(
+        session && (String(session.refreshToken || "").trim() || String(session.token || "").trim())
+      );
+      const hasIdToken = Boolean(
+        typeof loadStoredGoogleIdToken_ === "function"
+          ? String(loadStoredGoogleIdToken_() || "").trim()
+          : ""
+      );
+      return hasSession || hasIdToken;
+    } catch (error) {
+      return false;
+    }
+  };
+  const canLookupProtectedProfile = hasUsableGoogleAuth_();
+  const effectiveGoogleLinkedStudent =
+    googleLinkedStudent && googleLinkedStudent.email && canLookupProtectedProfile
+      ? googleLinkedStudent
+      : null;
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
   const registrationDeadlineLabel = eventInfo.registrationCloseAt
@@ -86,29 +109,29 @@ function RegistrationPage({ shared }) {
     : "-";
 
   useEffect(() => {
-    if (!googleLinkedStudent) {
+    if (!effectiveGoogleLinkedStudent) {
       return;
     }
-    const hasEmail = Boolean(googleLinkedStudent.email);
-    setEmail(googleLinkedStudent.email || "");
+    const hasEmail = Boolean(effectiveGoogleLinkedStudent.email);
+    setEmail(effectiveGoogleLinkedStudent.email || "");
     setStudent({
-      name: googleLinkedStudent.name || "",
-      company: googleLinkedStudent.company || "",
-      title: googleLinkedStudent.title || "",
-      phone: normalizePhoneInputValue_(googleLinkedStudent.phone),
-      dietaryPreference: googleLinkedStudent.dietaryPreference || "",
+      name: effectiveGoogleLinkedStudent.name || "",
+      company: effectiveGoogleLinkedStudent.company || "",
+      title: effectiveGoogleLinkedStudent.title || "",
+      phone: normalizePhoneInputValue_(effectiveGoogleLinkedStudent.phone),
+      dietaryPreference: effectiveGoogleLinkedStudent.dietaryPreference || "",
     });
     setCustomFields((prev) =>
       prev.dietary
         ? prev
         : {
             ...prev,
-            dietary: googleLinkedStudent.dietaryPreference || prev.dietary || "無禁忌",
+            dietary: effectiveGoogleLinkedStudent.dietaryPreference || prev.dietary || "無禁忌",
           }
     );
     setAutoFilled(hasEmail);
     setLookupStatus(hasEmail ? "found" : "idle");
-  }, [googleLinkedStudent]);
+  }, [effectiveGoogleLinkedStudent]);
 
   useEffect(() => {
     setCustomFields((prev) => {
@@ -199,7 +222,7 @@ function RegistrationPage({ shared }) {
 
   const loadExistingRegistration = async (emailValue) => {
     const normalized = String(emailValue || "").trim().toLowerCase();
-    if (!normalized || !eventId) {
+    if (!normalized || !eventId || !canLookupProtectedProfile) {
       setExistingRegistration(null);
       return "none";
     }
@@ -227,14 +250,14 @@ function RegistrationPage({ shared }) {
   };
 
   useEffect(() => {
-    if (!googleLinkedStudent || !googleLinkedStudent.email) {
+    if (!effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email) {
       return;
     }
     const needsDirectory =
-      !googleLinkedStudent.company &&
-      !googleLinkedStudent.title &&
-      !googleLinkedStudent.phone &&
-      !googleLinkedStudent.group;
+      !effectiveGoogleLinkedStudent.company &&
+      !effectiveGoogleLinkedStudent.title &&
+      !effectiveGoogleLinkedStudent.phone &&
+      !effectiveGoogleLinkedStudent.group;
     if (!needsDirectory) {
       return;
     }
@@ -243,7 +266,7 @@ function RegistrationPage({ shared }) {
       try {
         const { result } = await apiRequest({
           action: "lookupStudent",
-          email: String(googleLinkedStudent.email || "").trim().toLowerCase(),
+          email: String(effectiveGoogleLinkedStudent.email || "").trim().toLowerCase(),
         });
         if (!result.ok) {
           throw new Error(result.error || "Student not found");
@@ -263,7 +286,7 @@ function RegistrationPage({ shared }) {
     return () => {
       ignore = true;
     };
-  }, [googleLinkedStudent]);
+  }, [effectiveGoogleLinkedStudent]);
 
   const handleEmailChange = (value) => {
     const normalized = value.toLowerCase();
@@ -298,7 +321,7 @@ function RegistrationPage({ shared }) {
       try {
         const normalizedEmail = String(email || "").trim().toLowerCase();
         const payload = { action: "getRegistrationBootstrap", eventId: eventId };
-        if (normalizedEmail) {
+        if (normalizedEmail && canLookupProtectedProfile) {
           payload.email = normalizedEmail;
         }
         const { result } = await apiRequest(payload);
@@ -322,7 +345,7 @@ function RegistrationPage({ shared }) {
           };
           setEventInfo(nextEventInfo);
           saveCachedEventInfo_(eventId, nextEventInfo);
-          if (normalizedEmail) {
+          if (normalizedEmail && canLookupProtectedProfile) {
             const cacheKey = `${eventId}::${normalizedEmail}`;
             bootstrapCacheRef.current[cacheKey] = { ts: Date.now(), data: result.data };
             const status = applyBootstrapRegistrationData_(result.data);
@@ -363,6 +386,11 @@ function RegistrationPage({ shared }) {
       if (!normalized) {
         setLookupStatus("idle");
       }
+      return;
+    }
+    if (!canLookupProtectedProfile) {
+      setExistingRegistration(null);
+      setLookupStatus("idle");
       return;
     }
     let ignore = false;
@@ -428,8 +456,8 @@ function RegistrationPage({ shared }) {
     setSubmitLoading(true);
     try {
       const linkedStudentId =
-        googleLinkedStudent && googleLinkedStudent.id
-          ? String(googleLinkedStudent.id || "").trim()
+        effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.id
+          ? String(effectiveGoogleLinkedStudent.id || "").trim()
           : "";
       const payloadCustomFields = normalizeCustomFieldsForSubmit_(
         customFields,
@@ -479,8 +507,8 @@ function RegistrationPage({ shared }) {
     setSubmitSuccessType("");
     try {
       const linkedStudentId =
-        googleLinkedStudent && googleLinkedStudent.id
-          ? String(googleLinkedStudent.id || "").trim()
+        effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.id
+          ? String(effectiveGoogleLinkedStudent.id || "").trim()
           : "";
       const payloadCustomFields = {
         ...normalizeCustomFieldsForSubmit_(customFields, linkedStudentId),
@@ -654,7 +682,7 @@ function RegistrationPage({ shared }) {
                   <p className="font-semibold text-slate-800">可直接報名，不一定要先登入</p>
                   <p className="mt-1">Google 登入僅用於快速帶入同學資料。</p>
                 </div>
-                {!googleLinkedStudent || !googleLinkedStudent.email ? (
+                {!effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email ? (
                   <button
                     type="button"
                     onClick={() => setShowGoogleSigninPanel((prev) => !prev)}
@@ -664,13 +692,13 @@ function RegistrationPage({ shared }) {
                   </button>
                 ) : null}
               </div>
-              {googleLinkedStudent && googleLinkedStudent.email ? (
+              {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email ? (
                 <div className="mt-3 alert alert-success">
-                  已登入 Google：{googleLinkedStudent.email}
+                  已登入 Google：{effectiveGoogleLinkedStudent.email}
                 </div>
               ) : null}
             </div>
-            {!googleLinkedStudent || !googleLinkedStudent.email ? (
+            {!effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email ? (
               showGoogleSigninPanel ? (
                 <GoogleSigninPanel
                   title="Google 登入"
@@ -693,13 +721,13 @@ function RegistrationPage({ shared }) {
                 autoComplete="email"
                 autoCapitalize="none"
                 autoCorrect="off"
-                disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
+                disabled={Boolean(effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email)}
                 className="input-base"
               />
               <p className="text-xs text-slate-500">
-                {googleLinkedStudent && googleLinkedStudent.email
+                {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email
                   ? "已透過 Google 綁定同學資料。"
-                  : "輸入後將自動帶入姓名與公司等資料。"}
+                  : "登入後可自動帶入同學資料，未登入也可手動填寫報名。"}
               </p>
               {lookupStatus === "notfound" ? (
                 <p className="text-xs text-amber-600">查無資料，請確認 Email 是否正確或請承辦補登。</p>

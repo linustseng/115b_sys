@@ -7,6 +7,8 @@ function HomePage({
   formatEventSchedule_,
   getCategoryLabel_,
   loadStoredGoogleStudent_,
+  loadStoredGoogleIdToken_,
+  loadStoredAdminSession_,
   GoogleSigninPanel,
 }) {
   const eventsCacheKey = "home_events_cache_v1";
@@ -30,6 +32,31 @@ function HomePage({
   const [cancelError, setCancelError] = useState("");
   const [cancelSuccess, setCancelSuccess] = useState("");
   const hasBootstrappedRef = useRef(false);
+
+  const hasUsableGoogleAuth_ = () => {
+    try {
+      const session =
+        typeof loadStoredAdminSession_ === "function"
+          ? loadStoredAdminSession_()
+          : { token: "", refreshToken: "" };
+      const hasSession = Boolean(
+        session && (String(session.refreshToken || "").trim() || String(session.token || "").trim())
+      );
+      const hasIdToken = Boolean(
+        typeof loadStoredGoogleIdToken_ === "function"
+          ? String(loadStoredGoogleIdToken_() || "").trim()
+          : ""
+      );
+      return hasSession || hasIdToken;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const effectiveGoogleLinkedStudent =
+    googleLinkedStudent && googleLinkedStudent.email && hasUsableGoogleAuth_()
+      ? googleLinkedStudent
+      : null;
 
   useEffect(() => {
     try {
@@ -146,7 +173,7 @@ function HomePage({
     if (!checkinTarget) {
       return;
     }
-    const userEmail = googleLinkedStudent && googleLinkedStudent.email;
+    const userEmail = effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email;
     if (!userEmail) {
       setCheckinError("請先使用 Google 登入後再簽到。");
       return;
@@ -165,8 +192,9 @@ function HomePage({
         throw new Error(result.error || "簽到失敗");
       }
       const nameValue =
-        (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
-        (googleLinkedStudent && googleLinkedStudent.name) ||
+        (effectiveGoogleLinkedStudent &&
+          (effectiveGoogleLinkedStudent.preferredName || effectiveGoogleLinkedStudent.nameZh)) ||
+        (effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.name) ||
         "";
       if (result.data && result.data.checkinId) {
         setCheckinStatuses((prev) => ({
@@ -198,7 +226,7 @@ function HomePage({
         action: "deleteCheckin",
         id: cancelTarget.checkinId,
         userEmail: String(
-          (googleLinkedStudent && googleLinkedStudent.email) || lookupEmail || ""
+          (effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email) || lookupEmail || ""
         )
           .trim()
           .toLowerCase(),
@@ -221,8 +249,9 @@ function HomePage({
   };
 
   const displayName =
-    (googleLinkedStudent && (googleLinkedStudent.preferredName || googleLinkedStudent.nameZh)) ||
-    (googleLinkedStudent && googleLinkedStudent.name) ||
+    (effectiveGoogleLinkedStudent &&
+      (effectiveGoogleLinkedStudent.preferredName || effectiveGoogleLinkedStudent.nameZh)) ||
+    (effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.name) ||
     "";
 
   const formatCheckinTime_ = (value) => {
@@ -319,10 +348,9 @@ function HomePage({
       setLookupError("");
     }
     try {
-      const payload = { action: "listHomeBootstrap" };
-      if (normalizedEmail) {
-        payload.email = normalizedEmail;
-      }
+      const payload = normalizedEmail
+        ? { action: "listHomeBootstrap", email: normalizedEmail }
+        : { action: "listEvents" };
       const { result } = await apiRequest(payload);
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
@@ -353,7 +381,13 @@ function HomePage({
       return true;
     } catch (err) {
       if (includeLookup && normalizedEmail) {
-        setLookupError(err.message || "查詢失敗");
+        const rawMessage = String(err.message || "查詢失敗");
+        const normalizedMessage = rawMessage.toLowerCase();
+        if (normalizedMessage.includes("unauthorized") || normalizedMessage.includes("forbidden")) {
+          setLookupError("登入狀態已過期或帳號不符，請重新使用 Google 登入後再查詢。");
+        } else {
+          setLookupError(rawMessage);
+        }
       } else {
         setError(err.message ? `活動列表暫時無法載入：${err.message}` : "活動列表暫時無法載入。");
       }
@@ -378,7 +412,7 @@ function HomePage({
 
   useEffect(() => {
     let ignore = false;
-    const googleEmail = String((googleLinkedStudent && googleLinkedStudent.email) || "")
+    const googleEmail = String((effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email) || "")
       .trim()
       .toLowerCase();
     if (googleEmail) {
@@ -398,7 +432,7 @@ function HomePage({
     return () => {
       ignore = true;
     };
-  }, [apiRequest, googleLinkedStudent && googleLinkedStudent.email]);
+  }, [apiRequest, effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email]);
 
   return (
     <div className="min-h-screen">
@@ -451,9 +485,9 @@ function HomePage({
           </div>
           <div className="mt-6 grid gap-6 sm:grid-cols-[1.1fr_0.9fr]">
             <div className="space-y-5">
-              {googleLinkedStudent && googleLinkedStudent.email ? (
+              {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email ? (
                 <div className="alert alert-success">
-                  已登入 Google：{googleLinkedStudent.email}
+                  已登入 Google：{effectiveGoogleLinkedStudent.email}
                 </div>
               ) : (
                 <GoogleSigninPanel
@@ -476,7 +510,7 @@ function HomePage({
                   autoComplete="email"
                   autoCapitalize="none"
                   autoCorrect="off"
-                  disabled={Boolean(googleLinkedStudent && googleLinkedStudent.email)}
+                  disabled={Boolean(effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email)}
                   className="input-base"
                 />
               </div>
