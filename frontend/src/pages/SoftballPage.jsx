@@ -475,6 +475,11 @@ function SoftballPage({ shared }) {
     return `${start || "-"} - ${end || "-"}`;
   };
 
+  const getPracticeFieldLabel_ = (practice) => {
+    const practiceField = fields.find((field) => normalizeId_(field.id) === normalizeId_(practice?.fieldId)) || null;
+    return String(practiceField?.name || practice?.location || "").trim();
+  };
+
   const formatDatePartsWithWeekday_ = (parts) => {
     if (!parts) {
       return "-";
@@ -1995,7 +2000,12 @@ function SoftballPage({ shared }) {
                             {getPracticeListTimeLabel_(item) ? ` · ${getPracticeListTimeLabel_(item)}` : ""}
                           </p>
                         </div>
-                        <span className="text-xs opacity-70">{item.id}</span>
+                        <div className="text-right">
+                          {getPracticeFieldLabel_(item) ? (
+                            <p className="text-xs font-medium opacity-80">{getPracticeFieldLabel_(item)}</p>
+                          ) : null}
+                          <p className="text-[11px] opacity-50">{item.id}</p>
+                        </div>
                       </button>
                     ))
                   ) : (
@@ -2170,9 +2180,7 @@ function SoftballPage({ shared }) {
                 {getPracticeListTimeLabel_(selectedPractice)
                   ? ` · ${getPracticeListTimeLabel_(selectedPractice)}`
                   : ""}
-                {selectedPractice.fieldId
-                  ? ` · ${fields.find((field) => normalizeId_(field.id) === normalizeId_(selectedPractice.fieldId))?.name || "未命名球場"}`
-                  : ""}
+                {getPracticeFieldLabel_(selectedPractice) ? ` · ${getPracticeFieldLabel_(selectedPractice)}` : ""}
               </div>
             ) : null}
 
