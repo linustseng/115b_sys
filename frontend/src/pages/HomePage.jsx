@@ -347,11 +347,16 @@ function HomePage({
       setLookupLoading(true);
       setLookupError("");
     }
+    if (!normalizedEmail) {
+      setEvents([]);
+      setMyRegistrations([]);
+      setCheckinStatuses({});
+      setLookupError("");
+      setError("");
+      return true;
+    }
     try {
-      const payload = normalizedEmail
-        ? { action: "listHomeBootstrap", email: normalizedEmail }
-        : { action: "listEvents" };
-      const { result } = await apiRequest(payload);
+      const { result } = await apiRequest({ action: "listHomeBootstrap", email: normalizedEmail });
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
@@ -363,7 +368,7 @@ function HomePage({
       } catch (err) {
         // Ignore cache errors
       }
-      if (includeLookup && normalizedEmail) {
+      if (includeLookup) {
         const registrations = data.registrations || [];
         const statuses = data.checkinStatuses || {};
         setMyRegistrations(registrations);
@@ -373,14 +378,10 @@ function HomePage({
           setCheckinStatuses({});
           setLookupError("查無報名紀錄。");
         }
-      } else if (!normalizedEmail) {
-        setMyRegistrations([]);
-        setCheckinStatuses({});
-        setLookupError("");
       }
       return true;
     } catch (err) {
-      if (includeLookup && normalizedEmail) {
+      if (includeLookup) {
         const rawMessage = String(err.message || "查詢失敗");
         const normalizedMessage = rawMessage.toLowerCase();
         if (normalizedMessage.includes("unauthorized") || normalizedMessage.includes("forbidden")) {
@@ -466,7 +467,7 @@ function HomePage({
             <div>
               <h2 className="text-lg font-semibold text-slate-900">我的報名</h2>
               <p className="mt-2 text-sm text-slate-500">
-                用 Email 查詢報名紀錄，也可以直接從下方活動卡片報名。
+                用 Email 查詢報名紀錄。活動列表僅限登入後查看。
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
@@ -474,7 +475,7 @@ function HomePage({
                 已報名 {myRegistrations.length}
               </span>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-                可報名活動 {visibleEvents.length}
+                可報名活動 {effectiveGoogleLinkedStudent ? visibleEvents.length : "需登入"}
               </span>
             </div>
             {lookupLoading ? (
@@ -521,12 +522,18 @@ function HomePage({
               >
                 {lookupLoading ? "查詢中..." : "查詢我的報名"}
               </button>
-              <a
-                href="#events"
-                className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:-translate-y-0.5 hover:bg-emerald-700"
-              >
-                直接看可報名活動
-              </a>
+              {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email ? (
+                <a
+                  href="#events"
+                  className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-900/20 transition hover:-translate-y-0.5 hover:bg-emerald-700"
+                >
+                  直接看可報名活動
+                </a>
+              ) : (
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  請先登入 Google，才能查看可報名活動。
+                </div>
+              )}
               {lookupError ? (
                 <p className="text-xs font-semibold text-amber-600">{lookupError}</p>
               ) : null}
@@ -659,12 +666,18 @@ function HomePage({
             </div>
           ) : null}
 
-          {!loading && !visibleEvents.length && !error ? (
+          {!effectiveGoogleLinkedStudent || !effectiveGoogleLinkedStudent.email ? (
+            <div className="mt-6 rounded-2xl border border-slate-200/80 bg-slate-50 px-5 py-4 text-sm text-slate-600">
+              請先登入 Google 後再查看近期活動與報名入口。
+            </div>
+          ) : null}
+
+          {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email && !loading && !visibleEvents.length && !error ? (
             <p className="mt-6 text-sm text-slate-500">目前沒有活動，請稍後再查看。</p>
           ) : null}
 
           <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            {loading
+            {effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email && loading
               ? [0, 1, 2, 3].map((item) => (
                   <div
                     key={`event-skeleton-${item}`}
@@ -683,7 +696,8 @@ function HomePage({
                     <div className="mt-6 h-9 rounded-xl bg-slate-100" />
                   </div>
                 ))
-              : visibleEvents.map((event) => {
+              : effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.email
+                ? visibleEvents.map((event) => {
                   const statusLabel = event.status === "open" ? "報名進行中" : "報名狀態更新";
                   const schedule = formatEventSchedule_(event.startAt, event.endAt);
                   const eventId = normalizeEventId_(event.id);
@@ -766,7 +780,8 @@ function HomePage({
                       </a>
                     </div>
                   );
-                })}
+                })
+                : null}
           </div>
         </div>
 
