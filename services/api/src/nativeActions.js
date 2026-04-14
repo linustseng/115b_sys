@@ -2298,6 +2298,8 @@ export async function dispatchNativeAction({
     "verifyGoogle",
     "linkGoogleStudent",
     "refreshSession",
+    // Public event list is used by unauthenticated event homepage / registration fallback.
+    "listEvents",
     // Landing can render without login; it will return empty private sections when unauthenticated.
     "listLandingBootstrap",
     "listOrderPlans",

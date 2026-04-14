@@ -820,10 +820,6 @@ app.post("/v1/actions/:action", async (req, res) => {
 
 app.get("/v1/events", async (req, res) => {
   try {
-    const auth = await resolveAuthContext(req);
-    if (!auth || !auth.studentId) {
-      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
-    }
     const result = await query(`SELECT * FROM events ORDER BY coalesce(start_at, ''), id`);
     res.json({
       ok: true,
