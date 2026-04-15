@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function defaultForm() {
@@ -101,7 +102,7 @@ function MakeupReminderCard({ reminder }) {
   );
 }
 
-function CourseCatalogCard({ unit }) {
+function CourseCatalogCard({ unit, apiRequest }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -140,6 +141,7 @@ function CourseCatalogCard({ unit }) {
         {(unit.sessions || []).map((session) => {
           const homeworkItems = Array.isArray(session.task && session.task.homeworkItems) ? session.task.homeworkItems : [];
           const quizItems = Array.isArray(session.task && session.task.quizItems) ? session.task.quizItems : [];
+          const attachments = Array.isArray(session.task && session.task.attachments) ? session.task.attachments : [];
           return (
             <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -165,6 +167,23 @@ function CourseCatalogCard({ unit }) {
                   )}
                 </div>
               </div>
+              {attachments.length ? (
+                <div className="mt-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">作業檔案</p>
+                  <div className="mt-2 flex flex-col gap-2">
+                    {attachments.map((item, index) => (
+                      <button
+                        key={`${item.attachmentId || item.url || "attachment"}-${index}`}
+                        type="button"
+                        onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-white"
+                      >
+                        {item.name || item.url || "附件"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -847,7 +866,7 @@ export default function AcademicsPage({ shared }) {
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
             {courseScope === "all" ? (
               courseCatalog.map((unit) => (
-                <CourseCatalogCard key={unit.id} unit={unit} />
+                <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
               ))
             ) : (
               <div className="space-y-6">
@@ -867,7 +886,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的已上課課程。</div>
                     ) : null}
                     {recentPastCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} />
+                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
                     ))}
                   </div>
                 </section>
@@ -888,7 +907,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的即將上課課程。</div>
                     ) : null}
                     {recentFutureCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} />
+                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
                     ))}
                   </div>
                 </section>

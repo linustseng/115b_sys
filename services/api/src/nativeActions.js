@@ -1256,6 +1256,7 @@ function mapAcademicSessionTaskRow_(row) {
     updatedAt: firstText(row && row.updated_at, raw.updatedAt),
     homeworkItems: uniqTextItems_(Array.isArray(raw.homeworkItems) ? raw.homeworkItems : parseTextLines_(raw.homeworkNotice || row && row.homework_notice)),
     quizItems: uniqTextItems_(Array.isArray(raw.quizItems) ? raw.quizItems : parseTextLines_(raw.quizNotice || row && row.quiz_notice)),
+    attachments: normalizeAttachmentItems(raw.attachments),
   };
 }
 
@@ -1305,6 +1306,7 @@ function academicSessionTaskToDbRow_(input, actor = null) {
   const updatedByName = firstText(raw.updatedByName, linkedActor.preferredName || linkedActor.nameZh || linkedActor.name || "");
   const homeworkItems = uniqTextItems_(Array.isArray(raw.homeworkItems) ? raw.homeworkItems : parseTextLines_(raw.homeworkNotice));
   const quizItems = uniqTextItems_(Array.isArray(raw.quizItems) ? raw.quizItems : parseTextLines_(raw.quizNotice));
+  const attachments = normalizeAttachmentItems(raw.attachments);
   return {
     id,
     sessionId: firstText(raw.sessionId),
@@ -1321,6 +1323,7 @@ function academicSessionTaskToDbRow_(input, actor = null) {
       quizNotice: firstText(raw.quizNotice),
       homeworkItems,
       quizItems,
+      attachments,
       updatedBy,
       updatedByName,
       updatedAt,
@@ -1514,7 +1517,13 @@ async function loadAcademicCourseLayer_(query, sessions = [], { includeDraftMake
   const courses = (await query(`select * from academic_courses order by coalesce(title,''), id`)).rows.map(mapAcademicCourseRow_);
   const courseSessions = (await query(`select * from academic_course_sessions order by coalesce(course_id,''), coalesce(session_id,'')`)).rows.map(mapAcademicCourseSessionRow_);
   const courseNotes = (await query(`select * from academic_course_notes order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(mapAcademicCourseNoteRow_);
-  const sessionTasks = (await query(`select * from academic_session_tasks order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(mapAcademicSessionTaskRow_);
+  const sessionTasks = await Promise.all(
+    (await query(`select * from academic_session_tasks order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(async (row) => {
+      const item = mapAcademicSessionTaskRow_(row);
+      item.attachments = await hydrateAttachmentItems(query, item.attachments);
+      return item;
+    })
+  );
   const makeupNotesQuery = includeDraftMakeupNotes
     ? `select n.*, s.class_kind from session_notes n join academic_sessions s on s.id = n.session_id where coalesce(s.class_kind,'') = 'makeup_target' order by coalesce(n.updated_at,'' ) desc, n.id desc`
     : `select n.*, s.class_kind from session_notes n join academic_sessions s on s.id = n.session_id where coalesce(s.class_kind,'') = 'makeup_target' and coalesce(n.status,'draft') = 'published' order by coalesce(n.published_at,'' ) desc, coalesce(n.updated_at,'' ) desc, n.id desc`;
@@ -3690,7 +3699,9 @@ export async function dispatchNativeAction({
         [row.id, row.sessionId, row.homeworkNotice, row.quizNotice, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
       );
       const refreshed = rowOrNull(await query(`select * from academic_session_tasks where session_id = $1 limit 1`, [sessionId]));
-      return { ok: true, data: { task: mapAcademicSessionTaskRow_(refreshed) }, error: null };
+      const mappedTask = mapAcademicSessionTaskRow_(refreshed);
+      mappedTask.attachments = await hydrateAttachmentItems(query, mappedTask.attachments);
+      return { ok: true, data: { task: mappedTask }, error: null };
     }
 
     case "upsertSessionNote": {

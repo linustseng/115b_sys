@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 
 function parseMultilineItems_(value) {
   return String(value || "")
@@ -68,11 +69,27 @@ function buildCourseNoteForm(note, courseId = "") {
   };
 }
 
+function normalizeAttachmentItems_(value) {
+  return (Array.isArray(value) ? value : [])
+    .map((item) => ({
+      attachmentId: String(item && (item.attachmentId || item.id) ? item.attachmentId || item.id : "").trim(),
+      id: String(item && (item.attachmentId || item.id) ? item.attachmentId || item.id : "").trim(),
+      name: String(item && (item.name || item.originalName || item.url) ? item.name || item.originalName || item.url : "附件").trim(),
+      url: String(item && item.url ? item.url : "").trim(),
+      mimeType: String(item && item.mimeType ? item.mimeType : "").trim(),
+      sizeBytes: Number(item && item.sizeBytes ? item.sizeBytes : 0),
+      attachmentKind: String(item && item.attachmentKind ? item.attachmentKind : "homework_file").trim() || "homework_file",
+      source: String(item && item.source ? item.source : "attachment").trim() || "attachment",
+    }))
+    .filter((item) => item.attachmentId || item.url);
+}
+
 function buildSessionTaskForm(task, sessionId = "") {
   return {
     sessionId: sessionId || (task && task.sessionId) || "",
     homeworkNotice: toMultilineText_(task && task.homeworkItems, (task && task.homeworkNotice) || ""),
     quizNotice: toMultilineText_(task && task.quizItems, (task && task.quizNotice) || ""),
+    attachments: normalizeAttachmentItems_(task && task.attachments),
   };
 }
 
@@ -125,6 +142,10 @@ function downloadTextFile_(filename, content, mimeType = "text/plain;charset=utf
 export default function AcademicsAdminPage({ shared }) {
   const {
     apiRequest,
+    API_V2_URL,
+    loadStoredGoogleIdToken_,
+    storeGoogleIdToken_,
+    getGoogleIdTokenSilently_,
     formatDisplayDate_,
     formatEventSchedule_,
   } = shared;
@@ -152,6 +173,7 @@ export default function AcademicsAdminPage({ shared }) {
   const [selectedMakeupSessionId, setSelectedMakeupSessionId] = useState("");
   const [makeupNoteForm, setMakeupNoteForm] = useState(() => buildMakeupNoteForm(null, ""));
   const [requestDrafts, setRequestDrafts] = useState({});
+  const [sessionTaskUploadState, setSessionTaskUploadState] = useState({});
   const [selectedTargetDate, setSelectedTargetDate] = useState("");
   const [manualForm, setManualForm] = useState({
     studentId: "",
@@ -587,8 +609,12 @@ export default function AcademicsAdminPage({ shared }) {
     }));
   };
 
-  const handleSaveSessionTask_ = async (sessionId) => {
-    const draft = sessionTaskDrafts[sessionId] || buildSessionTaskForm(null, sessionId);
+  const handleSaveSessionTask_ = async (sessionId, extraPatch = {}, successMessage = "堂次作業 / 小考已儲存。") => {
+    const draft = {
+      ...(sessionTaskDrafts[sessionId] || buildSessionTaskForm(null, sessionId)),
+      ...(extraPatch && typeof extraPatch === "object" ? extraPatch : {}),
+      sessionId,
+    };
     if (!sessionId) {
       setError("缺少堂次資料");
       return;
@@ -598,22 +624,136 @@ export default function AcademicsAdminPage({ shared }) {
     try {
       const homeworkItems = parseMultilineItems_(draft.homeworkNotice);
       const quizItems = parseMultilineItems_(draft.quizNotice);
+      const attachments = normalizeAttachmentItems_(draft.attachments);
       const payload = {
         sessionId,
         homeworkNotice: homeworkItems.join("\n"),
         quizNotice: quizItems.join("\n"),
         homeworkItems,
         quizItems,
+        attachments,
       };
       const { result } = await apiRequest({ action: "upsertAcademicSessionTask", data: payload });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "儲存失敗");
       }
-      setStatus("堂次作業 / 小考已儲存。");
+      setSessionTaskDrafts((prev) => ({
+        ...prev,
+        [sessionId]: buildSessionTaskForm(result.data && result.data.task, sessionId),
+      }));
+      setStatus(successMessage);
       await loadBootstrap_();
     } catch (err) {
       setError(String((err && err.message) || "儲存失敗"));
     }
+  };
+
+  const handleUploadSessionTaskAttachment_ = async (sessionId, file) => {
+    if (!file || !sessionId) {
+      return;
+    }
+    if (!API_V2_URL) {
+      setSessionTaskUploadState((prev) => ({
+        ...prev,
+        [sessionId]: { uploading: false, error: "目前尚未設定 API v2，附件上傳未啟用" },
+      }));
+      return;
+    }
+    let idToken = String(loadStoredGoogleIdToken_() || "").trim();
+    if (!idToken && typeof getGoogleIdTokenSilently_ === "function") {
+      try {
+        idToken = String((await getGoogleIdTokenSilently_()) || "").trim();
+        if (idToken) {
+          storeGoogleIdToken_(idToken);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (!idToken) {
+      setSessionTaskUploadState((prev) => ({
+        ...prev,
+        [sessionId]: { uploading: false, error: "請先完成 Google 登入，再上傳附件" },
+      }));
+      return;
+    }
+    setSessionTaskUploadState((prev) => ({
+      ...prev,
+      [sessionId]: { uploading: true, error: "" },
+    }));
+    try {
+      const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
+      const sendUpload_ = async (token) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("entityType", "academic_session_note");
+        formData.append("entityId", sessionId);
+        formData.append("attachmentKind", "homework_file");
+        return fetch(`${base}/v1/attachments/upload`, {
+          method: "POST",
+          headers: { "x-id-token": token },
+          body: formData,
+        });
+      };
+      let response = await sendUpload_(idToken);
+      if (response.status === 401 && typeof getGoogleIdTokenSilently_ === "function") {
+        try {
+          const refreshed = String((await getGoogleIdTokenSilently_()) || "").trim();
+          if (refreshed) {
+            storeGoogleIdToken_(refreshed);
+            idToken = refreshed;
+            response = await sendUpload_(idToken);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload || payload.ok !== true) {
+        throw new Error((payload && payload.error) || `上傳失敗 (HTTP ${response.status})`);
+      }
+      const item = normalizeAttachmentItems_([payload.data && (payload.data.item || payload.data)])[0];
+      if (!item) {
+        throw new Error("上傳成功但缺少附件資料");
+      }
+      const currentDraft = sessionTaskDrafts[sessionId] || buildSessionTaskForm(sessionTasksBySessionId.get(sessionId), sessionId);
+      const nextAttachments = normalizeAttachmentItems_([...(currentDraft.attachments || []), item]).filter(
+        (attachment, index, arr) => arr.findIndex((candidate) => String((candidate.attachmentId || candidate.url) || "") === String((attachment.attachmentId || attachment.url) || "")) === index
+      );
+      setSessionTaskDrafts((prev) => ({
+        ...prev,
+        [sessionId]: {
+          ...currentDraft,
+          attachments: nextAttachments,
+        },
+      }));
+      await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "作業檔案已上傳。");
+      setSessionTaskUploadState((prev) => ({
+        ...prev,
+        [sessionId]: { uploading: false, error: "" },
+      }));
+    } catch (err) {
+      setSessionTaskUploadState((prev) => ({
+        ...prev,
+        [sessionId]: { uploading: false, error: String((err && err.message) || "上傳失敗") },
+      }));
+    }
+  };
+
+  const handleRemoveSessionTaskAttachment_ = async (sessionId, target) => {
+    const currentDraft = sessionTaskDrafts[sessionId] || buildSessionTaskForm(sessionTasksBySessionId.get(sessionId), sessionId);
+    const nextAttachments = normalizeAttachmentItems_(currentDraft.attachments).filter((item) => {
+      const key = String((item.attachmentId || item.url) || "").trim();
+      return key !== target;
+    });
+    setSessionTaskDrafts((prev) => ({
+      ...prev,
+      [sessionId]: {
+        ...currentDraft,
+        attachments: nextAttachments,
+      },
+    }));
+    await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "作業檔案已移除。");
   };
 
   const handleSaveMakeupNote_ = async (event) => {
@@ -1151,6 +1291,7 @@ export default function AcademicsAdminPage({ shared }) {
                   </div>
                   {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || []).map((session) => {
                     const draft = sessionTaskDrafts[session.id] || buildSessionTaskForm(session.task, session.id);
+                    const uploadState = sessionTaskUploadState[session.id] || { uploading: false, error: "" };
                     return (
                       <div key={session.id} className="rounded-3xl border border-slate-200 bg-white p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1188,6 +1329,63 @@ export default function AcademicsAdminPage({ shared }) {
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                             />
                           </div>
+                        </div>
+
+                        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">作業檔案</p>
+                              <p className="mt-1 text-xs text-slate-500">可上傳 PDF、圖片、Office 檔，會直接顯示在同學課程頁。</p>
+                            </div>
+                            <label
+                              className={`inline-flex cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                                uploadState.uploading
+                                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                              }`}
+                            >
+                              <input
+                                type="file"
+                                className="hidden"
+                                disabled={uploadState.uploading}
+                                accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                onChange={(event) => {
+                                  const f = event.target.files && event.target.files[0];
+                                  event.target.value = "";
+                                  handleUploadSessionTaskAttachment_(session.id, f);
+                                }}
+                              />
+                              {uploadState.uploading ? "上傳中..." : "上傳作業檔案"}
+                            </label>
+                          </div>
+                          {uploadState.error ? <div className="mt-3 alert alert-error text-xs">{uploadState.error}</div> : null}
+                          {Array.isArray(draft.attachments) && draft.attachments.length ? (
+                            <div className="mt-3 space-y-2">
+                              {draft.attachments.map((item, index) => {
+                                const key = String((item && (item.attachmentId || item.url)) || index).trim();
+                                return (
+                                  <div key={key || index} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                                      className="flex-1 truncate text-left text-xs text-slate-600 underline-offset-2 hover:underline"
+                                    >
+                                      {item.name || item.url || "附件"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSessionTaskAttachment_(session.id, key)}
+                                      className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                                    >
+                                      移除
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="mt-3 text-xs text-slate-400">目前尚未上傳作業檔案。</p>
+                          )}
                         </div>
                       </div>
                     );
