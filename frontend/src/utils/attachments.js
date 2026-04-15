@@ -36,11 +36,11 @@ export function openAttachmentUrl_(url, name = "附件預覽") {
   if (!href || typeof window === "undefined" || typeof document === "undefined") {
     return false;
   }
+  const targetHref = buildAttachmentPreviewUrl_(href, name) || href;
   if (isStandalonePwa_()) {
-    window.location.assign(href);
+    window.location.assign(targetHref);
     return true;
   }
-  const targetHref = buildAttachmentPreviewUrl_(href, name) || href;
   const anchor = document.createElement("a");
   anchor.href = targetHref;
   anchor.target = "_blank";

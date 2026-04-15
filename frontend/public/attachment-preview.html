@@ -116,6 +116,7 @@
           <p class="hint">如果瀏覽器不支援內嵌預覽，可用右側按鈕直接開啟。</p>
         </div>
         <div class="actions">
+          <button id="downloadBtn" class="btn" type="button">下載原檔名</button>
           <a id="openLink" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">直接開啟</a>
         </div>
       </div>
@@ -127,20 +128,59 @@
       const rawName = params.get('name') || '附件預覽';
       const title = document.getElementById('title');
       const openLink = document.getElementById('openLink');
+      const downloadBtn = document.getElementById('downloadBtn');
       const viewer = document.getElementById('viewer');
+
+      async function downloadWithOriginalName(url, filename) {
+        const response = await fetch(url, { credentials: 'omit' });
+        if (!response.ok) {
+          throw new Error(`下載失敗 (${response.status})`);
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = filename || 'download';
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+
       document.title = rawName;
       title.textContent = rawName;
       if (!rawUrl) {
+        if (downloadBtn) downloadBtn.disabled = true;
         viewer.innerHTML = '<div class="fallback"><div class="card">找不到附件網址。</div></div>';
       } else {
         openLink.href = rawUrl;
+        if (downloadBtn) {
+          downloadBtn.addEventListener('click', async () => {
+            const originalText = downloadBtn.textContent;
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = '下載中...';
+            try {
+              await downloadWithOriginalName(rawUrl, rawName);
+              downloadBtn.textContent = '已開始下載';
+              setTimeout(() => {
+                downloadBtn.textContent = originalText;
+                downloadBtn.disabled = false;
+              }, 1200);
+            } catch (error) {
+              window.alert((error && error.message) || '下載失敗');
+              downloadBtn.textContent = originalText;
+              downloadBtn.disabled = false;
+            }
+          });
+        }
         const iframe = document.createElement('iframe');
         iframe.src = rawUrl;
         iframe.title = rawName;
         iframe.referrerPolicy = 'no-referrer';
         viewer.appendChild(iframe);
         iframe.addEventListener('error', () => {
-          viewer.innerHTML = `<div class="fallback"><div class="card"><p>這個檔案無法在頁內預覽。</p><p>請改用上方 <strong>直接開啟</strong>。</p><p class="hint"><code>${rawName}</code></p></div></div>`;
+          viewer.innerHTML = `<div class="fallback"><div class="card"><p>這個檔案無法在頁內預覽。</p><p>請改用上方 <strong>下載原檔名</strong> 或 <strong>直接開啟</strong>。</p><p class="hint"><code>${rawName}</code></p></div></div>`;
         });
       }
     </script>
