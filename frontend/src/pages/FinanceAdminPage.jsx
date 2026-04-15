@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function FinanceAdminPage({ shared }) {
   const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
@@ -202,7 +203,15 @@ function FinanceAdminPage({ shared }) {
       }
       setRequests(result.data && result.data.requests ? result.data.requests : []);
     } catch (err) {
-      setError(err.message || "載入失敗");
+      const message = String((err && err.message) || "載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入財務後台。",
+          forbiddenMessage: "你目前沒有權限使用財務後台。",
+          networkMessage: "目前網路或系統回應較慢，財務後台資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -1396,7 +1405,14 @@ function FinanceAdminPage({ shared }) {
       }, 150);
     } catch (err) {
       setFundEventEditingLoadingId("");
-      setError(err && err.message ? err.message : "班費事件資料載入失敗");
+      const message = String((err && err.message) || "班費事件資料載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入班費事件資料。",
+          networkMessage: "目前網路或系統回應較慢，班費事件資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     }
   };
 
@@ -1503,7 +1519,14 @@ function FinanceAdminPage({ shared }) {
       }, 150);
     } catch (err) {
       setFundPaymentEditingLoadingId("");
-      setError(err && err.message ? err.message : "收款資料載入失敗");
+      const message = String((err && err.message) || "收款資料載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入收款資料。",
+          networkMessage: "目前網路或系統回應較慢，收款資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     }
   };
 
@@ -1570,7 +1593,7 @@ function FinanceAdminPage({ shared }) {
       if (!result.ok) {
         const rawError = String(result.error || "").trim();
         if (/unauthorized/i.test(rawError)) {
-          throw new Error("權限不足或登入已過期，請重新整理頁面後再試一次。");
+          throw new Error("登入狀態已失效或權限不足，請重新登入後再試一次。");
         }
         if (/not found/i.test(rawError)) {
           throw new Error("這筆收款可能已被刪除或資料已更新，請重新整理後再試一次。");
@@ -1642,7 +1665,7 @@ function FinanceAdminPage({ shared }) {
       if (!result.ok) {
         const rawError = String(result.error || "").trim();
         if (/unauthorized/i.test(rawError)) {
-          throw new Error("權限不足或登入已過期，請重新整理頁面後再試一次。");
+          throw new Error("登入狀態已失效或權限不足，請重新登入後再試一次。");
         }
         throw new Error(rawError || "批次入帳失敗");
       }

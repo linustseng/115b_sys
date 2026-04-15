@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function SoftballPlayerPage({ shared }) {
 
@@ -135,7 +136,7 @@ function SoftballPlayerPage({ shared }) {
       setGoogleSessionToken(String(result.data.sessionToken || "").trim());
     }
     if (requireAuth && result && result.ok === false && String(result.error || "") === "Unauthorized") {
-      throw new Error("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
+      throw new Error("登入狀態已失效，請重新登入後再試。");
     }
     return response;
   };
@@ -228,7 +229,13 @@ function SoftballPlayerPage({ shared }) {
         { requireAuth: true }
       );
       if (!result.ok) {
-        setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
+        setError(
+          `出席資料載入失敗：${mapAppErrorMessage(result.error || "載入失敗", {
+            reauthMessage: "請重新登入後再載入出席資料。",
+            networkMessage: "目前網路或系統回應較慢，請稍後再試。",
+            fallbackMessage: result.error || "載入失敗",
+          })}`
+        );
         // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
         setAttendanceLoaded(true);
         return;
@@ -260,7 +267,14 @@ function SoftballPlayerPage({ shared }) {
       setAttendance(Array.from(map.values()));
       setAttendanceLoaded(true);
     } catch (err) {
-      setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
+      const message = String((err && err.message) || "載入失敗");
+      setError(
+        `出席資料載入失敗：${mapAppErrorMessage(message, {
+          reauthMessage: "請重新登入後再載入出席資料。",
+          networkMessage: "目前網路或系統回應較慢，請稍後再試。",
+          fallbackMessage: message,
+        })}`
+      );
       // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
       setAttendanceLoaded(true);
     }
@@ -275,7 +289,14 @@ function SoftballPlayerPage({ shared }) {
         await loadBootstrap(googleLinkedStudent && googleLinkedStudent.id);
       } catch (err) {
         if (!ignore) {
-          setError("壘球資料載入失敗。");
+          const message = String((err && err.message) || "壘球資料載入失敗。");
+          setError(
+            mapAppErrorMessage(message, {
+              reauthMessage: "登入狀態已失效，請重新登入後再載入壘球資料。",
+              networkMessage: "目前網路或系統回應較慢，壘球資料稍後再試。",
+              fallbackMessage: "壘球資料載入失敗。",
+            })
+          );
         }
       } finally {
         if (!ignore) {
