@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
+import { computeHomeAuthState } from "../utils/authPageState";
 
 function HomePage({
   apiRequest,
@@ -34,30 +35,17 @@ function HomePage({
   const [cancelSuccess, setCancelSuccess] = useState("");
   const hasBootstrappedRef = useRef(false);
 
-  const hasUsableGoogleAuth_ = () => {
-    try {
-      const session =
-        typeof loadStoredAdminSession_ === "function"
-          ? loadStoredAdminSession_()
-          : { token: "", refreshToken: "" };
-      const hasSession = Boolean(
-        session && (String(session.refreshToken || "").trim() || String(session.token || "").trim())
-      );
-      const hasIdToken = Boolean(
-        typeof loadStoredGoogleIdToken_ === "function"
-          ? String(loadStoredGoogleIdToken_() || "").trim()
-          : ""
-      );
-      return hasSession || hasIdToken;
-    } catch (error) {
-      return false;
-    }
-  };
+  const homeAuthState = computeHomeAuthState({
+    googleLinkedStudent,
+    adminSession:
+      typeof loadStoredAdminSession_ === "function"
+        ? loadStoredAdminSession_()
+        : { token: "", refreshToken: "" },
+    googleIdToken:
+      typeof loadStoredGoogleIdToken_ === "function" ? loadStoredGoogleIdToken_() : "",
+  });
 
-  const effectiveGoogleLinkedStudent =
-    googleLinkedStudent && googleLinkedStudent.email && hasUsableGoogleAuth_()
-      ? googleLinkedStudent
-      : null;
+  const effectiveGoogleLinkedStudent = homeAuthState.effectiveGoogleLinkedStudent;
 
   useEffect(() => {
     try {

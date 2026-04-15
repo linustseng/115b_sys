@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
+import { shouldRunProfileSilentRecovery } from "../utils/authPageState";
 
 const buildEmptyForm_ = () => ({
   email: "",
@@ -124,7 +125,7 @@ export default function ProfilePage({ shared }) {
   }, [googleLinkedStudent && googleLinkedStudent.email, idToken]);
 
   useEffect(() => {
-    if (idToken || !googleLinkedStudent || !googleLinkedStudent.email) {
+    if (!shouldRunProfileSilentRecovery({ googleLinkedStudent, idToken })) {
       setAuthRecovering(false);
       return;
     }

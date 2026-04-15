@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 import { mapAppErrorMessage } from "../utils/errorMappings";
+import { shouldLoadFinanceBootstrap } from "../utils/authPageState";
 
 function FinancePage({ shared }) {
   const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
@@ -378,10 +379,7 @@ function FinancePage({ shared }) {
   }, [googleLinkedStudent]);
 
   useEffect(() => {
-    if (!googleLinkedStudent || !googleLinkedStudent.email) {
-      return;
-    }
-    if (bootstrapLoaded) {
+    if (!shouldLoadFinanceBootstrap({ googleLinkedStudent, bootstrapLoaded })) {
       return;
     }
     let ignore = false;

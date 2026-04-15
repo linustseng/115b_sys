@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from "react";
+import { computeLandingAuthState } from "../utils/authPageState";
 import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
@@ -70,7 +71,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       return false;
     }
   })();
-  const needsReauth = hasGoogleLogin && !hasAuthMaterial;
   const [authRestoreResolved, setAuthRestoreResolved] = useState(() => !hasGoogleLogin || hasAuthMaterial);
   const formatBirthdayName_ = (item) => {
     const zh = String((item && item.nameZh) || "").trim();
@@ -101,8 +101,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [copiedStudentId, setCopiedStudentId] = useState(false);
   const [authRecovering, setAuthRecovering] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("");
-  const authRestoring = hasGoogleLogin && needsReauth && (!authRestoreResolved || authRecovering);
-  const shouldShowReauthPrompt = hasGoogleLogin && needsReauth && authRestoreResolved && !authRecovering;
+  const { needsReauth, authRestoring, shouldShowReauthPrompt } = computeLandingAuthState({
+    googleLinkedStudent,
+    hasAuthMaterial,
+    authRestoreResolved,
+    authRecovering,
+  });
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
