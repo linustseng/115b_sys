@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { getCheckinErrorDisplay, mapRegistrationError } from "./utils/errorMappings";
+import { sanitizeBrowserStoredAuthState } from "./utils/authState";
 import lineLinkGuide from "./assets/line_link.jpg";
 
 const lazyImportWithRetry_ = (loader, key) => {
@@ -1998,7 +1999,7 @@ function storeGoogleStudent_(student) {
 }
 
 function loadStoredAdminSession_() {
-  const empty = { token: "", refreshToken: "", studentId: "", memberships: [] };
+  const empty = { token: "", refreshToken: "", studentId: "", studentEmail: "", memberships: [] };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEYS.adminSession);
     if (!raw) {
@@ -2009,6 +2010,7 @@ function loadStoredAdminSession_() {
     const token = String((parsed && parsed.token) || "").trim();
     const refreshToken = String((parsed && parsed.refreshToken) || "").trim();
     const studentId = String((parsed && parsed.studentId) || "").trim();
+    const studentEmail = String((parsed && parsed.studentEmail) || "").trim().toLowerCase();
     const memberships = Array.isArray(parsed && parsed.memberships) ? parsed.memberships : [];
 
     if (savedAt && Date.now() - savedAt > ADMIN_SESSION_MAX_AGE_MS && !refreshToken) {
@@ -2023,6 +2025,7 @@ function loadStoredAdminSession_() {
       token,
       refreshToken,
       studentId,
+      studentEmail,
       memberships,
     };
   } catch (error) {
@@ -2043,6 +2046,7 @@ function storeAdminSession_(session) {
       return;
     }
     const studentId = String(session.studentId || "").trim();
+    const studentEmail = String(session.studentEmail || "").trim().toLowerCase();
     const memberships = Array.isArray(session.memberships) ? session.memberships : [];
     window.localStorage.setItem(
       STORAGE_KEYS.adminSession,
@@ -2050,6 +2054,7 @@ function storeAdminSession_(session) {
         token,
         refreshToken,
         studentId,
+        studentEmail,
         memberships,
         savedAt: Date.now(),
       })
@@ -2982,6 +2987,24 @@ function PageLoader({ title = "載入中..." }) {
 }
 
 function AppShell() {
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const { changed, reasons } = sanitizeBrowserStoredAuthState(STORAGE_KEYS, window);
+    if (!changed || !reasons.length) {
+      return;
+    }
+    try {
+      window.sessionStorage.setItem(
+        "emba115b.reauth_reason",
+        JSON.stringify({ reason: `auth storage sanitized: ${reasons.join(", ")}`, at: Date.now() })
+      );
+    } catch (error) {
+      // Ignore storage failures.
+    }
+  }, []);
+
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");
   const isAdminEventsPage = pathname.includes("admin/events");
