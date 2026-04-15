@@ -11,6 +11,7 @@ function FinanceAdminPage({ shared }) {
     API_V2_URL,
     loadStoredGoogleStudent_,
     loadStoredGoogleIdToken_,
+    loadStoredAdminSession_,
     storeGoogleIdToken_,
     getGoogleIdTokenSilently_,
     storeGoogleStudent_,
@@ -370,49 +371,64 @@ function FinanceAdminPage({ shared }) {
       setManualUploadAttachmentError("目前尚未設定 API v2，附件上傳未啟用");
       return;
     }
+    const storedSession = (typeof loadStoredAdminSession_ === "function" ? loadStoredAdminSession_() : null) || {};
+    let sessionToken = String(storedSession.token || "").trim();
     let idToken = String(loadStoredGoogleIdToken_() || "").trim();
-    if (!idToken && typeof getGoogleIdTokenSilently_ === "function") {
-      try {
-        idToken = String((await getGoogleIdTokenSilently_()) || "").trim();
-        if (idToken) {
-          storeGoogleIdToken_(idToken);
-        }
-      } catch {
-        // ignore
-      }
-    }
-    if (!idToken) {
-      setManualUploadAttachmentError("請先完成 Google 登入，再上傳附件");
-      return;
-    }
     setManualUploadingAttachment(true);
     setManualUploadAttachmentError("");
     try {
       const base = API_V2_URL.endsWith("/") ? API_V2_URL.slice(0, -1) : API_V2_URL;
-      const sendUpload_ = async (token) => {
+      const sendUpload_ = async ({ sessionToken: nextSessionToken = "", idToken: nextIdToken = "" } = {}) => {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("entityType", "finance_request");
         formData.append("entityId", `draft:${manualAttachmentDraftId}`);
         formData.append("attachmentKind", "supporting_document");
+        const headers = {};
+        if (nextSessionToken) {
+          headers.Authorization = `Bearer ${nextSessionToken}`;
+        } else if (nextIdToken) {
+          headers["x-id-token"] = nextIdToken;
+        }
         return fetch(`${base}/v1/attachments/upload`, {
           method: "POST",
-          headers: { "x-id-token": token },
+          headers,
           body: formData,
         });
       };
-      let response = await sendUpload_(idToken);
-      if (response.status === 401 && typeof getGoogleIdTokenSilently_ === "function") {
+      let response = sessionToken ? await sendUpload_({ sessionToken }) : null;
+      if ((!response || response.status === 401) && !idToken && typeof getGoogleIdTokenSilently_ === "function") {
         try {
           const refreshed = String((await getGoogleIdTokenSilently_()) || "").trim();
           if (refreshed) {
             storeGoogleIdToken_(refreshed);
             idToken = refreshed;
-            response = await sendUpload_(idToken);
           }
         } catch {
           // ignore silent refresh failure and surface original 401 below
         }
+      }
+      if (!response) {
+        if (!idToken) {
+          throw new Error("請先登入後台，若 session 已過期再重新 Google 登入");
+        }
+        response = await sendUpload_({ idToken });
+      } else if (response.status === 401) {
+        if (!idToken && typeof getGoogleIdTokenSilently_ === "function") {
+          try {
+            const refreshed = String((await getGoogleIdTokenSilently_()) || "").trim();
+            if (refreshed) {
+              storeGoogleIdToken_(refreshed);
+              idToken = refreshed;
+            }
+          } catch {
+            // ignore silent refresh failure and surface original 401 below
+          }
+        }
+        if (!idToken) {
+          throw new Error("後台 session 已失效，請重新登入");
+        }
+        response = await sendUpload_({ idToken });
       }
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload || payload.ok !== true) {

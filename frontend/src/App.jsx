@@ -3058,6 +3058,7 @@ function AppShell() {
     saveCachedEventInfo_,
     loadStoredGoogleStudent_,
     loadStoredGoogleIdToken_,
+    loadStoredAdminSession_,
     storeGoogleIdToken_,
     storeGoogleStudent_,
     storeAdminSession_,
