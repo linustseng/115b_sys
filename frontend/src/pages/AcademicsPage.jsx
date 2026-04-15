@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function defaultForm() {
   return {
@@ -233,11 +234,13 @@ export default function AcademicsPage({ shared }) {
       });
     } catch (err) {
       const message = String((err && err.message) || "");
-      if (message === "Unauthorized" || message.includes("登入已過期")) {
-        setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
-      } else {
-        setError(message || "載入失敗");
-      }
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "目前無法自動恢復登入狀態，請重新登入後再試。",
+          networkMessage: "目前網路或系統回應較慢，課程資料稍後再試。",
+          fallbackMessage: message || "載入失敗",
+        })
+      );
     } finally {
       setLoading(false);
     }

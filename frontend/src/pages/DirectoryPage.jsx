@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 export default function DirectoryPage({ shared }) {
   const {
@@ -105,13 +106,13 @@ export default function DirectoryPage({ shared }) {
       setDirectory(Array.isArray(result.data && result.data.directory) ? result.data.directory : []);
     } catch (err) {
       const message = String((err && err.message) || "");
-      if (message === "Unauthorized") {
-        setError("您目前沒有權限查看通訊錄（僅班代與資管組組長可查看）。");
-      } else if (message.includes("登入已過期") || message.includes("Silent login unavailable") || message.includes("No credential")) {
-        setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
-      } else {
-        setError(message || "載入失敗");
-      }
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "目前無法自動恢復登入狀態，請重新登入後再試。",
+          forbiddenMessage: "您目前沒有權限查看通訊錄（僅班代與資管組組長可查看）。",
+          fallbackMessage: message || "載入失敗",
+        })
+      );
       setDirectory([]);
     } finally {
       setLoading(false);

@@ -1,3 +1,43 @@
+export function classifyAppError(error) {
+  const normalized = String(error || "").trim();
+  const lower = normalized.toLowerCase();
+
+  if (
+    normalized === "Unauthorized" ||
+    normalized.includes("登入已過期") ||
+    normalized.includes("重新登入") ||
+    normalized.includes("請重新") ||
+    lower.includes("invalid google token") ||
+    lower.includes("google 驗證失敗") ||
+    lower.includes("silent login unavailable") ||
+    lower.includes("no credential") ||
+    lower.includes("fedcm")
+  ) {
+    return "reauth";
+  }
+
+  if (normalized === "Forbidden" || lower.includes("forbidden") || normalized.includes("權限不足")) {
+    return "forbidden";
+  }
+
+  if (normalized === "Request timeout" || normalized === "Network error") {
+    return "network";
+  }
+
+  return "generic";
+}
+
+export function mapAppErrorMessage(error, options = {}) {
+  const kind = classifyAppError(error);
+  const messages = {
+    reauth: options.reauthMessage || "登入狀態已失效，請重新登入後再試。",
+    forbidden: options.forbiddenMessage || "你目前沒有權限執行這個操作。",
+    network: options.networkMessage || "目前網路或系統回應較慢，請稍後再試。",
+    generic: options.fallbackMessage || String(error || "載入失敗"),
+  };
+  return messages[kind];
+}
+
 export function getCheckinErrorDisplay(error) {
   if (!error) {
     return null;

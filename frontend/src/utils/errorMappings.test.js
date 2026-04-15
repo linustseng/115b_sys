@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getCheckinErrorDisplay, mapRegistrationError } from "./errorMappings";
+import { classifyAppError, getCheckinErrorDisplay, mapAppErrorMessage, mapRegistrationError } from "./errorMappings";
 
 describe("getCheckinErrorDisplay", () => {
   it("returns null on empty error", () => {
@@ -19,6 +19,35 @@ describe("getCheckinErrorDisplay", () => {
   it("maps missing slug", () => {
     const result = getCheckinErrorDisplay("Missing slug");
     expect(result.title).toBe("簽到連結不完整");
+  });
+});
+
+describe("classifyAppError", () => {
+  it("classifies reauth errors", () => {
+    expect(classifyAppError("Unauthorized")).toBe("reauth");
+    expect(classifyAppError("登入已過期，請重新登入")).toBe("reauth");
+  });
+
+  it("classifies forbidden and network errors", () => {
+    expect(classifyAppError("Forbidden")).toBe("forbidden");
+    expect(classifyAppError("Request timeout")).toBe("network");
+    expect(classifyAppError("Network error")).toBe("network");
+  });
+});
+
+describe("mapAppErrorMessage", () => {
+  it("maps app errors with custom messages", () => {
+    expect(
+      mapAppErrorMessage("Unauthorized", {
+        reauthMessage: "請重新登入後再試。",
+      })
+    ).toBe("請重新登入後再試。");
+    expect(
+      mapAppErrorMessage("Forbidden", {
+        forbiddenMessage: "你沒有權限。",
+      })
+    ).toBe("你沒有權限。");
+    expect(mapAppErrorMessage("Request timeout")).toBe("目前網路或系統回應較慢，請稍後再試。");
   });
 });
 

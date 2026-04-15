@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function HomePage({
   apiRequest,
@@ -383,14 +384,23 @@ function HomePage({
     } catch (err) {
       if (includeLookup) {
         const rawMessage = String(err.message || "查詢失敗");
-        const normalizedMessage = rawMessage.toLowerCase();
-        if (normalizedMessage.includes("unauthorized") || normalizedMessage.includes("forbidden")) {
-          setLookupError("登入狀態已過期或帳號不符，請重新使用 Google 登入後再查詢。");
-        } else {
-          setLookupError(rawMessage);
-        }
+        setLookupError(
+          mapAppErrorMessage(rawMessage, {
+            reauthMessage: "登入狀態已失效或帳號不符，請重新使用 Google 登入後再查詢。",
+            forbiddenMessage: "登入狀態已失效或帳號不符，請重新使用 Google 登入後再查詢。",
+            networkMessage: "目前網路或系統回應較慢，請稍後再查詢。",
+            fallbackMessage: rawMessage,
+          })
+        );
       } else {
-        setError(err.message ? `活動列表暫時無法載入：${err.message}` : "活動列表暫時無法載入。");
+        const rawMessage = String((err && err.message) || "");
+        setError(
+          `活動列表暫時無法載入：${mapAppErrorMessage(rawMessage, {
+            reauthMessage: "請重新登入後再試。",
+            networkMessage: "目前網路或系統回應較慢。",
+            fallbackMessage: rawMessage || "載入失敗",
+          })}`
+        );
       }
       return false;
     } finally {

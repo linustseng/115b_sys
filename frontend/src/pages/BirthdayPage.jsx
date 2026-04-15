@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function BirthdayPage({ shared }) {
   const { apiRequest, GoogleSigninPanel, loadStoredGoogleStudent_ } = shared;
@@ -85,11 +86,13 @@ function BirthdayPage({ shared }) {
       } catch (requestError) {
         if (!ignore) {
           const message = requestError.message || "載入壽星資料失敗";
-          if (message === "Unauthorized" || message.includes("登入已過期") || message.includes("重新")) {
-            setError("目前無法自動恢復登入狀態，請稍後再試；若仍不行再重新登入。");
-          } else {
-            setError(message);
-          }
+          setError(
+            mapAppErrorMessage(message, {
+              reauthMessage: "目前無法自動恢復登入狀態，請重新登入後再試。",
+              networkMessage: "目前網路或系統回應較慢，壽星資料稍後再試。",
+              fallbackMessage: message,
+            })
+          );
         }
       } finally {
         if (!ignore) {
