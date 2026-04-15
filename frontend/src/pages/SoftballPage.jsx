@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { mapSoftballAttendanceError, mapSoftballBootstrapError } from "../utils/authErrorPaths";
 
 function SoftballPage({ shared }) {
 
@@ -580,13 +581,13 @@ function SoftballPage({ shared }) {
         practiceId: practiceId,
       });
       if (!result.ok) {
-        setError(`出席資料載入失敗：${result.error || "載入失敗"}`);
+        setError(mapSoftballAttendanceError(result.error || "載入失敗"));
         setAttendance([]);
         return;
       }
       setAttendance(result.data && result.data.attendance ? result.data.attendance : []);
     } catch (err) {
-      setError(`出席資料載入失敗：${err.message || "載入失敗"}`);
+      setError(mapSoftballAttendanceError(err.message || "載入失敗"));
       setAttendance([]);
     }
   };
@@ -669,7 +670,7 @@ function SoftballPage({ shared }) {
         await loadSoftballBootstrap();
       } catch (err) {
         if (!ignore) {
-          setError(err.message || "壘球後台資料載入失敗");
+          setError(mapSoftballBootstrapError(err.message || "壘球後台資料載入失敗"));
         }
       } finally {
         if (!ignore) {

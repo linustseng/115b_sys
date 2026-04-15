@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 import { mapAppErrorMessage } from "../utils/errorMappings";
+import { mapFinanceAdminMutationError } from "../utils/authErrorPaths";
 
 function FinanceAdminPage({ shared }) {
   const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
@@ -1592,13 +1593,7 @@ function FinanceAdminPage({ shared }) {
       });
       if (!result.ok) {
         const rawError = String(result.error || "").trim();
-        if (/unauthorized/i.test(rawError)) {
-          throw new Error("登入狀態已失效或權限不足，請重新登入後再試一次。");
-        }
-        if (/not found/i.test(rawError)) {
-          throw new Error("這筆收款可能已被刪除或資料已更新，請重新整理後再試一次。");
-        }
-        throw new Error(rawError || "更新入帳狀態失敗");
+        throw new Error(mapFinanceAdminMutationError(rawError, "更新入帳狀態失敗"));
       }
       await loadFundPayments(fundPaymentForm.eventId);
       await loadFundSummary();
@@ -1664,10 +1659,7 @@ function FinanceAdminPage({ shared }) {
       });
       if (!result.ok) {
         const rawError = String(result.error || "").trim();
-        if (/unauthorized/i.test(rawError)) {
-          throw new Error("登入狀態已失效或權限不足，請重新登入後再試一次。");
-        }
-        throw new Error(rawError || "批次入帳失敗");
+        throw new Error(mapFinanceAdminMutationError(rawError, "批次入帳失敗"));
       }
       const updated = result.data || {};
       await loadFundPayments(fundPaymentForm.eventId);

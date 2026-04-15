@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { mapAppErrorMessage } from "../utils/errorMappings";
+import { mapSoftballAttendanceError, mapSoftballBootstrapError } from "../utils/authErrorPaths";
 
 function SoftballPlayerPage({ shared }) {
 
@@ -229,13 +229,7 @@ function SoftballPlayerPage({ shared }) {
         { requireAuth: true }
       );
       if (!result.ok) {
-        setError(
-          `出席資料載入失敗：${mapAppErrorMessage(result.error || "載入失敗", {
-            reauthMessage: "請重新登入後再載入出席資料。",
-            networkMessage: "目前網路或系統回應較慢，請稍後再試。",
-            fallbackMessage: result.error || "載入失敗",
-          })}`
-        );
+        setError(mapSoftballAttendanceError(result.error || "載入失敗"));
         // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
         setAttendanceLoaded(true);
         return;
@@ -268,13 +262,7 @@ function SoftballPlayerPage({ shared }) {
       setAttendanceLoaded(true);
     } catch (err) {
       const message = String((err && err.message) || "載入失敗");
-      setError(
-        `出席資料載入失敗：${mapAppErrorMessage(message, {
-          reauthMessage: "請重新登入後再載入出席資料。",
-          networkMessage: "目前網路或系統回應較慢，請稍後再試。",
-          fallbackMessage: message,
-        })}`
-      );
+      setError(mapSoftballAttendanceError(message));
       // Keep existing attendance state (avoid reverting optimistic UI) when reload fails.
       setAttendanceLoaded(true);
     }
@@ -290,13 +278,7 @@ function SoftballPlayerPage({ shared }) {
       } catch (err) {
         if (!ignore) {
           const message = String((err && err.message) || "壘球資料載入失敗。");
-          setError(
-            mapAppErrorMessage(message, {
-              reauthMessage: "登入狀態已失效，請重新登入後再載入壘球資料。",
-              networkMessage: "目前網路或系統回應較慢，壘球資料稍後再試。",
-              fallbackMessage: "壘球資料載入失敗。",
-            })
-          );
+          setError(mapSoftballBootstrapError(message));
         }
       } finally {
         if (!ignore) {
