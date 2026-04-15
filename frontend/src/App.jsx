@@ -2135,29 +2135,48 @@ function getGoogleIdTokenSilently_() {
     () =>
       new Promise((resolve, reject) => {
         let settled = false;
+        const settleResolve = (value) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutId);
+          resolve(value);
+        };
+        const settleReject = (error) => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timeoutId);
+          reject(error instanceof Error ? error : new Error(String(error || "Silent login unavailable")));
+        };
+        const timeoutId = window.setTimeout(() => {
+          settleReject(new Error("Silent login timeout"));
+        }, 8000);
+
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           use_fedcm_for_prompt: true,
           auto_select: true,
           callback: (response) => {
-            if (settled) {
-              return;
-            }
-            settled = true;
             if (response && response.credential) {
-              resolve(response.credential);
+              settleResolve(response.credential);
             } else {
-              reject(new Error("No credential"));
+              settleReject(new Error("No credential"));
             }
           },
         });
         window.google.accounts.id.prompt((notification) => {
-          if (settled) {
+          if (settled || !notification) {
             return;
           }
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            settled = true;
-            reject(new Error("Silent login unavailable"));
+          if (
+            notification.isNotDisplayed() ||
+            notification.isSkippedMoment() ||
+            (typeof notification.isDismissedMoment === "function" && notification.isDismissedMoment())
+          ) {
+            settleReject(new Error("Silent login unavailable"));
           }
         });
       })
