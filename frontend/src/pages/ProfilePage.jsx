@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 const buildEmptyForm_ = () => ({
   email: "",
@@ -90,7 +91,14 @@ export default function ProfilePage({ shared }) {
         birthdayDay: profilePayload && profilePayload.birthdayDay ? profilePayload.birthdayDay : "",
       });
     } catch (err) {
-      setError(err.message || "載入失敗");
+      const message = String((err && err.message) || "載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入個人資料。",
+          networkMessage: "目前網路或系統回應較慢，個人資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
       setProfile(null);
     } finally {
       setLoading(false);
@@ -216,7 +224,14 @@ export default function ProfilePage({ shared }) {
       }
       setSuccess("已更新個人資訊");
     } catch (err) {
-      setError(err.message || "更新失敗");
+      const message = String((err && err.message) || "更新失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再更新個人資料。",
+          networkMessage: "目前網路或系統回應較慢，稍後再試一次。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setSaving(false);
     }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 
 function FinancePage({ shared }) {
   const attachmentActionLabel = isStandalonePwa_() ? "開啟附件" : "預覽附件";
@@ -201,7 +202,14 @@ function FinancePage({ shared }) {
       }
       setRequests(result.data && result.data.requests ? result.data.requests : []);
     } catch (err) {
-      setError(err.message || "載入失敗");
+      const message = String((err && err.message) || "載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入財務資料。",
+          networkMessage: "目前網路或系統回應較慢，財務資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -337,7 +345,14 @@ function FinancePage({ shared }) {
       setMemberGroups(resolveMemberGroups_(googleLinkedStudent && googleLinkedStudent.id, memberships));
       return true;
     } catch (err) {
-      setError(err.message || "載入失敗");
+      const message = String((err && err.message) || "載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入申請資料。",
+          networkMessage: "目前網路或系統回應較慢，申請資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
       return false;
     } finally {
       setLoading(false);
@@ -795,7 +810,14 @@ function FinancePage({ shared }) {
       resetForm();
       await loadRequests(googleLinkedStudent.email);
     } catch (err) {
-      setError(err.message || "儲存失敗");
+      const message = String((err && err.message) || "儲存失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再儲存。",
+          networkMessage: "目前網路或系統回應較慢，請稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -902,7 +924,14 @@ function FinancePage({ shared }) {
       resetForm();
       await loadRequests(googleLinkedStudent.email);
     } catch (err) {
-      setError(err.message || "送出失敗");
+      const message = String((err && err.message) || "送出失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再送出。",
+          networkMessage: "目前網路或系統回應較慢，請稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -927,7 +956,14 @@ function FinancePage({ shared }) {
       }
       await loadRequests(googleLinkedStudent.email);
     } catch (err) {
-      setError(err.message || "撤回失敗");
+      const message = String((err && err.message) || "撤回失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再撤回。",
+          networkMessage: "目前網路或系統回應較慢，請稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { mapAppErrorMessage } from "../utils/errorMappings";
 import { QRCodeSVG } from "qrcode.react";
 import {
   addDays_,
@@ -607,7 +608,15 @@ export default function AdminPage({
       }
       setEvents(result.data && result.data.events ? result.data.events : []);
     } catch (err) {
-      setError("活動列表載入失敗。");
+      const message = String((err && err.message) || "活動列表載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入活動列表。",
+          forbiddenMessage: "你目前沒有權限查看活動後台。",
+          networkMessage: "目前網路或系統回應較慢，活動列表稍後再試。",
+          fallbackMessage: "活動列表載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -911,7 +920,15 @@ export default function AdminPage({
       }
       setStudents(result.data && result.data.students ? result.data.students : []);
     } catch (err) {
-      setError("同學名單載入失敗。");
+      const message = String((err && err.message) || "同學名單載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入同學名單。",
+          forbiddenMessage: "你目前沒有權限查看同學名單。",
+          networkMessage: "目前網路或系統回應較慢，同學名單稍後再試。",
+          fallbackMessage: "同學名單載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -937,7 +954,15 @@ export default function AdminPage({
       directoryLoadedTokenRef.current = marker;
     } catch (err) {
       setDirectory([]);
-      setError(String((err && err.message) || "通訊錄載入失敗"));
+      const message = String((err && err.message) || "通訊錄載入失敗");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入通訊錄。",
+          forbiddenMessage: "你目前沒有權限查看通訊錄。",
+          networkMessage: "目前網路或系統回應較慢，通訊錄稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -954,7 +979,15 @@ export default function AdminPage({
       setRegistrations(result.data && result.data.registrations ? result.data.registrations : []);
       setRegistrationsLoaded(true);
     } catch (err) {
-      setError("報名名單載入失敗。");
+      const message = String((err && err.message) || "報名名單載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入報名名單。",
+          forbiddenMessage: "你目前沒有權限查看報名名單。",
+          networkMessage: "目前網路或系統回應較慢，報名名單稍後再試。",
+          fallbackMessage: "報名名單載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -974,7 +1007,15 @@ export default function AdminPage({
       setMembershipDirty(false);
       setMembershipStatus("");
     } catch (err) {
-      setError(err.message || "班務分組載入失敗。");
+      const message = String((err && err.message) || "班務分組載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入班務分組。",
+          forbiddenMessage: "你目前沒有權限查看班務分組。",
+          networkMessage: "目前網路或系統回應較慢，班務分組稍後再試。",
+          fallbackMessage: message,
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -1010,7 +1051,15 @@ export default function AdminPage({
       setMembershipStatus("");
       return true;
     } catch (err) {
-      setError(err.message || "後台資料載入失敗。");
+      const message = String((err && err.message) || "後台資料載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入後台資料。",
+          forbiddenMessage: "你目前沒有權限使用此後台。",
+          networkMessage: "目前網路或系統回應較慢，後台資料稍後再試。",
+          fallbackMessage: message,
+        })
+      );
       return false;
     } finally {
       setLoading(false);
@@ -1028,7 +1077,15 @@ export default function AdminPage({
       setCheckins(result.data && result.data.checkins ? result.data.checkins : []);
       setCheckinsLoaded(true);
     } catch (err) {
-      setError("簽到名單載入失敗。");
+      const message = String((err && err.message) || "簽到名單載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入簽到名單。",
+          forbiddenMessage: "你目前沒有權限查看簽到名單。",
+          networkMessage: "目前網路或系統回應較慢，簽到名單稍後再試。",
+          fallbackMessage: "簽到名單載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -1047,7 +1104,15 @@ export default function AdminPage({
       setOrderPlans(sorted);
       setOrderPlansLoaded(true);
     } catch (err) {
-      setError("訂餐設定載入失敗。");
+      const message = String((err && err.message) || "訂餐設定載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入訂餐設定。",
+          forbiddenMessage: "你目前沒有權限查看訂餐設定。",
+          networkMessage: "目前網路或系統回應較慢，訂餐設定稍後再試。",
+          fallbackMessage: "訂餐設定載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
@@ -1067,7 +1132,15 @@ export default function AdminPage({
       }
       setOrderResponses(result.data && result.data.responses ? result.data.responses : []);
     } catch (err) {
-      setError("訂餐名單載入失敗。");
+      const message = String((err && err.message) || "訂餐名單載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入訂餐名單。",
+          forbiddenMessage: "你目前沒有權限查看訂餐名單。",
+          networkMessage: "目前網路或系統回應較慢，訂餐名單稍後再試。",
+          fallbackMessage: "訂餐名單載入失敗。",
+        })
+      );
     } finally {
       setLoading(false);
     }
