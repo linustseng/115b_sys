@@ -99,6 +99,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   });
   const [showCalendarDesktop, setShowCalendarDesktop] = useState(false);
   const [copiedStudentId, setCopiedStudentId] = useState(false);
+  const [copiedMyEmbaAccount, setCopiedMyEmbaAccount] = useState(false);
   const [authRecovering, setAuthRecovering] = useState(false);
   const [reauthBannerMessage, setReauthBannerMessage] = useState("");
   const { needsReauth, authRestoring, shouldShowReauthPrompt } = computeLandingAuthState({
@@ -1076,25 +1077,47 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                     </p>
                     <p className="mt-1 text-slate-500">{googleLinkedStudent.email}</p>
                     {googleLinkedStudent.id ? (
-                      <p className="mt-1 text-slate-400">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(googleLinkedStudent.id);
-                            setCopiedStudentId(true);
-                            setTimeout(() => {
-                              setCopiedStudentId(false);
-                            }, 1500);
-                          }}
-                          className="hover:text-slate-600 transition-colors"
-                          title="點擊複製學號"
-                        >
-                          學號：{googleLinkedStudent.id}
-                        </button>
-                        {copiedStudentId ? (
-                          <span className="ml-2 text-xs text-green-600">已複製</span>
-                        ) : null}
-                      </p>
+                      <>
+                        <p className="mt-1 text-slate-400">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(googleLinkedStudent.id);
+                              setCopiedStudentId(true);
+                              setTimeout(() => {
+                                setCopiedStudentId(false);
+                              }, 1500);
+                            }}
+                            className="transition-colors hover:text-slate-600"
+                            title="點擊複製學號"
+                          >
+                            學號：{googleLinkedStudent.id}
+                          </button>
+                          {copiedStudentId ? (
+                            <span className="ml-2 text-xs text-green-600">已複製</span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 text-slate-400">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const myEmbaAccount = `${googleLinkedStudent.id}@emba.ntu.edu.tw`;
+                              navigator.clipboard.writeText(myEmbaAccount);
+                              setCopiedMyEmbaAccount(true);
+                              setTimeout(() => {
+                                setCopiedMyEmbaAccount(false);
+                              }, 1500);
+                            }}
+                            className="transition-colors hover:text-slate-600"
+                            title="點擊複製 myEMBA 帳號"
+                          >
+                            myEMBA：{googleLinkedStudent.id}@emba.ntu.edu.tw
+                          </button>
+                          {copiedMyEmbaAccount ? (
+                            <span className="ml-2 text-xs text-green-600">已複製</span>
+                          ) : null}
+                        </p>
+                      </>
                     ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
                       <button
