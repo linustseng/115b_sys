@@ -944,7 +944,7 @@ function SoftballPlayerPage({ shared }) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200/80">Game Day Cheer Mix</p>
                 <h3 className="mt-3 text-2xl font-black tracking-[0.08em] text-white sm:text-3xl">壘球隊應援曲</h3>
-                <p className="mt-2 max-w-2xl text-sm text-rose-100/80">正式中文曲名、熱血播放介面，支援連續播放，播完會自動接下一首。</p>
+                <p className="mt-2 max-w-2xl text-sm text-rose-100/80">正式中文曲名、熱血播放介面，預設單曲循環播放，需要時可手動切到上一首或下一首。</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <button type="button" onClick={handlePlayPrevious} className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20">上一首</button>
@@ -990,8 +990,8 @@ function SoftballPlayerPage({ shared }) {
                       setIsPlaying(true);
                       setAudioError("");
                     }}
+                    loop
                     onPause={() => setIsPlaying(false)}
-                    onEnded={handlePlayNext}
                     onError={() => {
                       setIsPlaying(false);
                       setAudioError("音檔載入失敗，請確認路徑是否正確。");
