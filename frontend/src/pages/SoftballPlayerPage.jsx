@@ -132,25 +132,29 @@ function SoftballPlayerPage({ shared }) {
   };
 
   const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
-  const cheerPlaylist = useMemo(
-    () =>
-      (Array.isArray(softballConfig.cheerPlaylist) ? softballConfig.cheerPlaylist : [])
-        .map((item, index) => {
-          const row = item && typeof item === "object" ? item : {};
-          const title = String(row.title || row.name || `應援曲 ${index + 1}`).trim();
-          const url = normalizeCheerTrackUrl_(row.url || row.audioUrl || "");
-          if (!url) {
-            return null;
-          }
-          return {
-            id: String(row.id || `track-${index + 1}`),
-            title,
-            url,
-          };
-        })
-        .filter(Boolean),
-    [softballConfig]
-  );
+  const defaultCheerPlaylist = [
+    { id: "track-1", title: "Hero", url: "/media/softball-cheers/01-hero.mp3" },
+    { id: "track-2", title: "Neto", url: "/media/softball-cheers/02-neto.mp3" },
+    { id: "track-3", title: "Haka", url: "/media/softball-cheers/03-haka.mp3" },
+  ];
+  const cheerPlaylist = useMemo(() => {
+    const configured = (Array.isArray(softballConfig.cheerPlaylist) ? softballConfig.cheerPlaylist : [])
+      .map((item, index) => {
+        const row = item && typeof item === "object" ? item : {};
+        const title = String(row.title || row.name || `應援曲 ${index + 1}`).trim();
+        const url = normalizeCheerTrackUrl_(row.url || row.audioUrl || "");
+        if (!url) {
+          return null;
+        }
+        return {
+          id: String(row.id || `track-${index + 1}`),
+          title,
+          url,
+        };
+      })
+      .filter(Boolean);
+    return configured.length ? configured : defaultCheerPlaylist;
+  }, [softballConfig]);
   const currentTrack = cheerPlaylist[currentTrackIndex] || null;
 
   useEffect(() => {
