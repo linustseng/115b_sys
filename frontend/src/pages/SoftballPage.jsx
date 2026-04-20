@@ -79,6 +79,7 @@ function SoftballPage({ shared }) {
   const [membershipsLoaded, setMembershipsLoaded] = useState(false);
   const [softballConfig, setSoftballConfig] = useState({});
   const [jerseyDeadline, setJerseyDeadline] = useState("");
+  const [cheerPlaylistText, setCheerPlaylistText] = useState("");
   const [activePracticeId, setActivePracticeId] = useState("");
   const [supplySubtab, setSupplySubtab] = useState("cases");
   const [playerForm, setPlayerForm] = useState({
@@ -209,6 +210,55 @@ function SoftballPage({ shared }) {
   });
 
   const normalizeId_ = (value) => String(value || "").trim();
+
+  const normalizeCheerTrackUrl_ = (value) => {
+    const text = String(value || "").trim();
+    if (!text) {
+      return "";
+    }
+    if (/^https?:\/\//i.test(text) || text.startsWith("/")) {
+      return text;
+    }
+    return `/${text.replace(/^\/+/, "")}`;
+  };
+
+  const formatCheerPlaylistText_ = (playlist) =>
+    (Array.isArray(playlist) ? playlist : [])
+      .map((item) => {
+        const row = item && typeof item === "object" ? item : {};
+        const title = String(row.title || row.name || "").trim();
+        const url = normalizeCheerTrackUrl_(row.url || row.audioUrl || "");
+        if (!title || !url) {
+          return "";
+        }
+        return `${title} | ${url}`;
+      })
+      .filter(Boolean)
+      .join("\n");
+
+  const parseCheerPlaylistText_ = (value) => {
+    const lines = String(value || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"));
+
+    return lines.map((line, index) => {
+      const parts = line.split("|");
+      if (parts.length < 2) {
+        throw new Error(`應援曲第 ${index + 1} 行格式錯誤，請使用「歌名 | 路徑」`);
+      }
+      const title = String(parts[0] || "").trim();
+      const url = normalizeCheerTrackUrl_(parts.slice(1).join("|").trim());
+      if (!title || !url) {
+        throw new Error(`應援曲第 ${index + 1} 行缺少歌名或路徑`);
+      }
+      return {
+        id: `track-${index + 1}`,
+        title,
+        url,
+      };
+    });
+  };
 
   const statusTimerRef = useRef(null);
   const flashStatusMessage_ = (message, timeoutMs = 2500) => {
@@ -508,6 +558,7 @@ function SoftballPage({ shared }) {
     const config = data.config || {};
     setSoftballConfig(config);
     setJerseyDeadline(config.jerseyDeadline || "");
+    setCheerPlaylistText(formatCheerPlaylistText_(config.cheerPlaylist || []));
     setPlayers(data.players || []);
     setPractices(practicesList);
     setFields(data.fields || []);
@@ -621,8 +672,10 @@ function SoftballPage({ shared }) {
       const config = result.data && result.data.config ? result.data.config : {};
       setSoftballConfig(config);
       setJerseyDeadline(config.jerseyDeadline || "");
+      setCheerPlaylistText(formatCheerPlaylistText_(config.cheerPlaylist || []));
     } catch (err) {
       setSoftballConfig({});
+      setCheerPlaylistText("");
     }
   };
 
@@ -970,17 +1023,22 @@ function SoftballPage({ shared }) {
     setSaving(true);
     setStatusMessage("");
     try {
+      const nextConfig = {
+        ...softballConfig,
+        jerseyDeadline: jerseyDeadline,
+        cheerPlaylist: parseCheerPlaylistText_(cheerPlaylistText),
+      };
       const { result } = await effectiveApiRequest({
         action: "updateSoftballConfig",
-        data: {
-          jerseyDeadline: jerseyDeadline,
-        },
+        data: nextConfig,
       });
       if (!result.ok) {
         throw new Error(result.error || "更新失敗");
       }
-      setSoftballConfig(result.data && result.data.config ? result.data.config : {});
-      setStatusMessage("已更新背號截止日");
+      const savedConfig = result.data && result.data.config ? result.data.config : {};
+      setSoftballConfig(savedConfig);
+      setCheerPlaylistText(formatCheerPlaylistText_(savedConfig.cheerPlaylist || []));
+      setStatusMessage("已更新背號截止日與應援曲");
     } catch (err) {
       setStatusMessage(err.message || "更新失敗");
     } finally {
@@ -2328,28 +2386,44 @@ function SoftballPage({ shared }) {
                     </div>
                   </div>
                 ) : null}
-                <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold text-slate-900">背號截止日</p>
-                    <form onSubmit={handleSaveConfig} className="flex items-center gap-2">
+                <form onSubmit={handleSaveConfig} className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4 text-xs text-slate-600">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="font-semibold text-slate-900">壘球前台設定</p>
+                    <button
+                      type="submit"
+                      className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
+                    >
+                      儲存
+                    </button>
+                  </div>
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[220px_1fr]">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-900">背號截止日</label>
                       <input
                         type="date"
                         value={jerseyDeadline}
                         onChange={(event) => setJerseyDeadline(event.target.value)}
-                        className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700"
+                        className="mt-2 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700"
                       />
-                      <button
-                        type="submit"
-                        className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300"
-                      >
-                        儲存
-                      </button>
-                    </form>
+                      <p className="mt-2 text-[11px] text-slate-400">
+                        截止日前號碼為暫時保留，截止後由隊務一次核准。
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-900">應援曲 playlist</label>
+                      <textarea
+                        value={cheerPlaylistText}
+                        onChange={(event) => setCheerPlaylistText(event.target.value)}
+                        rows="6"
+                        placeholder={"台大 EMBA 115B 壘球應援曲 | /media/softball-cheers/01-cheer.mp3\n熱血出擊 | /media/softball-cheers/02-go-team.mp3"}
+                        className="mt-2 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-900"
+                      />
+                      <p className="mt-2 text-[11px] text-slate-400">
+                        一行一首，格式為「歌名 | mp3 路徑」。可用相對站內路徑，例如 /media/softball-cheers/01-song.mp3。
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-2 text-[11px] text-slate-400">
-                    截止日前號碼為暫時保留，截止後由隊務一次核准。
-                  </p>
-                </div>
+                </form>
                 {filteredPlayers.map((player) => {
                   const matchedStudent = studentById[normalizeId_(player.id)] || null;
                   const displayName = getPlayerDisplayName_(player, matchedStudent) || "-";

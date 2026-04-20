@@ -103,11 +103,26 @@ function SoftballPlayerPage({ shared }) {
   });
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
   const [pendingAttendanceStatusMap, setPendingAttendanceStatusMap] = useState({});
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [audioError, setAudioError] = useState("");
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
   const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
 
   const normalizeId_ = (value) => String(value || "").trim();
+  const audioRef = useRef(null);
+
+  const normalizeCheerTrackUrl_ = (value) => {
+    const text = String(value || "").trim();
+    if (!text) {
+      return "";
+    }
+    if (/^https?:\/\//i.test(text) || text.startsWith("/")) {
+      return text;
+    }
+    return `/${text.replace(/^\/+/, "")}`;
+  };
 
   const formatJerseyLabel_ = (value) => {
     if (!value) {
@@ -117,6 +132,54 @@ function SoftballPlayerPage({ shared }) {
   };
 
   const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
+  const cheerPlaylist = useMemo(
+    () =>
+      (Array.isArray(softballConfig.cheerPlaylist) ? softballConfig.cheerPlaylist : [])
+        .map((item, index) => {
+          const row = item && typeof item === "object" ? item : {};
+          const title = String(row.title || row.name || `應援曲 ${index + 1}`).trim();
+          const url = normalizeCheerTrackUrl_(row.url || row.audioUrl || "");
+          if (!url) {
+            return null;
+          }
+          return {
+            id: String(row.id || `track-${index + 1}`),
+            title,
+            url,
+          };
+        })
+        .filter(Boolean),
+    [softballConfig]
+  );
+  const currentTrack = cheerPlaylist[currentTrackIndex] || null;
+
+  useEffect(() => {
+    if (currentTrackIndex < cheerPlaylist.length) {
+      return;
+    }
+    setCurrentTrackIndex(0);
+  }, [cheerPlaylist.length, currentTrackIndex]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) {
+      setIsPlaying(false);
+      return;
+    }
+    audio.pause();
+    audio.load();
+    setAudioError("");
+    if (!isPlaying) {
+      return;
+    }
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(() => {
+        setIsPlaying(false);
+        setAudioError("瀏覽器暫時阻擋自動播放，請再按一次播放。");
+      });
+    }
+  }, [currentTrackIndex, currentTrack, isPlaying]);
 
   const authedApiRequest = async (payload, options = {}) => {
     const requireAuth = options && options.requireAuth === true;
@@ -476,6 +539,50 @@ function SoftballPlayerPage({ shared }) {
     }
   };
 
+  const handleSelectTrack = (index) => {
+    setCurrentTrackIndex(index);
+    setIsPlaying(true);
+    setAudioError("");
+  };
+
+  const handleToggleAudio = async () => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) {
+      return;
+    }
+    setAudioError("");
+    if (!audio.paused) {
+      audio.pause();
+      setIsPlaying(false);
+      return;
+    }
+    try {
+      await audio.play();
+      setIsPlaying(true);
+    } catch (error) {
+      setIsPlaying(false);
+      setAudioError("播放失敗，請再試一次。");
+    }
+  };
+
+  const handlePlayPrevious = () => {
+    if (!cheerPlaylist.length) {
+      return;
+    }
+    setCurrentTrackIndex((prev) => (prev - 1 + cheerPlaylist.length) % cheerPlaylist.length);
+    setIsPlaying(true);
+    setAudioError("");
+  };
+
+  const handlePlayNext = () => {
+    if (!cheerPlaylist.length) {
+      return;
+    }
+    setCurrentTrackIndex((prev) => (prev + 1) % cheerPlaylist.length);
+    setIsPlaying(true);
+    setAudioError("");
+  };
+
   const attendanceByPractice = attendance.reduce((acc, item) => {
     const key = normalizeId_(item.practiceId);
     if (key) {
@@ -819,6 +926,69 @@ function SoftballPlayerPage({ shared }) {
           <div className="mb-6 alert alert-error">
             {error}
           </div>
+        ) : null}
+
+        {cheerPlaylist.length ? (
+          <section className="mb-6 card p-7 sm:p-10">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-rose-400">Softball Cheer Mix</p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-900">壘球隊應援曲</h3>
+                <p className="mt-1 text-sm text-slate-500">支援連續播放，播完會自動接下一首。</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={handlePlayPrevious} className="btn-chip">上一首</button>
+                <button type="button" onClick={handleToggleAudio} className="btn-primary">
+                  {isPlaying ? "暫停" : "播放"}
+                </button>
+                <button type="button" onClick={handlePlayNext} className="btn-chip">下一首</button>
+              </div>
+            </div>
+            {currentTrack ? (
+              <div className="mt-5 rounded-3xl border border-rose-200/70 bg-rose-50/60 p-5">
+                <p className="text-xs font-semibold text-rose-500">現在播放</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{currentTrack.title}</p>
+                <audio
+                  ref={audioRef}
+                  className="mt-4 w-full"
+                  controls
+                  preload="none"
+                  src={currentTrack.url}
+                  onPlay={() => {
+                    setIsPlaying(true);
+                    setAudioError("");
+                  }}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={handlePlayNext}
+                  onError={() => {
+                    setIsPlaying(false);
+                    setAudioError("音檔載入失敗，請確認路徑是否正確。");
+                  }}
+                />
+                {audioError ? <p className="mt-2 text-xs text-rose-500">{audioError}</p> : null}
+              </div>
+            ) : null}
+            <div className="mt-5 grid gap-3">
+              {cheerPlaylist.map((track, index) => {
+                const active = index === currentTrackIndex;
+                return (
+                  <button
+                    key={track.id}
+                    type="button"
+                    onClick={() => handleSelectTrack(index)}
+                    className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm ${
+                      active
+                        ? "border-rose-300 bg-rose-50 text-rose-900"
+                        : "border-slate-200/70 bg-slate-50/60 text-slate-600 hover:border-slate-300"
+                    }`}
+                  >
+                    <span className="font-semibold">{track.title}</span>
+                    <span className="text-xs">{active ? "播放中" : "點此播放"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
         ) : null}
 
         {activeTab === "profile" ? (
