@@ -64,6 +64,9 @@ function SoftballPlayerPage({ shared }) {
     if (queryTab === "profile") {
       return "profile";
     }
+    if (queryTab === "playlist") {
+      return "playlist";
+    }
     return "attendance";
   });
   const [players, setPlayers] = useState([]);
@@ -907,6 +910,7 @@ function SoftballPlayerPage({ shared }) {
           <div className="flex flex-wrap gap-3 text-sm font-semibold text-slate-600">
             {[
               { id: "attendance", label: "練習回覆" },
+              { id: "playlist", label: "應援曲播放" },
               { id: "profile", label: "我的資料" },
             ].map((item) => (
               <button
@@ -934,7 +938,7 @@ function SoftballPlayerPage({ shared }) {
           </div>
         ) : null}
 
-        {cheerPlaylist.length ? (
+        {activeTab === "playlist" && cheerPlaylist.length ? (
           <section className="mb-6 overflow-hidden rounded-[2rem] border border-rose-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.28),_transparent_30%),linear-gradient(135deg,_rgba(15,23,42,1),_rgba(88,28,135,0.96)_52%,_rgba(190,24,93,0.92))] p-7 text-white shadow-[0_28px_80px_rgba(15,23,42,0.35)] sm:p-10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
