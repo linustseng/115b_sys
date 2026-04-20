@@ -133,9 +133,10 @@ function SoftballPlayerPage({ shared }) {
 
   const jerseyNumbers = Array.from({ length: 100 }, (_, index) => formatJerseyLabel_(String(index)));
   const defaultCheerPlaylist = [
-    { id: "track-1", title: "Hero", url: "/media/softball-cheers/01-hero.mp3" },
-    { id: "track-2", title: "Neto", url: "/media/softball-cheers/02-neto.mp3" },
-    { id: "track-3", title: "Haka", url: "/media/softball-cheers/03-haka.mp3" },
+    { id: "track-1", title: "炸裂曲", subtitle: "Hero", url: "/media/softball-cheers/01-zhaliequ.mp3" },
+    { id: "track-2", title: "三振舞", subtitle: "Neto", url: "/media/softball-cheers/02-sanzhenwu.mp3" },
+    { id: "track-3", title: "拍手曲", subtitle: "Haka / Clap", url: "/media/softball-cheers/03-paishouqu.mp3" },
+    { id: "track-4", title: "台灣尚勇", subtitle: "Taiwan Strong", url: "/media/softball-cheers/04-taiwan-shang-yong.mp3" },
   ];
   const cheerPlaylist = useMemo(() => {
     const configured = (Array.isArray(softballConfig.cheerPlaylist) ? softballConfig.cheerPlaylist : [])
@@ -149,6 +150,7 @@ function SoftballPlayerPage({ shared }) {
         return {
           id: String(row.id || `track-${index + 1}`),
           title,
+          subtitle: String(row.subtitle || row.artist || "").trim(),
           url,
         };
       })
@@ -933,46 +935,77 @@ function SoftballPlayerPage({ shared }) {
         ) : null}
 
         {cheerPlaylist.length ? (
-          <section className="mb-6 card p-7 sm:p-10">
+          <section className="mb-6 overflow-hidden rounded-[2rem] border border-rose-200/70 bg-[radial-gradient(circle_at_top_left,_rgba(251,113,133,0.28),_transparent_30%),linear-gradient(135deg,_rgba(15,23,42,1),_rgba(88,28,135,0.96)_52%,_rgba(190,24,93,0.92))] p-7 text-white shadow-[0_28px_80px_rgba(15,23,42,0.35)] sm:p-10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.25em] text-rose-400">Softball Cheer Mix</p>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900">壘球隊應援曲</h3>
-                <p className="mt-1 text-sm text-slate-500">支援連續播放，播完會自動接下一首。</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-rose-200/80">Game Day Cheer Mix</p>
+                <h3 className="mt-3 text-2xl font-black tracking-[0.08em] text-white sm:text-3xl">壘球隊應援曲</h3>
+                <p className="mt-2 max-w-2xl text-sm text-rose-100/80">正式中文曲名、熱血播放介面，支援連續播放，播完會自動接下一首。</p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={handlePlayPrevious} className="btn-chip">上一首</button>
-                <button type="button" onClick={handleToggleAudio} className="btn-primary">
-                  {isPlaying ? "暫停" : "播放"}
+                <button type="button" onClick={handlePlayPrevious} className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20">上一首</button>
+                <button type="button" onClick={handleToggleAudio} className="rounded-full bg-rose-500 px-5 py-2 text-xs font-bold text-white shadow-lg shadow-rose-900/30 hover:bg-rose-400">
+                  {isPlaying ? "暫停播放" : "開始播放"}
                 </button>
-                <button type="button" onClick={handlePlayNext} className="btn-chip">下一首</button>
+                <button type="button" onClick={handlePlayNext} className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white backdrop-blur hover:bg-white/20">下一首</button>
               </div>
             </div>
             {currentTrack ? (
-              <div className="mt-5 rounded-3xl border border-rose-200/70 bg-rose-50/60 p-5">
-                <p className="text-xs font-semibold text-rose-500">現在播放</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{currentTrack.title}</p>
-                <audio
-                  ref={audioRef}
-                  className="mt-4 w-full"
-                  controls
-                  preload="none"
-                  src={currentTrack.url}
-                  onPlay={() => {
-                    setIsPlaying(true);
-                    setAudioError("");
-                  }}
-                  onPause={() => setIsPlaying(false)}
-                  onEnded={handlePlayNext}
-                  onError={() => {
-                    setIsPlaying(false);
-                    setAudioError("音檔載入失敗，請確認路徑是否正確。");
-                  }}
-                />
-                {audioError ? <p className="mt-2 text-xs text-rose-500">{audioError}</p> : null}
+              <div className="mt-6 grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
+                <div className="relative overflow-hidden rounded-[1.75rem] border border-white/15 bg-white/10 p-5 backdrop-blur">
+                  <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-rose-400/30 blur-2xl" />
+                  <div className="absolute -bottom-10 -left-10 h-28 w-28 rounded-full bg-fuchsia-400/20 blur-2xl" />
+                  <div className="relative flex aspect-square items-center justify-center rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_30%_30%,_rgba(255,255,255,0.22),_transparent_28%),linear-gradient(135deg,_rgba(251,113,133,0.85),_rgba(190,24,93,0.82)_45%,_rgba(88,28,135,0.88))] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                    <div className="text-center">
+                      <p className="text-xs font-semibold uppercase tracking-[0.35em] text-rose-100/80">Now Playing</p>
+                      <p className="mt-3 text-4xl font-black tracking-[0.18em] text-white">{String(currentTrack.title || "應援曲").slice(0, 2)}</p>
+                      <p className="mt-3 text-sm font-semibold text-rose-50/90">115B Softball</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-[1.75rem] border border-white/15 bg-white/10 p-5 backdrop-blur">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-rose-200/80">現在播放</p>
+                      <p className="mt-2 text-2xl font-black tracking-[0.08em] text-white">{currentTrack.title}</p>
+                      {currentTrack.subtitle ? (
+                        <p className="mt-2 text-sm font-medium text-rose-100/75">{currentTrack.subtitle}</p>
+                      ) : null}
+                    </div>
+                    <div className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-rose-100/80">
+                      {currentTrackIndex + 1} / {cheerPlaylist.length}
+                    </div>
+                  </div>
+                  <audio
+                    ref={audioRef}
+                    className="mt-5 w-full"
+                    controls
+                    preload="none"
+                    src={currentTrack.url}
+                    onPlay={() => {
+                      setIsPlaying(true);
+                      setAudioError("");
+                    }}
+                    onPause={() => setIsPlaying(false)}
+                    onEnded={handlePlayNext}
+                    onError={() => {
+                      setIsPlaying(false);
+                      setAudioError("音檔載入失敗，請確認路徑是否正確。");
+                    }}
+                  />
+                  {audioError ? <p className="mt-2 text-xs text-rose-200">{audioError}</p> : null}
+                  <div className="mt-5 flex items-center gap-2">
+                    {cheerPlaylist.map((track, index) => (
+                      <span
+                        key={`${track.id}-pulse`}
+                        className={`h-2.5 flex-1 rounded-full ${index === currentTrackIndex ? "bg-rose-300" : "bg-white/15"}`}
+                      />
+                    ))}
+                  </div>
+                </div>
               </div>
             ) : null}
-            <div className="mt-5 grid gap-3">
+            <div className="mt-6 grid gap-3">
               {cheerPlaylist.map((track, index) => {
                 const active = index === currentTrackIndex;
                 return (
@@ -980,14 +1013,19 @@ function SoftballPlayerPage({ shared }) {
                     key={track.id}
                     type="button"
                     onClick={() => handleSelectTrack(index)}
-                    className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left text-sm ${
+                    className={`flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left text-sm transition ${
                       active
-                        ? "border-rose-300 bg-rose-50 text-rose-900"
-                        : "border-slate-200/70 bg-slate-50/60 text-slate-600 hover:border-slate-300"
+                        ? "border-rose-300/60 bg-white/18 text-white shadow-lg shadow-rose-950/20"
+                        : "border-white/10 bg-white/8 text-rose-50/85 hover:bg-white/14"
                     }`}
                   >
-                    <span className="font-semibold">{track.title}</span>
-                    <span className="text-xs">{active ? "播放中" : "點此播放"}</span>
+                    <div className="min-w-0">
+                      <p className="font-bold tracking-[0.04em]">{track.title}</p>
+                      {track.subtitle ? <p className="mt-1 text-xs text-rose-100/70">{track.subtitle}</p> : null}
+                    </div>
+                    <div className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-rose-100/80">
+                      {active ? "播放中" : `第 ${index + 1} 首`}
+                    </div>
                   </button>
                 );
               })}
