@@ -1763,13 +1763,7 @@ function SoftballPage({ shared }) {
       return "unknown";
     };
 
-    const sourceAttendance = Array.isArray(statsAttendance) && statsAttendance.length
-      ? statsAttendance
-      : (() => {
-          return [];
-        })();
-
-    let attendanceRows = sourceAttendance;
+    let attendanceRows = Array.isArray(statsAttendance) ? statsAttendance.slice() : [];
     if (!attendanceRows.length) {
       try {
         const { result } = await effectiveApiRequest({ action: "listSoftballAttendance" });
@@ -1784,17 +1778,24 @@ function SoftballPage({ shared }) {
       }
     }
 
-    const activePlayersForStats = players.filter((player) => {
-      const status = String(player.status || "active").trim().toLowerCase();
-      const requestStatus = String(player.requestStatus || "").trim().toLowerCase();
-      if (status && status !== "active") {
-        return false;
-      }
-      if (requestStatus === "pending") {
-        return false;
-      }
-      return true;
-    });
+    const activePlayersForStats = players
+      .filter((player) => {
+        const status = String(player.status || "active").trim().toLowerCase();
+        const requestStatus = String(player.requestStatus || "").trim().toLowerCase();
+        if (status && status !== "active") {
+          return false;
+        }
+        if (requestStatus === "pending") {
+          return false;
+        }
+        return true;
+      })
+      .slice()
+      .sort((a, b) => {
+        const left = String(getPlayerDisplayName_(a, studentById[normalizeId_(a.id)] || null) || "");
+        const right = String(getPlayerDisplayName_(b, studentById[normalizeId_(b.id)] || null) || "");
+        return left.localeCompare(right, "zh-Hant", { numeric: true });
+      });
 
     const practicesSorted = practices
       .slice()
@@ -1808,10 +1809,7 @@ function SoftballPage({ shared }) {
         return practicesSorted;
       }
       return practicesSorted.slice(0, 10);
-    })();
-
-    const pastPractices = scopedPractices
-      .filter((practice) => isPracticeExpired_(practice))
+    })()
       .slice()
       .sort((a, b) => getPracticeSortKey_(a) - getPracticeSortKey_(b));
 
@@ -1838,79 +1836,31 @@ function SoftballPage({ shared }) {
       "學號",
       "姓名",
       "暱稱",
-      "統計範圍",
-      "已結束場次",
-      "出席",
-      "遲到",
-      "缺席",
-      "未回覆",
-      "參與(出席+遲到)",
-      "回覆率",
-      "參與率",
-      "全勤",
-      ...pastPractices.map((practice) => {
+      ...scopedPractices.map((practice) => {
         const dateLabel = formatPracticeDate_(practice.date || practice.startAt).replace(/\s*\(週[^)]*\)/g, "");
         const title = String(practice.title || "練習").trim();
         return `${dateLabel} ${title}`.trim();
       }),
     ]);
 
-    activePlayersForStats
-      .map((player) => {
-        const playerId = normalizeId_(player.id);
-        const matchedStudent = studentById[playerId] || null;
-        const counts = { total: pastPractices.length, attend: 0, late: 0, absent: 0, unknown: 0 };
-        const practiceStatuses = pastPractices.map((practice) => {
+    activePlayersForStats.forEach((player) => {
+      const playerId = normalizeId_(player.id);
+      const matchedStudent = studentById[playerId] || null;
+      const row = [
+        playerId,
+        getPlayerDisplayName_(player, matchedStudent) || playerId,
+        getResolvedPlayerAlias_(player, matchedStudent),
+        ...scopedPractices.map((practice) => {
           const record = attMap.get(`${normalizeId_(practice.id)}:${playerId}`);
           const status = normalizeAttendanceStatus_(record && record.status);
-          counts[status] += 1;
           return statusLabelMap[status] || "未回覆";
-        });
-        const present = counts.attend + counts.late;
-        const responseRate = counts.total ? Math.round(((counts.total - counts.unknown) / counts.total) * 100) : 0;
-        const participationRate = counts.total ? Math.round((present / counts.total) * 100) : 0;
-        return {
-          playerId,
-          name: getPlayerDisplayName_(player, matchedStudent) || playerId,
-          alias: getResolvedPlayerAlias_(player, matchedStudent),
-          counts,
-          present,
-          responseRate,
-          participationRate,
-          perfectAttendance: counts.total > 0 && present === counts.total,
-          practiceStatuses,
-        };
-      })
-      .sort((a, b) => {
-        if (a.perfectAttendance !== b.perfectAttendance) {
-          return a.perfectAttendance ? -1 : 1;
-        }
-        if (b.present !== a.present) {
-          return b.present - a.present;
-        }
-        return a.name.localeCompare(b.name, "zh-Hant", { numeric: true });
-      })
-      .forEach((item) => {
-        pushRow_([
-          item.playerId,
-          item.name,
-          item.alias,
-          statsScope === "recent5" ? "最近 5 場" : statsScope === "all" ? "全部場次" : "最近 10 場",
-          item.counts.total,
-          item.counts.attend,
-          item.counts.late,
-          item.counts.absent,
-          item.counts.unknown,
-          item.present,
-          `${item.responseRate}%`,
-          `${item.participationRate}%`,
-          item.perfectAttendance ? "是" : "否",
-          ...item.practiceStatuses,
-        ]);
-      });
+        }),
+      ];
+      pushRow_(row);
+    });
 
     if (rows.length === 1) {
-      pushRow_(["", "(無資料)", "", "", 0, 0, 0, 0, 0, 0, "0%", "0%", "否"]);
+      pushRow_(["", "(無資料)", ""]);
     }
 
     const csv = rows.join("\n");
@@ -1923,13 +1873,13 @@ function SoftballPage({ shared }) {
       .replace(/\.\d+Z$/, "")
       .slice(0, 15);
     link.href = url;
-    link.download = `softball-attendance-perfect-award-${statsScope}-${timestamp}.csv`;
+    link.download = `softball-attendance-matrix-${statsScope}-${timestamp}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.URL.revokeObjectURL(url);
 
-    setStatusMessage(`已匯出出席統計 CSV（球員 ${activePlayersForStats.length} 人、已結束場次 ${pastPractices.length} 場）`);
+    setStatusMessage(`已匯出到場矩陣 CSV（球員 ${activePlayersForStats.length} 人、場次 ${scopedPractices.length} 場）`);
   };
 
   const handleExportAttendanceLineText = async () => {
