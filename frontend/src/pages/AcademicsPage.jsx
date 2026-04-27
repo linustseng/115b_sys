@@ -603,6 +603,7 @@ export default function AcademicsPage({ shared }) {
                       token: sessionToken,
                       refreshToken,
                       studentId: linkedStudentId,
+                      studentEmail: String((linkedStudent && linkedStudent.email) || "").trim().toLowerCase(),
                       memberships,
                     });
                   }

@@ -33,8 +33,8 @@ export function computeHomeAuthState({ googleLinkedStudent, adminSession, google
   };
 }
 
-export function shouldRunProfileSilentRecovery({ googleLinkedStudent, idToken }) {
-  return Boolean(!idToken && googleLinkedStudent && googleLinkedStudent.email);
+export function shouldRunProfileSilentRecovery() {
+  return false;
 }
 
 export function shouldLoadFinanceBootstrap({ googleLinkedStudent, bootstrapLoaded }) {

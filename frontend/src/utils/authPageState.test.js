@@ -72,8 +72,8 @@ describe("hasUsableGoogleAuth", () => {
 });
 
 describe("profile and finance auth helpers", () => {
-  it("runs profile silent recovery only when student exists but id token is absent", () => {
-    expect(shouldRunProfileSilentRecovery({ googleLinkedStudent: { email: "linus@example.com" }, idToken: "" })).toBe(true);
+  it("does not run profile silent recovery because Google prompt is not truly silent", () => {
+    expect(shouldRunProfileSilentRecovery({ googleLinkedStudent: { email: "linus@example.com" }, idToken: "" })).toBe(false);
     expect(shouldRunProfileSilentRecovery({ googleLinkedStudent: { email: "linus@example.com" }, idToken: "id-token" })).toBe(false);
     expect(shouldRunProfileSilentRecovery({ googleLinkedStudent: null, idToken: "" })).toBe(false);
   });

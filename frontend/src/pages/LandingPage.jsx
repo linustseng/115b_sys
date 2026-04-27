@@ -324,6 +324,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             token: sessionToken,
             refreshToken,
             studentId: linkedStudentId,
+            studentEmail: String((student && student.email) || "").trim().toLowerCase(),
             memberships,
           });
           setMemberships(memberships);
@@ -1189,6 +1190,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                           token: sessionToken,
                           refreshToken,
                           studentId: linkedStudentId,
+                          studentEmail: String((student && student.email) || "").trim().toLowerCase(),
                           memberships,
                         });
                       }

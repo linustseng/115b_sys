@@ -1637,6 +1637,7 @@ async function requestWithReadRetry_(payload) {
             token: refreshResult.data.sessionToken,
             refreshToken: refreshResult.data.refreshToken || refreshToken,
             studentId: String((storedSession && storedSession.studentId) || "").trim(),
+            studentEmail: String((storedSession && storedSession.studentEmail) || "").trim().toLowerCase(),
             memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
           });
           return requestWithApiV2Read_(payload);
@@ -1656,6 +1657,7 @@ async function requestWithReadRetry_(payload) {
             token: verifyData.sessionToken,
             refreshToken: verifyData.refreshToken || "",
             studentId: linkedStudentId,
+            studentEmail: String((verifyData.student && verifyData.student.email) || "").trim().toLowerCase(),
             memberships: Array.isArray(verifyData.memberships) ? verifyData.memberships : [],
           });
           return requestWithApiV2Read_(payload);
@@ -1773,6 +1775,10 @@ async function recoverStoredAuthSession_() {
   authRecoveryInFlight_ = (async () => {
     const storedSession = loadStoredAdminSession_();
     const storedStudent = loadStoredGoogleStudent_();
+    const clearFailedSession_ = () => {
+      storeAdminSession_(null);
+      storeGoogleIdToken_("");
+    };
 
     if (storedSession && storedSession.refreshToken) {
       try {
@@ -1802,7 +1808,7 @@ async function recoverStoredAuthSession_() {
           };
         }
       } catch (error) {
-        // Fall through to Google-based recovery.
+        clearFailedSession_();
       }
     }
 
@@ -1834,6 +1840,7 @@ async function recoverStoredAuthSession_() {
           token: sessionToken,
           refreshToken,
           studentId,
+          studentEmail: String((student && student.email) || "").trim().toLowerCase(),
           memberships: Array.isArray(verifyData.memberships) ? verifyData.memberships : [],
         });
       }
@@ -1854,18 +1861,7 @@ async function recoverStoredAuthSession_() {
       // Try silent Google token recovery below.
     }
 
-    if (typeof getGoogleIdTokenSilently_ === "function") {
-      try {
-        const refreshedIdToken = String((await getGoogleIdTokenSilently_()) || "").trim();
-        const verifiedSilent = await verifyWithToken_(refreshedIdToken);
-        if (verifiedSilent) {
-          return verifiedSilent;
-        }
-      } catch (error) {
-        // No silent Google recovery available.
-      }
-    }
-
+    clearFailedSession_();
     return { recovered: false, sessionToken: "", idToken: "" };
   })().finally(() => {
     authRecoveryInFlight_ = null;
@@ -2045,8 +2041,11 @@ function storeAdminSession_(session) {
       window.localStorage.removeItem(STORAGE_KEYS.adminSession);
       return;
     }
-    const studentId = String(session.studentId || "").trim();
-    const studentEmail = String(session.studentEmail || "").trim().toLowerCase();
+    const storedStudent = loadStoredGoogleStudent_();
+    const studentId = String(session.studentId || (storedStudent && storedStudent.id) || "").trim();
+    const studentEmail = String(session.studentEmail || (storedStudent && storedStudent.email) || "")
+      .trim()
+      .toLowerCase();
     const memberships = Array.isArray(session.memberships) ? session.memberships : [];
     window.localStorage.setItem(
       STORAGE_KEYS.adminSession,
@@ -2133,59 +2132,11 @@ function waitForGoogleIdentity(timeoutMs = 6000) {
 }
 
 function getGoogleIdTokenSilently_() {
-  if (typeof window === "undefined" || !GOOGLE_CLIENT_ID) {
-    return Promise.reject(new Error("Google Identity unavailable"));
-  }
-  return waitForGoogleIdentity().then(
-    () =>
-      new Promise((resolve, reject) => {
-        let settled = false;
-        const settleResolve = (value) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timeoutId);
-          resolve(value);
-        };
-        const settleReject = (error) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          clearTimeout(timeoutId);
-          reject(error instanceof Error ? error : new Error(String(error || "Silent login unavailable")));
-        };
-        const timeoutId = window.setTimeout(() => {
-          settleReject(new Error("Silent login timeout"));
-        }, 8000);
-
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          use_fedcm_for_prompt: true,
-          auto_select: true,
-          callback: (response) => {
-            if (response && response.credential) {
-              settleResolve(response.credential);
-            } else {
-              settleReject(new Error("No credential"));
-            }
-          },
-        });
-        window.google.accounts.id.prompt((notification) => {
-          if (settled || !notification) {
-            return;
-          }
-          if (
-            notification.isNotDisplayed() ||
-            notification.isSkippedMoment() ||
-            (typeof notification.isDismissedMoment === "function" && notification.isDismissedMoment())
-          ) {
-            settleReject(new Error("Silent login unavailable"));
-          }
-        });
-      })
-  );
+  // Google Identity Services no longer offers a truly invisible ID-token refresh for this flow.
+  // Calling google.accounts.id.prompt() here surfaces the mobile FedCM / One Tap sheet, which made
+  // normal page loads feel like random login interruptions. Keep the function for older call sites,
+  // but make auth recovery session-first and require an explicit Google button click for new tokens.
+  return Promise.reject(new Error("Explicit Google sign-in required"));
 }
 
 function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
@@ -2280,7 +2231,6 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
           text: "signin_with",
           width: 280,
         });
-        window.google.accounts.id.prompt();
       })
       .catch(() => {
         if (!cancelled) {
@@ -2573,6 +2523,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
       token: token,
       refreshToken: nextRefreshToken,
       studentId: String(studentId || "").trim(),
+      studentEmail: String((googleLinkedStudent && googleLinkedStudent.email) || "").trim().toLowerCase(),
       memberships: Array.isArray(nextMemberships) ? nextMemberships : [],
     };
     setAdminSession(payload);
@@ -3163,6 +3114,7 @@ function AppShell() {
               token: refreshResult.data.sessionToken,
               refreshToken: refreshResult.data.refreshToken || storedSession.refreshToken,
               studentId: storedSession.studentId || "",
+              studentEmail: String((storedSession && storedSession.studentEmail) || "").trim().toLowerCase(),
               memberships: Array.isArray(refreshResult.data.memberships) ? refreshResult.data.memberships : [],
             });
             return;
@@ -3177,19 +3129,10 @@ function AppShell() {
         let verifyResponse = await apiRequest({ action: "verifyGoogle", idToken });
         let verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
 
-        if (
-          verifyResult &&
-          verifyResult.ok === false &&
-          String(verifyResult.error || "") === "Unauthorized" &&
-          typeof getGoogleIdTokenSilently_ === "function"
-        ) {
-          // Refresh idToken silently and retry once.
-          const refreshed = await getGoogleIdTokenSilently_();
-          if (refreshed) {
-            storeGoogleIdToken_(refreshed);
-            verifyResponse = await apiRequest({ action: "verifyGoogle", idToken: refreshed });
-            verifyResult = verifyResponse && verifyResponse.result ? verifyResponse.result : null;
-          }
+        if (verifyResult && verifyResult.ok === false && String(verifyResult.error || "") === "Unauthorized") {
+          storeGoogleIdToken_("");
+          storeAdminSession_(null);
+          return;
         }
 
         if (verifyResult && verifyResult.ok && verifyResult.data && verifyResult.data.sessionToken) {
@@ -3198,6 +3141,7 @@ function AppShell() {
             token: verifyResult.data.sessionToken,
             refreshToken: verifyResult.data.refreshToken || "",
             studentId,
+            studentEmail: String((verifyResult.data.student && verifyResult.data.student.email) || "").trim().toLowerCase(),
             memberships: Array.isArray(verifyResult.data.memberships) ? verifyResult.data.memberships : [],
           });
 
