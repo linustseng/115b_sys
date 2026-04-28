@@ -60,6 +60,87 @@ function safeJsonObject(value) {
   }
 }
 
+export function parseTodoDateValue(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number") {
+    const parsedNumber = new Date(value);
+    return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
+  }
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const normalized =
+    /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
+      ? raw.replace(/\//g, "-").replace(" ", "T")
+      : raw;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function isSoftballAttendanceConfirmed(value) {
+  const normalizedStatus = String(value || "").trim().toLowerCase();
+  // Existing semantics: only an empty status or "unknown" is not-yet-confirmed.
+  return Boolean(normalizedStatus && normalizedStatus !== "unknown");
+}
+
+export function isEventAttendanceConfirmed(value) {
+  const attendance = String(value || "").trim();
+  return attendance === "出席" || attendance === "不克出席";
+}
+
+export function isEventTodoExpired(eventRow, { nowMs = Date.now() } = {}) {
+  const status = String((eventRow && eventRow.status) || "").trim().toLowerCase();
+  if (status && status !== "open") {
+    return true;
+  }
+  const closeAt = parseTodoDateValue(eventRow && eventRow.registration_close_at);
+  const endAt = parseTodoDateValue(eventRow && eventRow.end_at);
+  if (closeAt && nowMs > closeAt.getTime()) {
+    return true;
+  }
+  if (endAt && nowMs > endAt.getTime()) {
+    return true;
+  }
+  return false;
+}
+
+export function getOrderCutoffAt(planRow) {
+  const raw = safeJsonObject(planRow && planRow.raw);
+  const explicitCutoff = parseTodoDateValue(
+    firstText(raw.cutoffAt, firstText(raw.closeAt, planRow && planRow.close_at ? planRow.close_at : ""))
+  );
+  if (explicitCutoff) {
+    return explicitCutoff;
+  }
+  const mealDate = parseTodoDateValue(firstText(planRow && planRow.date ? planRow.date : "", raw.date || ""));
+  if (!mealDate) {
+    return null;
+  }
+  const cutoff = new Date(mealDate);
+  cutoff.setDate(cutoff.getDate() - 1);
+  cutoff.setHours(23, 59, 0, 0);
+  return cutoff;
+}
+
+export function isOrderPlanOpen(planRow, { nowMs = Date.now() } = {}) {
+  const raw = safeJsonObject(planRow && planRow.raw);
+  const status = String(firstText(raw.status, planRow && planRow.status ? planRow.status : "")).trim().toLowerCase();
+  if (status && status !== "open") {
+    return false;
+  }
+  const cutoffAt = getOrderCutoffAt(planRow);
+  if (cutoffAt && nowMs > cutoffAt.getTime()) {
+    return false;
+  }
+  return true;
+}
+
 function safeJsonArray(value) {
   if (Array.isArray(value)) {
     return value;
@@ -3805,9 +3886,7 @@ export async function dispatchNativeAction({
             [practiceId, studentId]
           );
           const attendanceRow = rowOrNull(attendanceResult);
-          const normalizedStatus = String((attendanceRow && attendanceRow.status) || "").trim().toLowerCase();
-          // Treat "unknown" as not-yet-confirmed, so the todo stays until the user chooses attend/absent.
-          const hasConfirmedResponse = Boolean(normalizedStatus && normalizedStatus !== "unknown");
+          const hasConfirmedResponse = isSoftballAttendanceConfirmed(attendanceRow && attendanceRow.status);
           const todoId = `todo:softball:${practiceId}:${studentId}`;
 
           if (!hasConfirmedResponse) {
@@ -3856,46 +3935,6 @@ export async function dispatchNativeAction({
 
       // Todo notification: event attendance confirmation (treat "尚未確定" as not-yet-confirmed).
       try {
-        const parseEventDateValue_ = (value) => {
-          if (!value) {
-            return null;
-          }
-          if (value instanceof Date) {
-            return Number.isNaN(value.getTime()) ? null : value;
-          }
-          if (typeof value === "number") {
-            const parsedNumber = new Date(value);
-            return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
-          }
-          const raw = String(value || "").trim();
-          if (!raw) {
-            return null;
-          }
-          const normalized =
-            /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
-              ? raw.replace(/\//g, "-").replace(" ", "T")
-              : raw;
-          const parsed = new Date(normalized);
-          return Number.isNaN(parsed.getTime()) ? null : parsed;
-        };
-
-        const isEventExpired_ = (eventRow) => {
-          const status = String((eventRow && eventRow.status) || "").trim().toLowerCase();
-          if (status && status !== "open") {
-            return true;
-          }
-          const closeAt = parseEventDateValue_(eventRow && eventRow.registration_close_at);
-          const endAt = parseEventDateValue_(eventRow && eventRow.end_at);
-          const nowMs = Date.now();
-          if (closeAt && nowMs > closeAt.getTime()) {
-            return true;
-          }
-          if (endAt && nowMs > endAt.getTime()) {
-            return true;
-          }
-          return false;
-        };
-
         const eventsResult = await query(
           `select id, title, start_at, end_at, location, registration_close_at, status
            from events
@@ -3920,11 +3959,6 @@ export async function dispatchNativeAction({
           registrationsByEventId.set(eventId, row);
         });
 
-        const shouldTreatAsConfirmedAttendance_ = (value) => {
-          const attendance = String(value || "").trim();
-          return attendance === "出席" || attendance === "不克出席";
-        };
-
         for (const eventRow of eventsResult.rows) {
           const eventId = String(eventRow.id || "").trim();
           if (!eventId) {
@@ -3937,8 +3971,8 @@ export async function dispatchNativeAction({
 
           const fields = safeJsonObject(registrationRow.custom_fields);
           const attendance = String(fields.attendance || "").trim();
-          const hasConfirmedAttendance = shouldTreatAsConfirmedAttendance_(attendance);
-          const expired = isEventExpired_(eventRow);
+          const hasConfirmedAttendance = isEventAttendanceConfirmed(attendance);
+          const expired = isEventTodoExpired(eventRow);
           const todoId = `todo:event-attendance:${eventId}:${studentId}`;
 
           if (!expired && !hasConfirmedAttendance) {
@@ -3988,60 +4022,6 @@ export async function dispatchNativeAction({
 
       // Todo notification: pending meal order before cutoff.
       try {
-        const parseOrderDateValue_ = (value) => {
-          if (!value) {
-            return null;
-          }
-          if (value instanceof Date) {
-            return Number.isNaN(value.getTime()) ? null : value;
-          }
-          if (typeof value === "number") {
-            const parsedNumber = new Date(value);
-            return Number.isNaN(parsedNumber.getTime()) ? null : parsedNumber;
-          }
-          const raw = String(value || "").trim();
-          if (!raw) {
-            return null;
-          }
-          const normalized =
-            /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
-              ? raw.replace(/\//g, "-").replace(" ", "T")
-              : raw;
-          const parsed = new Date(normalized);
-          return Number.isNaN(parsed.getTime()) ? null : parsed;
-        };
-
-        const getOrderCutoffAt_ = (planRow) => {
-          const raw = safeJsonObject(planRow && planRow.raw);
-          const explicitCutoff = parseOrderDateValue_(
-            firstText(raw.cutoffAt, firstText(raw.closeAt, planRow && planRow.close_at ? planRow.close_at : ""))
-          );
-          if (explicitCutoff) {
-            return explicitCutoff;
-          }
-          const mealDate = parseOrderDateValue_(firstText(planRow && planRow.date ? planRow.date : "", raw.date || ""));
-          if (!mealDate) {
-            return null;
-          }
-          const cutoff = new Date(mealDate);
-          cutoff.setDate(cutoff.getDate() - 1);
-          cutoff.setHours(23, 59, 0, 0);
-          return cutoff;
-        };
-
-        const isOrderPlanOpen_ = (planRow) => {
-          const raw = safeJsonObject(planRow && planRow.raw);
-          const status = String(firstText(raw.status, planRow && planRow.status ? planRow.status : "")).trim().toLowerCase();
-          if (status && status !== "open") {
-            return false;
-          }
-          const cutoffAt = getOrderCutoffAt_(planRow);
-          if (cutoffAt && Date.now() > cutoffAt.getTime()) {
-            return false;
-          }
-          return true;
-        };
-
         const weekdayShortFormatter = new Intl.DateTimeFormat("zh-TW", {
           timeZone: "Asia/Taipei",
           weekday: "short",
@@ -4141,13 +4121,13 @@ export async function dispatchNativeAction({
           }
           const todoId = `todo:ordering:${orderId}:${studentId}`;
           const rawPlan = safeJsonObject(planRow && planRow.raw);
-          const isOpen = isOrderPlanOpen_(planRow);
+          const isOpen = isOrderPlanOpen(planRow);
           const hasResponse = respondedOrderIds.has(orderId);
 
           if (isOpen && !hasResponse) {
             const createdAtText = nowIso();
-            const cutoffAt = getOrderCutoffAt_(planRow);
-            const mealDate = parseOrderDateValue_(firstText(planRow && planRow.date ? planRow.date : "", rawPlan.date || ""));
+            const cutoffAt = getOrderCutoffAt(planRow);
+            const mealDate = parseTodoDateValue(firstText(planRow && planRow.date ? planRow.date : "", rawPlan.date || ""));
             const title = `${describeMealDay_(mealDate)}便當還沒選`;
             const body = describeCutoff_(cutoffAt);
             const url = "/ordering";
