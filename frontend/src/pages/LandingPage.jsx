@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useEffect, useState } from "react";
-import { computeLandingAuthState } from "../utils/authPageState";
+import { computeLandingAuthState, shouldAttemptLandingAuthRecovery } from "../utils/authPageState";
 import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
@@ -282,7 +282,14 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, []);
 
   useEffect(() => {
-    if (!hasGoogleLogin || !needsReauth || authRecovering) {
+    if (
+      !shouldAttemptLandingAuthRecovery({
+        hasGoogleLogin,
+        needsReauth,
+        authRestoreResolved,
+        authRecovering,
+      })
+    ) {
       return;
     }
     if (typeof getGoogleIdTokenSilently_ !== "function") {
@@ -347,6 +354,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   }, [
     apiRequest,
     authRecovering,
+    authRestoreResolved,
     getGoogleIdTokenSilently_,
     hasGoogleLogin,
     needsReauth,

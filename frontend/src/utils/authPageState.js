@@ -15,6 +15,10 @@ export function computeLandingAuthState({ googleLinkedStudent, hasAuthMaterial, 
   };
 }
 
+export function shouldAttemptLandingAuthRecovery({ hasGoogleLogin, needsReauth, authRestoreResolved, authRecovering }) {
+  return Boolean(hasGoogleLogin && needsReauth && !authRestoreResolved && !authRecovering);
+}
+
 export function hasUsableGoogleAuth({ adminSession, googleIdToken }) {
   const session = adminSession || {};
   const hasSession = hasTruthy(session.refreshToken) || hasTruthy(session.token);
