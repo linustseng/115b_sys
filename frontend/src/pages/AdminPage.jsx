@@ -2907,14 +2907,22 @@ export default function AdminPage({
     return rows;
   };
 
+  const buildSafeFilename_ = (value, fallback = "出席名單") =>
+    String(value || fallback)
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/\s+/g, " ")
+      .replace(/-+/g, "-")
+      .replace(/^[\s.-]+|[\s.-]+$/g, "") || fallback;
+
   const handleExportAttendanceExcel = () => {
     if (typeof window === "undefined" || !registrationEventId) {
       return;
     }
-    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "出席名單").trim();
-    const safeEventId = String(registrationEventId || "event").trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "event";
+    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "活動").trim();
+    const safeEventTitle = buildSafeFilename_(eventTitle || "活動", "活動");
     downloadXlsx({
-      filename: `attendance-list-${safeEventId}.xlsx`,
+      filename: `${safeEventTitle}-出席名單.xlsx`,
       sheetName: eventTitle || "出席名單",
       rows: buildAttendanceExcelRows_(),
     });
