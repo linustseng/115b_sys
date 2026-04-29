@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
+import { downloadXlsx } from "../utils/xlsxExport";
 import { QRCodeSVG } from "qrcode.react";
 import {
   addDays_,
@@ -2837,14 +2838,7 @@ export default function AdminPage({
     window.URL.revokeObjectURL(url);
   };
 
-  const escapeExcelHtml_ = (value) =>
-    String(value == null ? "" : value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-
-  const buildAttendanceExcelHtml_ = () => {
+  const buildAttendanceExcelRows_ = () => {
     const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
     const eventId = String((selectedRegistrationEvent && selectedRegistrationEvent.id) || registrationEventId || "").trim();
     const headers = [
@@ -2871,18 +2865,19 @@ export default function AdminPage({
       "報名時間",
       "更新時間",
     ];
-    const sheetName = String(eventTitle || "出席名單").replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "出席名單";
-    const rows = attendingRegistrationExportRows.length
-      ? attendingRegistrationExportRows
-      : [
-          {
-            name: "(無出席資料)",
-          },
-        ];
-    const rowHtml = rows
-      .map((item, index) => {
-        const values = [
-          attendingRegistrationExportRows.length ? index + 1 : "",
+    const rows = [
+      ["活動名稱", eventTitle || "-"],
+      ["活動ID", eventId || "-"],
+      ["匯出時間", new Date().toLocaleString()],
+      ["出席人數", attendingRegistrationExportRows.length],
+      [],
+      headers,
+    ];
+
+    if (attendingRegistrationExportRows.length) {
+      attendingRegistrationExportRows.forEach((item, index) => {
+        rows.push([
+          index + 1,
           item.name,
           item.studentId,
           item.group,
@@ -2904,53 +2899,25 @@ export default function AdminPage({
           item.notes,
           item.submittedAt,
           item.updatedAt,
-        ];
-        return `<tr>${values
-          .map((value) => `<td style="mso-number-format:'\\@';">${escapeExcelHtml_(value)}</td>`)
-          .join("")}</tr>`;
-      })
-      .join("");
-
-    return `<!doctype html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="UTF-8" />
-<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${escapeExcelHtml_(sheetName)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-<style>
-  table { border-collapse: collapse; }
-  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-family: Arial, "Microsoft JhengHei", sans-serif; font-size: 12px; }
-  th { background: #f1f5f9; font-weight: 700; }
-  .meta { background: #e0f2fe; font-weight: 700; }
-</style>
-</head>
-<body>
-<table>
-  <tr><td class="meta">活動名稱</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(eventTitle || "-")}</td></tr>
-  <tr><td class="meta">活動ID</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(eventId || "-")}</td></tr>
-  <tr><td class="meta">匯出時間</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(new Date().toLocaleString())}</td></tr>
-  <tr><td class="meta">出席人數</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(attendingRegistrationExportRows.length)}</td></tr>
-  <tr>${headers.map((header) => `<th>${escapeExcelHtml_(header)}</th>`).join("")}</tr>
-  ${rowHtml}
-</table>
-</body>
-</html>`;
+        ]);
+      });
+    } else {
+      rows.push(["", "(無出席資料)"]);
+    }
+    return rows;
   };
 
   const handleExportAttendanceExcel = () => {
     if (typeof window === "undefined" || !registrationEventId) {
       return;
     }
-    const html = buildAttendanceExcelHtml_();
-    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "出席名單").trim();
     const safeEventId = String(registrationEventId || "event").trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "event";
-    link.href = url;
-    link.download = `attendance-list-${safeEventId}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    downloadXlsx({
+      filename: `attendance-list-${safeEventId}.xlsx`,
+      sheetName: eventTitle || "出席名單",
+      rows: buildAttendanceExcelRows_(),
+    });
   };
 
   const directoryGroupOptions = useMemo(() => {
