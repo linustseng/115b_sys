@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v9-attendance-dedupe";
+const CACHE_VERSION = "v10-attendance-dietary";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const API_CACHE_TTL_MS = 60 * 1000;

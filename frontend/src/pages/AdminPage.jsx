@@ -1343,11 +1343,15 @@ export default function AdminPage({
         userEmail;
       const attendance = String(manualRegistrationForm.attendance || "").trim() || "尚未確定";
       const notes = String(manualRegistrationForm.notes || "").trim();
+      const dietaryPreference = String(targetStudent.dietaryRestrictions || targetStudent.dietary || "").trim();
       const customFields = {
         attendance: attendance,
         studentId: studentId,
         name: userName,
       };
+      if (dietaryPreference) {
+        customFields.dietary = dietaryPreference;
+      }
       if (notes) {
         customFields.notes = notes;
       }
@@ -2509,6 +2513,23 @@ export default function AdminPage({
     }
     return `row:${String((registration && registration.id) || "").trim()}`;
   };
+  const resolveRegistrationStudent_ = (registration, fields = parseCustomFields_(registration && registration.customFields)) => {
+    const studentId = resolveRegistrationStudentId_(registration, fields);
+    if (studentId && studentByStudentId.get(studentId)) {
+      return studentByStudentId.get(studentId);
+    }
+    const email = normalizeEmail_((registration && registration.userEmail) || fields.email || "");
+    return (email && studentByEmail.get(email)) || null;
+  };
+  const getStudentDietaryPreference_ = (student) =>
+    String((student && (student.dietaryRestrictions || student.dietary)) || "").trim();
+  const resolveRegistrationDietary_ = (registration, fields = parseCustomFields_(registration && registration.customFields)) => {
+    const registrationDietary = String(fields.dietary || "").trim();
+    if (registrationDietary) {
+      return registrationDietary;
+    }
+    return getStudentDietaryPreference_(resolveRegistrationStudent_(registration, fields));
+  };
   const studentLabelByStudentId = new Map(
     displayStudents
       .map((student) => {
@@ -2602,7 +2623,7 @@ export default function AdminPage({
       }
       acc.attendingTotal += 1;
 
-      const dietary = String(fields.dietary || "").trim() || "未填寫";
+      const dietary = resolveRegistrationDietary_(registration, fields) || "未填寫";
       acc.dietary[dietary] = (acc.dietary[dietary] || 0) + 1;
       const attendeeStudentId = resolveRegistrationStudentId_(registration, fields);
       const attendeeName =
@@ -2745,7 +2766,7 @@ export default function AdminPage({
         name,
         studentId,
         group: String((student && student.group) || "").trim(),
-        dietary: String(fields.dietary || "").trim(),
+        dietary: resolveRegistrationDietary_(registration, fields),
         parking: String(fields.parking || "").trim(),
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
         bringDrinks: String(fields.bringDrinks || "").trim(),
