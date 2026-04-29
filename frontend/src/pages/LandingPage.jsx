@@ -71,7 +71,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       return false;
     }
   })();
-  const [authRestoreResolved, setAuthRestoreResolved] = useState(() => !hasGoogleLogin || hasAuthMaterial);
+  const [authRestoreResolved, setAuthRestoreResolved] = useState(true);
   const formatBirthdayName_ = (item) => {
     const zh = String((item && item.nameZh) || "").trim();
     const displayName = String((item && (item.displayName || item.name)) || "").trim();
@@ -182,7 +182,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     );
   };
   const downgradeToReauthState_ = () => {
-    setAuthRestoreResolved(false);
+    setAuthRestoreResolved(true);
     storeGoogleIdToken_("");
     storeAdminSession_(null);
     setMemberships([]);
@@ -223,11 +223,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
     "https://calendar.google.com/calendar/embed?src=d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com&ctz=Asia%2FTaipei";
 
   useEffect(() => {
-    if (!hasGoogleLogin || hasAuthMaterial) {
-      setAuthRestoreResolved(true);
-      return;
-    }
-    setAuthRestoreResolved(false);
+    // Google Identity Services no longer supports a truly silent ID-token refresh for this flow.
+    // Keep expired cached profiles in the explicit re-login state instead of briefly showing
+    // an automatic recovery state that cannot actually complete without user interaction.
+    setAuthRestoreResolved(true);
   }, [hasGoogleLogin, hasAuthMaterial]);
 
   useEffect(() => {

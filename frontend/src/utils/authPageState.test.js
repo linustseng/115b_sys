@@ -38,7 +38,7 @@ describe("computeLandingAuthState", () => {
 });
 
 describe("shouldAttemptLandingAuthRecovery", () => {
-  it("tries only before the restore attempt has resolved", () => {
+  it("does not attempt landing silent recovery because Google now requires explicit sign-in", () => {
     expect(
       shouldAttemptLandingAuthRecovery({
         hasGoogleLogin: true,
@@ -46,19 +46,8 @@ describe("shouldAttemptLandingAuthRecovery", () => {
         authRestoreResolved: false,
         authRecovering: false,
       })
-    ).toBe(true);
-
-    expect(
-      shouldAttemptLandingAuthRecovery({
-        hasGoogleLogin: true,
-        needsReauth: true,
-        authRestoreResolved: true,
-        authRecovering: false,
-      })
     ).toBe(false);
-  });
 
-  it("does not start another recovery while one is already running", () => {
     expect(
       shouldAttemptLandingAuthRecovery({
         hasGoogleLogin: true,

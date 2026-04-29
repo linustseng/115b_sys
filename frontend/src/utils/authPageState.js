@@ -15,8 +15,8 @@ export function computeLandingAuthState({ googleLinkedStudent, hasAuthMaterial, 
   };
 }
 
-export function shouldAttemptLandingAuthRecovery({ hasGoogleLogin, needsReauth, authRestoreResolved, authRecovering }) {
-  return Boolean(hasGoogleLogin && needsReauth && !authRestoreResolved && !authRecovering);
+export function shouldAttemptLandingAuthRecovery() {
+  return false;
 }
 
 export function hasUsableGoogleAuth({ adminSession, googleIdToken }) {
