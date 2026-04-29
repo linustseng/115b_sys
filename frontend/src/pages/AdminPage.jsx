@@ -2449,6 +2449,66 @@ export default function AdminPage({
       .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
       .filter(([studentId]) => studentId)
   );
+  const studentByEmail = new Map(
+    displayStudents.flatMap((student) => {
+      const emails = [student.email, student.googleEmail]
+        .map((value) => normalizeEmail_(value))
+        .filter(Boolean);
+      return emails.map((email) => [email, student]);
+    })
+  );
+  const studentIdByUniqueName = (() => {
+    const buckets = new Map();
+    displayStudents.forEach((student) => {
+      const studentId = String(student.id || "").trim();
+      if (!studentId) {
+        return;
+      }
+      [getChineseName_(student), getDisplayName_(student), student.nameZh, student.name]
+        .map((value) => normalizeName_(value))
+        .filter(Boolean)
+        .forEach((name) => {
+          const existing = buckets.get(name) || new Set();
+          existing.add(studentId);
+          buckets.set(name, existing);
+        });
+    });
+    const unique = new Map();
+    buckets.forEach((ids, name) => {
+      if (ids.size === 1) {
+        unique.set(name, Array.from(ids)[0]);
+      }
+    });
+    return unique;
+  })();
+  const resolveRegistrationStudentId_ = (registration, fields = parseCustomFields_(registration && registration.customFields)) => {
+    const explicitStudentId = String((registration && registration.studentId) || fields.studentId || "").trim();
+    if (explicitStudentId) {
+      return explicitStudentId;
+    }
+    const email = normalizeEmail_((registration && registration.userEmail) || fields.email || "");
+    const studentByMail = email ? studentByEmail.get(email) : null;
+    if (studentByMail && studentByMail.id) {
+      return String(studentByMail.id || "").trim();
+    }
+    const name = normalizeName_(fields.name || (registration && registration.userName) || "");
+    return (name && studentIdByUniqueName.get(name)) || "";
+  };
+  const buildRegistrationPersonKey_ = (registration, fields = parseCustomFields_(registration && registration.customFields)) => {
+    const studentId = resolveRegistrationStudentId_(registration, fields);
+    if (studentId) {
+      return `student:${studentId}`;
+    }
+    const email = normalizeEmail_((registration && registration.userEmail) || fields.email || "");
+    if (email) {
+      return `email:${email}`;
+    }
+    const name = normalizeName_(fields.name || (registration && registration.userName) || "");
+    if (name) {
+      return `name:${name}`;
+    }
+    return `row:${String((registration && registration.id) || "").trim()}`;
+  };
   const studentLabelByStudentId = new Map(
     displayStudents
       .map((student) => {
@@ -2467,19 +2527,20 @@ export default function AdminPage({
     (item) => item && String(item.status || "").toLowerCase() !== "cancelled"
   );
 
-  // De-dupe registrations by studentId (pick the latest update) to avoid inflated counts.
+  // De-dupe registrations by resolved person identity (pick the latest update) to avoid inflated counts.
   const dedupedActiveRegistrations = (() => {
     const map = new Map();
     const scoreItem = (item) => {
+      const fields = parseCustomFields_(item && item.customFields);
+      const hasResolvedStudent = Boolean(resolveRegistrationStudentId_(item, fields));
       const created = parseTimestampValue_(item && item.createdAt);
       const updated = parseTimestampValue_(item && item.updatedAt);
-      return Math.max(created, updated);
+      return Math.max(created, updated) + (hasResolvedStudent ? 10 ** 15 : 0);
     };
 
     for (const registration of activeRegistrationList) {
       const fields = parseCustomFields_(registration.customFields);
-      const studentId = String(registration.studentId || fields.studentId || "").trim();
-      const key = studentId ? `student:${studentId}` : `row:${String(registration.id || "").trim()}`;
+      const key = buildRegistrationPersonKey_(registration, fields);
       if (!key || key === "row:") {
         continue;
       }
@@ -2496,7 +2557,7 @@ export default function AdminPage({
   dedupedActiveRegistrations.forEach((registration) => {
     const fields = parseCustomFields_(registration.customFields);
     const attendanceValue = String(fields.attendance || "").trim();
-    const studentId = String(registration.studentId || fields.studentId || "").trim();
+    const studentId = resolveRegistrationStudentId_(registration, fields);
     if (studentId) {
       attendanceByStudentId.set(studentId, attendanceValue);
     }
@@ -2506,7 +2567,7 @@ export default function AdminPage({
     dedupedActiveRegistrations
       .map((item) => {
         const fields = parseCustomFields_(item.customFields);
-        return String(item.studentId || fields.studentId || "").trim();
+        return resolveRegistrationStudentId_(item, fields);
       })
       .filter((value) => value)
   );
@@ -2543,7 +2604,7 @@ export default function AdminPage({
 
       const dietary = String(fields.dietary || "").trim() || "未填寫";
       acc.dietary[dietary] = (acc.dietary[dietary] || 0) + 1;
-      const attendeeStudentId = String(registration.studentId || fields.studentId || "").trim();
+      const attendeeStudentId = resolveRegistrationStudentId_(registration, fields);
       const attendeeName =
         (attendeeStudentId && studentNameByStudentId.get(attendeeStudentId)) ||
         String(fields.name || registration.userName || "").trim() ||
@@ -2673,21 +2734,17 @@ export default function AdminPage({
       if (normalizeAttendanceStatus_(fields.attendance) !== "attending") {
         return null;
       }
-      const studentId = String(registration.studentId || fields.studentId || "").trim();
+      const studentId = resolveRegistrationStudentId_(registration, fields);
       const student = (studentId && studentByStudentId.get(studentId)) || null;
       const name =
         getChineseName_(student) ||
         String(fields.name || registration.userName || "").trim() ||
         "未命名";
-      const email = String(
-        (student && (student.googleEmail || student.email)) || registration.userEmail || fields.email || ""
-      ).trim();
       const companions = parseInt(String(fields.companions || "0").trim(), 10);
       return {
         name,
         studentId,
         group: String((student && student.group) || "").trim(),
-        email,
         dietary: String(fields.dietary || "").trim(),
         parking: String(fields.parking || "").trim(),
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
@@ -2846,7 +2903,6 @@ export default function AdminPage({
       "姓名",
       "學號",
       "組別",
-      "Email",
       "飲食偏好",
       "停車",
       "攜伴人數",
@@ -2881,7 +2937,6 @@ export default function AdminPage({
           item.name,
           item.studentId,
           item.group,
-          item.email,
           item.dietary,
           item.parking,
           item.companions,
@@ -4993,7 +5048,7 @@ export default function AdminPage({
                       const registrationId = String(registration.id || "").trim();
                       const checkin = checkinStatusByRegistrationId[registrationId] || null;
                       const fields = parseCustomFields_(registration.customFields);
-                      const studentId = String(registration.studentId || fields.studentId || "").trim();
+                      const studentId = resolveRegistrationStudentId_(registration, fields);
                       const displayName =
                         (studentId && studentNameByStudentId.get(studentId)) ||
                         String(fields.name || "").trim() ||
