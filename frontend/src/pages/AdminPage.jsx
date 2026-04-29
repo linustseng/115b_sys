@@ -2649,27 +2649,37 @@ export default function AdminPage({
       if (bringDrinks === "不攜帶") {
         acc.notBringDrinksCount += 1;
       }
-      const drinkQtyKeys = [
-        "redWineQty",
-        "whiteWineQty",
-        "whiskyQty",
-        "kaoliangQty",
-        "plumWineQty",
-        "otherDrinkQty",
+      const drinkQtyItems = [
+        { key: "redWineQty", label: "紅酒" },
+        { key: "whiteWineQty", label: "白酒" },
+        { key: "whiskyQty", label: "威士忌" },
+        { key: "kaoliangQty", label: "高梁" },
+        { key: "plumWineQty", label: "梅酒" },
+        { key: "otherDrinkQty", label: String(fields.otherDrink || "其他酒水").trim() || "其他酒水" },
       ];
-      drinkQtyKeys.forEach((key) => {
-        const parsedQty = parseInt(String(fields[key] || "0").trim(), 10);
+      const drinkItems = [];
+      drinkQtyItems.forEach((item) => {
+        const parsedQty = parseInt(String(fields[item.key] || "0").trim(), 10);
         if (!isNaN(parsedQty) && parsedQty > 0) {
-          acc.drinks[key] = (acc.drinks[key] || 0) + parsedQty;
+          acc.drinks[item.key] = (acc.drinks[item.key] || 0) + parsedQty;
+          drinkItems.push(`${item.label} ${parsedQty}`);
         }
       });
-      acc.attendees.push({
+      const attendeeEntry = {
         name: attendeeName,
         dietary: dietary,
         parking: parking,
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
         bringDrinks: bringDrinks || "",
-      });
+        drinkItems,
+      };
+      acc.attendees.push(attendeeEntry);
+      if (attendeeEntry.companions > 0) {
+        acc.companionAttendees.push(attendeeEntry);
+      }
+      if (bringDrinks === "攜帶" || drinkItems.length) {
+        acc.drinkAttendees.push(attendeeEntry);
+      }
       const isSpecialDietary = dietary && dietary !== "無禁忌" && dietary !== "未填寫";
       if (isSpecialDietary) {
         const entry = {
@@ -2701,6 +2711,8 @@ export default function AdminPage({
         otherDrinkQty: 0,
       },
       attendees: [],
+      companionAttendees: [],
+      drinkAttendees: [],
       vegetarianAttendees: [],
       specialDietAttendees: [],
     }
@@ -2717,6 +2729,12 @@ export default function AdminPage({
   ]
     .map((item) => ({ ...item, qty: prepStats.drinks[item.key] || 0 }))
     .filter((item) => item.qty > 0);
+  const companionAttendeeList = (prepStats.companionAttendees || []).slice().sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
+  );
+  const drinkAttendeeList = (prepStats.drinkAttendees || []).slice().sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
+  );
   const vegetarianAttendeeList = (prepStats.vegetarianAttendees || []).slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
@@ -4900,6 +4918,61 @@ export default function AdminPage({
                       </div>
                     ) : null}
                   </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {registrationAllowCompanions ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-slate-600">攜伴名單</p>
+                          <span className="text-xs text-slate-500">共 {companionAttendeeList.length} 位</span>
+                        </div>
+                        <div className="mt-2 space-y-1 text-xs text-slate-600">
+                          {companionAttendeeList.length ? (
+                            companionAttendeeList.map((item) => (
+                              <div
+                                key={`companion-${item.name}`}
+                                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50/70 px-2 py-1"
+                              >
+                                <span className="font-semibold text-slate-700">{item.name}</span>
+                                <span className="tabular-nums text-slate-500">攜伴 {item.companions} 人</span>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-slate-400">目前沒有攜伴名單。</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {registrationAllowBringDrinks ? (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs font-semibold text-slate-600">自帶酒水名單</p>
+                          <span className="text-xs text-slate-500">共 {drinkAttendeeList.length} 位</span>
+                        </div>
+                        <div className="mt-2 space-y-1 text-xs text-slate-600">
+                          {drinkAttendeeList.length ? (
+                            drinkAttendeeList.map((item) => (
+                              <div
+                                key={`drink-${item.name}`}
+                                className="rounded-lg border border-sky-200/70 bg-sky-50/60 px-2 py-1"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold text-slate-700">{item.name}</span>
+                                  <span className="text-sky-700">{item.bringDrinks || "攜帶"}</span>
+                                </div>
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  {item.drinkItems && item.drinkItems.length ? item.drinkItems.join("、") : "未填數量/品項"}
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-slate-400">目前沒有自帶酒水名單。</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between gap-2">
