@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v4-auth";
+const CACHE_VERSION = "v5-auth-recovery";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const API_CACHE_TTL_MS = 60 * 1000;
