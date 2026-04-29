@@ -2438,6 +2438,11 @@ export default function AdminPage({
     // Treat vegetarian/no-meat categories as requiring dedicated meal prep.
     return /全素|蛋奶|奶蛋|素食|蔬食|不吃肉|不吃葷|vegan|vegetarian/i.test(text);
   };
+  const studentByStudentId = new Map(
+    displayStudents
+      .map((student) => [String(student.id || "").trim(), student])
+      .filter(([studentId]) => studentId)
+  );
   const studentNameByStudentId = new Map(
     displayStudents
       .map((student) => [String(student.id || "").trim(), getChineseName_(student)])
@@ -2661,6 +2666,48 @@ export default function AdminPage({
   const attendingNameList = prepStats.attendees.slice().sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")
   );
+  const attendingRegistrationExportRows = dedupedActiveRegistrations
+    .map((registration) => {
+      const fields = parseCustomFields_(registration.customFields);
+      if (normalizeAttendanceStatus_(fields.attendance) !== "attending") {
+        return null;
+      }
+      const studentId = String(registration.studentId || fields.studentId || "").trim();
+      const student = (studentId && studentByStudentId.get(studentId)) || null;
+      const name =
+        getChineseName_(student) ||
+        String(fields.name || registration.userName || "").trim() ||
+        "未命名";
+      const email = String(
+        (student && (student.googleEmail || student.email)) || registration.userEmail || fields.email || ""
+      ).trim();
+      const companions = parseInt(String(fields.companions || "0").trim(), 10);
+      return {
+        name,
+        studentId,
+        group: String((student && student.group) || "").trim(),
+        email,
+        dietary: String(fields.dietary || "").trim(),
+        parking: String(fields.parking || "").trim(),
+        companions: !isNaN(companions) && companions > 0 ? companions : 0,
+        bringDrinks: String(fields.bringDrinks || "").trim(),
+        redWineQty: String(fields.redWineQty || "").trim(),
+        whiteWineQty: String(fields.whiteWineQty || "").trim(),
+        whiskyQty: String(fields.whiskyQty || "").trim(),
+        kaoliangQty: String(fields.kaoliangQty || "").trim(),
+        plumWineQty: String(fields.plumWineQty || "").trim(),
+        otherDrink: String(fields.otherDrink || "").trim(),
+        otherDrinkQty: String(fields.otherDrinkQty || "").trim(),
+        proxy: String(fields.proxy || "").trim(),
+        projection: String(fields.projection || "").trim(),
+        topics: String(fields.topics || "").trim(),
+        notes: String(fields.notes || fields.note || "").trim(),
+        submittedAt: registration.createdAt || "",
+        updatedAt: registration.updatedAt || "",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant"));
   const manualRegistrationEntries = registrationList
     .map((registration) => {
       const fields = parseCustomFields_(registration.customFields);
@@ -2784,6 +2831,122 @@ export default function AdminPage({
     const safeEventId = String(registrationEventId || "event").trim() || "event";
     link.href = url;
     link.download = `registration-stats-${safeEventId}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const escapeExcelHtml_ = (value) =>
+    String(value == null ? "" : value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
+  const buildAttendanceExcelHtml_ = () => {
+    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
+    const eventId = String((selectedRegistrationEvent && selectedRegistrationEvent.id) || registrationEventId || "").trim();
+    const headers = [
+      "序號",
+      "姓名",
+      "學號",
+      "組別",
+      "Email",
+      "飲食偏好",
+      "停車",
+      "攜伴人數",
+      "自帶酒水",
+      "紅酒",
+      "白酒",
+      "威士忌",
+      "高梁",
+      "梅酒",
+      "其他酒水",
+      "其他酒水數量",
+      "代理出席",
+      "投影設備",
+      "議題/提案",
+      "備註",
+      "報名時間",
+      "更新時間",
+    ];
+    const sheetName = String(eventTitle || "出席名單").replace(/[\\/?*\[\]:]/g, " ").slice(0, 31) || "出席名單";
+    const rows = attendingRegistrationExportRows.length
+      ? attendingRegistrationExportRows
+      : [
+          {
+            name: "(無出席資料)",
+          },
+        ];
+    const rowHtml = rows
+      .map((item, index) => {
+        const values = [
+          attendingRegistrationExportRows.length ? index + 1 : "",
+          item.name,
+          item.studentId,
+          item.group,
+          item.email,
+          item.dietary,
+          item.parking,
+          item.companions,
+          item.bringDrinks,
+          item.redWineQty,
+          item.whiteWineQty,
+          item.whiskyQty,
+          item.kaoliangQty,
+          item.plumWineQty,
+          item.otherDrink,
+          item.otherDrinkQty,
+          item.proxy,
+          item.projection,
+          item.topics,
+          item.notes,
+          item.submittedAt,
+          item.updatedAt,
+        ];
+        return `<tr>${values
+          .map((value) => `<td style="mso-number-format:'\\@';">${escapeExcelHtml_(value)}</td>`)
+          .join("")}</tr>`;
+      })
+      .join("");
+
+    return `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8" />
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${escapeExcelHtml_(sheetName)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+<style>
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #cbd5e1; padding: 6px 8px; font-family: Arial, "Microsoft JhengHei", sans-serif; font-size: 12px; }
+  th { background: #f1f5f9; font-weight: 700; }
+  .meta { background: #e0f2fe; font-weight: 700; }
+</style>
+</head>
+<body>
+<table>
+  <tr><td class="meta">活動名稱</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(eventTitle || "-")}</td></tr>
+  <tr><td class="meta">活動ID</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(eventId || "-")}</td></tr>
+  <tr><td class="meta">匯出時間</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(new Date().toLocaleString())}</td></tr>
+  <tr><td class="meta">出席人數</td><td colspan="${headers.length - 1}">${escapeExcelHtml_(attendingRegistrationExportRows.length)}</td></tr>
+  <tr>${headers.map((header) => `<th>${escapeExcelHtml_(header)}</th>`).join("")}</tr>
+  ${rowHtml}
+</table>
+</body>
+</html>`;
+  };
+
+  const handleExportAttendanceExcel = () => {
+    if (typeof window === "undefined" || !registrationEventId) {
+      return;
+    }
+    const html = buildAttendanceExcelHtml_();
+    const blob = new Blob(["\uFEFF" + html], { type: "application/vnd.ms-excel;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const safeEventId = String(registrationEventId || "event").trim().replace(/[^a-zA-Z0-9_-]+/g, "-") || "event";
+    link.href = url;
+    link.download = `attendance-list-${safeEventId}.xls`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -4589,8 +4752,16 @@ export default function AdminPage({
                 <div className="rounded-2xl border border-slate-200/70 bg-slate-50/60 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-800">活動準備統計（出席）</p>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs text-slate-500">僅計算回覆「出席」的報名資料</span>
+                      <button
+                        type="button"
+                        onClick={handleExportAttendanceExcel}
+                        disabled={!attendingRegistrationExportRows.length}
+                        className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:border-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        匯出出席名單 Excel
+                      </button>
                       <button
                         type="button"
                         onClick={handleExportRegistrationStats}
