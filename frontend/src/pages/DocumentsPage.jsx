@@ -6,6 +6,7 @@ const DOC_TYPE_OPTIONS = [
   { id: "charter", label: "章程" },
   { id: "policy", label: "制度文件" },
   { id: "meeting_minutes", label: "班會記錄" },
+  { id: "committee_minutes", label: "班級委員會紀錄" },
   { id: "handover", label: "交接資料" },
   { id: "reference", label: "其他文件" },
 ];
@@ -13,6 +14,7 @@ const DOC_TYPE_OPTIONS = [
 const DOC_TYPE_SECTIONS = [
   { id: "governance", title: "章程 / 制度", docTypes: ["charter", "policy"], accent: "slate" },
   { id: "meetings", title: "班會記錄", docTypes: ["meeting_minutes"], accent: "sky" },
+  { id: "committee", title: "班級委員會紀錄", docTypes: ["committee_minutes"], accent: "violet" },
   { id: "handover", title: "交接 / SOP", docTypes: ["handover"], accent: "amber" },
   { id: "reference", title: "其他文件", docTypes: ["reference"], accent: "emerald" },
 ];
@@ -64,6 +66,68 @@ const DOCUMENT_TEMPLATES = {
 # 備註
 - `,
         changeSummary: "建立班會記錄",
+        meetingDate: "",
+        effectiveDate: "",
+        attachments: [],
+        isPinned: false,
+        pinOrder: 0,
+        meetingForm: {
+          ...emptyMeetingForm(),
+          agenda: "1. \n2. \n3. ",
+          discussion: "## 議題一\n- \n\n## 議題二\n- ",
+          resolutions: "1. \n2. ",
+          actionItems: "- [ ] 項目：\n  - 負責人：\n  - 截止日：",
+          notes: "- ",
+        },
+      };
+    },
+  },
+  committee_minutes: {
+    label: "班級委員會紀錄模板",
+    build(ownerGroupId = "A") {
+      return {
+        title: "",
+        docType: "committee_minutes",
+        ownerGroupId,
+        visibility: "class",
+        tagsText: "班委會, 委員會紀錄",
+        summary: "",
+        content: `# 會議資訊
+- 會議名稱：
+- 日期：
+- 時間：
+- 地點：
+- 主席：
+- 紀錄：
+
+# 出席情況
+- 出席：
+- 請假：
+
+# 議程
+1. 
+2. 
+3. 
+
+# 討論摘要
+## 議題一
+- 
+
+## 議題二
+- 
+
+# 決議事項
+1. 
+2. 
+
+# 待辦事項
+- [ ] 項目：
+  - 負責人：
+  - 截止日：
+
+# 備註
+- `,
+        changeSummary: "建立班級委員會紀錄",
         meetingDate: "",
         effectiveDate: "",
         attachments: [],
@@ -195,12 +259,16 @@ function isTemplateLikeSummary(summary) {
   return !stripped;
 }
 
+function isMeetingStyleDocType(docType) {
+  return docType === "meeting_minutes" || docType === "committee_minutes";
+}
+
 function hasMeaningfulDocumentContent(docType, content) {
   const text = String(content || "").trim();
   if (!text) {
     return false;
   }
-  if (docType === "meeting_minutes") {
+  if (isMeetingStyleDocType(docType)) {
     const parsed = parseMeetingMinutesContent(text);
     const cards = renderMeetingMinutesDetail(parsed, null);
     return cards.length > 0;
@@ -627,7 +695,7 @@ export default function DocumentsPage({ shared }) {
     selectedLatestVersion && selectedLatestVersion.content
   );
   const parsedMeetingDetail = useMemo(() => {
-    if (!selectedDocument || selectedDocument.docType !== "meeting_minutes") {
+    if (!selectedDocument || !isMeetingStyleDocType(selectedDocument.docType)) {
       return null;
     }
     return parseMeetingMinutesContent(selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "");
@@ -720,7 +788,7 @@ export default function DocumentsPage({ shared }) {
           標籤
           <input value={draft.tagsText} onChange={(e) => setDraft((prev) => ({ ...prev, tagsText: e.target.value }))} placeholder="章程, 班會, 財務" className="input-base mt-2 w-full" />
         </label>
-        {draft.docType !== "meeting_minutes" ? (
+        {!isMeetingStyleDocType(draft.docType) ? (
           <label className="block text-sm font-medium text-slate-700">
             會議日期（選填）
             <input type="date" value={draft.meetingDate} onChange={(e) => setDraft((prev) => ({ ...prev, meetingDate: e.target.value }))} className="input-base mt-2 w-full" />
@@ -740,9 +808,9 @@ export default function DocumentsPage({ shared }) {
           </label>
           <label className="mt-4 block text-sm font-medium text-slate-700">
             摘要
-            <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} placeholder={draft.docType === "meeting_minutes" ? "可留白，系統會依討論摘要 / 決議事項自動產生" : "文件摘要"} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
+            <textarea value={draft.summary} onChange={(e) => setDraft((prev) => ({ ...prev, summary: e.target.value }))} rows={3} placeholder={isMeetingStyleDocType(draft.docType) ? "可留白，系統會依討論摘要 / 決議事項自動產生" : "文件摘要"} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" />
           </label>
-          {draft.docType === "meeting_minutes" ? (
+          {isMeetingStyleDocType(draft.docType) ? (
             <div className="mt-4 rounded-3xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -886,7 +954,7 @@ export default function DocumentsPage({ shared }) {
         ? crypto.randomUUID()
         : `draft_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
     );
-    const parsedMeeting = selectedDocument.docType === "meeting_minutes"
+    const parsedMeeting = isMeetingStyleDocType(selectedDocument.docType)
       ? parseMeetingMinutesContent(selectedLatestVersion && selectedLatestVersion.content ? selectedLatestVersion.content : "")
       : null;
     setDraft({
@@ -1016,12 +1084,12 @@ export default function DocumentsPage({ shared }) {
     setSubmitting(true);
     setStatusMessage("");
     try {
-      const generatedMeetingContent = draft.docType === "meeting_minutes" && hasMeetingFormContent(draft.meetingForm)
+      const generatedMeetingContent = isMeetingStyleDocType(draft.docType) && hasMeetingFormContent(draft.meetingForm)
         ? buildMeetingMinutesContent(draft)
         : "";
       const finalContent = generatedMeetingContent || draft.content;
-      const finalSummary = draft.summary || (draft.docType === "meeting_minutes" ? buildMeetingMinutesSummary(draft) : "");
-      const resolvedMeetingDate = draft.docType === "meeting_minutes"
+      const finalSummary = draft.summary || (isMeetingStyleDocType(draft.docType) ? buildMeetingMinutesSummary(draft) : "");
+      const resolvedMeetingDate = isMeetingStyleDocType(draft.docType)
         ? String((draft.meetingForm && draft.meetingForm.meetingDate) || draft.meetingDate || "").trim()
         : draft.meetingDate;
       if (editorMode === "create") {
@@ -1296,7 +1364,7 @@ export default function DocumentsPage({ shared }) {
                       </div>
 
                       {selectedHasMeaningfulContent ? (
-                        selectedDocument.docType === "meeting_minutes" && meetingDetailCards.length ? (
+                        isMeetingStyleDocType(selectedDocument.docType) && meetingDetailCards.length ? (
                           <div className="mt-6 grid gap-4">
                             {meetingDetailCards.map((card) => (
                               <section key={card.title} className="rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
