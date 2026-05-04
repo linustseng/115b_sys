@@ -7777,7 +7777,36 @@ export async function dispatchNativeAction({
          limit 1`,
         [googleSub]
       );
-      const studentId = linked.rows.length ? String(linked.rows[0].id || "").trim() : "";
+      let studentId = linked.rows.length ? String(linked.rows[0].id || "").trim() : "";
+
+      if (!studentId) {
+        const email = normalizeEmail(googleProfile.email || "");
+        const emailLinked = email
+          ? await query(
+              `select s.id
+               from students s
+               left join directories d on d.id = s.id
+               where lower(coalesce(s.google_email, '')) = $1
+                  or lower(coalesce(d.email, '')) = $1
+               order by case when lower(coalesce(s.google_email, '')) = $1 then 0 else 1 end
+               limit 1`,
+              [email]
+            )
+          : { rows: [] };
+        studentId = emailLinked.rows.length ? String(emailLinked.rows[0].id || "").trim() : "";
+        if (studentId) {
+          await query(
+            `update students
+             set google_sub = $2,
+                 google_email = $3,
+                 synced_at = now(),
+                 raw = coalesce(raw, '{}'::jsonb)
+             where id = $1`,
+            [studentId, googleSub, email]
+          );
+        }
+      }
+
       const student = studentId ? await findStudentProfileById(studentId) : null;
       const emailMatch = student && student.email ? normalizeEmail(student.email) === normalizeEmail(googleProfile.email) : false;
       const sessionToken = studentId
