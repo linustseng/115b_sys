@@ -732,9 +732,11 @@ app.get("/health", async (_req, res) => {
   res.json({ ok: true, service: "115b-sys-api", now: new Date().toISOString() });
 });
 
+const PUBLIC_NATIVE_ACTIONS = new Set(["verifyGoogle", "linkGoogleStudent", "refreshSession", "searchStudents"]);
+
 async function handleNativeActionRequest_(req, res, actionName, payload) {
   try {
-    const auth = await resolveAuthContext(req);
+    const auth = PUBLIC_NATIVE_ACTIONS.has(actionName) ? null : await resolveAuthContext(req);
     const result = await dispatchNativeAction({
       action: actionName,
       payload,
@@ -767,7 +769,7 @@ app.post("/v1/action", async (req, res) => {
   delete forwarded.action;
 
   // Always try native first.
-  const auth = await resolveAuthContext(req);
+  const auth = PUBLIC_NATIVE_ACTIONS.has(action) ? null : await resolveAuthContext(req);
   try {
     const nativeResult = await dispatchNativeAction({
       action,
