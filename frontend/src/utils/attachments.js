@@ -28,6 +28,10 @@ function buildAttachmentPreviewUrl_(url, name = "附件預覽") {
   const previewUrl = new URL("/attachment-preview.html", window.location.origin);
   previewUrl.searchParams.set("url", href);
   previewUrl.searchParams.set("name", filename);
+  const returnTo = `${window.location.pathname || "/"}${window.location.search || ""}${window.location.hash || ""}`;
+  if (returnTo && !returnTo.startsWith("/attachment-preview.html")) {
+    previewUrl.searchParams.set("returnTo", returnTo);
+  }
   return previewUrl.toString();
 }
 

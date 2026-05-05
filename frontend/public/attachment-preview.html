@@ -74,6 +74,10 @@
         color: white;
         background: var(--accent);
       }
+      .btn.back {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+      }
       .viewer {
         padding: 0;
         min-height: 0;
@@ -116,6 +120,7 @@
           <p class="hint">如果瀏覽器不支援內嵌預覽，可用右側按鈕直接開啟。</p>
         </div>
         <div class="actions">
+          <button id="backBtn" class="btn back" type="button">回上一頁</button>
           <button id="downloadBtn" class="btn" type="button">下載原檔名</button>
           <a id="openLink" class="btn primary" href="#" target="_blank" rel="noopener noreferrer">直接開啟</a>
         </div>
@@ -126,10 +131,57 @@
       const params = new URLSearchParams(window.location.search);
       const rawUrl = params.get('url') || '';
       const rawName = params.get('name') || '附件預覽';
+      const rawReturnTo = params.get('returnTo') || '';
       const title = document.getElementById('title');
+      const backBtn = document.getElementById('backBtn');
       const openLink = document.getElementById('openLink');
       const downloadBtn = document.getElementById('downloadBtn');
       const viewer = document.getElementById('viewer');
+
+      function getSafeReturnTo() {
+        const value = String(rawReturnTo || '').trim();
+        if (!value) return '';
+        try {
+          const url = new URL(value, window.location.origin);
+          if (url.origin !== window.location.origin) return '';
+          if (url.pathname === '/attachment-preview.html') return '';
+          return `${url.pathname}${url.search}${url.hash}`;
+        } catch (error) {
+          return value.startsWith('/') && !value.startsWith('/attachment-preview.html') ? value : '';
+        }
+      }
+
+      function goBack() {
+        const returnTo = getSafeReturnTo();
+        if (window.history.length > 1) {
+          window.history.back();
+          if (returnTo) {
+            window.setTimeout(() => {
+              if (window.location.pathname === '/attachment-preview.html') {
+                window.location.replace(returnTo);
+              }
+            }, 600);
+          }
+          return;
+        }
+        if (returnTo) {
+          window.location.replace(returnTo);
+          return;
+        }
+        const referrer = document.referrer || '';
+        if (referrer) {
+          try {
+            const referrerUrl = new URL(referrer);
+            if (referrerUrl.origin === window.location.origin) {
+              window.location.href = referrer;
+              return;
+            }
+          } catch (error) {
+            // Ignore malformed referrers.
+          }
+        }
+        window.location.href = '/';
+      }
 
       async function downloadWithOriginalName(url, filename) {
         const response = await fetch(url, { credentials: 'omit' });
@@ -150,6 +202,9 @@
 
       document.title = rawName;
       title.textContent = rawName;
+      if (backBtn) {
+        backBtn.addEventListener('click', goBack);
+      }
       if (!rawUrl) {
         if (downloadBtn) downloadBtn.disabled = true;
         viewer.innerHTML = '<div class="fallback"><div class="card">找不到附件網址。</div></div>';
