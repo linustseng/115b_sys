@@ -1009,6 +1009,167 @@ function FinanceAdminPage({ shared }) {
     ? String(selectedRequest.payeeBankCode || "").trim()
     : "";
 
+  const financeAuditFieldLabels = {
+    id: "案件編號",
+    type: "申請類型",
+    title: "項目名稱",
+    description: "用途說明",
+    categoryType: "費用類別",
+    amountEstimated: "預估金額",
+    amountActual: "實際金額",
+    currency: "幣別",
+    paymentMethod: "請款方式",
+    vendorName: "廠商／店家",
+    payeeName: "收款人",
+    payeeBank: "收款銀行",
+    payeeBankCode: "收款銀行代碼",
+    payeeAccount: "收款帳號",
+    relatedPurchaseId: "關聯請購單",
+    noPurchaseReason: "無請購原因",
+    expectedClearDate: "預計付款／核銷日",
+    attachments: "附件",
+    status: "簽核狀態",
+    applicantId: "申請人 ID",
+    applicantName: "申請人",
+    applicantRole: "申請人角色",
+    applicantDepartment: "申請組別",
+    applicantEmail: "申請人 Email",
+    workflowCreatedByRole: "建立流程角色",
+    manualCreatedBy: "後台建立者 ID",
+    manualCreatedByName: "後台建立者",
+    manualCreatedAt: "後台建立時間",
+    submittedAt: "送出時間",
+    createdAt: "建立時間",
+    updatedAt: "更新時間",
+    revisionNo: "版本號",
+    lastChangeBatchId: "異動批次",
+    lastChangedAt: "最後異動時間",
+    lastChangedBy: "最後異動者 ID",
+    lastChangedByName: "最後異動者",
+  };
+
+  const financeAuditBusinessFieldOrder = [
+    "type",
+    "title",
+    "description",
+    "categoryType",
+    "amountEstimated",
+    "amountActual",
+    "currency",
+    "paymentMethod",
+    "vendorName",
+    "payeeName",
+    "payeeBank",
+    "payeeBankCode",
+    "payeeAccount",
+    "relatedPurchaseId",
+    "noPurchaseReason",
+    "expectedClearDate",
+    "attachments",
+    "status",
+    "applicantName",
+    "applicantDepartment",
+    "applicantRole",
+    "applicantEmail",
+    "workflowCreatedByRole",
+    "submittedAt",
+  ];
+  const financeAuditBusinessFieldRank = new Map(
+    financeAuditBusinessFieldOrder.map((key, index) => [key, index])
+  );
+  const financeAuditSystemFields = new Set([
+    "createdAt",
+    "updatedAt",
+    "revisionNo",
+    "lastChangeBatchId",
+    "lastChangedAt",
+    "lastChangedBy",
+    "lastChangedByName",
+    "manualCreatedBy",
+    "manualCreatedAt",
+  ]);
+
+  const formatFinanceAuditFieldLabel_ = (key) =>
+    financeAuditFieldLabels[key] || String(key || "").replace(/_/g, " ") || "未命名欄位";
+
+  const formatFinanceAuditValue_ = (key, value) => {
+    if (value == null || value === "") {
+      return "∅";
+    }
+    if (key === "type") {
+      return FINANCE_TYPES.find((item) => item.value === value)?.label || String(value);
+    }
+    if (key === "status") {
+      return FINANCE_STATUS_LABELS[value] || String(value);
+    }
+    if (key === "paymentMethod") {
+      return FINANCE_PAYMENT_METHODS.find((item) => item.value === value)?.label || String(value);
+    }
+    if (key === "workflowCreatedByRole" || key === "applicantRole") {
+      return FINANCE_ROLE_LABELS[value] || String(value);
+    }
+    if (key === "applicantDepartment") {
+      return CLASS_GROUPS.find((item) => item.id === value)?.label || String(value);
+    }
+    if (key === "categoryType") {
+      return financeCategories.find((item) => item.id === value)?.label || String(value);
+    }
+    if (key === "amountEstimated" || key === "amountActual") {
+      return formatFinanceAmount_(value);
+    }
+    if (["expectedClearDate", "submittedAt", "createdAt", "updatedAt", "lastChangedAt", "manualCreatedAt"].includes(key)) {
+      return formatDisplayDate_(value, { withTime: true }) || String(value);
+    }
+    if (key === "attachments") {
+      const attachments = parseFinanceAttachments_(value);
+      if (attachments.length) {
+        return `${attachments.length} 個附件`;
+      }
+      return Array.isArray(value) ? "無附件" : String(value || "無附件");
+    }
+    if (Array.isArray(value)) {
+      return value.length ? value.map((item) => formatFinanceAuditValue_(key, item)).join("、") : "∅";
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  };
+
+  const buildFinanceAuditDiffEntries_ = (diff) =>
+    Object.entries(diff || {})
+      .filter(([key]) => !financeAuditSystemFields.has(key))
+      .sort(([a], [b]) => {
+        const aRank = financeAuditBusinessFieldRank.has(a) ? financeAuditBusinessFieldRank.get(a) : 999;
+        const bRank = financeAuditBusinessFieldRank.has(b) ? financeAuditBusinessFieldRank.get(b) : 999;
+        return aRank === bRank ? a.localeCompare(b, "zh-Hant") : aRank - bRank;
+      });
+
+  const formatFinanceAuditActionLabel_ = (action) => {
+    const normalized = String(action || "").trim();
+    if (normalized === "create") return "建立案件";
+    if (normalized === "update") return "更新案件";
+    if (normalized === "restore") return "回復版本";
+    if (normalized === "delete") return "刪除案件";
+    return normalized || "異動";
+  };
+
+  const formatFinanceAuditEntityLabel_ = (entityType) => {
+    if (String(entityType || "") === "finance_request") {
+      return "財務申請";
+    }
+    return String(entityType || "紀錄").replace(/_/g, " ");
+  };
+
+  const buildFinanceAuditSummary_ = (item, diffEntries) => {
+    const actionLabel = formatFinanceAuditActionLabel_(item && item.action);
+    if (!diffEntries.length) {
+      return actionLabel;
+    }
+    const labels = diffEntries.slice(0, 3).map(([key]) => formatFinanceAuditFieldLabel_(key));
+    return `${actionLabel}：${labels.join("、")}${diffEntries.length > 3 ? ` 等 ${diffEntries.length} 項` : ""}`;
+  };
+
   const sortedActions = actions
     .slice()
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
@@ -2151,15 +2312,20 @@ function FinanceAdminPage({ shared }) {
                       <p className="text-slate-400">載入中...</p>
                     ) : financeAuditEvents.length ? (
                       financeAuditEvents.map((item) => {
-                        const diffEntries = Object.entries(item.diff || {});
+                        const diffEntries = buildFinanceAuditDiffEntries_(item.diff || {});
+                        const hiddenSystemFieldCount = Math.max(
+                          0,
+                          Object.entries(item.diff || {}).length - diffEntries.length
+                        );
+                        const summaryLabel = buildFinanceAuditSummary_(item, diffEntries);
                         return (
                           <div key={item.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                  <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                                  <span className="font-semibold text-slate-800">{summaryLabel}</span>
                                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                                    {item.entityType}
+                                    {formatFinanceAuditEntityLabel_(item.entityType)}
                                   </span>
                                   {item.revisionNo ? (
                                     <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -2169,22 +2335,24 @@ function FinanceAdminPage({ shared }) {
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
                                   <span>{item.actorName || item.actorId || 'system'}</span>
-                                  {item.action ? <span>· {item.action}</span> : null}
+                                  {item.action ? <span>· {formatFinanceAuditActionLabel_(item.action)}</span> : null}
                                   <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
                                 </div>
                                 {diffEntries.length ? (
                                   <div className="mt-2 space-y-1">
                                     {diffEntries.slice(0, 6).map(([key, value]) => (
                                       <div key={key} className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600">
-                                        <span className="font-semibold text-slate-700">{key}</span>
+                                        <span className="font-semibold text-slate-700">{formatFinanceAuditFieldLabel_(key)}</span>
                                         <span className="mx-1 text-slate-400">:</span>
-                                        <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                        <span className="text-rose-600">{formatFinanceAuditValue_(key, value && value.before)}</span>
                                         <span className="mx-1 text-slate-400">→</span>
-                                        <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                        <span className="text-emerald-700">{formatFinanceAuditValue_(key, value && value.after)}</span>
                                       </div>
                                     ))}
                                     {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
                                   </div>
+                                ) : hiddenSystemFieldCount ? (
+                                  <p className="mt-2 text-[11px] text-slate-400">這次只有系統版本資訊變更，沒有申請內容欄位差異。</p>
                                 ) : null}
                               </div>
                               {item.versionId ? (
