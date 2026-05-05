@@ -1175,6 +1175,8 @@ function FinanceAdminPage({ shared }) {
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
   const latestAction = sortedActions[0] || null;
   const currentStatusKey = selectedRequest ? String(selectedRequest.status || "").trim() : "";
+  const financeRestorableStatuses = new Set(["draft", "returned"]);
+  const canRestoreSelectedFinanceRequest = financeRestorableStatuses.has(currentStatusKey);
   const currentRoleKey = statusRoleMap[currentStatusKey] || "";
   const currentRoleLabel =
     currentStatusKey === "closed"
@@ -1210,6 +1212,13 @@ function FinanceAdminPage({ shared }) {
 
   const handleRestoreFinanceAuditVersion = async (item) => {
     if (!item || !item.versionId) {
+      return;
+    }
+    if (!canRestoreSelectedFinanceRequest || item.canRestoreVersion === false) {
+      setError(
+        item.restoreBlockedReason ||
+          "此財務申請已進入簽核流程，不能直接回復舊版；請先退回補件後再調整。"
+      );
       return;
     }
     if (!window.confirm(`確定要回復這版財務申請嗎？\n\n時間：${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}`)) {
@@ -2358,11 +2367,22 @@ function FinanceAdminPage({ shared }) {
                               {item.versionId ? (
                                 <button
                                   type="button"
-                                  disabled={loading}
+                                  disabled={
+                                    loading ||
+                                    !canRestoreSelectedFinanceRequest ||
+                                    item.canRestoreVersion === false
+                                  }
                                   onClick={() => handleRestoreFinanceAuditVersion(item)}
-                                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                                  title={
+                                    !canRestoreSelectedFinanceRequest
+                                      ? "已進入簽核流程，不能直接回復舊版"
+                                      : item.restoreBlockedReason || ""
+                                  }
+                                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                  回復到這版
+                                  {canRestoreSelectedFinanceRequest && item.canRestoreVersion !== false
+                                    ? "回復到這版"
+                                    : "簽核中不可回復"}
                                 </button>
                               ) : null}
                             </div>

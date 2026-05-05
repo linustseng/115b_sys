@@ -1953,6 +1953,12 @@ function resolveFinanceInitialStatus_(record, memberships, studentIdByEmail = {}
   return applicantRole === "lead" ? "pending_rep" : "pending_lead";
 }
 
+const FINANCE_RESTORABLE_STATUSES = new Set(["draft", "returned"]);
+
+function canRestoreFinanceVersionByStatus_(status) {
+  return FINANCE_RESTORABLE_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
 function resolveApplicantIdentity_(record, studentIdByEmail = {}) {
   const applicantEmail = normalizeEmail((record && record.applicantEmail) || "");
   let applicantId = String((record && record.applicantId) || "").trim();
@@ -5952,7 +5958,7 @@ export async function dispatchNativeAction({
       }
       const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
       const result = await query(
-        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no, v.after_data as version_after_data
            from audit_events e
            left join audit_entity_versions v
              on v.batch_id = e.batch_id
@@ -5964,7 +5970,11 @@ export async function dispatchNativeAction({
           limit $2`,
         [requestId, limit]
       );
-      const events = result.rows.map((row) => ({
+      const events = result.rows.map((row) => {
+        const afterData = safeJsonObject(row.version_after_data);
+        const versionStatus = firstText(afterData.status);
+        const canRestoreVersion = !versionStatus || canRestoreFinanceVersionByStatus_(versionStatus);
+        return {
         id: firstText(row.id),
         batchId: firstText(row.batch_id),
         versionId: firstText(row.version_id),
@@ -5978,7 +5988,10 @@ export async function dispatchNativeAction({
         severity: firstText(row.severity, 'info'),
         createdAt: asIsoText_(row.created_at),
         diff: safeJsonObject(row.diff),
-      }));
+          canRestoreVersion,
+          restoreBlockedReason: canRestoreVersion ? "" : "這一版已進入簽核流程，不能直接回復。",
+        };
+      });
       return { ok: true, data: { events }, error: null };
     }
 
@@ -6002,13 +6015,21 @@ export async function dispatchNativeAction({
         const requestId = firstText(versionRow.entity_id, targetSnapshot.id);
         const batchId = `audit_batch:${crypto.randomUUID()}`;
         const createdAt = nowIso();
+        const currentRow = rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [requestId]));
+        const currentSnapshot = currentRow ? normalizeFinanceRequestRowForClient_(currentRow) : {};
+        const currentStatus = firstText(currentSnapshot.status);
+        const targetStatus = firstText(targetSnapshot.status);
+        if (currentRow && !canRestoreFinanceVersionByStatus_(currentStatus)) {
+          return { ok: false, data: null, error: "此財務申請已進入簽核流程，不能直接回復舊版；請先退回補件後再調整。" };
+        }
+        if (targetStatus && !canRestoreFinanceVersionByStatus_(targetStatus)) {
+          return { ok: false, data: null, error: "不能回復到已送簽核或已結案的版本。" };
+        }
         await txQuery(
           `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
            values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
           [batchId, 'finance_admin', actorInfo.actorId, actorInfo.actorName, actorInfo.actorEmail, 'restoreFinanceAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
         );
-        const currentRow = rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [requestId]));
-        const currentSnapshot = currentRow ? normalizeFinanceRequestRowForClient_(currentRow) : {};
         const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
         const nextRow = buildFinanceRequestRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, actorInfo);
         await txQuery(
