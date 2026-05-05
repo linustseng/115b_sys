@@ -273,6 +273,30 @@ function mapFundPaymentRow(row) {
   };
 }
 
+function mapDrinkQueueEntryRow(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
+  return {
+    ...raw,
+    id: firstText(row && row.id, raw.id),
+    offenderId: firstText(raw.offenderId, row && row.offender_id),
+    offenderName: firstText(raw.offenderName, row && row.offender_name),
+    offenderEmail: normalizeEmail(firstText(raw.offenderEmail, row && row.offender_email)),
+    incidentAt: firstText(raw.incidentAt, row && row.incident_at),
+    nextClassDate: firstText(raw.nextClassDate, row && row.next_class_date),
+    reason: firstText(raw.reason, row && row.reason),
+    drinkTheme: firstText(raw.drinkTheme, row && row.drink_theme),
+    pledgeText: firstText(raw.pledgeText, row && row.pledge_text),
+    status: firstText(raw.status, row && row.status, "queued"),
+    servedAt: firstText(raw.servedAt, row && row.served_at),
+    servedNote: firstText(raw.servedNote, row && row.served_note),
+    createdById: firstText(raw.createdById, row && row.created_by_id),
+    createdByName: firstText(raw.createdByName, row && row.created_by_name),
+    createdByEmail: normalizeEmail(firstText(raw.createdByEmail, row && row.created_by_email)),
+    createdAt: firstText(raw.createdAt, row && row.created_at),
+    updatedAt: firstText(raw.updatedAt, row && row.updated_at),
+  };
+}
+
 function canAccessByGroups(memberships, allowedGroupIds = []) {
   const list = asArray(memberships);
   return list.some((item) => {
@@ -6444,6 +6468,148 @@ export async function dispatchNativeAction({
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
       return { ok: true, data: { memberships }, error: null };
+    }
+
+    case "listDrinkQueueBootstrap": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const canManage = canAccessByGroups(memberships, ["E", "F"]);
+      const [studentsResult, entriesResult] = await Promise.all([
+        query(`select id, name, google_email from students order by coalesce(id,'')`),
+        query(`select * from drink_queue_entries order by
+          case lower(coalesce(status,'')) when 'queued' then 0 when 'served' then 1 when 'excused' then 2 else 3 end,
+          coalesce(next_class_date,''), coalesce(created_at,''), id`),
+      ]);
+      return {
+        ok: true,
+        data: {
+          canManage,
+          currentStudent: {
+            id: firstText(auth.studentId),
+            name: firstText(auth && auth.profile && auth.profile.name, auth.studentId),
+            email: normalizeEmail(auth && auth.profile && auth.profile.email),
+          },
+          students: studentsResult.rows.map((row) => ({
+            id: firstText(row.id),
+            name: firstText(row.name),
+            email: normalizeEmail(row.google_email),
+          })),
+          entries: entriesResult.rows.map((row) => mapDrinkQueueEntryRow(row)),
+        },
+        error: null,
+      };
+    }
+
+    case "createDrinkQueueEntry": {
+      requireAuth();
+      const data = safeJsonObject(body.data || body.entry || body);
+      const offenderId = firstText(data.offenderId);
+      let offender = null;
+      if (offenderId) {
+        offender = rowOrNull(await query(`select id, name, google_email from students where id = $1 limit 1`, [offenderId]));
+      }
+      const offenderName = firstNonEmptyText(data.offenderName, offender && offender.name);
+      if (!offenderId && !offenderName) {
+        return { ok: false, data: null, error: "請選擇或填寫被手機鈴聲抓到的同學" };
+      }
+      const id = firstText(data.id, crypto.randomUUID());
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      const row = {
+        id,
+        offenderId: firstNonEmptyText(offenderId, offender && offender.id),
+        offenderName,
+        offenderEmail: normalizeEmail(firstNonEmptyText(data.offenderEmail, offender && offender.google_email)),
+        incidentAt: firstText(data.incidentAt, createdAt.slice(0, 10)),
+        nextClassDate: firstText(data.nextClassDate),
+        reason: firstText(data.reason, "手機沒有關靜音，教室瞬間變演唱會"),
+        drinkTheme: firstText(data.drinkTheme, "全班醒腦飲料局"),
+        pledgeText: firstText(data.pledgeText, "下次上課我請，全班一起醒著畢業。"),
+        status: "queued",
+        servedAt: "",
+        servedNote: "",
+        createdById: firstText(auth.studentId),
+        createdByName: firstText(auth && auth.profile && auth.profile.name, auth.studentId),
+        createdByEmail: normalizeEmail(auth && auth.profile && auth.profile.email),
+        createdAt,
+        updatedAt,
+      };
+      const raw = { ...data, ...row };
+      await query(
+        `insert into drink_queue_entries (
+          id, offender_id, offender_name, offender_email, incident_at, next_class_date,
+          reason, drink_theme, pledge_text, status, served_at, served_note,
+          created_by_id, created_by_name, created_by_email, raw, created_at, updated_at
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16::jsonb,$17,$18)`,
+        [
+          row.id,
+          row.offenderId,
+          row.offenderName,
+          row.offenderEmail,
+          row.incidentAt,
+          row.nextClassDate,
+          row.reason,
+          row.drinkTheme,
+          row.pledgeText,
+          row.status,
+          row.servedAt,
+          row.servedNote,
+          row.createdById,
+          row.createdByName,
+          row.createdByEmail,
+          jsonbParam(raw, {}),
+          row.createdAt,
+          row.updatedAt,
+        ]
+      );
+      const refreshed = rowOrNull(await query(`select * from drink_queue_entries where id = $1 limit 1`, [id]));
+      return { ok: true, data: { entry: mapDrinkQueueEntryRow(refreshed) }, error: null };
+    }
+
+    case "updateDrinkQueueEntryStatus": {
+      await requireGroupAccess(["E", "F"]);
+      const id = firstText(body.id || (body.data && body.data.id));
+      const status = firstText(body.status || (body.data && body.data.status)).toLowerCase();
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      if (!["queued", "served", "excused"].includes(status)) {
+        return { ok: false, data: null, error: "Unsupported status" };
+      }
+      const existing = rowOrNull(await query(`select * from drink_queue_entries where id = $1 limit 1`, [id]));
+      if (!existing) {
+        return { ok: false, data: null, error: "Record not found" };
+      }
+      const updatedAt = nowIso();
+      const servedAt = status === "served" ? firstText(body.servedAt || (body.data && body.data.servedAt), updatedAt.slice(0, 10)) : "";
+      const servedNote = firstText(body.servedNote || (body.data && body.data.servedNote));
+      const raw = {
+        ...safeJsonObject(existing.raw),
+        status,
+        servedAt,
+        servedNote,
+        updatedAt,
+        updatedById: firstText(auth.studentId),
+        updatedByName: firstText(auth && auth.profile && auth.profile.name, auth.studentId),
+      };
+      await query(
+        `update drink_queue_entries
+            set status = $2, served_at = $3, served_note = $4, raw = $5::jsonb, updated_at = $6, synced_at = now()
+          where id = $1`,
+        [id, status, servedAt, servedNote, jsonbParam(raw, {}), updatedAt]
+      );
+      const refreshed = rowOrNull(await query(`select * from drink_queue_entries where id = $1 limit 1`, [id]));
+      return { ok: true, data: { entry: mapDrinkQueueEntryRow(refreshed) }, error: null };
+    }
+
+    case "deleteDrinkQueueEntry": {
+      await requireGroupAccess(["E", "F"]);
+      const id = firstText(body.id || (body.data && body.data.id));
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from drink_queue_entries where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
     }
 
     case "listApprovalsOverview": {

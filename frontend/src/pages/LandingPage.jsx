@@ -1360,6 +1360,27 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             </div>
           </div>
 
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50 to-white p-5 shadow-[0_28px_80px_-70px_rgba(180,83,9,0.8)] sm:p-6 xl:col-span-2">
+            <div>
+              <div className="inline-flex rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-orange-700">
+                🔕 Silent or Smoothie
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">飲料請客排隊系統</h3>
+              <p className="mt-3 text-sm text-orange-900/80">
+                手機沒關靜音？下一堂課請全班喝飲料。人太多沒關係，系統幫大家排隊追蹤。
+              </p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/drinks"
+                className="inline-flex items-center rounded-full border border-orange-300 bg-white px-4 py-1.5 text-sm font-semibold text-orange-700 shadow-sm hover:border-orange-400"
+              >
+                查看飲料隊列
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
+            </div>
+          </div>
+
         </section>
 
         {prioritizeApprovalsFirst ? (

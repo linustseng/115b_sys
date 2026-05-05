@@ -59,6 +59,7 @@ const CheckinPage = lazyImportWithRetry_(() => import("./pages/CheckinPage"), "C
 const OrderingPage = lazyImportWithRetry_(() => import("./pages/OrderingPage"), "OrderingPage");
 const OrderingPublicPage = lazyImportWithRetry_(() => import("./pages/OrderingPublicPage"), "OrderingPublicPage");
 const FinancePage = lazyImportWithRetry_(() => import("./pages/FinancePage"), "FinancePage");
+const DrinkQueuePage = lazyImportWithRetry_(() => import("./pages/DrinkQueuePage"), "DrinkQueuePage");
 const ApprovalsPage = lazyImportWithRetry_(() => import("./pages/ApprovalsPage"), "ApprovalsPage");
 const FinanceAdminPage = lazyImportWithRetry_(() => import("./pages/FinanceAdminPage"), "FinanceAdminPage");
 const AcademicsPage = lazyImportWithRetry_(() => import("./pages/AcademicsPage"), "AcademicsPage");
@@ -787,6 +788,7 @@ const API_POST_ACTIONS = new Set([
   "listFinanceBootstrap",
   "listFundEvents",
   "listFundPayments",
+  "listDrinkQueueBootstrap",
   "listBirthdays",
   "refreshSession",
   "listAcademicsBootstrap",
@@ -836,6 +838,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listFundEvents",
   "listFundPayments",
   "getFundSummary",
+  "listDrinkQueueBootstrap",
   // Ordering
   "listOrderPlans",
   "getOrderPublicLinkAdmin",
@@ -893,6 +896,9 @@ const API_V2_WRITE_ACTIONS = new Set([
   "deleteFundEvent",
   "upsertFundPayment",
   "deleteFundPayment",
+  "createDrinkQueueEntry",
+  "updateDrinkQueueEntryStatus",
+  "deleteDrinkQueueEntry",
   // Ordering
   "createOrderPlan",
   "updateOrderPlan",
@@ -2970,6 +2976,7 @@ function AppShell() {
   const isAcademicsPage = pathname.includes("academics");
   const isOrderingPage = pathname.includes("ordering");
   const isFinancePage = pathname.includes("finance");
+  const isDrinkQueuePage = pathname.includes("drinks");
   const isBirthdayPage = pathname.includes("birthdays");
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
@@ -3383,6 +3390,8 @@ function AppShell() {
     content = <OrderingPage shared={shared} />;
   } else if (isFinancePage) {
     content = <FinancePage shared={shared} />;
+  } else if (isDrinkQueuePage) {
+    content = <DrinkQueuePage shared={shared} />;
   } else if (isBirthdayPage) {
     content = <BirthdayPage shared={shared} />;
   } else if (isApprovalsPage) {
