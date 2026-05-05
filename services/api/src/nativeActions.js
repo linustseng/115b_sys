@@ -1959,6 +1959,37 @@ function canRestoreFinanceVersionByStatus_(status) {
   return FINANCE_RESTORABLE_STATUSES.has(String(status || "").trim().toLowerCase());
 }
 
+const EVENT_RESTORABLE_STATUSES = new Set(["draft"]);
+
+function canRestoreEventVersionByStatus_(status) {
+  return EVENT_RESTORABLE_STATUSES.has(String(status || "").trim().toLowerCase());
+}
+
+async function countEventUserActivity_(txQuery, eventId) {
+  if (!eventId) {
+    return { registrations: 0, checkins: 0, total: 0 };
+  }
+  const result = await txQuery(
+    `select
+       (select count(*)::int from registrations where event_id = $1 and coalesce(status,'submitted') <> 'cancelled') as registrations,
+       (select count(*)::int from checkins where event_id = $1) as checkins`,
+    [eventId]
+  );
+  const row = rowOrNull(result) || {};
+  const registrations = Number(row.registrations || 0) || 0;
+  const checkins = Number(row.checkins || 0) || 0;
+  return { registrations, checkins, total: registrations + checkins };
+}
+
+async function countOrderResponses_(txQuery, orderPlanId) {
+  if (!orderPlanId) {
+    return 0;
+  }
+  const result = await txQuery(`select count(*)::int as count from order_responses where order_id = $1`, [orderPlanId]);
+  const row = rowOrNull(result) || {};
+  return Number(row.count || 0) || 0;
+}
+
 function resolveApplicantIdentity_(record, studentIdByEmail = {}) {
   const applicantEmail = normalizeEmail((record && record.applicantEmail) || "");
   let applicantId = String((record && record.applicantId) || "").trim();
@@ -2801,9 +2832,12 @@ export async function dispatchNativeAction({
       if (!eventId) {
         return { ok: true, data: { events: [] }, error: null };
       }
+      const currentEventRow = rowOrNull(await query(`select status from events where id = $1 limit 1`, [eventId]));
+      const currentEventStatus = firstText(currentEventRow && currentEventRow.status);
+      const eventActivity = await countEventUserActivity_(query, eventId);
       const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
       const result = await query(
-        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no, v.after_data as version_after_data
            from audit_events e
            left join audit_entity_versions v
              on v.batch_id = e.batch_id
@@ -2815,7 +2849,19 @@ export async function dispatchNativeAction({
           limit $2`,
         [eventId, limit]
       );
-      const events = result.rows.map((row) => ({
+      const events = result.rows.map((row) => {
+        const afterData = safeJsonObject(row.version_after_data);
+        const versionStatus = firstText(afterData.status);
+        const canRestoreVersion =
+          canRestoreEventVersionByStatus_(currentEventStatus) &&
+          (!versionStatus || canRestoreEventVersionByStatus_(versionStatus)) &&
+          eventActivity.total === 0;
+        const restoreBlockedReason = canRestoreVersion
+          ? ""
+          : eventActivity.total > 0
+          ? "這個活動已有報名或簽到紀錄，不能直接回復舊版。"
+          : "只有草稿活動可以直接回復舊版。";
+        return {
         id: firstText(row.id),
         batchId: firstText(row.batch_id),
         versionId: firstText(row.version_id),
@@ -2829,7 +2875,10 @@ export async function dispatchNativeAction({
         severity: firstText(row.severity, 'info'),
         createdAt: asIsoText_(row.created_at),
         diff: safeJsonObject(row.diff),
-      }));
+          canRestoreVersion,
+          restoreBlockedReason,
+        };
+      });
       return { ok: true, data: { events }, error: null };
     }
 
@@ -2857,6 +2906,21 @@ export async function dispatchNativeAction({
         if (!Object.keys(snapshot).length) {
           return { ok: false, data: null, error: "Version snapshot is empty" };
         }
+        const eventId = firstText(versionRow.entity_id, snapshot.id);
+        const currentRow = rowOrNull(await txQuery(`select * from events where id = $1 limit 1 for update`, [eventId]));
+        const currentSnapshot = currentRow ? normalizeEventRowForClient_(currentRow) : {};
+        const currentStatus = firstText(currentSnapshot.status);
+        const targetStatus = firstText(snapshot.status);
+        const eventActivity = await countEventUserActivity_(txQuery, eventId);
+        if (currentRow && !canRestoreEventVersionByStatus_(currentStatus)) {
+          return { ok: false, data: null, error: "此活動已開放或已結束，不能直接回復舊版；請用正常編輯流程調整。" };
+        }
+        if (targetStatus && !canRestoreEventVersionByStatus_(targetStatus)) {
+          return { ok: false, data: null, error: "不能回復到已開放或已結束的活動版本。" };
+        }
+        if (eventActivity.total > 0) {
+          return { ok: false, data: null, error: "此活動已有報名或簽到紀錄，不能直接回復舊版。" };
+        }
         const batchId = `audit_batch:${crypto.randomUUID()}`;
         const createdAt = nowIso();
         await txQuery(
@@ -2864,9 +2928,6 @@ export async function dispatchNativeAction({
            values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
           [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreEventAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
         );
-        const eventId = firstText(versionRow.entity_id, snapshot.id);
-        const currentRow = rowOrNull(await txQuery(`select * from events where id = $1 limit 1 for update`, [eventId]));
-        const currentSnapshot = currentRow ? normalizeEventRowForClient_(currentRow) : {};
         const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
         const nextRow = buildEventRowFromSnapshot_(snapshot, currentRow, nextRevision, batchId, { actorId, actorName });
         await txQuery(
@@ -4494,9 +4555,10 @@ export async function dispatchNativeAction({
       if (!orderPlanId) {
         return { ok: true, data: { events: [] }, error: null };
       }
+      const orderResponseCount = await countOrderResponses_(query, orderPlanId);
       const limit = Math.min(100, Math.max(1, Number(body.limit || 20) || 20));
       const result = await query(
-        `select e.*, v.id as version_id, v.revision_no as version_revision_no
+        `select e.*, v.id as version_id, v.revision_no as version_revision_no, v.after_data as version_after_data
            from audit_events e
            left join audit_entity_versions v
              on v.batch_id = e.batch_id
@@ -4509,7 +4571,11 @@ export async function dispatchNativeAction({
           limit $2`,
         [orderPlanId, limit]
       );
-      const events = result.rows.map((row) => ({
+      const events = result.rows.map((row) => {
+        const afterData = safeJsonObject(row.version_after_data);
+        const targetOrderPlanId = firstText(afterData.orderPlanId, row.parent_entity_id, row.entity_type === 'order_plan' ? row.entity_id : orderPlanId);
+        const canRestoreVersion = targetOrderPlanId === orderPlanId && orderResponseCount === 0;
+        return {
         id: firstText(row.id),
         batchId: firstText(row.batch_id),
         versionId: firstText(row.version_id),
@@ -4525,7 +4591,10 @@ export async function dispatchNativeAction({
         severity: firstText(row.severity, 'info'),
         createdAt: asIsoText_(row.created_at),
         diff: safeJsonObject(row.diff),
-      }));
+          canRestoreVersion,
+          restoreBlockedReason: canRestoreVersion ? "" : "這個訂餐已有同學回覆，不能直接回復舊版。",
+        };
+      });
       return { ok: true, data: { events }, error: null };
     }
 
@@ -4555,16 +4624,20 @@ export async function dispatchNativeAction({
 
         const batchId = `audit_batch:${crypto.randomUUID()}`;
         const createdAt = nowIso();
-        await txQuery(
-          `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
-           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
-          [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreOrderAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
-        );
 
         if (entityType === 'order_plan') {
           const orderPlanId = firstText(versionRow.entity_id, targetSnapshot.id);
           const currentRow = rowOrNull(await txQuery(`select * from order_plans where id = $1 limit 1 for update`, [orderPlanId]));
           const currentSnapshot = currentRow ? buildOrderPlanForClient_(currentRow) : {};
+          const responseCount = await countOrderResponses_(txQuery, orderPlanId);
+          if (responseCount > 0) {
+            return { ok: false, data: null, error: "此訂餐已有同學回覆，不能直接回復舊版。" };
+          }
+          await txQuery(
+            `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+            [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreOrderAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
+          );
           const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
           const nextRow = buildOrderPlanRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, { actorId, actorName });
           await txQuery(
@@ -4617,6 +4690,19 @@ export async function dispatchNativeAction({
         const linkId = firstText(versionRow.entity_id, targetSnapshot.id);
         const currentRow = rowOrNull(await txQuery(`select * from ordering_public_links where id = $1 limit 1 for update`, [linkId]));
         const currentSnapshot = currentRow ? normalizeOrderingPublicLinkRow(currentRow) : {};
+        const orderPlanId = firstText(targetSnapshot.orderPlanId, currentSnapshot.orderPlanId, versionRow.parent_entity_id);
+        if (!orderPlanId) {
+          return { ok: false, data: null, error: "找不到外部入口對應的訂餐日期，不能回復舊版。" };
+        }
+        const responseCount = await countOrderResponses_(txQuery, orderPlanId);
+        if (responseCount > 0) {
+          return { ok: false, data: null, error: "此訂餐已有同學回覆，不能直接回復外部入口舊版。" };
+        }
+        await txQuery(
+          `insert into audit_change_batches (id, source, actor_id, actor_name, actor_email, reason, status, created_at, raw)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)`,
+          [batchId, 'admin_ui', actorId, actorName, actorEmail, 'restoreOrderAuditVersion', 'pending', createdAt, jsonbParam({ versionId }, {})]
+        );
         const nextRevision = currentRow ? Number(currentRow.revision_no || 1) + 1 : 1;
         const nextRow = buildOrderingPublicLinkRowFromSnapshot_(targetSnapshot, currentRow, nextRevision, batchId, { actorId, actorName });
         await txQuery(

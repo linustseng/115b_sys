@@ -768,6 +768,7 @@ const API_POST_ACTIONS = new Set([
   "listFinanceAuditEvents",
   "listFinanceActionsSummary",
   "listOrderPlans",
+  "listOrderAuditEvents",
   "getOrderPublicLinkAdmin",
   "getOrderPublicPage",
   "listOrderResponses",
@@ -841,6 +842,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listDrinkQueueBootstrap",
   // Ordering
   "listOrderPlans",
+  "listOrderAuditEvents",
   "getOrderPublicLinkAdmin",
   "getOrderPublicPage",
   "listOrderResponses",
@@ -907,6 +909,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "submitOrderPublicResponse",
   "adminUpsertOrderProxyResponse",
   "deleteOrderProxyResponse",
+  "restoreOrderAuditVersion",
   // Academics
   "submitMakeupRequest",
   "adminCreateMakeupRequest",

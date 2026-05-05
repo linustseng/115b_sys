@@ -1614,6 +1614,10 @@ export default function AdminPage({
     if (!item || !item.versionId) {
       return;
     }
+    if (!canRestoreActiveOrder || item.canRestoreVersion === false) {
+      setOrderStatusMessage(item.restoreBlockedReason || orderRestoreBlockedReason);
+      return;
+    }
     const entityLabel = item.entityType === "ordering_public_link" ? "外部訂餐入口" : "訂餐設定";
     if (!window.confirm(`確定要回復這筆${entityLabel}到 ${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt} 的版本嗎？`)) {
       return;
@@ -2090,6 +2094,10 @@ export default function AdminPage({
     if (!item || !item.versionId) {
       return;
     }
+    if (!canRestoreActiveEvent || item.canRestoreVersion === false) {
+      setError(item.restoreBlockedReason || eventRestoreBlockedReason);
+      return;
+    }
     if (!window.confirm(`確定要回復這版活動設定嗎？\n\n時間：${formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}`)) {
       return;
     }
@@ -2412,6 +2420,19 @@ export default function AdminPage({
     acc[eventId].push(checkin);
     return acc;
   }, {});
+  const activeEventId = normalizeEventId_(activeId || form.id);
+  const activeEventRegistrationCount = (registrationsByEvent[activeEventId] || []).filter(
+    (item) => String(item.status || "submitted").trim().toLowerCase() !== "cancelled"
+  ).length;
+  const activeEventCheckinCount = (checkinsByEvent[activeEventId] || []).length;
+  const canRestoreActiveEvent =
+    Boolean(activeEventId) &&
+    String(form.status || "").trim().toLowerCase() === "draft" &&
+    activeEventRegistrationCount + activeEventCheckinCount === 0;
+  const eventRestoreBlockedReason =
+    activeEventRegistrationCount + activeEventCheckinCount > 0
+      ? "這個活動已有報名或簽到紀錄，不能直接回復舊版。"
+      : "只有草稿活動可以直接回復舊版。";
 
   const registrationList = registrationEventId
     ? registrationsByEvent[normalizeEventId_(registrationEventId)] || []
@@ -3094,6 +3115,8 @@ export default function AdminPage({
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";
+  const canRestoreActiveOrder = Boolean(activeOrderPlan && !activeOrderPlan.isDraft) && orderResponses.length === 0;
+  const orderRestoreBlockedReason = "這個訂餐已有同學回覆，不能直接回復舊版。";
   const runtimeOrigin = typeof window !== "undefined" ? String(window.location.origin || "").trim() : "";
   const publicSiteBase = String(PUBLIC_SITE_URL || runtimeOrigin || "").replace(/\/$/, "");
   const publicOrderUrl = publicOrderLinkForm.token
@@ -4084,11 +4107,18 @@ export default function AdminPage({
                             {item.versionId ? (
                               <button
                                 type="button"
-                                disabled={saving}
+                                disabled={saving || !canRestoreActiveOrder || item.canRestoreVersion === false}
                                 onClick={() => handleRestoreOrderAuditVersion(item)}
-                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                                title={
+                                  !canRestoreActiveOrder
+                                    ? orderRestoreBlockedReason
+                                    : item.restoreBlockedReason || ""
+                                }
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                回復到這版
+                                {canRestoreActiveOrder && item.canRestoreVersion !== false
+                                  ? "回復到這版"
+                                  : "已有回覆不可回復"}
                               </button>
                             ) : null}
                           </div>
@@ -6208,11 +6238,18 @@ export default function AdminPage({
                           {item.versionId ? (
                             <button
                               type="button"
-                              disabled={saving}
+                              disabled={saving || !canRestoreActiveEvent || item.canRestoreVersion === false}
                               onClick={() => handleRestoreEventAuditVersion(item)}
-                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-60"
+                              title={
+                                !canRestoreActiveEvent
+                                  ? eventRestoreBlockedReason
+                                  : item.restoreBlockedReason || ""
+                              }
+                              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              回復到這版
+                              {canRestoreActiveEvent && item.canRestoreVersion !== false
+                                ? "回復到這版"
+                                : "已開放不可回復"}
                             </button>
                           ) : null}
                         </div>
