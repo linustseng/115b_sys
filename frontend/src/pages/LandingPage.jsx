@@ -1360,6 +1360,28 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             </div>
           </div>
 
+          <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-pink-200/80 bg-gradient-to-br from-pink-50 via-rose-50 to-white p-5 shadow-[0_28px_80px_-70px_rgba(190,24,93,0.8)] sm:p-6">
+            <div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">拉拉隊管理</h3>
+              <p className="mt-3 text-sm text-pink-900/80">練習排程、出席紀錄與全員統計。</p>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              {canSeeSoftballAdmin ? (
+                <a
+                  href="/cheerleading"
+                  className="inline-flex items-center rounded-full border border-pink-300 bg-white px-4 py-1.5 text-sm font-semibold text-pink-700 shadow-sm hover:border-pink-400"
+                >
+                  管理入口
+                  <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+                </a>
+              ) : (
+                <span className="rounded-full border border-pink-200 bg-white/80 px-4 py-1.5 text-xs font-semibold text-pink-700">
+                  登入有權限帳號後顯示
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-orange-200/80 bg-gradient-to-br from-orange-50 via-amber-50 to-white p-5 shadow-[0_28px_80px_-70px_rgba(180,83,9,0.8)] sm:p-6 xl:col-span-2">
             <div>
               <div className="inline-flex rounded-full border border-orange-200 bg-white/80 px-3 py-1 text-[11px] font-semibold text-orange-700">
