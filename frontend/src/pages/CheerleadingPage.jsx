@@ -34,14 +34,11 @@ function CheerleadingPage({ shared }) {
     { value: "late", label: "遲到", tone: "bg-amber-50 text-amber-700 border-amber-200" },
     { value: "early_leave", label: "早退", tone: "bg-orange-50 text-orange-700 border-orange-200" },
     { value: "excused", label: "請假", tone: "bg-sky-50 text-sky-700 border-sky-200" },
-    { value: "sick", label: "病假", tone: "bg-violet-50 text-violet-700 border-violet-200" },
-    { value: "official_leave", label: "公假", tone: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    { value: "online_makeup", label: "補練", tone: "bg-teal-50 text-teal-700 border-teal-200" },
     { value: "absent", label: "未到", tone: "bg-rose-50 text-rose-700 border-rose-200" },
     { value: "unknown", label: "未記錄", tone: "bg-slate-50 text-slate-600 border-slate-200" },
   ];
   const STATUS_LABELS = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
-  const PRESENT_STATUSES = new Set(["attend", "late", "early_leave", "online_makeup"]);
+  const PRESENT_STATUSES = new Set(["attend", "late", "early_leave"]);
 
   const normalizeId_ = (value) => String(value || "").trim();
   const normalizeStatus_ = (value) => {
