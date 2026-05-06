@@ -1366,19 +1366,21 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               <p className="mt-3 text-sm text-pink-900/80">練習排程、出席紀錄與全員統計。</p>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
+              <a
+                href="/cheerleading/player"
+                className="inline-flex items-center rounded-full border border-pink-300 bg-white px-4 py-1.5 text-sm font-semibold text-pink-700 shadow-sm hover:border-pink-400"
+              >
+                同學入口
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
               {canSeeSoftballAdmin ? (
                 <a
                   href="/cheerleading"
-                  className="inline-flex items-center rounded-full border border-pink-300 bg-white px-4 py-1.5 text-sm font-semibold text-pink-700 shadow-sm hover:border-pink-400"
+                  className="text-xs font-semibold text-pink-700 underline decoration-pink-300 underline-offset-4 hover:text-pink-800"
                 >
                   管理入口
-                  <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
                 </a>
-              ) : (
-                <span className="rounded-full border border-pink-200 bg-white/80 px-4 py-1.5 text-xs font-semibold text-pink-700">
-                  登入有權限帳號後顯示
-                </span>
-              )}
+              ) : null}
             </div>
           </div>
 

@@ -67,6 +67,7 @@ const AcademicsAdminPage = lazyImportWithRetry_(() => import("./pages/AcademicsA
 const SoftballPage = lazyImportWithRetry_(() => import("./pages/SoftballPage"), "SoftballPage");
 const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPlayerPage"), "SoftballPlayerPage");
 const CheerleadingPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPage"), "CheerleadingPage");
+const CheerleadingPlayerPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPlayerPage"), "CheerleadingPlayerPage");
 const DocumentsPage = lazyImportWithRetry_(() => import("./pages/DocumentsPage"), "DocumentsPage");
 import {
   addDays_,
@@ -775,6 +776,7 @@ const API_POST_ACTIONS = new Set([
   "listOrderResponses",
   "listSoftballBootstrap",
   "listCheerleadingBootstrap",
+  "listCheerleadingPlayerBootstrap",
   "listStudents",
   "listGroupMemberships",
   "listMyMemberships",
@@ -852,6 +854,7 @@ const API_V2_READ_ACTIONS = new Set([
   // Softball
   "listSoftballBootstrap",
   "listCheerleadingBootstrap",
+  "listCheerleadingPlayerBootstrap",
   "listSoftballPlayerBootstrap",
   "listSoftballPlayers",
   "listSoftballPractices",
@@ -1036,6 +1039,7 @@ const READ_CACHE_TTL_BY_ACTION_MS = {
   listFinanceAdminBootstrap: 5000,
   listSoftballBootstrap: 5000,
   listCheerleadingBootstrap: 8000,
+  listCheerleadingPlayerBootstrap: 5000,
   listBirthdays: 30000,
   getRegistrationBootstrap: 3000,
   getCheckinBootstrap: 3000,
@@ -2991,6 +2995,7 @@ function AppShell() {
   const isBirthdayPage = pathname.includes("birthdays");
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
+  const isCheerleadingPlayerPage = pathname.includes("cheerleading/player");
   const isCheerleadingPage = pathname.includes("cheerleading");
   const isApprovalsPage = pathname.startsWith("/approvals");
   const isDocumentsPage = pathname.includes("documents");
@@ -3410,6 +3415,8 @@ function AppShell() {
     content = <ApprovalsPage shared={shared} />;
   } else if (isSoftballPlayerPage) {
     content = <SoftballPlayerPage shared={shared} />;
+  } else if (isCheerleadingPlayerPage) {
+    content = <CheerleadingPlayerPage shared={shared} />;
   } else if (isCheerleadingPage) {
     content = (
       <AdminAccessGuard

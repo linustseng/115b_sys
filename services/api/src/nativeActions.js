@@ -7056,6 +7056,34 @@ export async function dispatchNativeAction({
       };
     }
 
+    case "listCheerleadingPlayerBootstrap": {
+      requireAuth();
+      const [studentResult, practicesResult, attendanceResult] = await Promise.all([
+        query(`select id, email, name_zh, name_en, preferred_name, group_id from directories where id = $1 limit 1`, [auth.studentId]),
+        query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
+        query(`select * from cheerleading_attendance where student_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`, [auth.studentId]),
+      ]);
+      const studentRow = rowOrNull(studentResult);
+      return {
+        ok: true,
+        data: {
+          student: studentRow
+            ? {
+                id: firstText(studentRow.id),
+                email: normalizeEmail(studentRow.email || ""),
+                nameZh: firstText(studentRow.name_zh),
+                nameEn: firstText(studentRow.name_en),
+                preferredName: firstText(studentRow.preferred_name),
+                groupId: firstText(studentRow.group_id),
+              }
+            : { id: auth.studentId },
+          practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+        },
+        error: null,
+      };
+    }
+
     case "createCheerleadingPractice":
     case "updateCheerleadingPractice": {
       await requireSoftballAdminAccess();
@@ -7090,12 +7118,17 @@ export async function dispatchNativeAction({
     }
 
     case "submitCheerleadingAttendance": {
-      await requireSoftballAdminAccess();
+      requireAuth();
+      const cheerleadingAccess = await getSoftballAdminAccess_();
+      const isAdmin = cheerleadingAccess.allowed;
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);
-      const studentId = firstText(data.studentId || data.playerId || body.studentId || body.playerId);
+      const studentId = firstText(data.studentId || data.playerId || body.studentId || body.playerId, auth.studentId);
       if (!practiceId || !studentId) {
         return { ok: false, data: null, error: "Missing practiceId/studentId" };
+      }
+      if (!isAdmin && String(studentId) !== String(auth.studentId)) {
+        return { ok: false, data: null, error: "Unauthorized" };
       }
       const id = `${practiceId}:${studentId}`;
       const existing = await query(`select * from cheerleading_attendance where practice_id = $1 and student_id = $2 limit 1`, [practiceId, studentId]);
