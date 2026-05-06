@@ -11,6 +11,7 @@ function CheerleadingPage({ shared }) {
   const [statusMessage, setStatusMessage] = useState("");
   const [students, setStudents] = useState([]);
   const [practices, setPractices] = useState([]);
+  const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [activePracticeId, setActivePracticeId] = useState("");
   const [statsScope, setStatsScope] = useState("recent10");
@@ -20,10 +21,12 @@ function CheerleadingPage({ shared }) {
     startAt: "",
     endAt: "",
     title: "拉拉隊練習",
+    fieldId: "",
     location: "",
     focus: "",
     notes: "",
   });
+  const [fieldForm, setFieldForm] = useState({ id: "", name: "", address: "", mapUrl: "", notes: "" });
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
 
   const ATTENDANCE_OPTIONS = [
@@ -63,6 +66,7 @@ function CheerleadingPage({ shared }) {
       const data = result.data || {};
       setStudents(Array.isArray(data.students) ? data.students : []);
       setPractices(Array.isArray(data.practices) ? data.practices : []);
+      setFields(Array.isArray(data.fields) ? data.fields : []);
       setAttendance(Array.isArray(data.attendance) ? data.attendance : []);
       if (!activePracticeId && Array.isArray(data.practices) && data.practices[0]) {
         setActivePracticeId(data.practices[0].id || "");
@@ -138,11 +142,48 @@ function CheerleadingPage({ shared }) {
       const action = payload.id ? "updateCheerleadingPractice" : "createCheerleadingPractice";
       const { result } = await effectiveApiRequest({ action, data: payload });
       if (!result.ok) throw new Error(result.error || "儲存練習失敗");
-      setPracticeForm({ id: "", date: "", startAt: "", endAt: "", title: "拉拉隊練習", location: "", focus: "", notes: "" });
+      setPracticeForm({ id: "", date: "", startAt: "", endAt: "", title: "拉拉隊練習", fieldId: "", location: "", focus: "", notes: "" });
       setStatusMessage("練習已儲存");
       await loadBootstrap();
     } catch (err) {
       setError(err.message || "儲存練習失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveField = async (event) => {
+    event.preventDefault();
+    if (!fieldForm.name) {
+      setError("請先填地點名稱");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const action = fieldForm.id ? "updateCheerleadingField" : "createCheerleadingField";
+      const { result } = await effectiveApiRequest({ action, data: fieldForm });
+      if (!result.ok) throw new Error(result.error || "儲存地點失敗");
+      setFieldForm({ id: "", name: "", address: "", mapUrl: "", notes: "" });
+      setStatusMessage("地點已儲存");
+      await loadBootstrap();
+    } catch (err) {
+      setError(err.message || "儲存地點失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteField = async (field) => {
+    const ok = typeof confirmDelete_ === "function" ? confirmDelete_(`刪除「${field.name || "地點"}」？`) : window.confirm("確定刪除？");
+    if (!ok) return;
+    setSaving(true);
+    try {
+      const { result } = await effectiveApiRequest({ action: "deleteCheerleadingField", id: field.id });
+      if (!result.ok) throw new Error(result.error || "刪除地點失敗");
+      await loadBootstrap();
+    } catch (err) {
+      setError(err.message || "刪除地點失敗");
     } finally {
       setSaving(false);
     }
@@ -196,7 +237,7 @@ function CheerleadingPage({ shared }) {
         {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
 
         <nav className="flex flex-wrap gap-2">
-          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }].map((tab) => (
+          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }].map((tab) => (
             <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
               {tab.label}
             </button>
@@ -276,13 +317,38 @@ function CheerleadingPage({ shared }) {
               <input value={practiceForm.title} onChange={(e) => setPracticeForm({ ...practiceForm, title: e.target.value })} placeholder="練習名稱" className="rounded-xl border border-slate-200 px-3 py-2" />
               <input type="time" value={practiceForm.startAt} onChange={(e) => setPracticeForm({ ...practiceForm, startAt: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2" />
               <input type="time" value={practiceForm.endAt} onChange={(e) => setPracticeForm({ ...practiceForm, endAt: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2" />
-              <input value={practiceForm.location} onChange={(e) => setPracticeForm({ ...practiceForm, location: e.target.value })} placeholder="地點" className="rounded-xl border border-slate-200 px-3 py-2" />
+              <select value={practiceForm.fieldId} onChange={(e) => {
+                const field = fields.find((item) => normalizeId_(item.id) === normalizeId_(e.target.value));
+                setPracticeForm({ ...practiceForm, fieldId: e.target.value, location: field?.name || practiceForm.location });
+              }} className="rounded-xl border border-slate-200 px-3 py-2">
+                <option value="">選擇地點</option>
+                {fields.map((field) => <option key={field.id} value={field.id}>{field.name}</option>)}
+              </select>
+              <input value={practiceForm.location} onChange={(e) => setPracticeForm({ ...practiceForm, location: e.target.value })} placeholder="地點補充 / 自訂地點" className="rounded-xl border border-slate-200 px-3 py-2" />
               <input value={practiceForm.focus} onChange={(e) => setPracticeForm({ ...practiceForm, focus: e.target.value })} placeholder="練習重點" className="rounded-xl border border-slate-200 px-3 py-2" />
               <textarea value={practiceForm.notes} onChange={(e) => setPracticeForm({ ...practiceForm, notes: e.target.value })} placeholder="備註" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" />
               <button disabled={saving} type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{practiceForm.id ? "更新練習" : "新增練習"}</button>
             </form>
             <div className="mt-6 space-y-3">
-              {sortedPractices.map((practice) => <div key={practice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">{practice.location || "未填地點"}</p></div><div className="flex gap-2"><button type="button" onClick={() => setPracticeForm({ id: practice.id || "", date: practice.date || "", startAt: practice.startAt || "", endAt: practice.endAt || "", title: practice.title || "拉拉隊練習", location: practice.location || "", focus: practice.focus || "", notes: practice.notes || "" })} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold">編輯</button><button type="button" onClick={() => deletePractice(practice)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div></div>)}
+              {sortedPractices.map((practice) => <div key={practice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">{practice.location || "未填地點"}</p></div><div className="flex gap-2"><button type="button" onClick={() => setPracticeForm({ id: practice.id || "", date: practice.date || "", startAt: practice.startAt || "", endAt: practice.endAt || "", title: practice.title || "拉拉隊練習", fieldId: practice.fieldId || "", location: practice.location || "", focus: practice.focus || "", notes: practice.notes || "" })} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold">編輯</button><button type="button" onClick={() => deletePractice(practice)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div></div>)}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "fields" ? (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-bold">地點管理</h2>
+            <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_0.9fr]">
+              <div className="space-y-3">
+                {fields.map((field) => <div key={field.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><button type="button" onClick={() => setFieldForm({ ...field })} className="text-left"><p className="font-semibold">{field.name}</p><p className="text-sm text-slate-500">{field.address || "未填地址"}</p></button><button type="button" onClick={() => deleteField(field)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div>)}
+              </div>
+              <form onSubmit={saveField} className="space-y-3">
+                <input value={fieldForm.name} onChange={(e) => setFieldForm({ ...fieldForm, name: e.target.value })} placeholder="地點名稱" className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <input value={fieldForm.address} onChange={(e) => setFieldForm({ ...fieldForm, address: e.target.value })} placeholder="地址" className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <input value={fieldForm.mapUrl} onChange={(e) => setFieldForm({ ...fieldForm, mapUrl: e.target.value })} placeholder="地圖連結" className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <textarea value={fieldForm.notes} onChange={(e) => setFieldForm({ ...fieldForm, notes: e.target.value })} placeholder="備註" className="w-full rounded-xl border border-slate-200 px-3 py-2" />
+                <div className="flex gap-2"><button disabled={saving} type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">{fieldForm.id ? "更新地點" : "新增地點"}</button><button type="button" onClick={() => setFieldForm({ id: "", name: "", address: "", mapUrl: "", notes: "" })} className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">清空</button></div>
+              </form>
             </div>
           </section>
         ) : null}

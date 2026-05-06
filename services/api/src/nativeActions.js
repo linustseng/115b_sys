@@ -7089,13 +7089,14 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingBootstrap": {
       await requireSoftballAdminAccess();
-      const [studentsResult, practicesResult, attendanceResult] = await Promise.all([
+      const [studentsResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
         query(
           `select id, email, name_zh, name_en, preferred_name, group_id
            from directories
            order by coalesce(group_id,''), coalesce(name_zh,''), coalesce(preferred_name,''), id`
         ),
         query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
+        query(`select * from cheerleading_fields order by coalesce(name,''), id`),
         query(
           `with att as (
              select *,
@@ -7121,6 +7122,7 @@ export async function dispatchNativeAction({
             groupId: firstText(row.group_id),
           })),
           practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
         },
         error: null,
@@ -7129,9 +7131,10 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingPlayerBootstrap": {
       requireAuth();
-      const [studentResult, practicesResult, attendanceResult] = await Promise.all([
+      const [studentResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
         query(`select id, email, name_zh, name_en, preferred_name, group_id from directories where id = $1 limit 1`, [auth.studentId]),
         query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
+        query(`select * from cheerleading_fields order by coalesce(name,''), id`),
         query(`select * from cheerleading_attendance where student_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`, [auth.studentId]),
       ]);
       const studentRow = rowOrNull(studentResult);
@@ -7149,6 +7152,7 @@ export async function dispatchNativeAction({
               }
             : { id: auth.studentId },
           practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
         },
         error: null,
@@ -7185,6 +7189,38 @@ export async function dispatchNativeAction({
       }
       await query(`delete from cheerleading_practices where id = $1`, [id]);
       await query(`delete from cheerleading_attendance where practice_id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "createCheerleadingField":
+    case "updateCheerleadingField": {
+      await requireSoftballAdminAccess();
+      const data = safeJsonObject(body.data || body.field || body);
+      const id = firstText(data.id, crypto.randomUUID());
+      const createdAt = firstText(data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      await query(
+        `insert into cheerleading_fields (id, name, address, map_url, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5::jsonb,$6,$7)
+         on conflict (id) do update set
+           name=excluded.name,
+           address=excluded.address,
+           map_url=excluded.map_url,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, firstText(data.name), firstText(data.address), firstText(data.mapUrl || data.map_url), jsonbParam(data, {}), createdAt, updatedAt]
+      );
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "deleteCheerleadingField": {
+      await requireSoftballAdminAccess();
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from cheerleading_fields where id = $1`, [id]);
       return { ok: true, data: { id }, error: null };
     }
 

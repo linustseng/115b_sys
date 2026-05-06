@@ -8,6 +8,7 @@ function CheerleadingPlayerPage({ shared }) {
   const [error, setError] = useState("");
   const [student, setStudent] = useState(null);
   const [practices, setPractices] = useState([]);
+  const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
 
   const OPTIONS = [
@@ -36,6 +37,7 @@ function CheerleadingPlayerPage({ shared }) {
       if (!result.ok) throw new Error(result.error || "拉拉隊資料載入失敗");
       setStudent(result.data?.student || null);
       setPractices(Array.isArray(result.data?.practices) ? result.data.practices : []);
+      setFields(Array.isArray(result.data?.fields) ? result.data.fields : []);
       setAttendance(Array.isArray(result.data?.attendance) ? result.data.attendance : []);
     } catch (err) {
       setError(err.message || "拉拉隊資料載入失敗");
@@ -65,6 +67,7 @@ function CheerleadingPlayerPage({ shared }) {
     if (aHighlighted !== bHighlighted) return aHighlighted ? -1 : 1;
     return String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""));
   }), [highlightedPracticeId, practices]);
+  const fieldById = useMemo(() => fields.reduce((acc, field) => ({ ...acc, [normalizeId(field.id)]: field }), {}), [fields]);
   const stats = useMemo(() => {
     const total = sortedPractices.length;
     let present = 0;
@@ -120,10 +123,12 @@ function CheerleadingPlayerPage({ shared }) {
             {sortedPractices.length ? sortedPractices.map((practice) => {
               const record = attendanceByPractice.get(normalizeId(practice.id));
               const status = normalizeStatus(record?.status);
+              const field = fieldById[normalizeId(practice.fieldId)] || null;
+              const locationLabel = practice.location || field?.name || "未填地點";
               return (
                 <div key={practice.id} className={`rounded-2xl border p-4 ${highlightedPracticeId && normalizeId(practice.id) === highlightedPracticeId ? "border-pink-300 bg-pink-50/50" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="mt-1 text-sm text-slate-500">{practice.location || "未填地點"}{practice.focus ? ` · ${practice.focus}` : ""}</p></div>
+                    <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="mt-1 text-sm text-slate-500">{locationLabel}{field?.address ? ` · ${field.address}` : ""}{practice.focus ? ` · ${practice.focus}` : ""}</p>{field?.mapUrl ? <a href={field.mapUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-pink-700 underline">查看地圖</a> : null}</div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">目前：{labelByStatus[status]}</span>
                   </div>
                   {practice.notes ? <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{practice.notes}</p> : null}

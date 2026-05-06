@@ -954,6 +954,9 @@ const API_V2_WRITE_ACTIONS = new Set([
   "createCheerleadingPractice",
   "updateCheerleadingPractice",
   "deleteCheerleadingPractice",
+  "createCheerleadingField",
+  "updateCheerleadingField",
+  "deleteCheerleadingField",
   "submitCheerleadingAttendance",
   // Documents
   "createDocument",
