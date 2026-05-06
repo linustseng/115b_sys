@@ -84,8 +84,9 @@ function CheerleadingPage({ shared }) {
     () => students.slice().sort((a, b) => getStudentName_(a).localeCompare(getStudentName_(b), "zh-Hant", { numeric: true })),
     [students]
   );
+  const getPracticeSortValue_ = (practice) => String(practice?.date || practice?.startAt || "9999-12-31");
   const sortedPractices = useMemo(
-    () => practices.slice().sort((a, b) => String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""))),
+    () => practices.slice().sort((a, b) => getPracticeSortValue_(a).localeCompare(getPracticeSortValue_(b))),
     [practices]
   );
   const activePractice = sortedPractices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId)) || sortedPractices[0] || null;

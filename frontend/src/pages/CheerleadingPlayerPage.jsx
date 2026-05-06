@@ -62,7 +62,7 @@ function CheerleadingPlayerPage({ shared }) {
     const aHighlighted = highlightedPracticeId && normalizeId(a.id) === highlightedPracticeId;
     const bHighlighted = highlightedPracticeId && normalizeId(b.id) === highlightedPracticeId;
     if (aHighlighted !== bHighlighted) return aHighlighted ? -1 : 1;
-    return String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""));
+    return String(a.date || a.startAt || "9999-12-31").localeCompare(String(b.date || b.startAt || "9999-12-31"));
   }), [highlightedPracticeId, practices]);
   const fieldById = useMemo(() => fields.reduce((acc, field) => ({ ...acc, [normalizeId(field.id)]: field }), {}), [fields]);
   const stats = useMemo(() => {
