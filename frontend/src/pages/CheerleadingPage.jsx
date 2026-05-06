@@ -1,0 +1,294 @@
+import React, { useEffect, useMemo, useState } from "react";
+
+function CheerleadingPage({ shared }) {
+  const { apiRequest, authedApiRequest, pad2_, confirmDelete_ } = shared;
+  const effectiveApiRequest = typeof authedApiRequest === "function" ? authedApiRequest : apiRequest;
+
+  const [activeTab, setActiveTab] = useState("stats");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const [students, setStudents] = useState([]);
+  const [practices, setPractices] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [activePracticeId, setActivePracticeId] = useState("");
+  const [statsScope, setStatsScope] = useState("recent10");
+  const [practiceForm, setPracticeForm] = useState({
+    id: "",
+    date: "",
+    startAt: "",
+    endAt: "",
+    title: "拉拉隊練習",
+    location: "",
+    focus: "",
+    notes: "",
+  });
+  const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+
+  const ATTENDANCE_OPTIONS = [
+    { value: "attend", label: "出席", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    { value: "late", label: "遲到", tone: "bg-amber-50 text-amber-700 border-amber-200" },
+    { value: "early_leave", label: "早退", tone: "bg-orange-50 text-orange-700 border-orange-200" },
+    { value: "excused", label: "請假", tone: "bg-sky-50 text-sky-700 border-sky-200" },
+    { value: "sick", label: "病假", tone: "bg-violet-50 text-violet-700 border-violet-200" },
+    { value: "official_leave", label: "公假", tone: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    { value: "online_makeup", label: "補練", tone: "bg-teal-50 text-teal-700 border-teal-200" },
+    { value: "absent", label: "未到", tone: "bg-rose-50 text-rose-700 border-rose-200" },
+    { value: "unknown", label: "未記錄", tone: "bg-slate-50 text-slate-600 border-slate-200" },
+  ];
+  const STATUS_LABELS = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
+  const PRESENT_STATUSES = new Set(["attend", "late", "early_leave", "online_makeup"]);
+
+  const normalizeId_ = (value) => String(value || "").trim();
+  const normalizeStatus_ = (value) => {
+    const raw = String(value || "").trim().toLowerCase();
+    return ATTENDANCE_OPTIONS.some((item) => item.value === raw) ? raw : "unknown";
+  };
+  const getStudentName_ = (student) =>
+    String(student?.nameZh || student?.preferredName || student?.name || student?.nameEn || student?.email || student?.id || "").trim();
+  const formatDate_ = (value) => String(value || "").slice(0, 10) || "未定日期";
+  const todayKey_ = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${pad2_ ? pad2_(now.getMonth() + 1) : String(now.getMonth() + 1).padStart(2, "0")}-${pad2_ ? pad2_(now.getDate()) : String(now.getDate()).padStart(2, "0")}`;
+  };
+  const isPracticePast_ = (practice) => String(practice?.date || practice?.startAt || "").slice(0, 10) <= todayKey_();
+
+  const loadBootstrap = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "listCheerleadingBootstrap" });
+      if (!result.ok) throw new Error(result.error || "拉拉隊資料載入失敗");
+      const data = result.data || {};
+      setStudents(Array.isArray(data.students) ? data.students : []);
+      setPractices(Array.isArray(data.practices) ? data.practices : []);
+      setAttendance(Array.isArray(data.attendance) ? data.attendance : []);
+      if (!activePracticeId && Array.isArray(data.practices) && data.practices[0]) {
+        setActivePracticeId(data.practices[0].id || "");
+      }
+    } catch (err) {
+      setError(err.message || "拉拉隊資料載入失敗");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sortedStudents = useMemo(
+    () => students.slice().sort((a, b) => getStudentName_(a).localeCompare(getStudentName_(b), "zh-Hant", { numeric: true })),
+    [students]
+  );
+  const sortedPractices = useMemo(
+    () => practices.slice().sort((a, b) => String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""))),
+    [practices]
+  );
+  const activePractice = sortedPractices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId)) || sortedPractices[0] || null;
+
+  const attendanceMap = useMemo(() => {
+    const map = new Map();
+    attendance.forEach((item) => {
+      const practiceId = normalizeId_(item.practiceId || item.practice_id);
+      const studentId = normalizeId_(item.studentId || item.student_id || item.playerId || item.player_id);
+      if (practiceId && studentId) map.set(`${practiceId}:${studentId}`, item);
+    });
+    return map;
+  }, [attendance]);
+
+  const scopedPractices = useMemo(() => {
+    if (statsScope === "recent5") return sortedPractices.slice(0, 5);
+    if (statsScope === "all") return sortedPractices;
+    return sortedPractices.slice(0, 10);
+  }, [sortedPractices, statsScope]);
+
+  const stats = useMemo(() => {
+    const practiceStats = scopedPractices.map((practice) => {
+      const counts = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: 0 }), {});
+      sortedStudents.forEach((student) => {
+        const record = attendanceMap.get(`${normalizeId_(practice.id)}:${normalizeId_(student.id)}`);
+        counts[normalizeStatus_(record?.status)] += 1;
+      });
+      const present = Object.entries(counts).reduce((sum, [status, count]) => sum + (PRESENT_STATUSES.has(status) ? count : 0), 0);
+      const total = sortedStudents.length;
+      return { practice, counts, present, total, participationRate: total ? Math.round((present / total) * 100) : 0 };
+    });
+    const pastPractices = scopedPractices.filter(isPracticePast_);
+    const studentStats = sortedStudents.map((student) => {
+      const counts = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: 0 }), {});
+      pastPractices.forEach((practice) => {
+        const record = attendanceMap.get(`${normalizeId_(practice.id)}:${normalizeId_(student.id)}`);
+        counts[normalizeStatus_(record?.status)] += 1;
+      });
+      const present = Object.entries(counts).reduce((sum, [status, count]) => sum + (PRESENT_STATUSES.has(status) ? count : 0), 0);
+      return { student, counts, present, total: pastPractices.length, participationRate: pastPractices.length ? Math.round((present / pastPractices.length) * 100) : 0 };
+    }).sort((a, b) => b.present - a.present || a.participationRate - b.participationRate || getStudentName_(a.student).localeCompare(getStudentName_(b.student), "zh-Hant"));
+    return { practiceStats, studentStats, pastPracticeCount: pastPractices.length };
+  }, [ATTENDANCE_OPTIONS, attendanceMap, scopedPractices, sortedStudents]);
+
+  const savePractice = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const payload = { ...practiceForm, title: practiceForm.title || "拉拉隊練習" };
+      const action = payload.id ? "updateCheerleadingPractice" : "createCheerleadingPractice";
+      const { result } = await effectiveApiRequest({ action, data: payload });
+      if (!result.ok) throw new Error(result.error || "儲存練習失敗");
+      setPracticeForm({ id: "", date: "", startAt: "", endAt: "", title: "拉拉隊練習", location: "", focus: "", notes: "" });
+      setStatusMessage("練習已儲存");
+      await loadBootstrap();
+    } catch (err) {
+      setError(err.message || "儲存練習失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePractice = async (practice) => {
+    const ok = typeof confirmDelete_ === "function" ? confirmDelete_(`刪除「${practice.title || "拉拉隊練習"}」？出席紀錄也會刪除。`) : window.confirm("確定刪除？");
+    if (!ok) return;
+    setSaving(true);
+    try {
+      const { result } = await effectiveApiRequest({ action: "deleteCheerleadingPractice", id: practice.id });
+      if (!result.ok) throw new Error(result.error || "刪除失敗");
+      await loadBootstrap();
+    } catch (err) {
+      setError(err.message || "刪除失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitAttendance = async (studentId, status) => {
+    if (!activePractice) return;
+    const key = `${normalizeId_(activePractice.id)}:${normalizeId_(studentId)}`;
+    const notes = attendanceNoteMap[key] ?? attendanceMap.get(key)?.notes ?? "";
+    setSaving(true);
+    try {
+      const { result } = await effectiveApiRequest({
+        action: "submitCheerleadingAttendance",
+        data: { practiceId: activePractice.id, studentId, status, notes },
+      });
+      if (!result.ok) throw new Error(result.error || "出席儲存失敗");
+      const saved = result.data?.attendance;
+      setAttendance((current) => current.filter((item) => `${normalizeId_(item.practiceId || item.practice_id)}:${normalizeId_(item.studentId || item.student_id || item.playerId || item.player_id)}` !== key).concat(saved));
+    } catch (err) {
+      setError(err.message || "出席儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-6 text-white shadow-lg">
+          <p className="text-sm font-semibold uppercase tracking-[0.25em] text-pink-100">115B Cheerleading</p>
+          <h1 className="mt-3 text-3xl font-bold">拉拉隊比賽管理</h1>
+          <p className="mt-2 max-w-2xl text-sm text-pink-50">全員參與；先支援練習、出席紀錄與統計。權限沿用壘球隊後台設計。</p>
+        </section>
+
+        {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+        {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
+
+        <nav className="flex flex-wrap gap-2">
+          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }].map((tab) => (
+            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {loading ? <p className="text-sm text-slate-500">載入中…</p> : null}
+
+        {activeTab === "stats" ? (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-bold">出席統計</h2>
+              <select value={statsScope} onChange={(event) => setStatsScope(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                <option value="recent5">最近 5 場</option>
+                <option value="recent10">最近 10 場</option>
+                <option value="all">全部場次</option>
+              </select>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-4">
+              {[{ label: "全員人數", value: sortedStudents.length }, { label: "統計場次", value: scopedPractices.length }, { label: "已結束場次", value: stats.pastPracticeCount }, { label: "紀錄筆數", value: attendance.length }].map((item) => (
+                <div key={item.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-bold">{item.value}</p></div>
+              ))}
+            </div>
+            <div className="mt-8 space-y-3">
+              <h3 className="font-semibold">各次練習概況</h3>
+              {stats.practiceStats.map(({ practice, counts, present, total, participationRate }) => (
+                <div key={practice.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}%</p></div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-5 lg:grid-cols-9">
+                    {ATTENDANCE_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{counts[item.value] || 0}</p></div>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 space-y-3">
+              <h3 className="font-semibold">個人參與統計（已結束練習）</h3>
+              {stats.studentStats.map(({ student, counts, present, total, participationRate }) => (
+                <div key={student.id} className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{getStudentName_(student)}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}% · 未記錄 {counts.unknown || 0}</p></div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "attendance" ? (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-bold">出席紀錄</h2>
+              <select value={activePractice?.id || ""} onChange={(event) => setActivePracticeId(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</option>)}
+              </select>
+            </div>
+            {!activePractice ? <p className="mt-4 text-sm text-slate-500">請先建立練習。</p> : null}
+            <div className="mt-5 space-y-3">
+              {activePractice && sortedStudents.map((student) => {
+                const key = `${normalizeId_(activePractice.id)}:${normalizeId_(student.id)}`;
+                const record = attendanceMap.get(key);
+                const status = normalizeStatus_(record?.status);
+                return (
+                  <div key={student.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">{getStudentName_(student)}</p><p className="text-xs text-slate-500">目前：{STATUS_LABELS[status]}</p></div>
+                    <div className="mt-3 flex flex-wrap gap-2">{ATTENDANCE_OPTIONS.map((item) => <button key={item.value} disabled={saving} type="button" onClick={() => submitAttendance(student.id, item.value)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === item.value ? item.tone : "border-slate-200 bg-white text-slate-600"}`}>{item.label}</button>)}</div>
+                    <input value={attendanceNoteMap[key] ?? record?.notes ?? ""} onChange={(event) => setAttendanceNoteMap((current) => ({ ...current, [key]: event.target.value }))} onBlur={() => submitAttendance(student.id, status)} placeholder="備註" className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ) : null}
+
+        {activeTab === "practices" ? (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <h2 className="text-xl font-bold">練習管理</h2>
+            <form onSubmit={savePractice} className="mt-4 grid gap-3 sm:grid-cols-2">
+              <input type="date" value={practiceForm.date} onChange={(e) => setPracticeForm({ ...practiceForm, date: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2" />
+              <input value={practiceForm.title} onChange={(e) => setPracticeForm({ ...practiceForm, title: e.target.value })} placeholder="練習名稱" className="rounded-xl border border-slate-200 px-3 py-2" />
+              <input type="time" value={practiceForm.startAt} onChange={(e) => setPracticeForm({ ...practiceForm, startAt: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2" />
+              <input type="time" value={practiceForm.endAt} onChange={(e) => setPracticeForm({ ...practiceForm, endAt: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2" />
+              <input value={practiceForm.location} onChange={(e) => setPracticeForm({ ...practiceForm, location: e.target.value })} placeholder="地點" className="rounded-xl border border-slate-200 px-3 py-2" />
+              <input value={practiceForm.focus} onChange={(e) => setPracticeForm({ ...practiceForm, focus: e.target.value })} placeholder="練習重點" className="rounded-xl border border-slate-200 px-3 py-2" />
+              <textarea value={practiceForm.notes} onChange={(e) => setPracticeForm({ ...practiceForm, notes: e.target.value })} placeholder="備註" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" />
+              <button disabled={saving} type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{practiceForm.id ? "更新練習" : "新增練習"}</button>
+            </form>
+            <div className="mt-6 space-y-3">
+              {sortedPractices.map((practice) => <div key={practice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">{practice.location || "未填地點"}</p></div><div className="flex gap-2"><button type="button" onClick={() => setPracticeForm({ id: practice.id || "", date: practice.date || "", startAt: practice.startAt || "", endAt: practice.endAt || "", title: practice.title || "拉拉隊練習", location: practice.location || "", focus: practice.focus || "", notes: practice.notes || "" })} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold">編輯</button><button type="button" onClick={() => deletePractice(practice)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div></div>)}
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </main>
+  );
+}
+
+export default CheerleadingPage;

@@ -797,6 +797,25 @@ function toSoftballPracticeRow(input) {
   };
 }
 
+function toCheerleadingPracticeRow(input) {
+  const raw = safeJsonObject(input);
+  const id = firstText(raw.id, crypto.randomUUID());
+  const createdAt = firstText(raw.createdAt, nowIso());
+  const updatedAt = nowIso();
+  return {
+    id,
+    date: firstText(raw.date),
+    title: firstText(raw.title, "拉拉隊練習"),
+    location: firstText(raw.location),
+    startAt: firstText(raw.startAt),
+    endAt: firstText(raw.endAt),
+    notes: firstText(raw.notes),
+    createdAt,
+    updatedAt,
+    raw,
+  };
+}
+
 function toSoftballAngelRosterRow(input) {
   const raw = safeJsonObject(input);
   const id = firstText(raw.id, crypto.randomUUID());
@@ -6995,6 +7014,109 @@ export async function dispatchNativeAction({
         },
         error: null,
       };
+    }
+
+    case "listCheerleadingBootstrap": {
+      await requireSoftballAdminAccess();
+      const [studentsResult, practicesResult, attendanceResult] = await Promise.all([
+        query(
+          `select id, email, name_zh, name_en, preferred_name, group_id
+           from directories
+           order by coalesce(group_id,''), coalesce(name_zh,''), coalesce(preferred_name,''), id`
+        ),
+        query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
+        query(
+          `with att as (
+             select *,
+               coalesce(practice_id, raw->>'practiceId', raw->>'practice_id') as practice_key,
+               coalesce(student_id, raw->>'studentId', raw->>'playerId', raw->>'student_id') as student_key
+             from cheerleading_attendance
+           )
+           select distinct on (practice_key, student_key) *
+           from att
+           order by practice_key, student_key, coalesce(updated_at,'') desc, id desc
+           limit 5000`
+        ),
+      ]);
+      return {
+        ok: true,
+        data: {
+          students: studentsResult.rows.map((row) => ({
+            id: firstText(row.id),
+            email: normalizeEmail(row.email || ""),
+            nameZh: firstText(row.name_zh),
+            nameEn: firstText(row.name_en),
+            preferredName: firstText(row.preferred_name),
+            groupId: firstText(row.group_id),
+          })),
+          practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+        },
+        error: null,
+      };
+    }
+
+    case "createCheerleadingPractice":
+    case "updateCheerleadingPractice": {
+      await requireSoftballAdminAccess();
+      const row = toCheerleadingPracticeRow(body.data || body.practice || body);
+      await query(
+        `insert into cheerleading_practices (id, date, title, location, start_at, end_at, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)
+         on conflict (id) do update set
+           date=excluded.date,
+           title=excluded.title,
+           location=excluded.location,
+           start_at=excluded.start_at,
+           end_at=excluded.end_at,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [row.id, row.date, row.title, row.location, row.startAt, row.endAt, row.notes, jsonbParam(row.raw, {}), row.createdAt, row.updatedAt]
+      );
+      return { ok: true, data: { id: row.id, practice: { ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id } }, error: null };
+    }
+
+    case "deleteCheerleadingPractice": {
+      await requireSoftballAdminAccess();
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from cheerleading_practices where id = $1`, [id]);
+      await query(`delete from cheerleading_attendance where practice_id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
+    }
+
+    case "submitCheerleadingAttendance": {
+      await requireSoftballAdminAccess();
+      const data = safeJsonObject(body.data || body.attendance || body);
+      const practiceId = firstText(data.practiceId || body.practiceId);
+      const studentId = firstText(data.studentId || data.playerId || body.studentId || body.playerId);
+      if (!practiceId || !studentId) {
+        return { ok: false, data: null, error: "Missing practiceId/studentId" };
+      }
+      const id = `${practiceId}:${studentId}`;
+      const existing = await query(`select * from cheerleading_attendance where practice_id = $1 and student_id = $2 limit 1`, [practiceId, studentId]);
+      const existingRow = existing.rows && existing.rows.length ? existing.rows[0] : null;
+      const createdAt = firstText(existingRow && existingRow.created_at ? existingRow.created_at : "", data.createdAt, nowIso());
+      const updatedAt = nowIso();
+      const notes = firstText(data.notes || data.note || body.note || body.notes);
+      const raw = { ...(data || {}), id, practiceId, studentId, playerId: studentId, notes };
+      await query(
+        `insert into cheerleading_attendance (id, practice_id, student_id, status, notes, raw, created_at, updated_at)
+         values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
+         on conflict (practice_id, student_id) do update set
+           id=excluded.id,
+           status=excluded.status,
+           notes=excluded.notes,
+           raw=excluded.raw,
+           updated_at=excluded.updated_at,
+           synced_at=now()`,
+        [id, practiceId, studentId, firstText(data.status, "unknown"), notes, jsonbParam(raw, {}), createdAt, updatedAt]
+      );
+      return { ok: true, data: { id, attendance: raw }, error: null };
     }
 
     case "listSoftballMemberships": {
