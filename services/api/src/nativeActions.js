@@ -4043,6 +4043,77 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Todo notification: cheerleading attendance for the next practice.
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const practiceResult = await query(
+          `select * from cheerleading_practices
+           where coalesce(date,'') <> ''
+             and coalesce(date,'') >= $1
+           order by coalesce(date,''), id
+           limit 1`,
+          [today]
+        );
+        const practice = rowOrNull(practiceResult);
+        if (practice && practice.id) {
+          const practiceId = String(practice.id || "").trim();
+          const attendanceResult = await query(
+            `select status
+             from cheerleading_attendance
+             where practice_id = $1
+               and student_id = $2
+             order by coalesce(updated_at,'') desc, id desc
+             limit 1`,
+            [practiceId, studentId]
+          );
+          const attendanceRow = rowOrNull(attendanceResult);
+          const hasConfirmedResponse = isSoftballAttendanceConfirmed(attendanceRow && attendanceRow.status);
+          const todoId = `todo:cheerleading:${practiceId}:${studentId}`;
+
+          if (!hasConfirmedResponse) {
+            const createdAtText = nowIso();
+            const title = "拉拉隊｜請回覆下一次練習";
+            const body = [firstText(practice.date, ""), firstText(practice.title, ""), firstText(practice.location, "")]
+              .filter(Boolean)
+              .join(" · ");
+            const url = `/cheerleading/player?practiceId=${encodeURIComponent(practiceId)}`;
+            const raw = {
+              kind: "todo",
+              todoKey: todoId,
+              category: "cheerleading",
+              practiceId,
+            };
+
+            await query(
+              `insert into notifications (
+                 id, dedupe_key, kind, status,
+                 target_student_id, target_group_id,
+                 title, body, url,
+                 created_at, updated_at, raw
+               ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+               on conflict (id) do update set
+                 status = 'open',
+                 title = excluded.title,
+                 body = excluded.body,
+                 url = excluded.url,
+                 raw = excluded.raw,
+                 target_student_id = excluded.target_student_id,
+                 -- Don't bump updated_at on every page load; only bump when transitioning from closed -> open.
+                 updated_at = case when notifications.status <> 'open' then excluded.updated_at else notifications.updated_at end`,
+              [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+            );
+          } else {
+            await query(
+              `update notifications set status = 'closed', updated_at = now()
+               where id = $1 and coalesce(status,'open') <> 'closed'`,
+              [todoId]
+            );
+          }
+        }
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       // Todo notification: event attendance confirmation (treat "尚未確定" as not-yet-confirmed).
       try {
         const eventsResult = await query(

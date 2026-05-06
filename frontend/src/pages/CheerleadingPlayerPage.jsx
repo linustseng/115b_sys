@@ -55,7 +55,16 @@ function CheerleadingPlayerPage({ shared }) {
     return map;
   }, [attendance]);
 
-  const sortedPractices = useMemo(() => practices.slice().sort((a, b) => String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""))), [practices]);
+  const highlightedPracticeId = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    return normalizeId(new URLSearchParams(window.location.search).get("practiceId"));
+  }, []);
+  const sortedPractices = useMemo(() => practices.slice().sort((a, b) => {
+    const aHighlighted = highlightedPracticeId && normalizeId(a.id) === highlightedPracticeId;
+    const bHighlighted = highlightedPracticeId && normalizeId(b.id) === highlightedPracticeId;
+    if (aHighlighted !== bHighlighted) return aHighlighted ? -1 : 1;
+    return String(b.date || b.startAt || "").localeCompare(String(a.date || a.startAt || ""));
+  }), [highlightedPracticeId, practices]);
   const stats = useMemo(() => {
     const total = sortedPractices.length;
     let present = 0;
@@ -112,7 +121,7 @@ function CheerleadingPlayerPage({ shared }) {
               const record = attendanceByPractice.get(normalizeId(practice.id));
               const status = normalizeStatus(record?.status);
               return (
-                <div key={practice.id} className="rounded-2xl border border-slate-200 p-4">
+                <div key={practice.id} className={`rounded-2xl border p-4 ${highlightedPracticeId && normalizeId(practice.id) === highlightedPracticeId ? "border-pink-300 bg-pink-50/50" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="mt-1 text-sm text-slate-500">{practice.location || "未填地點"}{practice.focus ? ` · ${practice.focus}` : ""}</p></div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">目前：{labelByStatus[status]}</span>
