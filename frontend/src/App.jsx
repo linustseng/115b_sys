@@ -69,6 +69,7 @@ const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPl
 const CheerleadingPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPage"), "CheerleadingPage");
 const CheerleadingPlayerPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPlayerPage"), "CheerleadingPlayerPage");
 const DocumentsPage = lazyImportWithRetry_(() => import("./pages/DocumentsPage"), "DocumentsPage");
+const QuickLinksPage = lazyImportWithRetry_(() => import("./pages/QuickLinksPage"), "QuickLinksPage");
 import {
   addDays_,
   addMinutes_,
@@ -3008,6 +3009,7 @@ function AppShell() {
   const isCheerleadingPage = pathname.includes("cheerleading");
   const isApprovalsPage = pathname.startsWith("/approvals");
   const isDocumentsPage = pathname.includes("documents");
+  const isQuickLinksPage = pathname.includes("quick-links");
   const lineInfo = getLineInAppInfo_();
   const [hideLineBanner, setHideLineBanner] = useState(() => {
     try {
@@ -3362,6 +3364,8 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
+  } else if (isQuickLinksPage) {
+    content = <QuickLinksPage shared={shared} />;
   } else if (isProfilePage) {
     content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {

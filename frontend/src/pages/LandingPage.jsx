@@ -3,16 +3,6 @@ import { computeLandingAuthState, shouldAttemptLandingAuthRecovery } from "../ut
 import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
-const defaultQuickLinks = [
-  {
-    id: "ntu-webmail",
-    title: "臺大 Webmail",
-    description: "快速開啟臺大信箱，處理學校與課務通知。",
-    url: "https://webmail.ntu.edu.tw/",
-    category: "學校系統",
-  },
-];
-
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const {
     apiRequest,
@@ -126,7 +116,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
-  const [quickLinks, setQuickLinks] = useState(defaultQuickLinks);
   const initialApprovalsOverview = (() => {
     try {
       const studentId =
@@ -290,26 +279,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     }
   }, []);
-
-  useEffect(() => {
-    let ignore = false;
-    const loadQuickLinks_ = async () => {
-      try {
-        const { result } = await apiRequest({ action: "listQuickLinks" });
-        if (ignore || !result || !result.ok) {
-          return;
-        }
-        const links = result.data && Array.isArray(result.data.quickLinks) ? result.data.quickLinks : [];
-        setQuickLinks(links.length ? links : defaultQuickLinks);
-      } catch (error) {
-        // Keep the seeded fallback if the API is temporarily unavailable.
-      }
-    };
-    loadQuickLinks_();
-    return () => {
-      ignore = true;
-    };
-  }, [apiRequest]);
 
   useEffect(() => {
     if (
@@ -492,9 +461,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         setMembershipsLoaded(true);
         setNotifications(data.notifications || []);
         setNotificationUnread(Number(data.unreadCount || 0));
-        if (Array.isArray(data.quickLinks) && data.quickLinks.length) {
-          setQuickLinks(data.quickLinks);
-        }
         try {
           localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
         } catch (error) {
@@ -1085,6 +1051,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               >
                 個人資訊維護
               </a>
+              <a
+                href="/quick-links"
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
+              >
+                常用鏈結
+              </a>
               {canSeeAdminPortal ? (
                 <a
                   href="/admin"
@@ -1250,58 +1222,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             ) : null}
           </section>
         ) : null}
-
-        <section className="entrance entrance-delay-2 mb-6 overflow-hidden rounded-[2.5rem] border border-cyan-100 bg-gradient-to-br from-cyan-50 via-white to-blue-50 p-5 shadow-[0_34px_95px_-72px_rgba(14,116,144,0.85)] sm:p-7">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-600">Quick Links</p>
-              <h2 className="mt-2 text-2xl font-semibold text-slate-900">常用鏈結</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                把同學最常用的外部入口集中在這裡，手機上不用再翻群組訊息或搜尋網址。
-              </p>
-            </div>
-            <span className="rounded-full border border-cyan-200 bg-white/80 px-3 py-1 text-xs font-semibold text-cyan-700 shadow-sm">
-              115B shortcuts
-            </span>
-          </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            {quickLinks.map((item) => {
-              const hasHref = Boolean(String(item.url || item.href || "").trim());
-              const content = (
-                <>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-cyan-700">
-                      {item.category || "Link"}
-                    </span>
-                    <span className="text-lg text-cyan-700">↗</span>
-                  </div>
-                  <h3 className="mt-4 text-base font-semibold text-slate-900">{item.title}</h3>
-                  <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p>
-                </>
-              );
-
-              return hasHref ? (
-                <a
-                  key={item.id || item.title}
-                  href={item.url || item.href}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="group rounded-[1.5rem] border border-cyan-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-300"
-                >
-                  {content}
-                </a>
-              ) : (
-                <div
-                  key={item.id || item.title}
-                  className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/55 p-4 opacity-90"
-                  aria-label={`${item.title}，待補正式網址`}
-                >
-                  {content}
-                </div>
-              );
-            })}
-          </div>
-        </section>
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-5">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
