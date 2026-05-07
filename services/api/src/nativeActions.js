@@ -2670,6 +2670,27 @@ export async function dispatchNativeAction({
     error.statusCode = 403;
     throw error;
   };
+  const getCheerleadingAdminAccess_ = async (membershipsInput = null) => {
+    requireAuth();
+    const memberships = membershipsInput || (await listMembershipsByStudentId(auth.studentId));
+    const allowed = canAccessByGroups(memberships, ["E", "L"]);
+    return {
+      memberships,
+      allowed: Boolean(allowed),
+      source: allowed ? "group" : "",
+    };
+  };
+
+  const requireCheerleadingAdminAccess = async () => {
+    const access = await getCheerleadingAdminAccess_();
+    if (access.allowed) {
+      return access.memberships;
+    }
+    const error = new Error("Forbidden");
+    error.statusCode = 403;
+    throw error;
+  };
+
 
   if (!PUBLIC_ACTIONS.has(name)) {
     requireAuth();
@@ -7095,8 +7116,20 @@ export async function dispatchNativeAction({
       };
     }
 
+    case "getCheerleadingAdminAccess": {
+      const access = await getCheerleadingAdminAccess_();
+      return {
+        ok: true,
+        data: {
+          allowed: access.allowed,
+          source: access.source,
+        },
+        error: null,
+      };
+    }
+
     case "listCheerleadingBootstrap": {
-      await requireSoftballAdminAccess();
+      await requireCheerleadingAdminAccess();
       const [studentsResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
         query(
           `select id, email, name_zh, name_en, preferred_name, group_id
@@ -7169,7 +7202,7 @@ export async function dispatchNativeAction({
 
     case "createCheerleadingPractice":
     case "updateCheerleadingPractice": {
-      await requireSoftballAdminAccess();
+      await requireCheerleadingAdminAccess();
       const row = toCheerleadingPracticeRow(body.data || body.practice || body);
       await query(
         `insert into cheerleading_practices (id, date, title, location, start_at, end_at, notes, raw, created_at, updated_at)
@@ -7190,7 +7223,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteCheerleadingPractice": {
-      await requireSoftballAdminAccess();
+      await requireCheerleadingAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
@@ -7202,7 +7235,7 @@ export async function dispatchNativeAction({
 
     case "createCheerleadingField":
     case "updateCheerleadingField": {
-      await requireSoftballAdminAccess();
+      await requireCheerleadingAdminAccess();
       const data = safeJsonObject(body.data || body.field || body);
       const id = firstText(data.id, crypto.randomUUID());
       const createdAt = firstText(data.createdAt, nowIso());
@@ -7223,7 +7256,7 @@ export async function dispatchNativeAction({
     }
 
     case "deleteCheerleadingField": {
-      await requireSoftballAdminAccess();
+      await requireCheerleadingAdminAccess();
       const id = firstText(body.id);
       if (!id) {
         return { ok: false, data: null, error: "Missing id" };
@@ -7234,7 +7267,7 @@ export async function dispatchNativeAction({
 
     case "submitCheerleadingAttendance": {
       requireAuth();
-      const cheerleadingAccess = await getSoftballAdminAccess_();
+      const cheerleadingAccess = await getCheerleadingAdminAccess_();
       const isAdmin = cheerleadingAccess.allowed;
       const data = safeJsonObject(body.data || body.attendance || body);
       const practiceId = firstText(data.practiceId || body.practiceId);

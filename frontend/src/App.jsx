@@ -364,6 +364,7 @@ const CLASS_GROUPS = [
   { id: "I", label: "美食組" },
   { id: "J", label: "班董" },
   { id: "K", label: "壘球隊" },
+  { id: "L", label: "啦啦隊" },
 ];
 
 const GROUP_ROLE_OPTIONS = [
@@ -823,6 +824,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listAcademicsBootstrap",
   "listAcademicsAdminBootstrap",
   "getSoftballAdminAccess",
+  "getCheerleadingAdminAccess",
   "searchStudents",
   "verifyGoogle",
   // Registrations & Checkins
@@ -3424,9 +3426,9 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="啦啦隊管理 · 後台"
-        helperText="僅限班代、副班代、資管組、體育組、壘球隊 manager/lead/deputy。"
-        allowedGroupIds={["E", "H"]}
-        extraAccessAction="getSoftballAdminAccess"
+        helperText="僅限班代、副班代、資訊組、啦啦隊權限群組。"
+        allowedGroupIds={["E", "L"]}
+        extraAccessAction="getCheerleadingAdminAccess"
       >
         <CheerleadingPage shared={shared} />
       </AdminAccessGuard>
