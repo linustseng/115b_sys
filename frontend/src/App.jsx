@@ -3423,7 +3423,7 @@ function AppShell() {
   } else if (isCheerleadingPage) {
     content = (
       <AdminAccessGuard
-        title="拉拉隊管理 · 後台"
+        title="啦啦隊管理 · 後台"
         helperText="僅限班代、副班代、資管組、體育組、壘球隊 manager/lead/deputy。"
         allowedGroupIds={["E", "H"]}
         extraAccessAction="getSoftballAdminAccess"

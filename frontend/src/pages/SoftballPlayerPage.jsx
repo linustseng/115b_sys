@@ -110,7 +110,7 @@ function SoftballPlayerPage({ shared }) {
   const [audioError, setAudioError] = useState("");
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "拉拉隊", "球隊經理"];
+  const POSITION_OPTIONS = ["投手", "捕手", "一壘", "二壘", "三壘", "游擊", "左外野", "中外野", "右外野", "啦啦隊", "球隊經理"];
   const JERSEY_SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2L", "3L", "5L", "6L"];
 
   const normalizeId_ = (value) => String(value || "").trim();

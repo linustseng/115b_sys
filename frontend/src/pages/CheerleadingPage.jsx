@@ -20,7 +20,7 @@ function CheerleadingPage({ shared }) {
     date: "",
     startAt: "",
     endAt: "",
-    title: "拉拉隊練習",
+    title: "啦啦隊練習",
     fieldId: "",
     location: "",
     focus: "",
@@ -59,7 +59,7 @@ function CheerleadingPage({ shared }) {
     setError("");
     try {
       const { result } = await effectiveApiRequest({ action: "listCheerleadingBootstrap" });
-      if (!result.ok) throw new Error(result.error || "拉拉隊資料載入失敗");
+      if (!result.ok) throw new Error(result.error || "啦啦隊資料載入失敗");
       const data = result.data || {};
       setStudents(Array.isArray(data.students) ? data.students : []);
       setPractices(Array.isArray(data.practices) ? data.practices : []);
@@ -69,7 +69,7 @@ function CheerleadingPage({ shared }) {
         setActivePracticeId(data.practices[0].id || "");
       }
     } catch (err) {
-      setError(err.message || "拉拉隊資料載入失敗");
+      setError(err.message || "啦啦隊資料載入失敗");
     } finally {
       setLoading(false);
     }
@@ -136,11 +136,11 @@ function CheerleadingPage({ shared }) {
     setSaving(true);
     setError("");
     try {
-      const payload = { ...practiceForm, title: practiceForm.title || "拉拉隊練習" };
+      const payload = { ...practiceForm, title: practiceForm.title || "啦啦隊練習" };
       const action = payload.id ? "updateCheerleadingPractice" : "createCheerleadingPractice";
       const { result } = await effectiveApiRequest({ action, data: payload });
       if (!result.ok) throw new Error(result.error || "儲存練習失敗");
-      setPracticeForm({ id: "", date: "", startAt: "", endAt: "", title: "拉拉隊練習", fieldId: "", location: "", focus: "", notes: "" });
+      setPracticeForm({ id: "", date: "", startAt: "", endAt: "", title: "啦啦隊練習", fieldId: "", location: "", focus: "", notes: "" });
       setStatusMessage("練習已儲存");
       await loadBootstrap();
     } catch (err) {
@@ -188,7 +188,7 @@ function CheerleadingPage({ shared }) {
   };
 
   const deletePractice = async (practice) => {
-    const ok = typeof confirmDelete_ === "function" ? confirmDelete_(`刪除「${practice.title || "拉拉隊練習"}」？出席紀錄也會刪除。`) : window.confirm("確定刪除？");
+    const ok = typeof confirmDelete_ === "function" ? confirmDelete_(`刪除「${practice.title || "啦啦隊練習"}」？出席紀錄也會刪除。`) : window.confirm("確定刪除？");
     if (!ok) return;
     setSaving(true);
     try {
@@ -227,7 +227,7 @@ function CheerleadingPage({ shared }) {
       <div className="mx-auto max-w-6xl space-y-6">
         <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-6 text-white shadow-lg">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-pink-100">115B Cheerleading</p>
-          <h1 className="mt-3 text-3xl font-bold">拉拉隊比賽管理</h1>
+          <h1 className="mt-3 text-3xl font-bold">啦啦隊比賽管理</h1>
           <p className="mt-2 max-w-2xl text-sm text-pink-50">全員參與；先支援練習、出席紀錄與統計。權限沿用壘球隊後台設計。</p>
         </section>
 
@@ -263,7 +263,7 @@ function CheerleadingPage({ shared }) {
               <h3 className="font-semibold">各次練習概況</h3>
               {stats.practiceStats.map(({ practice, counts, present, total, participationRate }) => (
                 <div key={practice.id} className="rounded-2xl border border-slate-200 p-4">
-                  <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}%</p></div>
+                  <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "啦啦隊練習"}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}%</p></div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-5 lg:grid-cols-9">
                     {ATTENDANCE_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{counts[item.value] || 0}</p></div>)}
                   </div>
@@ -286,7 +286,7 @@ function CheerleadingPage({ shared }) {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-xl font-bold">出席紀錄</h2>
               <select value={activePractice?.id || ""} onChange={(event) => setActivePracticeId(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</option>)}
+                {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatDate_(practice.date || practice.startAt)} · {practice.title || "啦啦隊練習"}</option>)}
               </select>
             </div>
             {!activePractice ? <p className="mt-4 text-sm text-slate-500">請先建立練習。</p> : null}
@@ -328,7 +328,7 @@ function CheerleadingPage({ shared }) {
               <button disabled={saving} type="submit" className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{practiceForm.id ? "更新練習" : "新增練習"}</button>
             </form>
             <div className="mt-6 space-y-3">
-              {sortedPractices.map((practice) => <div key={practice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="text-sm text-slate-500">{practice.location || "未填地點"}</p></div><div className="flex gap-2"><button type="button" onClick={() => setPracticeForm({ id: practice.id || "", date: practice.date || "", startAt: practice.startAt || "", endAt: practice.endAt || "", title: practice.title || "拉拉隊練習", fieldId: practice.fieldId || "", location: practice.location || "", focus: practice.focus || "", notes: practice.notes || "" })} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold">編輯</button><button type="button" onClick={() => deletePractice(practice)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div></div>)}
+              {sortedPractices.map((practice) => <div key={practice.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{formatDate_(practice.date || practice.startAt)} · {practice.title || "啦啦隊練習"}</p><p className="text-sm text-slate-500">{practice.location || "未填地點"}</p></div><div className="flex gap-2"><button type="button" onClick={() => setPracticeForm({ id: practice.id || "", date: practice.date || "", startAt: practice.startAt || "", endAt: practice.endAt || "", title: practice.title || "啦啦隊練習", fieldId: practice.fieldId || "", location: practice.location || "", focus: practice.focus || "", notes: practice.notes || "" })} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold">編輯</button><button type="button" onClick={() => deletePractice(practice)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">刪除</button></div></div>)}
             </div>
           </section>
         ) : null}

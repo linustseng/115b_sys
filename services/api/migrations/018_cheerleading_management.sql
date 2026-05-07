@@ -1,5 +1,5 @@
 -- 018_cheerleading_management.sql
--- 拉拉隊練習 / 出席紀錄 / 統計基礎表。先獨立於壘球模組，不抽共用架構。
+-- 啦啦隊練習 / 出席紀錄 / 統計基礎表。先獨立於壘球模組，不抽共用架構。
 
 create table if not exists cheerleading_practices (
   id text primary key,

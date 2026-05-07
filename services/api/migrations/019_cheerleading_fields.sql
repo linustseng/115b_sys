@@ -1,5 +1,5 @@
 -- 019_cheerleading_fields.sql
--- 拉拉隊練習地點管理；先獨立於壘球場地表。
+-- 啦啦隊練習地點管理；先獨立於壘球場地表。
 
 create table if not exists cheerleading_fields (
   id text primary key,

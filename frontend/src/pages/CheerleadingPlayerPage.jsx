@@ -31,13 +31,13 @@ function CheerleadingPlayerPage({ shared }) {
     setError("");
     try {
       const { result } = await effectiveApiRequest({ action: "listCheerleadingPlayerBootstrap" });
-      if (!result.ok) throw new Error(result.error || "拉拉隊資料載入失敗");
+      if (!result.ok) throw new Error(result.error || "啦啦隊資料載入失敗");
       setStudent(result.data?.student || null);
       setPractices(Array.isArray(result.data?.practices) ? result.data.practices : []);
       setFields(Array.isArray(result.data?.fields) ? result.data.fields : []);
       setAttendance(Array.isArray(result.data?.attendance) ? result.data.attendance : []);
     } catch (err) {
-      setError(err.message || "拉拉隊資料載入失敗");
+      setError(err.message || "啦啦隊資料載入失敗");
     } finally {
       setLoading(false);
     }
@@ -98,7 +98,7 @@ function CheerleadingPlayerPage({ shared }) {
       <div className="mx-auto max-w-4xl space-y-6">
         <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-6 text-white shadow-lg">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-pink-100">115B Cheerleading</p>
-          <h1 className="mt-3 text-3xl font-bold">拉拉隊前台</h1>
+          <h1 className="mt-3 text-3xl font-bold">啦啦隊前台</h1>
           <p className="mt-2 text-sm text-pink-50">{student ? `${getName(student)}，這裡可以查看練習並回覆自己的出席狀態。` : "查看練習並回覆自己的出席狀態。"}</p>
         </section>
 
@@ -125,7 +125,7 @@ function CheerleadingPlayerPage({ shared }) {
               return (
                 <div key={practice.id} className={`rounded-2xl border p-4 ${highlightedPracticeId && normalizeId(practice.id) === highlightedPracticeId ? "border-pink-300 bg-pink-50/50" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "拉拉隊練習"}</p><p className="mt-1 text-sm text-slate-500">{locationLabel}{field?.address ? ` · ${field.address}` : ""}{practice.focus ? ` · ${practice.focus}` : ""}</p>{field?.mapUrl ? <a href={field.mapUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-pink-700 underline">查看地圖</a> : null}</div>
+                    <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "啦啦隊練習"}</p><p className="mt-1 text-sm text-slate-500">{locationLabel}{field?.address ? ` · ${field.address}` : ""}{practice.focus ? ` · ${practice.focus}` : ""}</p>{field?.mapUrl ? <a href={field.mapUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-pink-700 underline">查看地圖</a> : null}</div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">目前：{labelByStatus[status]}</span>
                   </div>
                   {practice.notes ? <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{practice.notes}</p> : null}

@@ -1362,7 +1362,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
           <div className="entrance entrance-delay-4 group flex h-full flex-col justify-between rounded-[2rem] border border-pink-200/80 bg-gradient-to-br from-pink-50 via-rose-50 to-white p-5 shadow-[0_28px_80px_-70px_rgba(190,24,93,0.8)] sm:p-6">
             <div>
-              <h3 className="mt-4 text-xl font-semibold text-slate-900">拉拉隊管理</h3>
+              <h3 className="mt-4 text-xl font-semibold text-slate-900">啦啦隊管理</h3>
               <p className="mt-3 text-sm text-pink-900/80">練習排程、出席紀錄與全員統計。</p>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">

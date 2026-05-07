@@ -805,7 +805,7 @@ function toCheerleadingPracticeRow(input) {
   return {
     id,
     date: firstText(raw.date),
-    title: firstText(raw.title, "拉拉隊練習"),
+    title: firstText(raw.title, "啦啦隊練習"),
     location: firstText(raw.location),
     startAt: firstText(raw.startAt),
     endAt: firstText(raw.endAt),
@@ -4072,7 +4072,7 @@ export async function dispatchNativeAction({
 
           if (!hasConfirmedResponse) {
             const createdAtText = nowIso();
-            const title = "拉拉隊｜請回覆下一次練習";
+            const title = "啦啦隊｜請回覆下一次練習";
             const body = [firstText(practice.date, ""), firstText(practice.title, ""), firstText(practice.location, "")]
               .filter(Boolean)
               .join(" · ");
