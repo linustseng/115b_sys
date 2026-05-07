@@ -122,10 +122,6 @@ function OrderingPublicPage({ shared }) {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10">
       <main className="mx-auto max-w-lg space-y-4">
-        <a href="/" className="inline-flex w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
-          回首頁
-        </a>
-
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-500">Guest Ordering</p>
           <h1 className="mt-3 text-2xl font-semibold text-slate-900">{(publicLink && publicLink.title) || (plan && plan.publicTitle) || (plan && plan.title) || "外部訂餐"}</h1>
