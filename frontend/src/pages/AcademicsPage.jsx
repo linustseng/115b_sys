@@ -145,8 +145,7 @@ function CourseCatalogCard({ unit, apiRequest }) {
           return (
             <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-slate-900">{session.sessionDate || "日期待補"}</p>
-                <span className="text-xs text-slate-500">{session.startsAt || session.endsAt ? `${String(session.startsAt || "").slice(-5)} - ${String(session.endsAt || "").slice(-5)}` : "時間待補"}</span>
+                <p className="text-sm font-semibold text-slate-900">{formatSessionSchedule_(session) || "日期時間待補"}</p>
               </div>
               {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
@@ -516,7 +515,7 @@ export default function AcademicsPage({ shared }) {
         session.startsAt || session.sessionDate,
         session.endsAt || session.startsAt || session.sessionDate
       );
-      return [schedule && schedule.dateLabel, schedule && schedule.timeLabel].filter(Boolean).join(" · ");
+      return [schedule && schedule.dateLabel, schedule && schedule.timeLabel].filter(Boolean).join(" ");
     }
     if (session.sessionDate) {
       return formatDisplayDate_(session.sessionDate, { withTime: false });
@@ -697,7 +696,7 @@ export default function AcademicsPage({ shared }) {
                   <option value="">請選擇補課場次</option>
                   {makeupTargets.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.sessionDate}｜{item.title}{normalizeMakeupReminder_(makeupNotesBySessionId.get(item.id)) ? "｜有提醒" : ""}
+                      {formatSessionSchedule_(item)}｜{item.title}{normalizeMakeupReminder_(makeupNotesBySessionId.get(item.id)) ? "｜有提醒" : ""}
                     </option>
                   ))}
                 </select>

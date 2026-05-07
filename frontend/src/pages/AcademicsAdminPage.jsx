@@ -387,7 +387,7 @@ export default function AcademicsAdminPage({ shared }) {
         session.startsAt || session.sessionDate,
         session.endsAt || session.startsAt || session.sessionDate
       );
-      return [schedule && schedule.dateLabel, schedule && schedule.timeLabel].filter(Boolean).join(" · ");
+      return [schedule && schedule.dateLabel, schedule && schedule.timeLabel].filter(Boolean).join(" ");
     }
     if (session.sessionDate) {
       return formatDisplayDate_(session.sessionDate, { withTime: false });
@@ -421,7 +421,7 @@ export default function AcademicsAdminPage({ shared }) {
         bits.push(`原課：${item.missedSession.title}`);
       }
       if (item.missedSession && item.missedSession.sessionDate) {
-        bits.push(`原課日期：${item.missedSession.sessionDate}`);
+        bits.push(`原課日期：${formatSessionSchedule_(item.missedSession)}`);
       }
       bits.push(`餐食：${item.needMeal ? "要" : "免"}`);
       bits.push(`講義：${item.needHandout ? "要" : "免"}`);
@@ -939,7 +939,7 @@ export default function AcademicsAdminPage({ shared }) {
                 >
                   <option value="">請選擇補課場次</option>
                   {(bootstrap.makeupTargets || []).filter((item) => !selectedTargetDate || item.sessionDate === selectedTargetDate).map((item) => (
-                    <option key={item.id} value={item.id}>{item.sessionDate}｜{item.title}</option>
+                    <option key={item.id} value={item.id}>{formatSessionSchedule_(item)}｜{item.title}</option>
                   ))}
                 </select>
               </div>
@@ -1004,7 +1004,7 @@ export default function AcademicsAdminPage({ shared }) {
                 <option value="">請選擇補課場次</option>
                 {(bootstrap.makeupTargets || []).map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sessionDate}｜{item.title}
+                    {formatSessionSchedule_(item)}｜{item.title}
                   </option>
                 ))}
               </select>
