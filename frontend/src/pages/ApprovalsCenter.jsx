@@ -743,6 +743,11 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
 
   return (
     <div className={embedded ? "" : "mt-6"}>
+      {!embedded ? (
+        <a href="/" className="mb-4 inline-flex w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
+          回首頁
+        </a>
+      ) : null}
       <div className={embedded ? "" : "card p-6 sm:p-8"}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

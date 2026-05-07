@@ -120,6 +120,10 @@ function CheerleadingPlayerPage({ shared }) {
           <p className="mt-2 text-sm text-pink-50">{student ? `${getName(student)}，這裡可以查看練習並回覆自己的出席狀態。` : "查看練習並回覆自己的出席狀態。"}</p>
         </section>
 
+        <a href="/" className="inline-flex w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-pink-100 transition hover:bg-pink-50">
+          回首頁
+        </a>
+
         {error ? <div className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         {loading ? <p className="text-sm text-slate-500">載入中…</p> : null}
 
