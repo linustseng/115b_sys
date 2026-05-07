@@ -18,6 +18,14 @@ import {
 } from "./attachments.js";
 import { applyVersionedMutation } from "./versioning.js";
 
+
+const DEFAULT_115B_CALENDAR_ICS_URL =
+  "https://calendar.google.com/calendar/ical/d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com/public/basic.ics";
+
+function getAcademicsIcsUrl_() {
+  return firstText(process.env.ACADEMICS_ICS_URL || "", DEFAULT_115B_CALENDAR_ICS_URL);
+}
+
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -1103,7 +1111,7 @@ async function getAcademicRegularCount_(query) {
 }
 
 async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
-  const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
+  const configuredUrl = getAcademicsIcsUrl_();
   if (!configuredUrl) {
     const stats = await getAcademicRegularStats_(query);
     return {
@@ -1167,7 +1175,7 @@ async function reconcileAcademicSessionsWithSource_(query, withTransaction) {
 }
 
 async function ensureAcademicSessionsFresh_(query, withTransaction, { force = false } = {}) {
-  const configuredUrl = firstText(process.env.ACADEMICS_ICS_URL || "");
+  const configuredUrl = getAcademicsIcsUrl_();
   if (!configuredUrl) {
     return { configured: false, didSync: false, count: 0 };
   }
@@ -3502,7 +3510,7 @@ export async function dispatchNativeAction({
 
     case "syncAcademicSessionsFromIcs": {
       await requireGroupAccess(ACADEMICS_ALLOWED_GROUPS);
-      const icsUrl = firstText(body.icsUrl, process.env.ACADEMICS_ICS_URL || "");
+      const icsUrl = firstText(body.icsUrl, getAcademicsIcsUrl_());
       if (!icsUrl) {
         return { ok: false, data: null, error: "Missing icsUrl or ACADEMICS_ICS_URL" };
       }
