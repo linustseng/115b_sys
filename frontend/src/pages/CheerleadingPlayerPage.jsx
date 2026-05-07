@@ -23,7 +23,25 @@ function CheerleadingPlayerPage({ shared }) {
   const labelByStatus = OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
   const normalizeId = (value) => String(value || "").trim();
   const normalizeStatus = (value) => OPTIONS.some((item) => item.value === String(value || "").trim()) ? String(value || "").trim() : "unknown";
-  const formatDate = (value) => String(value || "").slice(0, 10) || "未定日期";
+  const pad2 = (value) => String(value).padStart(2, "0");
+  const getDateParts = (value) => {
+    const raw = String(value || "").trim();
+    const match = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (!match) return null;
+    return { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) };
+  };
+  const formatDate = (value) => {
+    const parts = getDateParts(value);
+    if (!parts) return "未定日期";
+    const weekday = ["日", "一", "二", "三", "四", "五", "六"][new Date(parts.year, parts.month - 1, parts.day).getDay()];
+    return `${parts.year}/${pad2(parts.month)}/${pad2(parts.day)} (週${weekday})`;
+  };
+  const formatPracticeSchedule = (practice) => {
+    const dateLabel = formatDate(practice?.date || practice?.startAt);
+    const start = String(practice?.startAt || "").match(/(\d{1,2}:\d{2})/)?.[1] || "";
+    const end = String(practice?.endAt || "").match(/(\d{1,2}:\d{2})/)?.[1] || "";
+    return [dateLabel, start || end ? `${start || "-"}–${end || "-"}` : ""].filter(Boolean).join(" ");
+  };
   const getName = (row) => String(row?.nameZh || row?.preferredName || row?.nameEn || row?.email || row?.id || "同學").trim();
 
   const load = async () => {
@@ -125,7 +143,7 @@ function CheerleadingPlayerPage({ shared }) {
               return (
                 <div key={practice.id} className={`rounded-2xl border p-4 ${highlightedPracticeId && normalizeId(practice.id) === highlightedPracticeId ? "border-pink-300 bg-pink-50/50" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div><p className="font-semibold">{formatDate(practice.date || practice.startAt)} · {practice.title || "啦啦隊練習"}</p><p className="mt-1 text-sm text-slate-500">{locationLabel}{field?.address ? ` · ${field.address}` : ""}{practice.focus ? ` · ${practice.focus}` : ""}</p>{field?.mapUrl ? <a href={field.mapUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-pink-700 underline">查看地圖</a> : null}</div>
+                    <div><p className="font-semibold">{formatPracticeSchedule(practice)} · {practice.title || "啦啦隊練習"}</p><p className="mt-1 text-sm text-slate-500">{locationLabel}{field?.address ? ` · ${field.address}` : ""}{practice.focus ? ` · ${practice.focus}` : ""}</p>{field?.mapUrl ? <a href={field.mapUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs font-semibold text-pink-700 underline">查看地圖</a> : null}</div>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">目前：{labelByStatus[status]}</span>
                   </div>
                   {practice.notes ? <p className="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">{practice.notes}</p> : null}
