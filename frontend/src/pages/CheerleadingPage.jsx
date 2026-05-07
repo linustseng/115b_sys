@@ -245,8 +245,12 @@ function CheerleadingPage({ shared }) {
         <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-6 text-white shadow-lg">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-pink-100">115B Cheerleading</p>
           <h1 className="mt-3 text-3xl font-bold">啦啦隊比賽管理</h1>
-          <p className="mt-2 max-w-2xl text-sm text-pink-50">全員參與；先支援練習、出席紀錄與統計。權限沿用壘球隊後台設計。</p>
+          <p className="mt-2 max-w-2xl text-sm text-pink-50">全員參與；先支援練習、出席紀錄與統計。權限設定與壘球一致，資料獨立維護。</p>
         </section>
+
+        <a href="/" className="inline-flex w-fit rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200 transition hover:bg-slate-50">
+          回首頁
+        </a>
 
         {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
