@@ -145,6 +145,18 @@ export default function AdminPage({
   const [membershipQuery, setMembershipQuery] = useState("");
   const [membershipStatus, setMembershipStatus] = useState("");
   const [membershipSaveError, setMembershipSaveError] = useState("");
+  const [quickLinks, setQuickLinks] = useState([]);
+  const [quickLinksLoaded, setQuickLinksLoaded] = useState(false);
+  const [quickLinkStatus, setQuickLinkStatus] = useState("");
+  const [quickLinkForm, setQuickLinkForm] = useState({
+    id: "",
+    title: "",
+    url: "",
+    description: "",
+    category: "學校系統",
+    status: "published",
+    sortOrder: 100,
+  });
   const [lineExportStatus, setLineExportStatus] = useState("");
   const [selectedMember, setSelectedMember] = useState(null);
   const [showOnlyUnassigned, setShowOnlyUnassigned] = useState(false);
@@ -706,6 +718,11 @@ export default function AdminPage({
         loadStudents();
       }
     }
+    if (activeTab === "quickLinks") {
+      if (!quickLinksLoaded) {
+        loadQuickLinksAdmin();
+      }
+    }
     if (activeTab === "ordering") {
       if (!orderPlansLoaded) {
         loadOrderPlans();
@@ -731,6 +748,7 @@ export default function AdminPage({
     registrationsLoaded,
     checkinsLoaded,
     orderPlansLoaded,
+    quickLinksLoaded,
     students.length,
     groupMemberships.length,
   ]);
@@ -1019,6 +1037,102 @@ export default function AdminPage({
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resetQuickLinkForm_ = () => {
+    setQuickLinkForm({
+      id: "",
+      title: "",
+      url: "",
+      description: "",
+      category: "學校系統",
+      status: "published",
+      sortOrder: 100,
+    });
+    setQuickLinkStatus("");
+  };
+
+  const loadQuickLinksAdmin = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "listQuickLinks", includeArchived: true });
+      if (!result.ok) {
+        throw new Error(result.error || "載入失敗");
+      }
+      setQuickLinks(result.data && Array.isArray(result.data.quickLinks) ? result.data.quickLinks : []);
+      setQuickLinksLoaded(true);
+    } catch (err) {
+      const message = String((err && err.message) || "常用鏈結載入失敗。");
+      setError(
+        mapAppErrorMessage(message, {
+          reauthMessage: "登入狀態已失效，請重新登入後再載入常用鏈結。",
+          forbiddenMessage: "你目前沒有權限維護常用鏈結。",
+          networkMessage: "目前網路或系統回應較慢，常用鏈結稍後再試。",
+          fallbackMessage: message,
+        })
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditQuickLink_ = (item) => {
+    setQuickLinkForm({
+      id: String((item && item.id) || "").trim(),
+      title: String((item && item.title) || "").trim(),
+      url: String((item && item.url) || "").trim(),
+      description: String((item && item.description) || "").trim(),
+      category: String((item && item.category) || "學校系統").trim(),
+      status: String((item && item.status) || "published").trim(),
+      sortOrder: Number((item && item.sortOrder) || 100),
+    });
+    setQuickLinkStatus("正在編輯既有鏈結");
+  };
+
+  const handleSaveQuickLink_ = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setQuickLinkStatus("");
+    try {
+      const { result } = await apiRequest({ action: "upsertQuickLink", ...quickLinkForm });
+      if (!result.ok) {
+        throw new Error(result.error || "儲存失敗");
+      }
+      resetQuickLinkForm_();
+      setQuickLinkStatus("已儲存常用鏈結。");
+      await loadQuickLinksAdmin();
+    } catch (err) {
+      setError(String((err && err.message) || "常用鏈結儲存失敗。"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteQuickLink_ = async (item) => {
+    const id = String((item && item.id) || "").trim();
+    if (!id) {
+      return;
+    }
+    if (!window.confirm(`確定刪除「${item.title || id}」？`)) {
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const { result } = await apiRequest({ action: "deleteQuickLink", id });
+      if (!result.ok) {
+        throw new Error(result.error || "刪除失敗");
+      }
+      resetQuickLinkForm_();
+      setQuickLinkStatus("已刪除常用鏈結。");
+      await loadQuickLinksAdmin();
+    } catch (err) {
+      setError(String((err && err.message) || "常用鏈結刪除失敗。"));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -3662,6 +3776,7 @@ export default function AdminPage({
               { id: "checkins", label: "簽到" },
               { id: "students", label: "通訊錄" },
               { id: "roles", label: "班務分組" },
+              { id: "quickLinks", label: "常用鏈結" },
             ]
               .filter((item) => allowedTabs.includes(item.id))
               .map((item) => (
@@ -3696,7 +3811,9 @@ export default function AdminPage({
                 ? "簽到名單"
                 : activeTab === "students"
                 ? "通訊錄"
-                : "班務分組"}
+                : activeTab === "roles"
+                ? "班務分組"
+                : "常用鏈結"}
             </h2>
             {loading ? (
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
@@ -5300,6 +5417,146 @@ export default function AdminPage({
                     目前沒有可顯示資料
                   </div>
                 ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "quickLinks" ? (
+            <div className="mt-6 grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
+              <form onSubmit={handleSaveQuickLink_} className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {quickLinkForm.id ? "編輯常用鏈結" : "新增常用鏈結"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">發布中的鏈結會顯示在首頁常用鏈結專區。</p>
+                  </div>
+                  {quickLinkForm.id ? (
+                    <button type="button" onClick={resetQuickLinkForm_} className="btn-chip">
+                      新增模式
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-4 grid gap-3">
+                  <label className="text-xs font-semibold text-slate-600">
+                    標題
+                    <input
+                      value={quickLinkForm.title}
+                      onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, title: event.target.value }))}
+                      required
+                      placeholder="例如：停車車號申請"
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-slate-400"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    網址
+                    <input
+                      value={quickLinkForm.url}
+                      onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, url: event.target.value }))}
+                      required
+                      type="url"
+                      placeholder="https://..."
+                      className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-slate-400"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    說明
+                    <textarea
+                      value={quickLinkForm.description}
+                      onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, description: event.target.value }))}
+                      rows={3}
+                      placeholder="簡短說明同學什麼時候要用這個入口"
+                      className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-400"
+                    />
+                  </label>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <label className="text-xs font-semibold text-slate-600 sm:col-span-1">
+                      分類
+                      <input
+                        value={quickLinkForm.category}
+                        onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, category: event.target.value }))}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-slate-400"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      狀態
+                      <select
+                        value={quickLinkForm.status}
+                        onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, status: event.target.value }))}
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-slate-400"
+                      >
+                        <option value="published">發布</option>
+                        <option value="draft">草稿</option>
+                        <option value="archived">封存</option>
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      排序
+                      <input
+                        value={quickLinkForm.sortOrder}
+                        onChange={(event) => setQuickLinkForm((prev) => ({ ...prev, sortOrder: event.target.value }))}
+                        type="number"
+                        className="mt-1 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none focus:border-slate-400"
+                      />
+                    </label>
+                  </div>
+                </div>
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "儲存中..." : "儲存鏈結"}
+                  </button>
+                  <button type="button" onClick={loadQuickLinksAdmin} disabled={saving} className="btn-chip">
+                    重新載入
+                  </button>
+                  {quickLinkStatus ? <span className="text-xs font-semibold text-emerald-600">{quickLinkStatus}</span> : null}
+                </div>
+              </form>
+
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">目前鏈結</p>
+                    <p className="mt-1 text-xs text-slate-500">共 {quickLinks.length} 筆；只有「發布」會出現在首頁。</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {quickLinks.length ? quickLinks.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-slate-900">{item.title}</p>
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${item.status === "published" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
+                              {item.status === "published" ? "發布" : item.status === "draft" ? "草稿" : "封存"}
+                            </span>
+                            <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-semibold text-cyan-700">
+                              {item.category || "general"}
+                            </span>
+                            <span className="text-[11px] text-slate-400">排序 {item.sortOrder}</span>
+                          </div>
+                          <p className="mt-1 break-all text-xs text-cyan-700">{item.url}</p>
+                          {item.description ? <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p> : null}
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button type="button" onClick={() => handleEditQuickLink_(item)} className="btn-chip">
+                            編輯
+                          </button>
+                          <button type="button" onClick={() => handleDeleteQuickLink_(item)} className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                            刪除
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                      目前沒有常用鏈結。
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ) : null}

@@ -3,24 +3,13 @@ import { computeLandingAuthState, shouldAttemptLandingAuthRecovery } from "../ut
 import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
-const quickLinks = [
+const defaultQuickLinks = [
   {
+    id: "ntu-webmail",
     title: "臺大 Webmail",
     description: "快速開啟臺大信箱，處理學校與課務通知。",
-    href: "https://webmail.ntu.edu.tw/",
-    badge: "Email",
-  },
-  {
-    title: "停車車號申請",
-    description: "課程、活動或校內停車需要登錄車號時使用。",
-    href: "",
-    badge: "Parking",
-  },
-  {
-    title: "健檢資料上傳",
-    description: "健康檢查或醫療相關資料繳交入口。",
-    href: "",
-    badge: "Health",
+    url: "https://webmail.ntu.edu.tw/",
+    category: "學校系統",
   },
 ];
 
@@ -137,6 +126,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const [quickLinks, setQuickLinks] = useState(defaultQuickLinks);
   const initialApprovalsOverview = (() => {
     try {
       const studentId =
@@ -300,6 +290,26 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
     }
   }, []);
+
+  useEffect(() => {
+    let ignore = false;
+    const loadQuickLinks_ = async () => {
+      try {
+        const { result } = await apiRequest({ action: "listQuickLinks" });
+        if (ignore || !result || !result.ok) {
+          return;
+        }
+        const links = result.data && Array.isArray(result.data.quickLinks) ? result.data.quickLinks : [];
+        setQuickLinks(links.length ? links : defaultQuickLinks);
+      } catch (error) {
+        // Keep the seeded fallback if the API is temporarily unavailable.
+      }
+    };
+    loadQuickLinks_();
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest]);
 
   useEffect(() => {
     if (
@@ -482,6 +492,9 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
         setMembershipsLoaded(true);
         setNotifications(data.notifications || []);
         setNotificationUnread(Number(data.unreadCount || 0));
+        if (Array.isArray(data.quickLinks) && data.quickLinks.length) {
+          setQuickLinks(data.quickLinks);
+        }
         try {
           localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), memberships: mine }));
         } catch (error) {
@@ -1253,27 +1266,24 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-3">
             {quickLinks.map((item) => {
-              const hasHref = Boolean(String(item.href || "").trim());
+              const hasHref = Boolean(String(item.url || item.href || "").trim());
               const content = (
                 <>
                   <div className="flex items-center justify-between gap-3">
                     <span className="rounded-full bg-cyan-100 px-2.5 py-1 text-[11px] font-semibold text-cyan-700">
-                      {item.badge}
+                      {item.category || "Link"}
                     </span>
-                    <span className="text-lg text-cyan-700">{hasHref ? "↗" : "…"}</span>
+                    <span className="text-lg text-cyan-700">↗</span>
                   </div>
                   <h3 className="mt-4 text-base font-semibold text-slate-900">{item.title}</h3>
                   <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p>
-                  {!hasHref ? (
-                    <p className="mt-3 text-[11px] font-semibold text-amber-700">待補正式網址</p>
-                  ) : null}
                 </>
               );
 
               return hasHref ? (
                 <a
-                  key={item.title}
-                  href={item.href}
+                  key={item.id || item.title}
+                  href={item.url || item.href}
                   target="_blank"
                   rel="noreferrer"
                   className="group rounded-[1.5rem] border border-cyan-100 bg-white/85 p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-cyan-300"
@@ -1282,7 +1292,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 </a>
               ) : (
                 <div
-                  key={item.title}
+                  key={item.id || item.title}
                   className="rounded-[1.5rem] border border-dashed border-slate-200 bg-white/55 p-4 opacity-90"
                   aria-label={`${item.title}，待補正式網址`}
                 >

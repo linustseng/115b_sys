@@ -2419,6 +2419,43 @@ function mapDocumentRow(row) {
   };
 }
 
+function mapQuickLinkRow(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: firstText(row.id),
+    title: firstText(row.title),
+    url: firstText(row.url),
+    description: firstText(row.description),
+    category: firstText(row.category, "general"),
+    status: firstText(row.status, "published"),
+    sortOrder: Number(row.sort_order || 0),
+    createdBy: firstText(row.created_by),
+    createdByName: firstText(row.created_by_name),
+    createdAt: firstText(row.created_at),
+    updatedAt: firstText(row.updated_at),
+  };
+}
+
+function normalizeQuickLinkStatus_(value) {
+  const status = firstText(value, "published").toLowerCase();
+  return status === "draft" || status === "archived" ? status : "published";
+}
+
+function normalizeQuickLinkUrl_(value) {
+  const url = firstText(value);
+  if (!url) {
+    return "";
+  }
+  try {
+    const parsed = new URL(url);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 function canManageDocumentsGlobal_(memberships) {
   return asArray(memberships).some((item) => {
     const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
@@ -2478,6 +2515,7 @@ export async function dispatchNativeAction({
     "refreshSession",
     // Landing can render without login; it will return empty private sections when unauthenticated.
     "listLandingBootstrap",
+    "listQuickLinks",
     "listOrderPlans",
     "getOrderPublicPage",
     "submitOrderPublicResponse",
@@ -3991,10 +4029,16 @@ export async function dispatchNativeAction({
 
     case "listLandingBootstrap": {
       const studentId = auth && auth.studentId ? String(auth.studentId || "").trim() : "";
+      const quickLinksResult = await query(
+        `select * from quick_links
+         where coalesce(status, 'published') = 'published'
+         order by sort_order asc, coalesce(updated_at,'') desc, id`
+      );
+      const quickLinks = quickLinksResult.rows.map((row) => mapQuickLinkRow(row)).filter(Boolean);
       if (!studentId) {
         return {
           ok: true,
-          data: { memberships: [], notifications: [], unreadCount: 0, needsLogin: true },
+          data: { memberships: [], notifications: [], unreadCount: 0, needsLogin: true, quickLinks },
           error: null,
         };
       }
@@ -4532,7 +4576,81 @@ export async function dispatchNativeAction({
         };
       });
       const unreadCount = notifications.filter((n) => !n.isRead).length;
-      return { ok: true, data: { memberships, notifications, unreadCount }, error: null };
+      return { ok: true, data: { memberships, notifications, unreadCount, quickLinks }, error: null };
+    }
+
+    case "listQuickLinks": {
+      const includeArchived = Boolean(body.includeArchived);
+      if (includeArchived) {
+        await requireGroupAccess(["E"]);
+      }
+      const result = await query(
+        `select * from quick_links
+         where ($1::boolean or coalesce(status, 'published') = 'published')
+         order by sort_order asc, coalesce(updated_at,'') desc, id`,
+        [includeArchived]
+      );
+      return { ok: true, data: { quickLinks: result.rows.map((row) => mapQuickLinkRow(row)).filter(Boolean) }, error: null };
+    }
+
+    case "upsertQuickLink": {
+      await requireGroupAccess(["E"]);
+      const title = firstText(body.title);
+      const url = normalizeQuickLinkUrl_(body.url);
+      if (!title) {
+        return { ok: false, data: null, error: "Missing title" };
+      }
+      if (!url) {
+        return { ok: false, data: null, error: "請輸入有效的 http/https 網址" };
+      }
+      const id = firstText(body.id, `quick-link-${crypto.randomUUID()}`);
+      const description = firstText(body.description);
+      const category = firstText(body.category, "general");
+      const status = normalizeQuickLinkStatus_(body.status);
+      const sortOrder = Number.isFinite(Number(body.sortOrder)) ? Number(body.sortOrder) : 100;
+      const now = nowIso();
+      const actorName = firstText(auth && auth.profile && auth.profile.name);
+      await query(
+        `insert into quick_links (
+           id, title, url, description, category, status, sort_order,
+           created_by, created_by_name, created_at, updated_at, raw
+         ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10,$11::jsonb)
+         on conflict (id) do update set
+           title = excluded.title,
+           url = excluded.url,
+           description = excluded.description,
+           category = excluded.category,
+           status = excluded.status,
+           sort_order = excluded.sort_order,
+           updated_at = excluded.updated_at,
+           raw = excluded.raw,
+           synced_at = now()`,
+        [
+          id,
+          title,
+          url,
+          description,
+          category,
+          status,
+          sortOrder,
+          auth.studentId,
+          actorName,
+          now,
+          jsonbParam({ title, url, description, category, status, sortOrder }, {}),
+        ]
+      );
+      const refreshed = rowOrNull(await query(`select * from quick_links where id = $1 limit 1`, [id]));
+      return { ok: true, data: { quickLink: mapQuickLinkRow(refreshed) }, error: null };
+    }
+
+    case "deleteQuickLink": {
+      await requireGroupAccess(["E"]);
+      const id = firstText(body.id);
+      if (!id) {
+        return { ok: false, data: null, error: "Missing id" };
+      }
+      await query(`delete from quick_links where id = $1`, [id]);
+      return { ok: true, data: { id }, error: null };
     }
 
     case "markNotificationRead": {

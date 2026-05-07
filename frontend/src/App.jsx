@@ -785,6 +785,7 @@ const API_POST_ACTIONS = new Set([
   "upsertMySoftballPlayerProfile",
   "listHomeBootstrap",
   "listLandingBootstrap",
+  "listQuickLinks",
   "listApprovalsOverview",
   "getCheckinBootstrap",
   "getRegistrationBootstrap",
@@ -810,6 +811,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listEventAuditEvents",
   "listHomeBootstrap",
   "listLandingBootstrap",
+  "listQuickLinks",
   "listAdminBootstrap",
   "listStudents",
   "listGroupMemberships",
@@ -965,6 +967,8 @@ const API_V2_WRITE_ACTIONS = new Set([
   "createDocumentVersion",
   "updateDocumentMeta",
   "archiveDocument",
+  "upsertQuickLink",
+  "deleteQuickLink",
 ]);
 
 function normalizeApiEndpoint_(rawUrl) {
@@ -3354,7 +3358,7 @@ function AppShell() {
           CLASS_GROUPS={CLASS_GROUPS}
           getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           initialTab="roles"
-          allowedTabs={["students", "roles"]}
+          allowedTabs={["students", "roles", "quickLinks"]}
         />
       </AdminAccessGuard>
     );
