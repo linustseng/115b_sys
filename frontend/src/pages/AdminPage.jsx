@@ -4336,17 +4336,17 @@ export default function AdminPage({
                 </form>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="font-semibold text-slate-900">最近異動紀錄</p>
-                    <p className="mt-1 text-xs text-slate-500">顯示目前訂餐與其外部入口的最近版本事件。</p>
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    {activeOrderLabel ? `目前套用 ${activeOrderLabel}` : "請先選擇訂餐日期"}
+              <details className="order-last rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-xl px-1 py-1 text-slate-700 marker:hidden">
+                  <span>
+                    <span className="font-semibold text-slate-900">異動紀錄</span>
+                    <span className="ml-2 text-slate-400">備查用，預設收合</span>
                   </span>
-                </div>
-                <div className="mt-4 space-y-2 text-xs text-slate-600">
+                  <span className="text-slate-400">
+                    {orderAuditEvents.length ? `${orderAuditEvents.length} 筆` : activeOrderLabel ? activeOrderLabel : "請先選擇訂餐日期"} · 展開
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                   {orderAuditLoading ? (
                     <p className="text-slate-400">載入中...</p>
                   ) : orderAuditEvents.length ? (
@@ -4419,7 +4419,7 @@ export default function AdminPage({
                     <p className="text-slate-400">目前沒有異動紀錄。</p>
                   )}
                 </div>
-              </div>
+              </details>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -6616,15 +6616,17 @@ export default function AdminPage({
             </div>
           </form>
           {activeId ? (
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-slate-900">最近異動紀錄</p>
-                  <p className="mt-1 text-xs text-slate-500">顯示這筆活動最近的版本與欄位差異。</p>
-                </div>
-                <span className="text-xs text-slate-400">{form.title || form.id || "未選擇活動"}</span>
-              </div>
-              <div className="mt-4 space-y-2 text-xs text-slate-600">
+            <details className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 text-xs text-slate-600">
+              <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-xl px-1 py-1 text-slate-700 marker:hidden">
+                <span>
+                  <span className="font-semibold text-slate-900">異動紀錄</span>
+                  <span className="ml-2 text-slate-400">備查用，預設收合</span>
+                </span>
+                <span className="text-slate-400">
+                  {eventAuditEvents.length ? `${eventAuditEvents.length} 筆` : form.title || form.id || "未選擇活動"} · 展開
+                </span>
+              </summary>
+              <div className="mt-3 space-y-2 border-t border-slate-100 pt-3">
                 {eventAuditLoading ? (
                   <p className="text-slate-400">載入中...</p>
                 ) : eventAuditEvents.length ? (
@@ -6697,7 +6699,7 @@ export default function AdminPage({
                   <p className="text-slate-400">目前沒有異動紀錄。</p>
                 )}
               </div>
-            </div>
+            </details>
           ) : null}
         </section>
         ) : null}
