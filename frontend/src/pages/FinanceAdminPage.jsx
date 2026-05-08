@@ -1127,27 +1127,40 @@ function FinanceAdminPage({ shared }) {
   const formatFinanceAuditFieldLabel_ = (key) =>
     financeAuditFieldLabels[key] || String(key || "").replace(/_/g, " ") || "未命名欄位";
 
+  const financeAuditCategoryFallbackLabels_ = {
+    general: "一般費用",
+    special: "特殊／重大費用",
+  };
+
+  const formatFinanceAuditCodeValue_ = (value, options = [], fallbackLabels = {}) => {
+    const text = String(value == null ? "" : value).trim();
+    if (!text) {
+      return "未設定";
+    }
+    return options.find((item) => String(item.value ?? item.id ?? "") === text)?.label || fallbackLabels[text] || text;
+  };
+
   const formatFinanceAuditValue_ = (key, value) => {
     if (value == null || value === "") {
-      return "∅";
+      return "未設定";
     }
     if (key === "type") {
-      return FINANCE_TYPES.find((item) => item.value === value)?.label || String(value);
+      return formatFinanceAuditCodeValue_(value, FINANCE_TYPES);
     }
     if (key === "status") {
-      return FINANCE_STATUS_LABELS[value] || String(value);
+      return formatFinanceAuditCodeValue_(value, [], FINANCE_STATUS_LABELS);
     }
     if (key === "paymentMethod") {
-      return FINANCE_PAYMENT_METHODS.find((item) => item.value === value)?.label || String(value);
+      return formatFinanceAuditCodeValue_(value, FINANCE_PAYMENT_METHODS);
     }
     if (key === "workflowCreatedByRole" || key === "applicantRole") {
-      return FINANCE_ROLE_LABELS[value] || String(value);
+      return formatFinanceAuditCodeValue_(value, [], FINANCE_ROLE_LABELS);
     }
     if (key === "applicantDepartment") {
-      return CLASS_GROUPS.find((item) => item.id === value)?.label || String(value);
+      return formatFinanceAuditCodeValue_(value, CLASS_GROUPS);
     }
     if (key === "categoryType") {
-      return financeCategories.find((item) => item.id === value)?.label || String(value);
+      return formatFinanceAuditCodeValue_(value, financeCategories, financeAuditCategoryFallbackLabels_);
     }
     if (key === "amountEstimated" || key === "amountActual") {
       return formatFinanceAmount_(value);
