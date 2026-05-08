@@ -191,6 +191,172 @@ export default function AdminPage({
   const normalizeEventId_ = (value) => String(value || "").trim();
   const normalizeOrderId_ = (value) => String(value || "").trim();
 
+  const auditFieldLabels_ = {
+    title: "標題",
+    description: "說明",
+    startAt: "開始時間",
+    endAt: "結束時間",
+    location: "地點",
+    address: "地址",
+    registrationOpenAt: "報名開始",
+    registrationCloseAt: "報名截止",
+    checkinOpenAt: "簽到開始",
+    checkinCloseAt: "簽到截止",
+    registerUrl: "報名連結",
+    checkinUrl: "簽到連結",
+    capacity: "名額",
+    category: "活動類型",
+    allowCompanions: "可帶眷屬",
+    allowBringDrinks: "可帶飲料",
+    attachments: "附件",
+    date: "訂餐日期",
+    optionA: "A 餐名稱",
+    optionB: "B 餐名稱",
+    optionC: "C 餐名稱",
+    optionVegetarian: "素食餐名稱",
+    optionAImage: "A 餐圖片",
+    optionBImage: "B 餐圖片",
+    optionCImage: "C 餐圖片",
+    optionVegetarianImage: "素食餐圖片",
+    cutoffAt: "截止時間",
+    notes: "備註",
+    closeAt: "外部入口關閉時間",
+    token: "外部入口 Token",
+    orderPlanId: "訂餐日期",
+    status: "狀態",
+    revisionNo: "版本號",
+    createdAt: "建立時間",
+    updatedAt: "更新時間",
+    lastChangeBatchId: "異動批次",
+    lastChangedAt: "最後異動時間",
+    lastChangedBy: "最後異動者 ID",
+    lastChangedByName: "最後異動者",
+  };
+  const auditBusinessFieldOrder_ = [
+    "title",
+    "date",
+    "startAt",
+    "endAt",
+    "location",
+    "address",
+    "registrationOpenAt",
+    "registrationCloseAt",
+    "checkinOpenAt",
+    "checkinCloseAt",
+    "cutoffAt",
+    "closeAt",
+    "status",
+    "category",
+    "capacity",
+    "allowCompanions",
+    "allowBringDrinks",
+    "optionA",
+    "optionB",
+    "optionC",
+    "optionVegetarian",
+    "optionAImage",
+    "optionBImage",
+    "optionCImage",
+    "optionVegetarianImage",
+    "description",
+    "notes",
+    "registerUrl",
+    "checkinUrl",
+    "attachments",
+    "token",
+  ];
+  const auditBusinessFieldRank_ = new Map(auditBusinessFieldOrder_.map((key, index) => [key, index]));
+  const auditSystemFields_ = new Set([
+    "createdAt",
+    "updatedAt",
+    "revisionNo",
+    "lastChangeBatchId",
+    "lastChangedAt",
+    "lastChangedBy",
+    "lastChangedByName",
+  ]);
+  const eventStatusLabels_ = { draft: "草稿", open: "開放報名", closed: "已結束" };
+  const orderStatusLabels_ = { open: "開放", closed: "關閉", disabled: "停用", enabled: "啟用" };
+  const yesNoLabels_ = { yes: "是", no: "否", true: "是", false: "否" };
+
+  const formatAuditFieldLabel_ = (key) =>
+    auditFieldLabels_[key] || String(key || "").replace(/_/g, " ") || "未命名欄位";
+
+  const formatAuditValue_ = (key, value) => {
+    if (value == null || value === "") {
+      return "∅";
+    }
+    const raw = String(value);
+    if (key === "status") {
+      return eventStatusLabels_[raw] || orderStatusLabels_[raw] || raw;
+    }
+    if (key === "category") {
+      return EVENT_CATEGORIES.find((item) => item.id === raw)?.label || raw;
+    }
+    if (key === "allowCompanions" || key === "allowBringDrinks") {
+      return yesNoLabels_[raw] || raw;
+    }
+    if (["startAt", "endAt", "registrationOpenAt", "registrationCloseAt", "checkinOpenAt", "checkinCloseAt", "cutoffAt", "closeAt", "createdAt", "updatedAt", "lastChangedAt"].includes(key)) {
+      return formatDisplayDate_(value, { withTime: true }) || raw;
+    }
+    if (["optionAImage", "optionBImage", "optionCImage", "optionVegetarianImage", "registerUrl", "checkinUrl"].includes(key)) {
+      return raw ? "已設定連結" : "∅";
+    }
+    if (key === "attachments") {
+      try {
+        const parsed = typeof value === "string" ? JSON.parse(value) : value;
+        if (Array.isArray(parsed)) {
+          return parsed.length ? `${parsed.length} 個附件` : "無附件";
+        }
+      } catch (_) {
+        // keep fallback below
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.length ? value.map((item) => formatAuditValue_(key, item)).join("、") : "∅";
+    }
+    if (typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return raw;
+  };
+
+  const buildAuditDiffEntries_ = (diff) =>
+    Object.entries(diff || {})
+      .filter(([key]) => !auditSystemFields_.has(key))
+      .sort(([a], [b]) => {
+        const aRank = auditBusinessFieldRank_.has(a) ? auditBusinessFieldRank_.get(a) : 999;
+        const bRank = auditBusinessFieldRank_.has(b) ? auditBusinessFieldRank_.get(b) : 999;
+        return aRank === bRank ? a.localeCompare(b, "zh-Hant") : aRank - bRank;
+      });
+
+  const formatAuditActionLabel_ = (action) => {
+    const normalized = String(action || "").trim();
+    if (normalized === "create") return "建立";
+    if (normalized === "update") return "更新";
+    if (normalized === "restore") return "回復版本";
+    if (normalized === "delete") return "刪除";
+    return normalized || "異動";
+  };
+
+  const formatAuditEntityLabel_ = (entityType) => {
+    const normalized = String(entityType || "").trim();
+    if (normalized === "event") return "活動";
+    if (normalized === "order_plan") return "訂餐";
+    if (normalized === "ordering_public_link") return "外部訂餐入口";
+    return normalized.replace(/_/g, " ") || "紀錄";
+  };
+
+  const buildAuditSummary_ = (item, diffEntries) => {
+    const actionLabel = formatAuditActionLabel_(item && item.action);
+    const entityLabel = formatAuditEntityLabel_(item && item.entityType);
+    if (!diffEntries.length) {
+      return `${actionLabel}${entityLabel}`;
+    }
+    const labels = diffEntries.slice(0, 3).map(([key]) => formatAuditFieldLabel_(key));
+    return `${actionLabel}${entityLabel}：${labels.join("、")}${diffEntries.length > 3 ? ` 等 ${diffEntries.length} 項` : ""}`;
+  };
+
   const normalizeEmail_ = (value) => String(value || "").trim().toLowerCase();
 
   const normalizeName_ = (value) => String(value || "").trim();
@@ -4185,15 +4351,20 @@ export default function AdminPage({
                     <p className="text-slate-400">載入中...</p>
                   ) : orderAuditEvents.length ? (
                     orderAuditEvents.map((item) => {
-                      const diffEntries = Object.entries(item.diff || {});
+                      const diffEntries = buildAuditDiffEntries_(item.diff || {});
+                      const hiddenSystemFieldCount = Math.max(
+                        0,
+                        Object.entries(item.diff || {}).length - diffEntries.length
+                      );
+                      const summaryLabel = buildAuditSummary_(item, diffEntries);
                       return (
                         <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                                <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                                <span className="font-semibold text-slate-800">{summaryLabel}</span>
                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                                  {item.entityType}
+                                  {formatAuditEntityLabel_(item.entityType)}
                                 </span>
                                 {item.revisionNo ? (
                                   <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -4203,22 +4374,24 @@ export default function AdminPage({
                               </div>
                               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
                                 <span>{item.actorName || item.actorId || 'system'}</span>
-                                {item.action ? <span>· {item.action}</span> : null}
+                                {item.action ? <span>· {formatAuditActionLabel_(item.action)}</span> : null}
                                 <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
                               </div>
                               {diffEntries.length ? (
                                 <div className="mt-2 space-y-1">
                                   {diffEntries.slice(0, 6).map(([key, value]) => (
                                     <div key={key} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
-                                      <span className="font-semibold text-slate-700">{key}</span>
+                                      <span className="font-semibold text-slate-700">{formatAuditFieldLabel_(key)}</span>
                                       <span className="mx-1 text-slate-400">:</span>
-                                      <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                      <span className="text-rose-600">{formatAuditValue_(key, value && value.before)}</span>
                                       <span className="mx-1 text-slate-400">→</span>
-                                      <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                      <span className="text-emerald-700">{formatAuditValue_(key, value && value.after)}</span>
                                     </div>
                                   ))}
                                   {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
                                 </div>
+                              ) : hiddenSystemFieldCount ? (
+                                <p className="mt-2 text-[11px] text-slate-400">這次只有系統版本資訊變更，沒有訂餐內容欄位差異。</p>
                               ) : null}
                             </div>
                             {item.versionId ? (
@@ -6456,15 +6629,20 @@ export default function AdminPage({
                   <p className="text-slate-400">載入中...</p>
                 ) : eventAuditEvents.length ? (
                   eventAuditEvents.map((item) => {
-                    const diffEntries = Object.entries(item.diff || {});
+                    const diffEntries = buildAuditDiffEntries_(item.diff || {});
+                    const hiddenSystemFieldCount = Math.max(
+                      0,
+                      Object.entries(item.diff || {}).length - diffEntries.length
+                    );
+                    const summaryLabel = buildAuditSummary_(item, diffEntries);
                     return (
                       <div key={item.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
-                              <span className="font-semibold text-slate-800">{item.summary || item.action}</span>
+                              <span className="font-semibold text-slate-800">{summaryLabel}</span>
                               <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${item.severity === 'warning' ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-600'}`}>
-                                {item.entityType}
+                                {formatAuditEntityLabel_(item.entityType)}
                               </span>
                               {item.revisionNo ? (
                                 <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -6474,22 +6652,24 @@ export default function AdminPage({
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
                               <span>{item.actorName || item.actorId || 'system'}</span>
-                              {item.action ? <span>· {item.action}</span> : null}
+                              {item.action ? <span>· {formatAuditActionLabel_(item.action)}</span> : null}
                               <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
                             </div>
                             {diffEntries.length ? (
                               <div className="mt-2 space-y-1">
                                 {diffEntries.slice(0, 6).map(([key, value]) => (
                                   <div key={key} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600">
-                                    <span className="font-semibold text-slate-700">{key}</span>
+                                    <span className="font-semibold text-slate-700">{formatAuditFieldLabel_(key)}</span>
                                     <span className="mx-1 text-slate-400">:</span>
-                                    <span className="text-rose-600">{String((value && value.before) ?? "") || "∅"}</span>
+                                    <span className="text-rose-600">{formatAuditValue_(key, value && value.before)}</span>
                                     <span className="mx-1 text-slate-400">→</span>
-                                    <span className="text-emerald-700">{String((value && value.after) ?? "") || "∅"}</span>
+                                    <span className="text-emerald-700">{formatAuditValue_(key, value && value.after)}</span>
                                   </div>
                                 ))}
                                 {diffEntries.length > 6 ? <p className="text-[11px] text-slate-400">還有 {diffEntries.length - 6} 個欄位變更</p> : null}
                               </div>
+                            ) : hiddenSystemFieldCount ? (
+                              <p className="mt-2 text-[11px] text-slate-400">這次只有系統版本資訊變更，沒有內容欄位差異。</p>
                             ) : null}
                           </div>
                           {item.versionId ? (
