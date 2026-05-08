@@ -182,6 +182,41 @@ function FinanceAdminPage({ shared }) {
     setTimeout(() => setCopyStatus(""), 1800);
   };
 
+  const shortenKey_ = (value) => {
+    const text = String(value == null ? "" : value).trim();
+    if (!text) return "-";
+    const normalized = text.replace(/^(audit_batch|audit_event|audit_version):/, "");
+    if (normalized.length <= 16) return text;
+    return `${normalized.slice(0, 8)}…${normalized.slice(-5)}`;
+  };
+
+  const ShortKey_ = ({ value, className = "" }) => {
+    const text = String(value == null ? "" : value).trim();
+    return (
+      <span title={text || undefined} className={`font-mono ${className}`.trim()}>
+        {shortenKey_(text)}
+      </span>
+    );
+  };
+
+  const CopyableKey_ = ({ value, label = "ID", className = "" }) => {
+    const text = String(value == null ? "" : value).trim();
+    if (!text) return <span className={className}>-</span>;
+    return (
+      <span className={`inline-flex items-center gap-1 ${className}`.trim()} title={text}>
+        <ShortKey_ value={text} />
+        <button
+          type="button"
+          onClick={() => copyText_(text, label)}
+          className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:border-slate-300 hover:text-slate-700"
+          title={`複製完整${label}`}
+        >
+          複製
+        </button>
+      </span>
+    );
+  };
+
   const fundPaymentErrorFlags = {
     eventId: !!error && error.includes("班費事件"),
     payerName: !!error && error.includes("繳費人"),
@@ -1998,7 +2033,7 @@ function FinanceAdminPage({ shared }) {
                               {formatFinanceAmount_(amount)}
                             </p>
                           </div>
-                          <span className="text-xs opacity-70">{item.id}</span>
+                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
                         </div>
                       </button>
                     );
@@ -2038,7 +2073,7 @@ function FinanceAdminPage({ shared }) {
                               {FINANCE_STATUS_LABELS[item.status] || item.status}
                             </p>
                           </div>
-                          <span className="text-xs opacity-70">{item.id}</span>
+                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
                         </div>
                       </button>
                     );
@@ -2100,7 +2135,7 @@ function FinanceAdminPage({ shared }) {
                               {formatFinanceAmount_(amount)}
                             </p>
                           </div>
-                          <span className="text-xs opacity-70">{item.id}</span>
+                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
                         </div>
                       </button>
                     );
@@ -2119,7 +2154,7 @@ function FinanceAdminPage({ shared }) {
                 <div>
                   <p className="font-semibold text-slate-900">{selectedRequest.title}</p>
                   <p className="text-xs text-slate-500">
-                    {selectedRequest.id} · {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
+                    <CopyableKey_ value={selectedRequest.id} label="案件 ID" /> · {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
                   </p>
                   <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
                     revision {Number(selectedRequest.revisionNo || 0) || 0}
@@ -2343,7 +2378,7 @@ function FinanceAdminPage({ shared }) {
                                   ) : null}
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-                                  <span>{item.actorName || item.actorId || 'system'}</span>
+                                  <span>{item.actorName || (item.actorId ? <CopyableKey_ value={item.actorId} label="異動者 ID" /> : 'system')}</span>
                                   {item.action ? <span>· {formatFinanceAuditActionLabel_(item.action)}</span> : null}
                                   <span>· {formatDisplayDate_(item.createdAt, { withTime: true }) || item.createdAt}</span>
                                 </div>
@@ -3504,7 +3539,7 @@ function FinanceAdminPage({ shared }) {
                         <div>
                           <p className="font-semibold text-slate-900">{item.label || "未命名"}</p>
                           <p className="text-xs text-slate-500">
-                            排序 {item.sortOrder || "-"} · {item.id}
+                            排序 {item.sortOrder || "-"} · <CopyableKey_ value={item.id} label="班務性質 ID" />
                           </p>
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
