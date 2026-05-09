@@ -102,7 +102,7 @@ function MakeupReminderCard({ reminder }) {
   );
 }
 
-function CourseCatalogCard({ unit, apiRequest }) {
+function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_ }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -866,7 +866,7 @@ export default function AcademicsPage({ shared }) {
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
             {courseScope === "all" ? (
               courseCatalog.map((unit) => (
-                <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
+                <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
               ))
             ) : (
               <div className="space-y-6">
@@ -886,7 +886,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的已上課課程。</div>
                     ) : null}
                     {recentPastCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
+                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
                     ))}
                   </div>
                 </section>
@@ -907,7 +907,7 @@ export default function AcademicsPage({ shared }) {
                       <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的即將上課課程。</div>
                     ) : null}
                     {recentFutureCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} />
+                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
                     ))}
                   </div>
                 </section>
