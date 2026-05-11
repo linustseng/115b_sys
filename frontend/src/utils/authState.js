@@ -63,6 +63,8 @@ export function evaluateStoredAuthState({ googleStudent, googleIdToken, adminSes
   );
   const studentEmailMismatch = Boolean(
     hasStudent &&
+      !studentIdMismatch &&
+      !normalizedSession.studentId &&
       normalizedSession.studentEmail &&
       normalizedStudent.email &&
       normalizedSession.studentEmail !== normalizedStudent.email

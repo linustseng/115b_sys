@@ -48,11 +48,22 @@ describe("authState", () => {
     expect(result.reasons).toContain("student_id_mismatch");
   });
 
-  it("clears all auth on student email mismatch", () => {
+  it("keeps auth when student id matches even if stored emails differ", () => {
+    const result = evaluateStoredAuthState({
+      googleStudent: { id: "B123", email: "outlook@example.com" },
+      googleIdToken: "id-token",
+      adminSession: { token: "session", refreshToken: "refresh", studentId: "B123", studentEmail: "gmail@example.com" },
+    });
+    expect(result.clearAllAuth).toBe(false);
+    expect(result.clearAdminSession).toBe(false);
+    expect(result.reasons).not.toContain("student_email_mismatch");
+  });
+
+  it("clears all auth on student email mismatch when no stable student id exists", () => {
     const result = evaluateStoredAuthState({
       googleStudent: { id: "B123", email: "linus@example.com" },
       googleIdToken: "id-token",
-      adminSession: { token: "session", refreshToken: "refresh", studentId: "B123", studentEmail: "other@example.com" },
+      adminSession: { token: "session", refreshToken: "refresh", studentEmail: "other@example.com" },
     });
     expect(result.clearAllAuth).toBe(true);
     expect(result.reasons).toContain("student_email_mismatch");

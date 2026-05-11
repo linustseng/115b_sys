@@ -949,11 +949,29 @@ function canViewAllMemberships_(memberships) {
   });
 }
 
-function isOwnEmailRequest_(auth, email) {
+async function isOwnEmailRequest_(auth, email) {
   const target = normalizeEmail(email);
   if (!target) {
     return false;
   }
+
+  // Google email can differ from the directory/profile email (e.g. Gmail login + Outlook contact email).
+  // Treat the bound student_id as the source of truth for "own profile" authorization.
+  const studentId = String(auth && auth.studentId ? auth.studentId : "").trim();
+  if (studentId) {
+    const result = await query(
+      `SELECT 1
+       FROM directories d
+       WHERE d.id = $1
+         AND lower(coalesce(d.email, '')) = $2
+       LIMIT 1`,
+      [studentId, target]
+    );
+    if (result.rows.length) {
+      return true;
+    }
+  }
+
   const authEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
   return Boolean(authEmail && authEmail === target);
 }
@@ -995,7 +1013,7 @@ app.get("/v1/lookup-student", async (req, res) => {
 
     const myMemberships = await listMembershipsByStudentId(auth.studentId);
     const canLookupAny = canViewAllMemberships_(myMemberships);
-    if (!canLookupAny && !isOwnEmailRequest_(auth, email)) {
+    if (!canLookupAny && !(await isOwnEmailRequest_(auth, email))) {
       return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     }
 
@@ -1029,7 +1047,7 @@ app.get("/v1/bootstrap/home", async (req, res) => {
     }
     const myMemberships = await listMembershipsByStudentId(auth.studentId);
     const canReadOthers = canViewAllMemberships_(myMemberships);
-    if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+    if (!canReadOthers && !(await isOwnEmailRequest_(auth, email))) {
       return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     }
 
@@ -1082,7 +1100,7 @@ app.get("/v1/bootstrap/registration", async (req, res) => {
       }
       const myMemberships = await listMembershipsByStudentId(auth.studentId);
       canReadOthers = canViewAllMemberships_(myMemberships);
-      if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+      if (!canReadOthers && !(await isOwnEmailRequest_(auth, email))) {
         return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
       }
     }
@@ -1122,7 +1140,7 @@ app.get("/v1/bootstrap/checkin", async (req, res) => {
       }
       const myMemberships = await listMembershipsByStudentId(auth.studentId);
       const canReadOthers = canViewAllMemberships_(myMemberships);
-      if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+      if (!canReadOthers && !(await isOwnEmailRequest_(auth, email))) {
         return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
       }
     }
@@ -1168,7 +1186,7 @@ async function handleListCheckinStatus(req, res) {
     }
     const myMemberships = await listMembershipsByStudentId(auth.studentId);
     const canReadOthers = canViewAllMemberships_(myMemberships);
-    if (!canReadOthers && !isOwnEmailRequest_(auth, email)) {
+    if (!canReadOthers && !(await isOwnEmailRequest_(auth, email))) {
       return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     }
 
