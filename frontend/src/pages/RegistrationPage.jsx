@@ -609,10 +609,10 @@ function RegistrationPage({ shared }) {
           </div>
           <div className="flex items-center gap-3">
             <a
-              href="/"
+              href="/events"
               className="hidden btn-ghost sm:inline-flex"
             >
-              返回報名列表
+              返回活動列表
             </a>
             {eventLoading ? (
               <span className="hidden rounded-full border border-slate-200 bg-white/80 px-4 py-2 text-xs font-semibold text-slate-500 shadow-sm sm:inline-flex">
@@ -629,10 +629,10 @@ function RegistrationPage({ shared }) {
         </div>
         <div className="mx-auto mt-4 flex max-w-6xl flex-wrap items-center gap-2 text-[11px] font-semibold text-slate-600 sm:hidden">
           <a
-            href="/"
+            href="/events"
             className="btn-chip px-3 py-1.5"
           >
-            返回報名列表
+            返回活動列表
           </a>
           {eventLoading ? (
             <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
