@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
 import { computeHomeAuthState } from "../utils/authPageState";
+import { filterActiveEvents, isEventCompleted, parseEventDateValue } from "../utils/eventVisibility";
 
 function HomePage({
   apiRequest,
@@ -79,28 +80,7 @@ function HomePage({
     }
   };
 
-  const parseEventDateValue_ = (value) => {
-    if (!value) {
-      return null;
-    }
-    if (value instanceof Date) {
-      return isNaN(value.getTime()) ? null : value;
-    }
-    if (typeof value === "number") {
-      const parsedNumber = new Date(value);
-      return isNaN(parsedNumber.getTime()) ? null : parsedNumber;
-    }
-    const raw = String(value || "").trim();
-    if (!raw) {
-      return null;
-    }
-    const normalized =
-      /^\d{4}[-/]\d{2}[-/]\d{2} \d{2}:\d{2}/.test(raw)
-        ? raw.replace(/\//g, "-").replace(" ", "T")
-        : raw;
-    const parsed = new Date(normalized);
-    return isNaN(parsed.getTime()) ? null : parsed;
-  };
+  const parseEventDateValue_ = parseEventDateValue;
 
   const getCheckinWindowState_ = (event) => {
     if (!event) {
@@ -118,20 +98,9 @@ function HomePage({
     return "open";
   };
 
-  const isEventClosed_ = (event) => {
-    if (!event) {
-      return false;
-    }
-    const status = String(event.status || "").trim().toLowerCase();
-    if (status === "closed") {
-      return true;
-    }
-    const endAt = parseEventDateValue_(event.endAt || event.registrationCloseAt);
-    return endAt ? endAt.getTime() < Date.now() : false;
-  };
+  const isEventClosed_ = isEventCompleted;
 
-  const visibleEvents = events
-    .filter((event) => !isEventClosed_(event))
+  const visibleEvents = filterActiveEvents(events)
     .sort((a, b) => {
       const aOpen = String(a.status || "").trim().toLowerCase() === "open";
       const bOpen = String(b.status || "").trim().toLowerCase() === "open";
@@ -318,7 +287,13 @@ function HomePage({
     };
   };
 
-  const registrationsByEventId = myRegistrations.reduce((acc, registration) => {
+  const visibleEventIds = new Set(visibleEvents.map((event) => normalizeEventId_(event.id)).filter(Boolean));
+  const activeRegistrations = myRegistrations.filter((registration) => {
+    const eventId = normalizeEventId_(registration.eventId);
+    return eventId && visibleEventIds.has(eventId);
+  });
+
+  const registrationsByEventId = activeRegistrations.reduce((acc, registration) => {
     const eventId = normalizeEventId_(registration.eventId);
     if (eventId) {
       acc[eventId] = registration;
@@ -327,7 +302,7 @@ function HomePage({
   }, {});
 
   const shouldShowRegistrationBadge =
-    myRegistrations.length > 0 || lookupError === "查無報名紀錄。";
+    activeRegistrations.length > 0 || lookupError === "查無報名紀錄。";
 
   const fetchHomeBootstrap_ = async (emailValue, options = {}) => {
     const normalizedEmail = String(emailValue || "").trim().toLowerCase();
@@ -476,7 +451,7 @@ function HomePage({
             </div>
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-                已報名 {myRegistrations.length}
+                已報名 {activeRegistrations.length}
               </span>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
                 可報名活動 {effectiveGoogleLinkedStudent ? visibleEvents.length : "需登入"}
@@ -552,9 +527,9 @@ function HomePage({
             </div>
           </div>
 
-          {myRegistrations.length ? (
+          {activeRegistrations.length ? (
             <div className="mt-6 space-y-4">
-              {myRegistrations.map((item) => {
+              {activeRegistrations.map((item) => {
                 const eventId = normalizeEventId_(item.eventId);
                 const event =
                   events.find((evt) => normalizeEventId_(evt.id) === eventId) || null;
