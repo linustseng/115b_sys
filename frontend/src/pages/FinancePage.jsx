@@ -1100,19 +1100,43 @@ function FinancePage({ shared }) {
     closed: requests.filter((item) => String(item.status || "").trim() === "closed").length,
   };
 
+  const getFinanceTypeLabel_ = (value) =>
+    FINANCE_TYPES.find((type) => String(type.value) === String(value))?.label || "申請";
+  const getRequestAmount_ = (item) =>
+    item && item.type === "purchase" ? item.amountEstimated : item?.amountActual;
+  const getRequestSubmittedAt_ = (item) =>
+    item?.submittedAt ||
+    item?.submitted_at ||
+    item?.createdAt ||
+    item?.created_at ||
+    item?.manualCreatedAt ||
+    item?.updatedAt ||
+    item?.updated_at ||
+    "";
+  const formatRequestSubmittedAt_ = (item) =>
+    formatDisplayDate_(getRequestSubmittedAt_(item), { withTime: true }) || "未記錄時間";
+  const formatRequestDateOnly_ = (item) =>
+    formatDisplayDateNoMidnight_(getRequestSubmittedAt_(item)) ||
+    formatDisplayDate_(getRequestSubmittedAt_(item), { withTime: false }) ||
+    "未記錄";
+  const getRequestGroupLabel_ = (item) =>
+    CLASS_GROUPS.find((group) => String(group.id) === String(item?.applicantDepartment))?.label ||
+    item?.applicantDepartment ||
+    "未分組";
+  const getRequestScenario_ = (status) => {
+    const normalized = String(status || "").trim();
+    if (normalized === "returned") return "returned";
+    if (normalized === "draft") return "draft";
+    if (normalized === "closed") return "closed";
+    if (normalized.startsWith("pending")) return "pending";
+    return "other";
+  };
+
   const parseRequestCreatedAtMs_ = (item) => {
     if (!item) {
       return 0;
     }
-    const raw =
-      item.createdAt ||
-      item.created_at ||
-      item.created ||
-      item.submittedAt ||
-      item.submitted_at ||
-      item.updatedAt ||
-      item.updated_at ||
-      "";
+    const raw = getRequestSubmittedAt_(item) || item.created || "";
     if (!raw) {
       return 0;
     }
@@ -1123,6 +1147,28 @@ function FinancePage({ shared }) {
     const parsed = Date.parse(String(raw));
     return Number.isFinite(parsed) ? parsed : 0;
   };
+
+  const myRequestGroups = useMemo(() => {
+    const groupMeta = [
+      { key: "returned", label: "需補件 / 已退回", hint: "優先處理", tone: "border-rose-200 bg-rose-50/60 text-rose-900" },
+      { key: "draft", label: "草稿", hint: "可繼續編輯", tone: "border-slate-200 bg-white text-slate-700" },
+      { key: "pending", label: "簽核中", hint: "等待流程", tone: "border-amber-200 bg-amber-50/60 text-amber-900" },
+      { key: "closed", label: "已結案", hint: "完成紀錄", tone: "border-emerald-200 bg-emerald-50/40 text-emerald-900" },
+      { key: "other", label: "其他", hint: "其他狀態", tone: "border-slate-200 bg-slate-50/60 text-slate-700" },
+    ];
+    const grouped = new Map(groupMeta.map((meta) => [meta.key, { ...meta, items: [] }]));
+    requests
+      .slice()
+      .sort((a, b) => parseRequestCreatedAtMs_(b) - parseRequestCreatedAtMs_(a))
+      .forEach((item) => {
+        const key = getRequestScenario_(item.status);
+        if (!grouped.has(key)) {
+          grouped.set(key, { key, label: "其他", hint: "其他狀態", tone: "border-slate-200 bg-slate-50/60 text-slate-700", items: [] });
+        }
+        grouped.get(key).items.push(item);
+      });
+    return groupMeta.map((meta) => grouped.get(meta.key)).filter((group) => group.items.length);
+  }, [requests]);
 
   const myLatestRequest = useMemo(() => {
     if (!requests.length) {
@@ -2133,108 +2179,112 @@ function FinancePage({ shared }) {
             </div>
           </form>
 
-            <section id="finance-my-requests" className="card p-6 sm:p-8">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-900">我的申請</h2>
+            <section id="finance-my-requests" className="card p-4 sm:p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">我的申請</h2>
+                <p className="mt-1 text-xs text-slate-400">依狀態分區，卡片優先顯示申請日期、單據類型與金額。</p>
+              </div>
               {loading ? (
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                   載入中
                 </span>
               ) : null}
             </div>
-            <div className="mt-4 space-y-3">
-              {requests.length ? (
-                requests.map((item) => {
-                  const statusLabel = FINANCE_STATUS_LABELS[item.status] || item.status || "-";
-                  const amount =
-                    item.type === "purchase" ? item.amountEstimated : item.amountActual;
-                  const canEdit = item.status === "draft" || item.status === "returned";
-                  const canWithdraw = String(item.status || "").startsWith("pending");
-                  const isEditing = editingId && editingId === item.id;
-                  const status = String(item.status || "").trim();
-                  const statusTone = status === "returned"
-                    ? { border: "border-rose-200", bg: "bg-rose-50/60", text: "text-rose-800" }
-                    : status.startsWith("pending")
-                    ? { border: "border-amber-200", bg: "bg-amber-50/60", text: "text-amber-900" }
-                    : status === "draft"
-                    ? { border: "border-slate-200", bg: "bg-white", text: "text-slate-700" }
-                    : status === "closed"
-                    ? { border: "border-emerald-200", bg: "bg-emerald-50/40", text: "text-emerald-900" }
-                    : { border: "border-slate-200/70", bg: "bg-slate-50/60", text: "text-slate-700" };
-                  const caseSteps = getCaseStepsForRequest_(item);
-
-                  return (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        if (canEdit) {
-                          handleEditRequest(item);
-                        }
-                      }}
-                      className={`rounded-2xl border p-4 text-sm transition ${
-                        canEdit ? "cursor-pointer hover:border-slate-300" : ""
-                      } ${
-                        isEditing
-                          ? "border-slate-900 bg-white text-slate-700"
-                          : `${statusTone.border} ${statusTone.bg} ${statusTone.text}`
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-slate-900">{item.title || "未命名"}</p>
-                            {item.manualCreatedByName || (item.raw && item.raw.manualCreatedByName) ? (
-                              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-                                由 {item.manualCreatedByName || item.raw.manualCreatedByName} 代建
-                              </span>
-                            ) : null}
-                          </div>
-                          <p className="text-xs text-slate-500">
-                            {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
-                            {formatFinanceAmount_(amount)} · {statusLabel}
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {canWithdraw ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleWithdraw(item);
-                              }}
-                              className="badge-error hover:border-rose-300"
-                            >
-                              撤回
-                            </button>
-                          ) : null}
-                        </div>
+            <div className="mt-4 space-y-4">
+              {myRequestGroups.length ? (
+                myRequestGroups.map((group) => (
+                  <div key={group.key} className={`rounded-2xl border p-3 ${group.tone}`}>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">{group.label}</h3>
+                        <p className="text-[11px] opacity-70">{group.hint}</p>
                       </div>
-                      <div className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2">
-                        <p className="text-[11px] font-semibold text-slate-500">Case 時間線</p>
-                        <div
-                          className="mt-2 grid gap-2"
-                          style={{ gridTemplateColumns: `repeat(${caseSteps.length}, minmax(0, 1fr))` }}
-                        >
-                          {caseSteps.map((step) => {
-                            const stepState = getCaseStepState_(item.status, step.id, caseSteps);
-                            const badgeClass =
-                              stepState === "done"
-                                ? "bg-emerald-500"
-                                : stepState === "active"
-                                ? "bg-amber-500"
-                                : "bg-slate-300";
-                            return (
-                              <div key={`${item.id}-${step.id}`} className="text-center">
-                                <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
-                                <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      <span className="rounded-full bg-white/80 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-black/5">
+                        {group.items.length} 筆
+                      </span>
                     </div>
-                  );
-                })
+                    <div className="space-y-2">
+                      {group.items.map((item) => {
+                        const statusLabel = FINANCE_STATUS_LABELS[item.status] || item.status || "-";
+                        const canEdit = item.status === "draft" || item.status === "returned";
+                        const canWithdraw = String(item.status || "").startsWith("pending");
+                        const isEditing = editingId && editingId === item.id;
+                        const caseSteps = getCaseStepsForRequest_(item);
+
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              if (canEdit) {
+                                handleEditRequest(item);
+                              }
+                            }}
+                            className={`rounded-xl border bg-white/80 px-3 py-2.5 text-sm text-slate-700 transition ${
+                              canEdit ? "cursor-pointer hover:border-slate-300" : ""
+                            } ${isEditing ? "border-slate-900 shadow-sm" : "border-white/70"}`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                                  <span className="rounded-full bg-slate-50 px-2 py-0.5 ring-1 ring-slate-200">{getFinanceTypeLabel_(item.type)}</span>
+                                  <span>{formatRequestDateOnly_(item)}</span>
+                                </div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                  <p className="truncate font-semibold text-slate-900">{item.title || "未命名"}</p>
+                                  {item.manualCreatedByName || (item.raw && item.raw.manualCreatedByName) ? (
+                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                                      由 {item.manualCreatedByName || item.raw.manualCreatedByName} 代建
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                  {formatFinanceAmount_(getRequestAmount_(item))} · {statusLabel} · {getRequestGroupLabel_(item)}
+                                </p>
+                                <p className="mt-1 text-[11px] text-slate-400">申請時間：{formatRequestSubmittedAt_(item)}</p>
+                              </div>
+                              {canWithdraw ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleWithdraw(item);
+                                  }}
+                                  className="badge-error shrink-0 hover:border-rose-300"
+                                >
+                                  撤回
+                                </button>
+                              ) : null}
+                            </div>
+                            <div className="mt-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2">
+                              <div
+                                className="grid gap-1.5"
+                                style={{ gridTemplateColumns: `repeat(${caseSteps.length}, minmax(0, 1fr))` }}
+                                aria-label="Case 時間線"
+                              >
+                                {caseSteps.map((step) => {
+                                  const stepState = getCaseStepState_(item.status, step.id, caseSteps);
+                                  const badgeClass =
+                                    stepState === "done"
+                                      ? "bg-emerald-500"
+                                      : stepState === "active"
+                                      ? "bg-amber-500"
+                                      : "bg-slate-300";
+                                  return (
+                                    <div key={`${item.id}-${step.id}`} className="text-center">
+                                      <span className={`mx-auto block h-2 w-2 rounded-full ${badgeClass}`} />
+                                      <p className="mt-1 truncate text-[9px] text-slate-500">{step.label}</p>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))
               ) : (
                 <p className="text-sm text-slate-500">尚無申請紀錄。</p>
               )}
