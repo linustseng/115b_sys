@@ -1036,6 +1036,45 @@ function FinanceAdminPage({ shared }) {
     .slice()
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
 
+  const getFinanceTypeLabel_ = (value) =>
+    FINANCE_TYPES.find((type) => String(type.value) === String(value))?.label || "申請";
+  const getFinanceRequestAmount_ = (item) =>
+    item && item.type === "purchase" ? item.amountEstimated : item?.amountActual;
+  const getFinanceRequestSubmittedAt_ = (item) =>
+    item?.submittedAt || item?.createdAt || item?.manualCreatedAt || item?.updatedAt || "";
+  const formatFinanceRequestSubmittedAt_ = (item) =>
+    formatDisplayDate_(getFinanceRequestSubmittedAt_(item), { withTime: true }) || "未記錄時間";
+  const formatFinanceRequestDateOnly_ = (item) =>
+    formatDisplayDateNoMidnight_(getFinanceRequestSubmittedAt_(item)) ||
+    formatDisplayDate_(getFinanceRequestSubmittedAt_(item), { withTime: false }) ||
+    "未記錄";
+  const getFinanceRequestDepartmentLabel_ = (item) =>
+    CLASS_GROUPS.find((group) => String(group.id) === String(item?.applicantDepartment))?.label ||
+    item?.applicantDepartment ||
+    "未分組";
+  const buildFinanceTypeGroups_ = (items) => {
+    const groups = new Map();
+    items.forEach((item) => {
+      const key = String(item.type || "other").trim() || "other";
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          label: getFinanceTypeLabel_(key),
+          items: [],
+        });
+      }
+      groups.get(key).items.push(item);
+    });
+    return Array.from(groups.values()).sort((a, b) => {
+      const aIndex = FINANCE_TYPES.findIndex((type) => String(type.value) === a.key);
+      const bIndex = FINANCE_TYPES.findIndex((type) => String(type.value) === b.key);
+      const safeA = aIndex === -1 ? 999 : aIndex;
+      const safeB = bIndex === -1 ? 999 : bIndex;
+      return safeA === safeB ? a.label.localeCompare(b.label, "zh-Hant") : safeA - safeB;
+    });
+  };
+  const completedTypeGroups = buildFinanceTypeGroups_(completedItems);
+
   const selectedRequest = requests.find((item) => item.id === selectedId) || null;
   const selectedPayeeBankName = selectedRequest
     ? String(selectedRequest.payeeBankName || selectedRequest.payeeBank || "").trim()
@@ -2014,83 +2053,86 @@ function FinanceAdminPage({ shared }) {
         {adminTab === "requests" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
-            <div className="card p-6 sm:p-8">
+            <div className="card p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">待處理案件</h2>
+                  <p className="mt-1 text-xs text-slate-400">依申請時間排序，手機上優先顯示重點資訊。</p>
+                </div>
                 {loading ? (
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-500">
                     載入中
                   </span>
                 ) : null}
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-2">
                 {filteredRequests.length ? (
-                  filteredRequests.map((item) => {
-                    const amount =
-                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedId(item.id)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          selectedId === item.id
-                            ? "border-slate-900 bg-white text-slate-700"
-                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold">{item.title || "未命名"}</p>
-                            <p className="text-xs opacity-70">
-                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
-                              {formatFinanceAmount_(amount)}
-                            </p>
+                  filteredRequests.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedId(item.id)}
+                      className={`w-full rounded-2xl border px-3 py-2.5 text-left text-sm transition ${
+                        selectedId === item.id
+                          ? "border-slate-900 bg-white text-slate-700 shadow-sm"
+                          : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                            <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">{getFinanceTypeLabel_(item.type)}</span>
+                            <span>{formatFinanceRequestDateOnly_(item)}</span>
                           </div>
-                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
+                          <p className="mt-1 truncate font-semibold text-slate-900">{item.title || "未命名"}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500">
+                            {getFinanceRequestDepartmentLabel_(item)} · {item.applicantName || "未填申請人"} · {formatFinanceAmount_(getFinanceRequestAmount_(item))}
+                          </p>
                         </div>
-                      </button>
-                    );
-                  })
+                        <div className="shrink-0 text-right">
+                          <p className="text-[11px] font-semibold text-slate-400"><ShortKey_ value={item.id} /></p>
+                          <p className="mt-1 text-[10px] text-slate-400">申請</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
                 ) : (
                   <p className="text-sm text-slate-500">目前沒有待處理案件。</p>
                 )}
               </div>
             </div>
 
-            <div className="card p-6 sm:p-8">
+            <div className="card p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-900">簽核中案件</h2>
                 <span className="text-xs text-slate-400">非目前角色待處理</span>
               </div>
-              <div className="mt-4 space-y-3">
+              <div className="mt-4 space-y-2">
                 {inProgressItems.length ? (
-                  inProgressItems.map((item) => {
-                    const amount =
-                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedId(item.id)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          selectedId === item.id
-                            ? "border-slate-900 bg-white text-slate-700"
-                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold">{item.title || "未命名"}</p>
-                            <p className="text-xs opacity-70">
-                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
-                              {formatFinanceAmount_(amount)} ·{" "}
-                              {FINANCE_STATUS_LABELS[item.status] || item.status}
-                            </p>
+                  inProgressItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => setSelectedId(item.id)}
+                      className={`w-full rounded-2xl border px-3 py-2.5 text-left text-sm transition ${
+                        selectedId === item.id
+                          ? "border-slate-900 bg-white text-slate-700 shadow-sm"
+                          : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+                            <span className="rounded-full bg-white px-2 py-0.5 ring-1 ring-slate-200">{getFinanceTypeLabel_(item.type)}</span>
+                            <span>{formatFinanceRequestDateOnly_(item)}</span>
                           </div>
-                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
+                          <p className="mt-1 truncate font-semibold text-slate-900">{item.title || "未命名"}</p>
+                          <p className="mt-0.5 truncate text-xs text-slate-500">
+                            {formatFinanceAmount_(getFinanceRequestAmount_(item))} · {FINANCE_STATUS_LABELS[item.status] || item.status}
+                          </p>
                         </div>
-                      </button>
-                    );
-                  })
+                        <span className="shrink-0 text-[11px] font-semibold text-slate-400"><ShortKey_ value={item.id} /></span>
+                      </div>
+                    </button>
+                  ))
                 ) : (
                   <p className="text-sm text-slate-500">目前沒有簽核中的案件。</p>
                 )}
@@ -2125,34 +2167,41 @@ function FinanceAdminPage({ shared }) {
                   </button>
                 </div>
               </div>
-              <div className="mt-4 space-y-3">
-                {completedItems.length ? (
-                  completedItems.map((item) => {
-                    const amount =
-                      item.type === "purchase" ? item.amountEstimated : item.amountActual;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => setSelectedId(item.id)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left text-sm transition ${
-                          selectedId === item.id
-                            ? "border-slate-900 bg-white text-slate-700"
-                            : "border-slate-200/70 bg-slate-50/60 text-slate-700 hover:border-slate-300"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="font-semibold">{item.title || "未命名"}</p>
-                            <p className="text-xs opacity-70">
-                              {FINANCE_TYPES.find((type) => type.value === item.type)?.label || "申請"} ·{" "}
-                              {formatFinanceAmount_(amount)}
-                            </p>
-                          </div>
-                          <span className="text-xs opacity-70"><ShortKey_ value={item.id} /></span>
-                        </div>
-                      </button>
-                    );
-                  })
+              <div className="mt-4 space-y-4">
+                {completedTypeGroups.length ? (
+                  completedTypeGroups.map((group) => (
+                    <div key={group.key} className="rounded-2xl border border-slate-200/70 bg-slate-50/50 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <h3 className="text-sm font-semibold text-slate-800">{group.label}</h3>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
+                          {group.items.length} 筆
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {group.items.map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => setSelectedId(item.id)}
+                            className={`w-full rounded-xl border px-3 py-2.5 text-left text-sm transition ${
+                              selectedId === item.id
+                                ? "border-slate-900 bg-white text-slate-700 shadow-sm"
+                                : "border-slate-200/70 bg-white/70 text-slate-700 hover:border-slate-300"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold text-slate-900">{item.title || "未命名"}</p>
+                                <p className="mt-0.5 truncate text-xs text-slate-500">
+                                  {formatFinanceRequestDateOnly_(item)} · {formatFinanceAmount_(getFinanceRequestAmount_(item))} · {item.applicantName || "未填申請人"}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-[11px] font-semibold text-slate-400"><ShortKey_ value={item.id} /></span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))
                 ) : (
                   <p className="text-sm text-slate-500">尚未有已結案的案件。</p>
                 )}
@@ -2169,8 +2218,17 @@ function FinanceAdminPage({ shared }) {
                   <p className="text-xs text-slate-500">
                     <CopyableKey_ value={selectedRequest.id} label="案件 ID" /> · {FINANCE_STATUS_LABELS[selectedRequest.status] || selectedRequest.status}
                   </p>
-                  <div className="mt-2 inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500">
-                    revision {Number(selectedRequest.revisionNo || 0) || 0}
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] font-semibold tracking-wide text-slate-400">申請日期時間</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-700">{formatFinanceRequestSubmittedAt_(selectedRequest)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                      <p className="text-[10px] font-semibold tracking-wide text-slate-400">單據類型 / 版本</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-700">
+                        {getFinanceTypeLabel_(selectedRequest.type)} · revision {Number(selectedRequest.revisionNo || 0) || 0}
+                      </p>
+                    </div>
                   </div>
                 </div>
                   <div className="grid gap-2 text-xs text-slate-500">
