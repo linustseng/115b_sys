@@ -83,6 +83,7 @@ function FinancePage({ shared }) {
     .toLowerCase() === "1";
   const [loginExpanded, setLoginExpanded] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [financeActionsByRequest, setFinanceActionsByRequest] = useState({});
   const [students, setStudents] = useState([]);
   const [financeCategories, setFinanceCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -193,6 +194,7 @@ function FinancePage({ shared }) {
   const loadRequests = async (email) => {
     if (!email) {
       setRequests([]);
+      setFinanceActionsByRequest({});
       return;
     }
     setLoading(true);
@@ -202,7 +204,8 @@ function FinancePage({ shared }) {
       if (!result.ok) {
         throw new Error(result.error || "載入失敗");
       }
-      setRequests(result.data && result.data.requests ? result.data.requests : []);
+      const nextRequests = result.data && result.data.requests ? result.data.requests : [];
+      setRequests(nextRequests);
     } catch (err) {
       const message = String((err && err.message) || "載入失敗");
       setError(
@@ -372,12 +375,51 @@ function FinancePage({ shared }) {
       }));
     } else {
       setRequests([]);
+      setFinanceActionsByRequest({});
       setStudents([]);
       setFinanceCategories([]);
       setMemberGroups([]);
       setBootstrapLoaded(false);
     }
   }, [googleLinkedStudent]);
+
+  useEffect(() => {
+    const requestIds = requests
+      .map((item) => String(item.id || "").trim())
+      .filter(Boolean);
+    if (!requestIds.length) {
+      setFinanceActionsByRequest({});
+      return;
+    }
+    let cancelled = false;
+    const loadRequestActions = async () => {
+      const uniqueIds = Array.from(new Set(requestIds));
+      const settled = await Promise.allSettled(
+        uniqueIds.map(async (requestId) => {
+          const { result } = await apiRequest({ action: "listFinanceActions", requestId });
+          if (!result.ok) {
+            throw new Error(result.error || "載入流程時間失敗");
+          }
+          return [requestId, (result.data && result.data.actions) || []];
+        })
+      );
+      if (cancelled) {
+        return;
+      }
+      const next = {};
+      settled.forEach((entry) => {
+        if (entry.status === "fulfilled") {
+          const [requestId, actions] = entry.value;
+          next[requestId] = actions;
+        }
+      });
+      setFinanceActionsByRequest(next);
+    };
+    loadRequestActions();
+    return () => {
+      cancelled = true;
+    };
+  }, [requests]);
 
   useEffect(() => {
     if (!shouldLoadFinanceBootstrap({ googleLinkedStudent, bootstrapLoaded })) {
@@ -1061,6 +1103,9 @@ function FinancePage({ shared }) {
     ];
   };
 
+  const getFinanceActionsForRequest_ = (request) =>
+    financeActionsByRequest[String((request && request.id) || "").trim()] || [];
+
   const getCaseStepState_ = (status, stepId, steps) => {
     const current = String(status || "").trim();
     if (!current) {
@@ -1091,6 +1136,38 @@ function FinancePage({ shared }) {
       return "active";
     }
     return "todo";
+  };
+
+  const formatCaseStepDate_ = (value) => {
+    if (!value) {
+      return "—";
+    }
+    return formatDisplayDateNoMidnight_(value) || formatDisplayDate_(value, { withTime: false }) || "—";
+  };
+
+  const getCaseStepDateLabel_ = (request, step, stepState) => {
+    if (!request || !step) {
+      return "—";
+    }
+    const actions = getFinanceActionsForRequest_(request)
+      .slice()
+      .sort((a, b) => parseRequestCreatedAtMs_({ createdAt: a.createdAt }) - parseRequestCreatedAtMs_({ createdAt: b.createdAt }));
+    const stepId = String(step.id || "").trim();
+    const completedAction = actions.find((action) => String(action.fromStatus || "").trim() === stepId && String(action.actionType || action.action || "").trim() === "approve");
+    const enteredAction = actions.find((action) => String(action.toStatus || "").trim() === stepId);
+    const closedAction = stepId === "closed" ? actions.find((action) => String(action.toStatus || "").trim() === "closed") : null;
+
+    if (stepState === "done") {
+      if (stepId === "closed") {
+        return formatCaseStepDate_(closedAction?.createdAt || request.updatedAt || request.lastChangedAt);
+      }
+      return formatCaseStepDate_(completedAction?.createdAt || enteredAction?.createdAt);
+    }
+    if (stepState === "active") {
+      const startedAt = stepId === "pending_lead" ? getRequestSubmittedAt_(request) : enteredAction?.createdAt;
+      return startedAt ? `自 ${formatCaseStepDate_(startedAt)}` : "進行中";
+    }
+    return "—";
   };
 
   const requestScenarioCounts = {
@@ -1649,10 +1726,12 @@ function FinancePage({ shared }) {
                                   : stepState === "active"
                                   ? "bg-amber-500"
                                   : "bg-slate-300";
+                              const stepDateLabel = getCaseStepDateLabel_(myLatestRequest, step, stepState);
                               return (
                                 <div key={`latest-${step.id}`} className="text-center">
                                   <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
-                                  <p className="mt-1 text-[10px] text-slate-500">{step.label}</p>
+                                  <p className="mt-1 text-[10px] font-semibold text-slate-500">{step.label}</p>
+                                  <p className="mt-0.5 truncate text-[9px] text-slate-400">{stepDateLabel}</p>
                                 </div>
                               );
                             })}
@@ -2270,10 +2349,12 @@ function FinancePage({ shared }) {
                                       : stepState === "active"
                                       ? "bg-amber-500"
                                       : "bg-slate-300";
+                                  const stepDateLabel = getCaseStepDateLabel_(item, step, stepState);
                                   return (
                                     <div key={`${item.id}-${step.id}`} className="text-center">
                                       <span className={`mx-auto block h-2 w-2 rounded-full ${badgeClass}`} />
-                                      <p className="mt-1 truncate text-[9px] text-slate-500">{step.label}</p>
+                                      <p className="mt-1 truncate text-[9px] font-semibold text-slate-500">{step.label}</p>
+                                      <p className="mt-0.5 truncate text-[9px] text-slate-400">{stepDateLabel}</p>
                                     </div>
                                   );
                                 })}
