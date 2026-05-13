@@ -1142,7 +1142,13 @@ function FinancePage({ shared }) {
     if (!value) {
       return "—";
     }
-    return formatDisplayDateNoMidnight_(value) || formatDisplayDate_(value, { withTime: false }) || "—";
+    const parsed = value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${parsed.getMonth() + 1}/${parsed.getDate()}`;
+    }
+    const fallback = formatDisplayDateNoMidnight_(value) || formatDisplayDate_(value, { withTime: false }) || "";
+    const match = String(fallback).match(/(?:\d{4}[/-])?(\d{1,2})[/-](\d{1,2})/);
+    return match ? `${Number(match[1])}/${Number(match[2])}` : fallback || "—";
   };
 
   const getCaseStepDateLabel_ = (request, step, stepState) => {
@@ -1715,7 +1721,7 @@ function FinancePage({ shared }) {
                         const steps = getCaseStepsForRequest_(myLatestRequest);
                         return (
                           <div
-                            className="mt-2 grid gap-2"
+                            className="mt-2 grid gap-1.5"
                             style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }}
                           >
                             {steps.map((step) => {
@@ -1730,8 +1736,8 @@ function FinancePage({ shared }) {
                               return (
                                 <div key={`latest-${step.id}`} className="text-center">
                                   <span className={`mx-auto block h-2.5 w-2.5 rounded-full ${badgeClass}`} />
-                                  <p className="mt-1 text-[10px] font-semibold text-slate-500">{step.label}</p>
-                                  <p className="mt-0.5 truncate text-[9px] text-slate-400">{stepDateLabel}</p>
+                                  <p className="mt-1 truncate text-[9px] font-semibold text-slate-500">{step.label}</p>
+                                  <p className="mt-0.5 truncate text-[9px] leading-none text-slate-400">{stepDateLabel}</p>
                                 </div>
                               );
                             })}
@@ -2337,7 +2343,7 @@ function FinancePage({ shared }) {
                             </div>
                             <div className="mt-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2">
                               <div
-                                className="grid gap-1.5"
+                                className="grid gap-1"
                                 style={{ gridTemplateColumns: `repeat(${caseSteps.length}, minmax(0, 1fr))` }}
                                 aria-label="Case 時間線"
                               >
@@ -2354,7 +2360,7 @@ function FinancePage({ shared }) {
                                     <div key={`${item.id}-${step.id}`} className="text-center">
                                       <span className={`mx-auto block h-2 w-2 rounded-full ${badgeClass}`} />
                                       <p className="mt-1 truncate text-[9px] font-semibold text-slate-500">{step.label}</p>
-                                      <p className="mt-0.5 truncate text-[9px] text-slate-400">{stepDateLabel}</p>
+                                      <p className="mt-0.5 truncate text-[9px] leading-none text-slate-400">{stepDateLabel}</p>
                                     </div>
                                   );
                                 })}
