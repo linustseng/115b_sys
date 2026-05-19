@@ -905,7 +905,16 @@ function SoftballPage({ shared }) {
   });
 
   useEffect(() => {
-    if (!activePracticeId && practices.length) {
+    if (!practices.length) {
+      if (activePracticeId) {
+        setActivePracticeId("");
+      }
+      return;
+    }
+    const hasSelected = practices.some(
+      (practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)
+    );
+    if (!activePracticeId || !hasSelected) {
       setActivePracticeId(normalizeId_(nextPractice ? nextPractice.id : practices[0].id));
     }
   }, [activePracticeId, nextPractice, practices]);

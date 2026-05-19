@@ -968,55 +968,60 @@ export default function AdminPage({
   }, [sortedEvents, eventListId]);
 
   useEffect(() => {
-    if (activeTab !== "ordering") {
+    if (activeTab !== "ordering" || isCreatingOrder) {
       return;
     }
-    if (isCreatingOrder) {
-      return;
-    }
-    if (!orderActiveId && orderPlans.length) {
-      setOrderActiveId(normalizeOrderId_(orderPlans[0].id));
-      return;
-    }
-    if (!orderActiveId && !orderPlans.length) {
+    if (!orderPlans.length) {
+      if (orderActiveId) {
+        setOrderActiveId("");
+      }
       setOrderForm(buildDefaultOrderForm());
+      return;
+    }
+    const hasSelected = orderPlans.some(
+      (plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId)
+    );
+    if (!orderActiveId || !hasSelected) {
+      setOrderActiveId(normalizeOrderId_(orderPlans[0].id));
     }
   }, [activeTab, orderActiveId, orderPlans, isCreatingOrder]);
 
   useEffect(() => {
-    if (activeTab !== "ordering") {
+    if (activeTab !== "ordering" || isCreatingOrder) {
       return;
     }
-    if (orderActiveId) {
-      const normalizedId = normalizeOrderId_(orderActiveId);
-      loadOrderResponses(normalizedId);
-      loadOrderAuditEvents(normalizedId);
-      setProxyOrderForm(buildDefaultProxyOrderForm());
-      const selected = orderPlans.find(
-        (plan) => normalizeOrderId_(plan.id) === normalizedId
-      );
-      if (selected) {
-        setOrderForm({
-          id: selected.id || "",
-          date: normalizeDateInput_(selected.date),
-          title: selected.title || "",
-          optionA: selected.optionA || "A 餐",
-          optionB: selected.optionB || "B 餐",
-          optionC: selected.optionC || (hasOrderVegetarianChoice_(selected) ? "C 餐" : "素食餐"),
-          optionVegetarian: selected.optionVegetarian || "",
-          optionAImage: selected.optionAImage || "",
-          optionBImage: selected.optionBImage || "",
-          optionCImage: selected.optionCImage || "",
-          optionVegetarianImage: selected.optionVegetarianImage || "",
-          cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
-          status: selected.status || "open",
-          notes: selected.notes || "",
-          revisionNo: Number(selected.revisionNo || 0) || 0,
-        });
-        loadOrderPublicLink(normalizedId, selected, { resetDraft: true });
-      }
+    const normalizedId = normalizeOrderId_(orderActiveId);
+    if (!normalizedId) {
+      return;
     }
-  }, [activeTab, orderActiveId, orderPlans]);
+    const selected = orderPlans.find(
+      (plan) => normalizeOrderId_(plan.id) === normalizedId
+    );
+    if (!selected) {
+      return;
+    }
+    loadOrderResponses(normalizedId);
+    loadOrderAuditEvents(normalizedId);
+    setProxyOrderForm(buildDefaultProxyOrderForm());
+    setOrderForm({
+      id: selected.id || "",
+      date: normalizeDateInput_(selected.date),
+      title: selected.title || "",
+      optionA: selected.optionA || "A 餐",
+      optionB: selected.optionB || "B 餐",
+      optionC: selected.optionC || (hasOrderVegetarianChoice_(selected) ? "C 餐" : "素食餐"),
+      optionVegetarian: selected.optionVegetarian || "",
+      optionAImage: selected.optionAImage || "",
+      optionBImage: selected.optionBImage || "",
+      optionCImage: selected.optionCImage || "",
+      optionVegetarianImage: selected.optionVegetarianImage || "",
+      cutoffAt: normalizeDateTimeInput_(selected.cutoffAt),
+      status: selected.status || "open",
+      notes: selected.notes || "",
+      revisionNo: Number(selected.revisionNo || 0) || 0,
+    });
+    loadOrderPublicLink(normalizedId, selected, { resetDraft: true });
+  }, [activeTab, orderActiveId, orderPlans, isCreatingOrder]);
 
   useEffect(() => {
     const handleUploadMessage = (event) => {
@@ -3391,7 +3396,7 @@ export default function AdminPage({
   const displayOrderPlans = draftOrderPlan ? [draftOrderPlan, ...orderPlans] : orderPlans;
   const activeOrderPlan = isCreatingOrder
     ? draftOrderPlan
-    : orderPlans.find((plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId));
+    : orderPlans.find((plan) => normalizeOrderId_(plan.id) === normalizeOrderId_(orderActiveId)) || null;
   const activeOrderLabel = activeOrderPlan
     ? `${formatOrderDateLabel_(activeOrderPlan.date)}${activeOrderPlan.title ? ` · ${activeOrderPlan.title}` : ""}`
     : "";

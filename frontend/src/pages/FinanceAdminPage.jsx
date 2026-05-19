@@ -1075,7 +1075,25 @@ function FinanceAdminPage({ shared }) {
   };
   const completedTypeGroups = buildFinanceTypeGroups_(completedItems);
 
-  const selectedRequest = requests.find((item) => item.id === selectedId) || null;
+  const visibleRequestItems = useMemo(
+    () => [...filteredRequests, ...inProgressItems, ...completedItems],
+    [filteredRequests, inProgressItems, completedItems]
+  );
+  const selectedRequest = visibleRequestItems.find((item) => item.id === selectedId) || null;
+
+  useEffect(() => {
+    if (!visibleRequestItems.length) {
+      if (selectedId) {
+        setSelectedId("");
+      }
+      return;
+    }
+    const hasSelected = visibleRequestItems.some((item) => item.id === selectedId);
+    if (!selectedId || !hasSelected) {
+      setSelectedId(visibleRequestItems[0].id || "");
+    }
+  }, [visibleRequestItems, selectedId]);
+
   const selectedPayeeBankName = selectedRequest
     ? String(selectedRequest.payeeBankName || selectedRequest.payeeBank || "").trim()
     : "";

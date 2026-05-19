@@ -106,7 +106,22 @@ function CheerleadingPage({ shared }) {
     () => practices.slice().sort((a, b) => getPracticeSortValue_(a).localeCompare(getPracticeSortValue_(b))),
     [practices]
   );
-  const activePractice = sortedPractices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId)) || sortedPractices[0] || null;
+  const activePractice = sortedPractices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId)) || null;
+
+  useEffect(() => {
+    if (!sortedPractices.length) {
+      if (activePracticeId) {
+        setActivePracticeId("");
+      }
+      return;
+    }
+    const hasSelected = sortedPractices.some(
+      (practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)
+    );
+    if (!activePracticeId || !hasSelected) {
+      setActivePracticeId(sortedPractices[0].id || "");
+    }
+  }, [activePracticeId, sortedPractices]);
 
   const attendanceMap = useMemo(() => {
     const map = new Map();
