@@ -6925,11 +6925,14 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Record not found" };
       }
       const updatedAt = nowIso();
+      const existingEntry = mapDrinkQueueEntryRow(existing);
+      const nextClassDate = firstText(body.nextClassDate || (body.data && body.data.nextClassDate), existingEntry.nextClassDate);
       const servedAt = status === "served" ? firstText(body.servedAt || (body.data && body.data.servedAt), updatedAt.slice(0, 10)) : "";
       const servedNote = firstText(body.servedNote || (body.data && body.data.servedNote));
       const raw = {
         ...safeJsonObject(existing.raw),
         status,
+        nextClassDate,
         servedAt,
         servedNote,
         updatedAt,
@@ -6938,9 +6941,9 @@ export async function dispatchNativeAction({
       };
       await query(
         `update drink_queue_entries
-            set status = $2, served_at = $3, served_note = $4, raw = $5::jsonb, updated_at = $6, synced_at = now()
+            set status = $2, next_class_date = $3, served_at = $4, served_note = $5, raw = $6::jsonb, updated_at = $7, synced_at = now()
           where id = $1`,
-        [id, status, servedAt, servedNote, jsonbParam(raw, {}), updatedAt]
+        [id, status, nextClassDate, servedAt, servedNote, jsonbParam(raw, {}), updatedAt]
       );
       const refreshed = rowOrNull(await query(`select * from drink_queue_entries where id = $1 limit 1`, [id]));
       return { ok: true, data: { entry: mapDrinkQueueEntryRow(refreshed) }, error: null };

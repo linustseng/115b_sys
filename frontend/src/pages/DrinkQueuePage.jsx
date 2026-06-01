@@ -60,6 +60,7 @@ function DrinkQueuePage({ shared }) {
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [editingDates, setEditingDates] = useState({});
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [form, setForm] = useState(() => ({
@@ -180,23 +181,93 @@ function DrinkQueuePage({ shared }) {
     setError("");
     setStatusMessage("");
     try {
+      const nextClassDate = normalizeText_(editingDates[entry.id] || entry.nextClassDate);
       const { result } = await apiRequest({
         action: "updateDrinkQueueEntryStatus",
         id: entry.id,
         status,
+        nextClassDate,
         servedAt: status === "served" ? getToday_() : "",
-        servedNote: status === "served" ? "已完成飲料和平協議" : "已由管理員取消本次飲料債",
+        servedNote: status === "served" ? "已完成飲料和平協議" : status === "excused" ? "已由管理員取消本次飲料債" : "",
       });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "更新失敗");
       }
-      setStatusMessage(status === "served" ? "已標記為已請客，掌聲鼓勵。" : "已標記為免罰/取消。");
+      setStatusMessage(status === "served" ? "已標記為已請客，掌聲鼓勵。" : status === "queued" ? "已還原為排隊中。" : "已標記為免罰/取消。");
       await loadBootstrap();
     } catch (err) {
       setError(String((err && err.message) || "更新失敗"));
     } finally {
       setSaving(false);
     }
+  };
+
+  const updateEntrySchedule = async (entry) => {
+    if (!entry || !entry.id) {
+      return;
+    }
+    const nextClassDate = normalizeText_(editingDates[entry.id] || entry.nextClassDate);
+    setSaving(true);
+    setError("");
+    setStatusMessage("");
+    try {
+      const status = normalizeText_(entry.status || "queued") || "queued";
+      const { result } = await apiRequest({
+        action: "updateDrinkQueueEntryStatus",
+        id: entry.id,
+        status,
+        nextClassDate,
+        servedAt: status === "served" ? normalizeText_(entry.servedAt) : "",
+        servedNote: status === "served" ? normalizeText_(entry.servedNote || "已完成飲料和平協議") : status === "excused" ? normalizeText_(entry.servedNote || "已由管理員取消本次飲料債") : "",
+      });
+      if (!result || !result.ok) {
+        throw new Error((result && result.error) || "更新請客日期失敗");
+      }
+      setStatusMessage("請客日期已更新。");
+      await loadBootstrap();
+    } catch (err) {
+      setError(String((err && err.message) || "更新請客日期失敗"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const renderManageControls = (item) => {
+    if (!canManage) {
+      return null;
+    }
+    const status = normalizeText_(item.status || "queued") || "queued";
+    const draftDate = editingDates[item.id] != null ? editingDates[item.id] : normalizeText_(item.nextClassDate);
+    return (
+      <div className="relative mt-3 space-y-2">
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-[11px] font-semibold text-slate-500">
+            請客日期
+            <input
+              type="date"
+              value={draftDate}
+              onChange={(event) => setEditingDates((prev) => ({ ...prev, [item.id]: event.target.value }))}
+              className="mt-1 block h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700"
+            />
+          </label>
+          <button type="button" disabled={saving} onClick={() => updateEntrySchedule(item)} className="h-9 rounded-full border border-orange-200 bg-white px-3 text-xs font-semibold text-orange-700 hover:border-orange-300 disabled:opacity-50">
+            更新日期
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {status !== "served" ? (
+            <button type="button" disabled={saving} onClick={() => updateStatus(item, "served")} className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">已請客</button>
+          ) : null}
+          {status !== "queued" ? (
+            <button type="button" disabled={saving} onClick={() => updateStatus(item, "queued")} className="rounded-full bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-500 disabled:opacity-50">還原排隊</button>
+          ) : null}
+          {status !== "excused" ? (
+            <button type="button" disabled={saving} onClick={() => updateStatus(item, "excused")} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-50">免罰</button>
+          ) : null}
+          <button type="button" disabled={saving} onClick={() => deleteEntry(item)} className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:opacity-50">刪除</button>
+        </div>
+      </div>
+    );
   };
 
   const deleteEntry = async (entry) => {
@@ -379,13 +450,7 @@ function DrinkQueuePage({ shared }) {
                   </div>
                   <p className="relative mt-3 text-sm text-slate-700">{item.reason}</p>
                   <p className="relative mt-2 rounded-2xl border border-orange-100 bg-white/80 px-3 py-2 text-xs font-semibold text-orange-800">「{item.pledgeText || "我請，我負責。"}」</p>
-                  {canManage ? (
-                    <div className="relative mt-3 flex flex-wrap gap-2">
-                      <button type="button" disabled={saving} onClick={() => updateStatus(item, "served")} className="rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">已請客</button>
-                      <button type="button" disabled={saving} onClick={() => updateStatus(item, "excused")} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 disabled:opacity-50">免罰</button>
-                      <button type="button" disabled={saving} onClick={() => deleteEntry(item)} className="rounded-full border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-600 hover:border-rose-300 disabled:opacity-50">刪除</button>
-                    </div>
-                  ) : null}
+                  {renderManageControls(item)}
                 </div>
               )) : (
                 <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
@@ -399,9 +464,11 @@ function DrinkQueuePage({ shared }) {
             <div className="rounded-[2rem] border border-emerald-200 bg-white/80 p-5">
               <h3 className="text-sm font-semibold text-emerald-800">已完成請客</h3>
               <div className="mt-3 space-y-2">
-                {servedEntries.slice(0, 5).map((item) => (
+                {servedEntries.slice(0, 8).map((item) => (
                   <div key={item.id} className="rounded-2xl bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-                    {item.offenderName} · {formatDate_(item.servedAt || item.nextClassDate)}
+                    <div className="font-semibold">{item.offenderName} · 請客：{formatDate_(item.nextClassDate)}</div>
+                    {item.servedAt ? <div className="mt-1 text-[11px] text-emerald-700/80">標記完成：{formatDate_(item.servedAt)}</div> : null}
+                    {renderManageControls(item)}
                   </div>
                 ))}
                 {!servedEntries.length ? <p className="text-xs text-slate-400">尚無紀錄。</p> : null}
@@ -410,9 +477,11 @@ function DrinkQueuePage({ shared }) {
             <div className="rounded-[2rem] border border-slate-200 bg-white/80 p-5">
               <h3 className="text-sm font-semibold text-slate-700">免罰/取消</h3>
               <div className="mt-3 space-y-2">
-                {excusedEntries.slice(0, 5).map((item) => (
+                {excusedEntries.slice(0, 8).map((item) => (
                   <div key={item.id} className="rounded-2xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                    {item.offenderName} · {item.servedNote || "已取消"}
+                    <div className="font-semibold">{item.offenderName} · 請客：{formatDate_(item.nextClassDate)}</div>
+                    <div className="mt-1 text-[11px] text-slate-500">{item.servedNote || "已取消"}</div>
+                    {renderManageControls(item)}
                   </div>
                 ))}
                 {!excusedEntries.length ? <p className="text-xs text-slate-400">尚無紀錄。</p> : null}
