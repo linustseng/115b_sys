@@ -2118,14 +2118,29 @@ function getLineInAppInfo_() {
   }
   const ua = navigator.userAgent || "";
   const isLineInApp = /Line/i.test(ua);
+  const isTelegramInApp = /Telegram/i.test(ua);
   const isIOS = /iPhone|iPad|iPod/i.test(ua);
   const isAndroid = /Android/i.test(ua);
   const isIOSBrowser = /Safari|CriOS|FxiOS|EdgiOS/i.test(ua);
   const isIOSInApp = isIOS && !isIOSBrowser;
-  const isInApp = isLineInApp || isIOSInApp;
+  const isInApp = isLineInApp || isTelegramInApp || isIOSInApp;
   if (!isLineInApp) {
     if (!isInApp) {
-      return { isLineInApp: false, openExternalUrl: "", currentUrl: "" };
+      return {
+        isLineInApp: false,
+        openExternalUrl: "",
+        currentUrl: "",
+        isAndroid,
+        isIOS,
+        isIOSBrowser,
+        isIOSInApp,
+        isLineApp: isLineInApp,
+        isTelegramInApp,
+        isInApp,
+        userAgent: ua,
+        platform: navigator.platform || "",
+        vendor: navigator.vendor || "",
+      };
     }
   }
   const currentUrl = window.location.href;
@@ -2139,7 +2154,21 @@ function getLineInAppInfo_() {
   } else if (isIOS) {
     openExternalUrl = `https://line.me/R/openExternal?url=${encodeURIComponent(currentUrl)}`;
   }
-  return { isLineInApp: isInApp, openExternalUrl, currentUrl, isAndroid, isIOS };
+  return {
+    isLineInApp: isInApp,
+    openExternalUrl,
+    currentUrl,
+    isAndroid,
+    isIOS,
+    isIOSBrowser,
+    isIOSInApp,
+    isLineApp: isLineInApp,
+    isTelegramInApp,
+    isInApp,
+    userAgent: ua,
+    platform: navigator.platform || "",
+    vendor: navigator.vendor || "",
+  };
 }
 
 function waitForGoogleIdentity(timeoutMs = 6000) {
@@ -2170,6 +2199,67 @@ function getGoogleIdTokenSilently_() {
   return Promise.reject(new Error("Explicit Google sign-in required"));
 }
 
+function getGoogleSigninDebugInfo_(lineInfo, status, profile, linkedStudent, emailMatch, idToken, error, buttonRef) {
+  if (typeof window === "undefined") {
+    return [];
+  }
+  const googleIdentityReady = Boolean(window.google && window.google.accounts && window.google.accounts.id);
+  const buttonNodeCount = buttonRef.current && buttonRef.current.childNodes ? buttonRef.current.childNodes.length : 0;
+  const hasStoredGoogleStudent = Boolean(loadStoredGoogleStudent_());
+  const hasStoredIdToken = Boolean(loadStoredGoogleIdToken_());
+  const hasStoredAdminSession = Boolean(loadStoredAdminSession_().token || loadStoredAdminSession_().refreshToken);
+  const reasons = [];
+
+  if (lineInfo.isInApp) {
+    reasons.push("目前被判定為內嵌/Custom Tab 環境，Google 登入可能被擋。");
+  }
+  if (!GOOGLE_CLIENT_ID) {
+    reasons.push("缺少 Google Client ID。");
+  }
+  if (!googleIdentityReady && !lineInfo.isInApp) {
+    reasons.push("Google Identity script 尚未載入或被阻擋。");
+  }
+  if (!buttonNodeCount && !lineInfo.isInApp && GOOGLE_CLIENT_ID) {
+    reasons.push("Google 按鈕尚未 render 到頁面。");
+  }
+  if (status === "idle" && !profile && !idToken) {
+    reasons.push("尚未收到 Google credential callback。");
+  }
+  if (status === "linked" && linkedStudent) {
+    reasons.push("已綁定同學資料，不需要再按開始綁定。");
+  }
+  if (error) {
+    reasons.push(`目前錯誤：${error}`);
+  }
+  if (!reasons.length) {
+    reasons.push("未偵測到明確阻擋原因，請截圖這個 debug 區塊。");
+  }
+
+  return [
+    ["status", status],
+    ["isInApp", lineInfo.isInApp ? "yes" : "no"],
+    ["isLine", lineInfo.isLineApp ? "yes" : "no"],
+    ["isTelegram", lineInfo.isTelegramInApp ? "yes" : "no"],
+    ["isIOSInApp", lineInfo.isIOSInApp ? "yes" : "no"],
+    ["isAndroid", lineInfo.isAndroid ? "yes" : "no"],
+    ["isIOS", lineInfo.isIOS ? "yes" : "no"],
+    ["platform", lineInfo.platform || "(empty)"],
+    ["vendor", lineInfo.vendor || "(empty)"],
+    ["googleScript", googleIdentityReady ? "ready" : "not ready"],
+    ["googleButtonNodes", String(buttonNodeCount)],
+    ["hasProfile", profile ? "yes" : "no"],
+    ["hasLinkedStudent", linkedStudent ? "yes" : "no"],
+    ["hasEmailMatch", emailMatch ? "yes" : "no"],
+    ["hasIdToken", idToken ? "yes" : "no"],
+    ["storedStudent", hasStoredGoogleStudent ? "yes" : "no"],
+    ["storedIdToken", hasStoredIdToken ? "yes" : "no"],
+    ["storedSession", hasStoredAdminSession ? "yes" : "no"],
+    ["currentUrl", lineInfo.currentUrl || window.location.href || ""],
+    ["userAgent", lineInfo.userAgent || navigator.userAgent || ""],
+    ["possibleReason", reasons.join(" / ")],
+  ];
+}
+
 function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const buttonRef = useRef(null);
   const onLinkedRef = useRef(onLinkedStudent);
@@ -2185,6 +2275,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   const [linkLoading, setLinkLoading] = useState(false);
   const [copyStatus, setCopyStatus] = useState("");
   const [showLineGuide, setShowLineGuide] = useState(false);
+  const [debugTick, setDebugTick] = useState(0);
   const lineInfo = getLineInAppInfo_();
   const isLineInApp = lineInfo.isLineInApp;
 
@@ -2354,6 +2445,16 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
   const resolvedTitle = title || "Google 登入";
   const resolvedHelper = helperText || "登入後可快速帶入同學資料。";
+  const debugInfo = getGoogleSigninDebugInfo_(
+    lineInfo,
+    status,
+    profile,
+    linkedStudent,
+    emailMatch,
+    idToken,
+    error,
+    buttonRef
+  );
 
   const handleCopyLink = async () => {
     if (!lineInfo.currentUrl) {
@@ -2381,7 +2482,9 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
       {isLineInApp ? (
         <div className="mt-4 alert alert-warning text-xs">
-          <p className="font-semibold">LINE 內建瀏覽器無法完成 Google 登入</p>
+          <p className="font-semibold">
+            {lineInfo.isTelegramInApp ? "Telegram 內建瀏覽器可能無法完成 Google 登入" : "內建瀏覽器可能無法完成 Google 登入"}
+          </p>
           <p className="mt-1">
             {lineInfo.isIOS
               ? "請點右上角「…」選擇用 Safari 開啟，再進行登入。"
@@ -2521,6 +2624,27 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       ) : null}
 
       {error ? <p className="mt-3 text-xs text-rose-600">{error}</p> : null}
+
+      <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-xs text-slate-600" open>
+        <summary className="cursor-pointer select-none font-semibold text-slate-800">
+          登入 Debug 資訊
+        </summary>
+        <div className="mt-3 grid gap-1 font-mono text-[11px] leading-5 text-slate-700">
+          {debugInfo.map(([label, value]) => (
+            <div key={label} className="grid grid-cols-[110px_minmax(0,1fr)] gap-2">
+              <span className="font-semibold text-slate-500">{label}</span>
+              <span className="break-all">{value}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDebugTick((prev) => prev + 1)}
+          className="mt-3 rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700"
+        >
+          重新整理 Debug {debugTick ? `(${debugTick})` : ""}
+        </button>
+      </details>
     </div>
   );
 }
