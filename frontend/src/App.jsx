@@ -2624,6 +2624,17 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
 
       {error ? <p className="mt-3 text-xs text-rose-600">{error}</p> : null}
 
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-xs text-amber-900">
+        <p className="font-semibold">如果 Google 按鈕或頁面鏈結無法點擊</p>
+        <p className="mt-1">可先重置此裝置的系統快取，再重新登入。</p>
+        <a
+          href={`${lineInfo.currentUrl ? new URL(lineInfo.currentUrl).pathname : window.location.pathname}?reset=1`}
+          className="mt-3 inline-flex rounded-full bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm shadow-amber-500/30 hover:bg-amber-500"
+        >
+          重置快取後重開
+        </a>
+      </div>
+
       <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-3 text-xs text-slate-600" open>
         <summary className="cursor-pointer select-none font-semibold text-slate-800">
           登入 Debug 資訊
@@ -3091,9 +3102,76 @@ function PageLoader({ title = "載入中..." }) {
   );
 }
 
+async function resetBrowserAppState_() {
+  try {
+    if (window.localStorage) {
+      Object.keys(window.localStorage)
+        .filter((key) => key.startsWith("emba115b.") || key.startsWith("landing_") || key.startsWith("home_"))
+        .forEach((key) => window.localStorage.removeItem(key));
+    }
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  try {
+    if (window.sessionStorage) {
+      window.sessionStorage.clear();
+    }
+  } catch (error) {
+    // Ignore storage failures.
+  }
+  try {
+    if ("caches" in window) {
+      const keys = await window.caches.keys();
+      await Promise.all(keys.map((key) => window.caches.delete(key)));
+    }
+  } catch (error) {
+    // Ignore cache failures.
+  }
+  try {
+    if ("serviceWorker" in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+  } catch (error) {
+    // Ignore service worker failures.
+  }
+}
+
 function AppShell() {
+  const [resetInProgress, setResetInProgress] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    try {
+      return new URLSearchParams(window.location.search || "").get("reset") === "1";
+    } catch (error) {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (!resetInProgress || typeof window === "undefined") {
+      return;
+    }
+    let cancelled = false;
+    resetBrowserAppState_().finally(() => {
+      if (cancelled) {
+        return;
+      }
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete("reset");
+      window.location.replace(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resetInProgress]);
+
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+    if (resetInProgress) {
       return;
     }
     const { changed, reasons } = sanitizeBrowserStoredAuthState(STORAGE_KEYS, window);
@@ -3108,7 +3186,11 @@ function AppShell() {
     } catch (error) {
       // Ignore storage failures.
     }
-  }, []);
+  }, [resetInProgress]);
+
+  if (resetInProgress) {
+    return <PageLoader title="正在重置瀏覽器快取..." />;
+  }
 
   const pathname = window.location.pathname;
   const isCheckinPage = pathname.includes("checkin");

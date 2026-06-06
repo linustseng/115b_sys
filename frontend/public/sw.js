@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v11-attendance-prep-details";
+const CACHE_VERSION = "v12-auth-reset";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const API_CACHE_TTL_MS = 60 * 1000;
