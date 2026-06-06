@@ -64,7 +64,7 @@ function OrderingPage({ shared }) {
   const [expandedPlans, setExpandedPlans] = useState({});
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
-  const [loginExpanded, setLoginExpanded] = useState(false);
+  const [loginExpanded, setLoginExpanded] = useState(() => !loadStoredGoogleStudent_());
 
   const normalizeOrderId_ = (value) => String(value || "").trim();
 

@@ -2301,7 +2301,6 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
         }
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          use_fedcm_for_prompt: true,
           callback: async (response) => {
             if (!response || !response.credential) {
               return;
