@@ -862,10 +862,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             </p>
             {birthdaySummary.current.length ? (
               <p className="mt-2 text-xs text-pink-800/90">
-                {birthdaySummary.current
-                  .slice(0, 5)
-                  .map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`)
-                  .join("、")}
+                {birthdaySummary.current.map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`).join("、")}
               </p>
             ) : null}
           </div>
@@ -878,10 +875,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             </p>
             {birthdaySummary.next.length ? (
               <p className="mt-2 text-xs text-amber-800/90">
-                {birthdaySummary.next
-                  .slice(0, 5)
-                  .map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`)
-                  .join("、")}
+                {birthdaySummary.next.map((item) => `${formatBirthdayName_(item)} ${item.month}/${item.day}`).join("、")}
               </p>
             ) : null}
           </div>
