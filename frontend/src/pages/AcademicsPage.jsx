@@ -850,6 +850,7 @@ export default function AcademicsPage({ shared }) {
       const courseTitle = String(course.title || "").trim() || "未命名課程";
       const courseStatus = course.status || getCourseStatus_(course, todayText);
       const reportRowsByKey = new Map();
+      const quizRowsByKey = new Map();
       const noteItems = Array.isArray(course.note && course.note.linkItems) ? course.note.linkItems : [];
       noteItems.forEach((item, index) => {
         rows.push({
@@ -891,17 +892,24 @@ export default function AcademicsPage({ shared }) {
           }
         }
         quizItems.forEach((text, index) => {
-          rows.push({
-            id: `quiz-${session.id}-${index}`,
-            kind: "quiz",
-            title: `小考 / 考試：${String(text || "").slice(0, 22) || "考試提醒"}`,
-            preview: text,
-            courseId: course.id,
-            courseTitle,
-            session,
-            courseStatus,
-            searchText: normalizeSearchText_([courseTitle, schedule, text, "小考 考試", getResourceKindMeta_("quiz").synonyms].join(" ")),
-          });
+          const quizText = String(text || "").trim();
+          const quizKey = getReportKey_(quizText) || `session-${session.id}-${index}`;
+          const existing = quizRowsByKey.get(quizKey);
+          if (existing) {
+            existing.searchText = normalizeSearchText_([existing.searchText, schedule].join(" "));
+          } else {
+            quizRowsByKey.set(quizKey, {
+              id: `quiz-${course.id}-${quizKey}`,
+              kind: "quiz",
+              title: `小考 / 考試：${String(quizText || "").slice(0, 22) || "考試提醒"}`,
+              preview: quizText,
+              courseId: course.id,
+              courseTitle,
+              session,
+              courseStatus,
+              searchText: normalizeSearchText_([courseTitle, schedule, quizText, "小考 考試", getResourceKindMeta_("quiz").synonyms].join(" ")),
+            });
+          }
         });
         (Array.isArray(task.attachments) ? task.attachments : []).forEach((attachment, index) => {
           const kind = normalizeResourceKind_(attachment && attachment.attachmentKind);
@@ -921,6 +929,7 @@ export default function AcademicsPage({ shared }) {
         });
       });
       reportRowsByKey.forEach((row) => rows.push(row));
+      quizRowsByKey.forEach((row) => rows.push(row));
     });
     return rows.sort((a, b) => {
       const left = `${String((a.session && a.session.sessionDate) || "")} ${a.courseTitle} ${a.title}`;
