@@ -102,6 +102,90 @@ const RESOURCE_KIND_FILTERS = [
 ];
 
 const REPORT_ATTACHMENT_KINDS = new Set(["homework_file", "homework_reference"]);
+const ACADEMICS_BOOTSTRAP_CACHE_PREFIX = "emba115b.academicsBootstrap.v1";
+const ACADEMICS_BOOTSTRAP_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function emptyAcademicsBootstrap_() {
+  return {
+    sessions: [],
+    regularSessions: [],
+    makeupTargets: [],
+    courses: [],
+    courseSessions: [],
+    courseNotes: [],
+    sessionTasks: [],
+    makeupNotes: [],
+    myRequests: [],
+    publicRequests: [],
+    summaryByTarget: [],
+    canManage: false,
+    hasMakeupDetails: false,
+  };
+}
+
+function normalizeBootstrapPayload_(data) {
+  return {
+    sessions: Array.isArray(data && data.sessions) ? data.sessions : [],
+    regularSessions: Array.isArray(data && data.regularSessions) ? data.regularSessions : [],
+    makeupTargets: Array.isArray(data && data.makeupTargets) ? data.makeupTargets : [],
+    courses: Array.isArray(data && data.courses) ? data.courses : [],
+    courseSessions: Array.isArray(data && data.courseSessions) ? data.courseSessions : [],
+    courseNotes: Array.isArray(data && data.courseNotes) ? data.courseNotes : [],
+    sessionTasks: Array.isArray(data && data.sessionTasks) ? data.sessionTasks : [],
+    makeupNotes: Array.isArray(data && data.makeupNotes) ? data.makeupNotes : [],
+    myRequests: Array.isArray(data && data.myRequests) ? data.myRequests : [],
+    publicRequests: Array.isArray(data && data.publicRequests) ? data.publicRequests : [],
+    summaryByTarget: Array.isArray(data && data.summaryByTarget) ? data.summaryByTarget : [],
+    canManage: Boolean(data && data.canManage),
+    hasMakeupDetails: Boolean(data && data.hasMakeupDetails),
+  };
+}
+
+function getAcademicsCacheKey_(student) {
+  const email = String(student && student.email ? student.email : "").trim().toLowerCase();
+  return email ? `${ACADEMICS_BOOTSTRAP_CACHE_PREFIX}:${email}` : "";
+}
+
+function readCachedAcademicsBootstrap_(student) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const key = getAcademicsCacheKey_(student);
+  if (!key) {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (!parsed || Date.now() - Number(parsed.savedAt || 0) > ACADEMICS_BOOTSTRAP_CACHE_MAX_AGE_MS) {
+      return null;
+    }
+    return normalizeBootstrapPayload_(parsed.data || {});
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeCachedAcademicsBootstrap_(student, data) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const key = getAcademicsCacheKey_(student);
+  if (!key) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(
+      key,
+      JSON.stringify({
+        savedAt: Date.now(),
+        data: normalizeBootstrapPayload_(data),
+      })
+    );
+  } catch (error) {
+    // Ignore storage quota and privacy-mode failures.
+  }
+}
 
 function getResourceKindMeta_(kind) {
   return RESOURCE_KIND_META[kind] || RESOURCE_KIND_META.other;
@@ -510,21 +594,7 @@ export default function AcademicsPage({ shared }) {
   const [resourceQuery, setResourceQuery] = useState("");
   const [expandedCourseId, setExpandedCourseId] = useState("");
   const [form, setForm] = useState(() => defaultForm());
-  const [bootstrap, setBootstrap] = useState({
-    sessions: [],
-    regularSessions: [],
-    makeupTargets: [],
-    courses: [],
-    courseSessions: [],
-    courseNotes: [],
-    sessionTasks: [],
-    makeupNotes: [],
-    myRequests: [],
-    publicRequests: [],
-    summaryByTarget: [],
-    canManage: false,
-    hasMakeupDetails: false,
-  });
+  const [bootstrap, setBootstrap] = useState(() => readCachedAcademicsBootstrap_(googleLinkedStudent) || emptyAcademicsBootstrap_());
 
   const loadBootstrap_ = async ({ includeMakeupDetails = false } = {}) => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
@@ -547,21 +617,9 @@ export default function AcademicsPage({ shared }) {
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "載入失敗");
       }
-      setBootstrap({
-        sessions: Array.isArray(result.data && result.data.sessions) ? result.data.sessions : [],
-        regularSessions: Array.isArray(result.data && result.data.regularSessions) ? result.data.regularSessions : [],
-        makeupTargets: Array.isArray(result.data && result.data.makeupTargets) ? result.data.makeupTargets : [],
-        courses: Array.isArray(result.data && result.data.courses) ? result.data.courses : [],
-        courseSessions: Array.isArray(result.data && result.data.courseSessions) ? result.data.courseSessions : [],
-        courseNotes: Array.isArray(result.data && result.data.courseNotes) ? result.data.courseNotes : [],
-        sessionTasks: Array.isArray(result.data && result.data.sessionTasks) ? result.data.sessionTasks : [],
-        makeupNotes: Array.isArray(result.data && result.data.makeupNotes) ? result.data.makeupNotes : [],
-        myRequests: Array.isArray(result.data && result.data.myRequests) ? result.data.myRequests : [],
-        publicRequests: Array.isArray(result.data && result.data.publicRequests) ? result.data.publicRequests : [],
-        summaryByTarget: Array.isArray(result.data && result.data.summaryByTarget) ? result.data.summaryByTarget : [],
-        canManage: Boolean(result.data && result.data.canManage),
-        hasMakeupDetails: Boolean(result.data && result.data.hasMakeupDetails),
-      });
+      const nextBootstrap = normalizeBootstrapPayload_(result.data || {});
+      setBootstrap(nextBootstrap);
+      writeCachedAcademicsBootstrap_(googleLinkedStudent, nextBootstrap);
     } catch (err) {
       const message = String((err && err.message) || "");
       setError(
@@ -578,22 +636,12 @@ export default function AcademicsPage({ shared }) {
 
   useEffect(() => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
-      setBootstrap({
-        sessions: [],
-        regularSessions: [],
-        makeupTargets: [],
-        courses: [],
-        courseSessions: [],
-        courseNotes: [],
-        sessionTasks: [],
-        makeupNotes: [],
-        myRequests: [],
-        publicRequests: [],
-        summaryByTarget: [],
-        canManage: false,
-        hasMakeupDetails: false,
-      });
+      setBootstrap(emptyAcademicsBootstrap_());
       return;
+    }
+    const cachedBootstrap = readCachedAcademicsBootstrap_(googleLinkedStudent);
+    if (cachedBootstrap) {
+      setBootstrap(cachedBootstrap);
     }
     loadBootstrap_({ includeMakeupDetails: false });
   }, [googleLinkedStudent && googleLinkedStudent.email]);
@@ -1041,6 +1089,12 @@ export default function AcademicsPage({ shared }) {
       }));
   }, [bootstrap.summaryByTarget, bootstrap.publicRequests, sessionsById, makeupNotesBySessionId]);
 
+  const hasBootstrapData = Boolean(
+    (bootstrap.courses && bootstrap.courses.length) ||
+      (bootstrap.regularSessions && bootstrap.regularSessions.length) ||
+      (bootstrap.sessions && bootstrap.sessions.length)
+  );
+
   if (!googleLinkedStudent || !googleLinkedStudent.email) {
     return (
       <div className="min-h-screen">
@@ -1132,7 +1186,7 @@ export default function AcademicsPage({ shared }) {
       <main className="mx-auto max-w-6xl px-6 pb-24 pt-8 sm:px-12">
         {loading ? (
           <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            載入中...
+            {hasBootstrapData ? "正在更新最新課程資料..." : "載入中..."}
           </div>
         ) : null}
         {error ? <div className="mb-4 alert alert-error">{error}</div> : null}
