@@ -397,6 +397,8 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
           const attachments = Array.isArray(session.task && session.task.attachments) ? session.task.attachments : [];
           const reportAttachments = attachments.filter((item) => isReportAttachmentKind_(item && item.attachmentKind));
           const learningAttachments = attachments.filter((item) => !isReportAttachmentKind_(item && item.attachmentKind));
+          const hasReport = Boolean(reportText || reportAttachments.length);
+          const hasQuiz = quizItems.length > 0;
           const groupedAttachments = learningAttachments.reduce((groups, item) => {
             const kind = normalizeResourceKind_(item && item.attachmentKind);
             groups[kind] = groups[kind] || [];
@@ -405,8 +407,8 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
           }, {});
           const attachmentKinds = Object.keys(groupedAttachments);
           const sessionBadges = [
-            reportText || reportAttachments.length ? ["homework", 1] : null,
-            quizItems.length ? ["quiz", quizItems.length] : null,
+            hasReport ? ["homework", 1] : null,
+            hasQuiz ? ["quiz", quizItems.length] : null,
             learningAttachments.length ? ["other", learningAttachments.length] : null,
           ].filter(Boolean);
           return (
@@ -420,41 +422,39 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
                 ) : null}
               </div>
               {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">報告</p>
-                  {reportText ? (
-                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{reportText}</p>
-                  ) : reportAttachments.length ? null : (
-                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無報告通知</p>
-                  )}
-                  {reportAttachments.length ? (
-                    <div className="mt-3 space-y-2">
-                      <p className="text-xs font-semibold text-slate-500">報告附件</p>
-                      <div className="flex flex-col gap-2">
-                        {reportAttachments.map((item, index) => (
-                          <button
-                            key={`${item.attachmentId || item.url || "report-attachment"}-${index}`}
-                            type="button"
-                            onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
-                            className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-amber-300 hover:bg-amber-50"
-                          >
-                            {item.name || item.url || "報告附件"}
-                          </button>
-                        ))}
-                      </div>
+              {hasReport || hasQuiz ? (
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  {hasReport ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">報告</p>
+                      {reportText ? <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{reportText}</p> : null}
+                      {reportAttachments.length ? (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-semibold text-slate-500">報告附件</p>
+                          <div className="flex flex-col gap-2">
+                            {reportAttachments.map((item, index) => (
+                              <button
+                                key={`${item.attachmentId || item.url || "report-attachment"}-${index}`}
+                                type="button"
+                                onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                                className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-amber-300 hover:bg-amber-50"
+                              >
+                                {item.name || item.url || "報告附件"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {hasQuiz ? (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考</p>
+                      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{quizItems.join("\n")}</p>
                     </div>
                   ) : null}
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考</p>
-                  {quizItems.length ? (
-                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{quizItems.join("\n")}</p>
-                  ) : (
-                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無小考通知</p>
-                  )}
-                </div>
-              </div>
+              ) : null}
               {attachmentKinds.length ? (
                 <div className="mt-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">學習資料</p>
