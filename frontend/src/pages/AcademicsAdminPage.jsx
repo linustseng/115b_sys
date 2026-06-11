@@ -107,6 +107,22 @@ function getAcademicAttachmentKindLabel_(value) {
   return item ? item.label : "報告題目";
 }
 
+function getCourseNextSession_(sessions, todayText) {
+  return (sessions || []).find((session) => String(session.sessionDate || "") >= todayText) || null;
+}
+
+function getCourseStatus_(course, todayText) {
+  const firstDate = String(course && course.firstSessionDate ? course.firstSessionDate : "").trim();
+  const lastDate = String(course && course.lastSessionDate ? course.lastSessionDate : "").trim();
+  if (lastDate && lastDate < todayText) {
+    return "completed";
+  }
+  if (firstDate && firstDate > todayText) {
+    return "upcoming";
+  }
+  return "active";
+}
+
 function buildMakeupNoteForm(note, sessionId = "") {
   return {
     sessionId: sessionId || (note && note.sessionId) || "",
@@ -183,6 +199,7 @@ export default function AcademicsAdminPage({ shared }) {
     students: [],
   });
   const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [courseAdminScope, setCourseAdminScope] = useState("active");
   const [courseNoteForm, setCourseNoteForm] = useState(() => buildCourseNoteForm(null, ""));
   const [sessionTaskDrafts, setSessionTaskDrafts] = useState({});
   const [selectedMakeupSessionId, setSelectedMakeupSessionId] = useState("");
@@ -266,6 +283,8 @@ export default function AcademicsAdminPage({ shared }) {
     return map;
   }, [bootstrap.sessionTasks]);
 
+  const todayText = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const courseCatalog = useMemo(() => {
     const buckets = new Map();
     (bootstrap.courses || []).forEach((course) => {
@@ -287,17 +306,43 @@ export default function AcademicsAdminPage({ shared }) {
       });
     });
     return Array.from(buckets.values())
-      .map((course) => ({
-        ...course,
-        sessions: (course.sessions || []).slice().sort((a, b) => {
+      .map((course) => {
+        const sessions = (course.sessions || []).slice().sort((a, b) => {
           const left = `${String(a.sessionDate || "")} ${String(a.startsAt || "")}`;
           const right = `${String(b.sessionDate || "")} ${String(b.startsAt || "")}`;
           return left.localeCompare(right, "zh-Hant", { numeric: true, sensitivity: "base" });
-        }),
-      }))
+        });
+        const firstSessionDate = sessions[0] ? String(sessions[0].sessionDate || "") : "";
+        const lastSessionDate = sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "";
+        const nextSession = getCourseNextSession_(sessions, todayText);
+        return {
+          ...course,
+          sessions,
+          firstSessionDate,
+          lastSessionDate,
+          nextSession,
+          status: getCourseStatus_({ firstSessionDate, lastSessionDate }, todayText),
+        };
+      })
       .filter((course) => course.sessions.length)
-      .sort((a, b) => String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
-  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionTasksBySessionId, sessionsById]);
+      .sort((a, b) => {
+        const aSort = String((a.nextSession && a.nextSession.sessionDate) || a.lastSessionDate || a.firstSessionDate || "");
+        const bSort = String((b.nextSession && b.nextSession.sessionDate) || b.lastSessionDate || b.firstSessionDate || "");
+        return aSort.localeCompare(bSort, "zh-Hant", { numeric: true, sensitivity: "base" }) || String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionTasksBySessionId, sessionsById, todayText]);
+
+  const activeCourseCatalog = useMemo(() => {
+    return courseCatalog.filter((course) => course.status !== "completed");
+  }, [courseCatalog]);
+
+  const completedCourseCatalog = useMemo(() => {
+    return courseCatalog
+      .filter((course) => course.status === "completed")
+      .sort((a, b) => String(b.lastSessionDate || "").localeCompare(String(a.lastSessionDate || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
+  }, [courseCatalog]);
+
+  const visibleCourseCatalog = courseAdminScope === "completed" ? completedCourseCatalog : activeCourseCatalog;
 
   const activeRequests = useMemo(
     () => (bootstrap.requests || []).filter((item) => String(item.status || "") !== "cancelled"),
@@ -357,17 +402,20 @@ export default function AcademicsAdminPage({ shared }) {
     });
   }, [bootstrap.requests, sessionsById, selectedTargetDate]);
 
+  const selectedCourse = useMemo(() => {
+    return courseCatalog.find((item) => item.id === selectedCourseId) || null;
+  }, [courseCatalog, selectedCourseId]);
+
   useEffect(() => {
-    if (!selectedCourseId) {
-      const firstCourseId = String(((courseCatalog || [])[0] && (courseCatalog || [])[0].id) || "");
-      if (firstCourseId) {
-        setSelectedCourseId(firstCourseId);
-        setCourseNoteForm(buildCourseNoteForm(courseNotesByCourseId.get(firstCourseId), firstCourseId));
-      }
+    const visibleIds = new Set((visibleCourseCatalog || []).map((item) => item.id));
+    if (!selectedCourseId || !visibleIds.has(selectedCourseId)) {
+      const firstCourseId = String(((visibleCourseCatalog || [])[0] && (visibleCourseCatalog || [])[0].id) || "");
+      setSelectedCourseId(firstCourseId);
+      setCourseNoteForm(buildCourseNoteForm(courseNotesByCourseId.get(firstCourseId), firstCourseId));
       return;
     }
     setCourseNoteForm(buildCourseNoteForm(courseNotesByCourseId.get(selectedCourseId), selectedCourseId));
-  }, [selectedCourseId, courseNotesByCourseId, courseCatalog]);
+  }, [selectedCourseId, courseNotesByCourseId, visibleCourseCatalog]);
 
   useEffect(() => {
       if (!selectedMakeupSessionId) {
@@ -1249,32 +1297,63 @@ export default function AcademicsAdminPage({ shared }) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
                 <h2 className="mt-2 text-xl font-semibold text-slate-900">課程共用筆記 / 各堂次報告小考</h2>
-                <p className="mt-2 text-sm text-slate-500">筆記改成課程層共用，報告與小考則分堂次儲存。</p>
+                <p className="mt-2 text-sm text-slate-500">先選課程維護共用筆記，再往下編輯各堂次報告與小考。</p>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                {[
+                  { id: "active", label: `進行中/即將（${activeCourseCatalog.length}）` },
+                  { id: "completed", label: `已結束（${completedCourseCatalog.length}）` },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setCourseAdminScope(item.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                      courseAdminScope === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
 
               <form className="mt-5 space-y-4" onSubmit={handleSaveCourseNote_}>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">選擇課程</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">課程</label>
                   <select
                     value={selectedCourseId}
                     onChange={(event) => setSelectedCourseId(event.target.value)}
                     className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
                   >
                     <option value="">請選擇課程</option>
-                    {courseCatalog.map((item) => (
+                    {visibleCourseCatalog.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.title}｜{item.sessions.length} 堂
+                        {item.title}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 {selectedCourseId ? (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                    {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || [])
-                      .map((session) => formatSessionSchedule_(session))
-                      .filter(Boolean)
-                      .join("｜") || "尚未綁定堂次"}
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-600">
+                      <span className="rounded-full bg-white px-2.5 py-1">堂數：{(selectedCourse && selectedCourse.sessions.length) || 0}</span>
+                      <span className="rounded-full bg-white px-2.5 py-1">
+                        狀態：{selectedCourse && selectedCourse.status === "completed" ? "已結束" : "進行中/即將"}
+                      </span>
+                      {selectedCourse && selectedCourse.firstSessionDate ? (
+                        <span className="rounded-full bg-white px-2.5 py-1">
+                          日期：{selectedCourse.firstSessionDate}{selectedCourse.lastSessionDate && selectedCourse.lastSessionDate !== selectedCourse.firstSessionDate ? ` - ${selectedCourse.lastSessionDate}` : ""}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-3 text-xs leading-5 text-slate-500">
+                      {((selectedCourse && selectedCourse.sessions) || [])
+                        .map((session) => formatSessionSchedule_(session))
+                        .filter(Boolean)
+                        .join("｜") || "尚未綁定堂次"}
+                    </p>
                   </div>
                 ) : null}
 
@@ -1309,13 +1388,20 @@ export default function AcademicsAdminPage({ shared }) {
                 </div>
               </form>
 
+              {!visibleCourseCatalog.length ? (
+                <div className="mt-5 alert alert-info text-xs">
+                  {courseAdminScope === "completed" ? "目前沒有已結束課程。" : "目前沒有進行中或即將開始的課程。"}
+                </div>
+              ) : null}
+
               {selectedCourseId ? (
                 <div className="mt-8 space-y-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Sessions</p>
                     <h3 className="mt-2 text-lg font-semibold text-slate-900">各堂次報告 / 小考</h3>
+                    <p className="mt-2 text-sm text-slate-500">這裡是堂次層級；同一份報告若跨多堂重複顯示，前台課程數量會依報告內容去重。</p>
                   </div>
-                  {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || []).map((session) => {
+                  {((selectedCourse && selectedCourse.sessions) || []).map((session) => {
                     const draft = sessionTaskDrafts[session.id] || buildSessionTaskForm(session.task, session.id);
                     const uploadState = sessionTaskUploadState[session.id] || { uploading: false, error: "" };
                     const selectedAttachmentKind = sessionTaskAttachmentKinds[session.id] || "homework_file";

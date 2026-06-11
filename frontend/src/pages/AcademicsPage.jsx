@@ -143,6 +143,10 @@ function getReportText_(items) {
     .join("\n");
 }
 
+function getReportKey_(text) {
+  return normalizeSearchText_(text).replace(/[，,。．.；;：:、\s]+/g, " ").trim();
+}
+
 function getCourseStatus_(course, todayText) {
   const firstDate = String(course && course.firstSessionDate ? course.firstSessionDate : "").trim();
   const lastDate = String(course && course.lastSessionDate ? course.lastSessionDate : "").trim();
@@ -273,6 +277,8 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
   const countItems = [
     ["course_note", counts.course_note || 0],
     ["homework", counts.homework || 0],
+    ["homework_file", counts.homework_file || 0],
+    ["homework_reference", counts.homework_reference || 0],
     ["past_exam", counts.past_exam || 0],
     ["answer_key", counts.answer_key || 0],
     ["quiz", counts.quiz || 0],
@@ -751,6 +757,7 @@ export default function AcademicsPage({ shared }) {
     allCourseCatalog.forEach((course) => {
       const courseTitle = String(course.title || "").trim() || "未命名課程";
       const courseStatus = course.status || getCourseStatus_(course, todayText);
+      const reportRowsByKey = new Map();
       const noteItems = Array.isArray(course.note && course.note.linkItems) ? course.note.linkItems : [];
       noteItems.forEach((item, index) => {
         rows.push({
@@ -773,17 +780,23 @@ export default function AcademicsPage({ shared }) {
         const quizItems = Array.isArray(task.quizItems) ? task.quizItems : [];
         const reportText = getReportText_(homeworkItems);
         if (reportText) {
-          rows.push({
-            id: `homework-${session.id}`,
-            kind: "homework",
-            title: `報告：${String(reportText || "").slice(0, 24) || "提醒"}`,
-            preview: reportText,
-            courseId: course.id,
-            courseTitle,
-            session,
-            courseStatus,
-            searchText: normalizeSearchText_([courseTitle, schedule, reportText, "報告", getResourceKindMeta_("homework").synonyms].join(" ")),
-          });
+          const reportKey = getReportKey_(reportText) || `session-${session.id}`;
+          const existing = reportRowsByKey.get(reportKey);
+          if (existing) {
+            existing.searchText = normalizeSearchText_([existing.searchText, schedule].join(" "));
+          } else {
+            reportRowsByKey.set(reportKey, {
+              id: `homework-${course.id}-${reportKey}`,
+              kind: "homework",
+              title: `報告：${String(reportText || "").slice(0, 24) || "提醒"}`,
+              preview: reportText,
+              courseId: course.id,
+              courseTitle,
+              session,
+              courseStatus,
+              searchText: normalizeSearchText_([courseTitle, schedule, reportText, "報告", getResourceKindMeta_("homework").synonyms].join(" ")),
+            });
+          }
         }
         quizItems.forEach((text, index) => {
           rows.push({
@@ -815,6 +828,7 @@ export default function AcademicsPage({ shared }) {
           });
         });
       });
+      reportRowsByKey.forEach((row) => rows.push(row));
     });
     return rows.sort((a, b) => {
       const left = `${String((a.session && a.session.sessionDate) || "")} ${a.courseTitle} ${a.title}`;
