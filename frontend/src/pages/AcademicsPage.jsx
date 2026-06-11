@@ -523,16 +523,19 @@ export default function AcademicsPage({ shared }) {
     publicRequests: [],
     summaryByTarget: [],
     canManage: false,
+    hasMakeupDetails: false,
   });
 
-  const loadBootstrap_ = async () => {
+  const loadBootstrap_ = async ({ includeMakeupDetails = false } = {}) => {
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({ action: "listAcademicsBootstrap" });
+      const { result } = await apiRequest({
+        action: includeMakeupDetails ? "listAcademicsBootstrap" : "listAcademicsCourseBootstrap",
+      });
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "載入失敗");
       }
@@ -549,6 +552,7 @@ export default function AcademicsPage({ shared }) {
         publicRequests: Array.isArray(result.data && result.data.publicRequests) ? result.data.publicRequests : [],
         summaryByTarget: Array.isArray(result.data && result.data.summaryByTarget) ? result.data.summaryByTarget : [],
         canManage: Boolean(result.data && result.data.canManage),
+        hasMakeupDetails: Boolean(result.data && result.data.hasMakeupDetails),
       });
     } catch (err) {
       const message = String((err && err.message) || "");
@@ -579,11 +583,18 @@ export default function AcademicsPage({ shared }) {
         publicRequests: [],
         summaryByTarget: [],
         canManage: false,
+        hasMakeupDetails: false,
       });
       return;
     }
-    loadBootstrap_();
+    loadBootstrap_({ includeMakeupDetails: false });
   }, [googleLinkedStudent && googleLinkedStudent.email]);
+
+  useEffect(() => {
+    if (activeTab === "makeup" && googleLinkedStudent && googleLinkedStudent.email && !bootstrap.hasMakeupDetails && !loading) {
+      loadBootstrap_({ includeMakeupDetails: true });
+    }
+  }, [activeTab, bootstrap.hasMakeupDetails, googleLinkedStudent && googleLinkedStudent.email, loading]);
 
   const regularSessions = useMemo(() => {
     return (bootstrap.regularSessions || []).slice().sort((a, b) => {
@@ -913,6 +924,13 @@ export default function AcademicsPage({ shared }) {
     }
   };
 
+  const handleTabChange_ = (tabId) => {
+    setActiveTab(tabId);
+    if (tabId === "makeup" && !bootstrap.hasMakeupDetails && !loading) {
+      loadBootstrap_({ includeMakeupDetails: true });
+    }
+  };
+
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSubmitMakeup_ = async (event) => {
@@ -938,7 +956,7 @@ export default function AcademicsPage({ shared }) {
       }
       setForm(defaultForm());
       setStatus("補課登記已送出，可在下方自行撤銷。" );
-      await loadBootstrap_({ allowRetry: false });
+      await loadBootstrap_({ includeMakeupDetails: true });
     } catch (err) {
       setError(String((err && err.message) || "送出失敗"));
     }
@@ -959,7 +977,7 @@ export default function AcademicsPage({ shared }) {
         throw new Error((result && result.error) || "撤銷失敗");
       }
       setStatus("補課登記已撤銷。");
-      await loadBootstrap_({ allowRetry: false });
+      await loadBootstrap_({ includeMakeupDetails: true });
     } catch (err) {
       setError(String((err && err.message) || "撤銷失敗"));
     }
@@ -1122,7 +1140,7 @@ export default function AcademicsPage({ shared }) {
               <button
                 key={item.id}
                 type="button"
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => handleTabChange_(item.id)}
                 className={`rounded-xl px-4 py-2 text-sm font-semibold ${
                   activeTab === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
                 }`}

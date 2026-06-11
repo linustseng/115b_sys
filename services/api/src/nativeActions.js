@@ -3430,6 +3430,51 @@ export async function dispatchNativeAction({
       return { ok: true, data: { months, currentMonth, nextMonth }, error: null };
     }
 
+    case "listAcademicsCourseBootstrap": {
+      requireAuth();
+      await ensureAcademicSessionsFresh_(query, withTransaction);
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
+      const fromDate = addDaysDateText_(todayDateText_(), -120);
+      const toDate = addDaysDateText_(todayDateText_(), 210);
+
+      const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
+      const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 20 });
+      const sessionsById = new Map();
+      persistedSessions.forEach((item) => sessionsById.set(item.id, item));
+      generatedTargets.forEach((item) => {
+        if (!sessionsById.has(item.id)) {
+          sessionsById.set(item.id, item);
+        }
+      });
+      const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: false });
+      const sessions = Array.from(sessionsById.values()).sort((left, right) => {
+        const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.id)}`;
+        const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
+        return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+
+      return {
+        ok: true,
+        data: {
+          sessions,
+          regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
+          makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
+          courses: courseLayer.courses,
+          courseSessions: courseLayer.courseSessions,
+          courseNotes: courseLayer.courseNotes,
+          sessionTasks: courseLayer.sessionTasks,
+          makeupNotes: courseLayer.makeupNotes,
+          myRequests: [],
+          publicRequests: [],
+          summaryByTarget: [],
+          canManage,
+          hasMakeupDetails: false,
+        },
+        error: null,
+      };
+    }
+
     case "listAcademicsBootstrap": {
       requireAuth();
       await ensureAcademicSessionsFresh_(query, withTransaction);
@@ -3504,6 +3549,7 @@ export async function dispatchNativeAction({
           publicRequests,
           summaryByTarget,
           canManage,
+          hasMakeupDetails: true,
         },
         error: null,
       };
