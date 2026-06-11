@@ -9,7 +9,7 @@ import { query, withTransaction } from "./db.js";
 import { jsonbParam } from "./jsonb.js";
 import { createSessionToken, createRefreshToken, verifyRefreshToken, verifySessionToken } from "./auth/session.js";
 import { verifyGoogleIdToken } from "./auth/google.js";
-import { dispatchNativeAction, runAcademicAutoSync } from "./nativeActions.js";
+import { dispatchNativeAction, refreshAcademicCourseBootstrapSnapshot, runAcademicAutoSync } from "./nativeActions.js";
 import {
   isAllowedAttachmentMime,
   isAttachmentStorageConfigured,
@@ -44,6 +44,10 @@ async function runAcademicAutoSyncTask_(reason = "interval") {
       console.log(`[academics] auto-sync completed (${reason}), imported ${Number(result.count || 0)} sessions`);
     } else if (reason === "startup") {
       console.log("[academics] auto-sync check completed (already fresh)");
+    }
+    await refreshAcademicCourseBootstrapSnapshot({ query, withTransaction });
+    if (reason === "startup") {
+      console.log("[academics] student course snapshot ready");
     }
   } catch (error) {
     console.error(`[academics] auto-sync failed (${reason}):`, (error && error.message) || error);

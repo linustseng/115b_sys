@@ -21,6 +21,9 @@ import { applyVersionedMutation } from "./versioning.js";
 
 const DEFAULT_115B_CALENDAR_ICS_URL =
   "https://calendar.google.com/calendar/ical/d07db9571997a7592737ae50fc3062ab8a1105d0e3b794ded9672b1e6cd0502a%40group.calendar.google.com/public/basic.ics";
+const ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_ID = "student-course-bootstrap";
+const ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_SCOPE = "academics:student-course-bootstrap";
+const ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function getAcademicsIcsUrl_() {
   return firstText(process.env.ACADEMICS_ICS_URL || "", DEFAULT_115B_CALENDAR_ICS_URL);
@@ -1070,6 +1073,10 @@ async function ensureGeneratedMakeupTargetSession_(query, sessionId) {
   return rowOrNull(result);
 }
 
+async function invalidateAcademicsCourseBootstrapSnapshot_(query) {
+  await query(`delete from academic_snapshots where id = $1`, [ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_ID]);
+}
+
 async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
   const url = firstText(icsUrl);
   if (!url) {
@@ -1084,6 +1091,7 @@ async function syncAcademicSessionsFromIcs_(query, withTransaction, icsUrl) {
     for (const item of sessions) {
       await upsertAcademicSession_(client.query.bind(client), item);
     }
+    await invalidateAcademicsCourseBootstrapSnapshot_(client.query.bind(client));
   });
   return { configured: true, didSync: true, count: sessions.length };
 }
@@ -1228,6 +1236,13 @@ export async function runAcademicAutoSync({ query, withTransaction, force = fals
     throw new Error("runAcademicAutoSync requires query and withTransaction functions");
   }
   return ensureAcademicSessionsFresh_(query, withTransaction, { force: Boolean(force) });
+}
+
+export async function refreshAcademicCourseBootstrapSnapshot({ query, withTransaction } = {}) {
+  if (typeof query !== "function" || typeof withTransaction !== "function") {
+    throw new Error("refreshAcademicCourseBootstrapSnapshot requires query and withTransaction functions");
+  }
+  return buildAcademicsCourseBootstrapSnapshot_(query, withTransaction);
 }
 
 function sessionNoteToDbRow_(input, actor = null) {
@@ -1673,6 +1688,101 @@ async function loadAcademicCourseLayer_(query, sessions = [], { includeDraftMake
     : `select n.*, s.class_kind from session_notes n join academic_sessions s on s.id = n.session_id where coalesce(s.class_kind,'') = 'makeup_target' and coalesce(n.status,'draft') = 'published' order by coalesce(n.published_at,'' ) desc, coalesce(n.updated_at,'' ) desc, n.id desc`;
   const makeupNotes = (await query(makeupNotesQuery)).rows.map((row) => mapSessionNoteRow(row));
   return { courses, courseSessions, courseNotes, sessionTasks, makeupNotes };
+}
+
+function normalizeAcademicsCourseBootstrapSnapshot_(data) {
+  return {
+    sessions: Array.isArray(data && data.sessions) ? data.sessions : [],
+    regularSessions: Array.isArray(data && data.regularSessions) ? data.regularSessions : [],
+    makeupTargets: Array.isArray(data && data.makeupTargets) ? data.makeupTargets : [],
+    courses: Array.isArray(data && data.courses) ? data.courses : [],
+    courseSessions: Array.isArray(data && data.courseSessions) ? data.courseSessions : [],
+    courseNotes: Array.isArray(data && data.courseNotes) ? data.courseNotes : [],
+    sessionTasks: Array.isArray(data && data.sessionTasks) ? data.sessionTasks : [],
+    makeupNotes: Array.isArray(data && data.makeupNotes) ? data.makeupNotes : [],
+    myRequests: [],
+    publicRequests: [],
+    summaryByTarget: [],
+    hasMakeupDetails: false,
+  };
+}
+
+async function readAcademicsCourseBootstrapSnapshot_(query, { allowStale = true } = {}) {
+  const row = rowOrNull(
+    await query(`select * from academic_snapshots where id = $1 limit 1`, [ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_ID])
+  );
+  if (!row) {
+    return null;
+  }
+  const time = row.synced_at ? new Date(row.synced_at).getTime() : 0;
+  if (!allowStale && (!Number.isFinite(time) || Date.now() - time > ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_MAX_AGE_MS)) {
+    return null;
+  }
+  return normalizeAcademicsCourseBootstrapSnapshot_(row.data || {});
+}
+
+async function writeAcademicsCourseBootstrapSnapshot_(query, data) {
+  const normalized = normalizeAcademicsCourseBootstrapSnapshot_(data);
+  const builtAt = nowIso();
+  await query(
+    `insert into academic_snapshots (id, scope, data, built_at, raw, synced_at)
+     values ($1,$2,$3::jsonb,$4,$5::jsonb,now())
+     on conflict (id) do update set
+       scope = excluded.scope,
+       data = excluded.data,
+       built_at = excluded.built_at,
+       raw = excluded.raw,
+       synced_at = now()`,
+    [
+      ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_ID,
+      ACADEMICS_COURSE_BOOTSTRAP_SNAPSHOT_SCOPE,
+      jsonbParam(normalized, {}),
+      builtAt,
+      jsonbParam({ builtAt, version: 1 }, {}),
+    ]
+  );
+  return normalized;
+}
+
+async function buildAcademicsCourseBootstrapSnapshot_(query, withTransaction) {
+  await ensureAcademicSessionsFresh_(query, withTransaction);
+  const fromDate = addDaysDateText_(todayDateText_(), -120);
+  const toDate = addDaysDateText_(todayDateText_(), 210);
+
+  const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
+  const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 20 });
+  const sessionsById = new Map();
+  persistedSessions.forEach((item) => sessionsById.set(item.id, item));
+  generatedTargets.forEach((item) => {
+    if (!sessionsById.has(item.id)) {
+      sessionsById.set(item.id, item);
+    }
+  });
+  const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: false });
+  const sessions = Array.from(sessionsById.values()).sort((left, right) => {
+    const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.id)}`;
+    const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
+    return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
+  });
+
+  return writeAcademicsCourseBootstrapSnapshot_(query, {
+    sessions,
+    regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
+    makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
+    courses: courseLayer.courses,
+    courseSessions: courseLayer.courseSessions,
+    courseNotes: courseLayer.courseNotes,
+    sessionTasks: courseLayer.sessionTasks,
+    makeupNotes: courseLayer.makeupNotes,
+  });
+}
+
+async function loadAcademicsCourseBootstrapSnapshot_(query, withTransaction) {
+  const cached = await readAcademicsCourseBootstrapSnapshot_(query, { allowStale: false });
+  if (cached) {
+    return cached;
+  }
+  return buildAcademicsCourseBootstrapSnapshot_(query, withTransaction);
 }
 
 function makeupRequestToDbRow_(input, actor) {
@@ -3449,44 +3559,15 @@ export async function dispatchNativeAction({
 
     case "listAcademicsCourseBootstrap": {
       requireAuth();
-      await ensureAcademicSessionsFresh_(query, withTransaction);
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
-      const fromDate = addDaysDateText_(todayDateText_(), -120);
-      const toDate = addDaysDateText_(todayDateText_(), 210);
-
-      const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
-      const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 20 });
-      const sessionsById = new Map();
-      persistedSessions.forEach((item) => sessionsById.set(item.id, item));
-      generatedTargets.forEach((item) => {
-        if (!sessionsById.has(item.id)) {
-          sessionsById.set(item.id, item);
-        }
-      });
-      const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: false });
-      const sessions = Array.from(sessionsById.values()).sort((left, right) => {
-        const a = `${firstText(left.sessionDate)} ${firstText(left.startsAt)} ${firstText(left.id)}`;
-        const b = `${firstText(right.sessionDate)} ${firstText(right.startsAt)} ${firstText(right.id)}`;
-        return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
-      });
+      const snapshot = await loadAcademicsCourseBootstrapSnapshot_(query, withTransaction);
 
       return {
         ok: true,
         data: {
-          sessions,
-          regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
-          makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
-          courses: courseLayer.courses,
-          courseSessions: courseLayer.courseSessions,
-          courseNotes: courseLayer.courseNotes,
-          sessionTasks: courseLayer.sessionTasks,
-          makeupNotes: courseLayer.makeupNotes,
-          myRequests: [],
-          publicRequests: [],
-          summaryByTarget: [],
+          ...snapshot,
           canManage,
-          hasMakeupDetails: false,
         },
         error: null,
       };
@@ -3494,22 +3575,13 @@ export async function dispatchNativeAction({
 
     case "listAcademicsBootstrap": {
       requireAuth();
-      await ensureAcademicSessionsFresh_(query, withTransaction);
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const canManage = canAccessByGroups(memberships, ACADEMICS_ALLOWED_GROUPS);
-      const fromDate = addDaysDateText_(todayDateText_(), -120);
-      const toDate = addDaysDateText_(todayDateText_(), 210);
-
-      const persistedSessions = await loadAcademicSessionsInRange_(query, { fromDate, toDate });
-      const generatedTargets = buildGeneratedThursdaySessions({ fromDateText: todayDateText_(), weeks: 20 });
+      const snapshot = await loadAcademicsCourseBootstrapSnapshot_(query, withTransaction);
       const sessionsById = new Map();
-      persistedSessions.forEach((item) => sessionsById.set(item.id, item));
-      generatedTargets.forEach((item) => {
-        if (!sessionsById.has(item.id)) {
-          sessionsById.set(item.id, item);
-        }
+      (snapshot.sessions || []).forEach((item) => {
+        sessionsById.set(item.id, item);
       });
-      const courseLayer = await loadAcademicCourseLayer_(query, Array.from(sessionsById.values()), { includeDraftMakeupNotes: false });
 
       const myRequestResult = await query(
         `select r.*, d.name_zh as canonical_name_zh, d.preferred_name as canonical_preferred_name
@@ -3554,14 +3626,8 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
+          ...snapshot,
           sessions,
-          regularSessions: normalizeRegularSessionsByDayCourse_(sessions),
-          makeupTargets: sessions.filter((item) => item.classKind === "makeup_target"),
-          courses: courseLayer.courses,
-          courseSessions: courseLayer.courseSessions,
-          courseNotes: courseLayer.courseNotes,
-          sessionTasks: courseLayer.sessionTasks,
-          makeupNotes: courseLayer.makeupNotes,
           myRequests,
           publicRequests,
           summaryByTarget,
@@ -3972,6 +4038,7 @@ export async function dispatchNativeAction({
            synced_at = now()`,
         [row.id, row.courseId, row.title, row.summary, row.linkUrl, row.linkLabel, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
       );
+      await invalidateAcademicsCourseBootstrapSnapshot_(query);
       const refreshed = rowOrNull(await query(`select * from academic_course_notes where course_id = $1 limit 1`, [courseId]));
       return { ok: true, data: { note: mapAcademicCourseNoteRow_(refreshed) }, error: null };
     }
@@ -4019,6 +4086,7 @@ export async function dispatchNativeAction({
            synced_at = now()`,
         [row.id, row.sessionId, row.homeworkNotice, row.quizNotice, row.updatedBy, row.updatedByName, row.updatedAt, jsonbParam(row.raw, {})]
       );
+      await invalidateAcademicsCourseBootstrapSnapshot_(query);
       const refreshed = rowOrNull(await query(`select * from academic_session_tasks where session_id = $1 limit 1`, [sessionId]));
       const mappedTask = mapAcademicSessionTaskRow_(refreshed);
       mappedTask.attachments = await hydrateAttachmentItems(query, mappedTask.attachments);
@@ -4086,6 +4154,7 @@ export async function dispatchNativeAction({
           jsonbParam(row.raw, {}),
         ]
       );
+      await invalidateAcademicsCourseBootstrapSnapshot_(query);
       const refreshed = rowOrNull(await query(`select * from session_notes where session_id = $1 limit 1`, [sessionId]));
       return { ok: true, data: { note: mapSessionNoteRow(refreshed) }, error: null };
     }
