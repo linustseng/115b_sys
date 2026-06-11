@@ -81,10 +81,10 @@ function normalizeMakeupReminder_(note) {
 
 const RESOURCE_KIND_META = {
   course_note: { label: "課程筆記", tone: "emerald", synonyms: "筆記 note notebooklm summary 摘要" },
-  homework: { label: "作業 / 報告", tone: "amber", synonyms: "作業 報告 homework hw assignment report 題目 繳交" },
+  homework: { label: "報告", tone: "amber", synonyms: "報告 report 題目 繳交" },
   quiz: { label: "小考 / 考試", tone: "rose", synonyms: "小考 考試 quiz exam 期中 期末 範圍" },
-  homework_file: { label: "作業 / 報告題目", tone: "amber", synonyms: "作業 報告 homework hw assignment report 題目 檔案" },
-  homework_reference: { label: "作業 / 報告參考", tone: "sky", synonyms: "作業 報告 作業參考 補充 reference solution 解答" },
+  homework_file: { label: "報告題目", tone: "amber", synonyms: "報告 report 題目 檔案" },
+  homework_reference: { label: "報告參考", tone: "sky", synonyms: "報告 補充 reference solution 解答" },
   past_exam: { label: "考古題", tone: "violet", synonyms: "考古題 past exam old exam 歷屆 試題 期中 期末" },
   answer_key: { label: "參考答案", tone: "emerald", synonyms: "答案 解答 answer key solution reference 參考答案" },
   handout: { label: "講義", tone: "slate", synonyms: "講義 handout 教材 補充資料 slides" },
@@ -93,7 +93,7 @@ const RESOURCE_KIND_META = {
 
 const RESOURCE_KIND_FILTERS = [
   { id: "all", label: "全部" },
-  { id: "homework", label: "作業/報告" },
+  { id: "homework", label: "報告" },
   { id: "past_exam", label: "考古題" },
   { id: "answer_key", label: "參考答案" },
   { id: "quiz", label: "小考/考試" },
@@ -134,6 +134,13 @@ function normalizeResourceKind_(value) {
 
 function normalizeSearchText_(value) {
   return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function getReportText_(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 function getCourseStatus_(course, todayText) {
@@ -265,7 +272,7 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
   const counts = (resourceCountsByCourseId && resourceCountsByCourseId.get(unit.id)) || {};
   const countItems = [
     ["course_note", counts.course_note || 0],
-    ["homework", (counts.homework || 0) + (counts.homework_file || 0)],
+    ["homework", counts.homework || 0],
     ["past_exam", counts.past_exam || 0],
     ["answer_key", counts.answer_key || 0],
     ["quiz", counts.quiz || 0],
@@ -373,6 +380,7 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
       {expanded ? <div className="mt-4 grid gap-3">
         {(unit.sessions || []).map((session) => {
           const homeworkItems = Array.isArray(session.task && session.task.homeworkItems) ? session.task.homeworkItems : [];
+          const reportText = getReportText_(homeworkItems);
           const quizItems = Array.isArray(session.task && session.task.quizItems) ? session.task.quizItems : [];
           const attachments = Array.isArray(session.task && session.task.attachments) ? session.task.attachments : [];
           const groupedAttachments = attachments.reduce((groups, item) => {
@@ -383,7 +391,7 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
           }, {});
           const attachmentKinds = Object.keys(groupedAttachments);
           const sessionBadges = [
-            homeworkItems.length ? ["homework", homeworkItems.length] : null,
+            reportText ? ["homework", 1] : null,
             quizItems.length ? ["quiz", quizItems.length] : null,
             attachments.length ? ["other", attachments.length] : null,
           ].filter(Boolean);
@@ -400,11 +408,11 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
               {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業 / 報告</p>
-                  {homeworkItems.length ? (
-                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{homeworkItems.join("\n")}</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">報告</p>
+                  {reportText ? (
+                    <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{reportText}</p>
                   ) : (
-                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無作業 / 報告通知</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無報告通知</p>
                   )}
                 </div>
                 <div>
@@ -763,19 +771,20 @@ export default function AcademicsPage({ shared }) {
         const task = session.task || {};
         const homeworkItems = Array.isArray(task.homeworkItems) ? task.homeworkItems : [];
         const quizItems = Array.isArray(task.quizItems) ? task.quizItems : [];
-        homeworkItems.forEach((text, index) => {
+        const reportText = getReportText_(homeworkItems);
+        if (reportText) {
           rows.push({
-            id: `homework-${session.id}-${index}`,
+            id: `homework-${session.id}`,
             kind: "homework",
-            title: `作業 / 報告：${String(text || "").slice(0, 24) || "提醒"}`,
-            preview: text,
+            title: `報告：${String(reportText || "").slice(0, 24) || "提醒"}`,
+            preview: reportText,
             courseId: course.id,
             courseTitle,
             session,
             courseStatus,
-            searchText: normalizeSearchText_([courseTitle, schedule, text, "作業 報告", getResourceKindMeta_("homework").synonyms].join(" ")),
+            searchText: normalizeSearchText_([courseTitle, schedule, reportText, "報告", getResourceKindMeta_("homework").synonyms].join(" ")),
           });
-        });
+        }
         quizItems.forEach((text, index) => {
           rows.push({
             id: `quiz-${session.id}-${index}`,
@@ -1306,7 +1315,7 @@ export default function AcademicsPage({ shared }) {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500">Resources</p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">找作業 / 報告 / 考古題</h2>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">找報告 / 考古題 / 參考答案</h2>
                 <p className="mt-2 text-sm text-slate-500">直接搜尋資料內容，不用先猜是哪一天上課。</p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -1318,7 +1327,7 @@ export default function AcademicsPage({ shared }) {
               <input
                 value={resourceQuery}
                 onChange={(event) => setResourceQuery(event.target.value)}
-                placeholder="搜尋課名、檔名、作業、報告、考古題、答案、期中、quiz..."
+                placeholder="搜尋課名、檔名、報告、考古題、答案、期中、quiz..."
                 className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
               />
 

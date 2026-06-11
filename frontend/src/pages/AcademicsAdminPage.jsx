@@ -94,8 +94,8 @@ function buildSessionTaskForm(task, sessionId = "") {
 }
 
 const ACADEMIC_ATTACHMENT_KIND_OPTIONS = [
-  { id: "homework_file", label: "作業題目" },
-  { id: "homework_reference", label: "作業參考" },
+  { id: "homework_file", label: "報告題目" },
+  { id: "homework_reference", label: "報告參考" },
   { id: "past_exam", label: "考古題" },
   { id: "answer_key", label: "參考答案" },
   { id: "handout", label: "講義" },
@@ -104,7 +104,7 @@ const ACADEMIC_ATTACHMENT_KIND_OPTIONS = [
 
 function getAcademicAttachmentKindLabel_(value) {
   const item = ACADEMIC_ATTACHMENT_KIND_OPTIONS.find((candidate) => candidate.id === value);
-  return item ? item.label : "作業題目";
+  return item ? item.label : "報告題目";
 }
 
 function buildMakeupNoteForm(note, sessionId = "") {
@@ -625,7 +625,7 @@ export default function AcademicsAdminPage({ shared }) {
     }));
   };
 
-  const handleSaveSessionTask_ = async (sessionId, extraPatch = {}, successMessage = "堂次作業 / 小考已儲存。") => {
+  const handleSaveSessionTask_ = async (sessionId, extraPatch = {}, successMessage = "堂次報告 / 小考已儲存。") => {
     const draft = {
       ...(sessionTaskDrafts[sessionId] || buildSessionTaskForm(null, sessionId)),
       ...(extraPatch && typeof extraPatch === "object" ? extraPatch : {}),
@@ -753,7 +753,7 @@ export default function AcademicsAdminPage({ shared }) {
           attachments: nextAttachments,
         },
       }));
-      await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "作業檔案已上傳。");
+      await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "報告檔案已上傳。");
       setSessionTaskUploadState((prev) => ({
         ...prev,
         [sessionId]: { uploading: false, error: "" },
@@ -779,7 +779,7 @@ export default function AcademicsAdminPage({ shared }) {
         attachments: nextAttachments,
       },
     }));
-    await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "作業檔案已移除。");
+    await handleSaveSessionTask_(sessionId, { ...currentDraft, attachments: nextAttachments }, "報告檔案已移除。");
   };
 
   const handleSaveMakeupNote_ = async (event) => {
@@ -1248,8 +1248,8 @@ export default function AcademicsAdminPage({ shared }) {
             <section className="card p-6 sm:p-7">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">課程共用筆記 / 各堂次作業小考</h2>
-                <p className="mt-2 text-sm text-slate-500">筆記改成課程層共用，作業與小考則分堂次儲存。</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">課程共用筆記 / 各堂次報告小考</h2>
+                <p className="mt-2 text-sm text-slate-500">筆記改成課程層共用，報告與小考則分堂次儲存。</p>
               </div>
 
               <form className="mt-5 space-y-4" onSubmit={handleSaveCourseNote_}>
@@ -1313,7 +1313,7 @@ export default function AcademicsAdminPage({ shared }) {
                 <div className="mt-8 space-y-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">Sessions</p>
-                    <h3 className="mt-2 text-lg font-semibold text-slate-900">各堂次作業 / 小考</h3>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">各堂次報告 / 小考</h3>
                   </div>
                   {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || []).map((session) => {
                     const draft = sessionTaskDrafts[session.id] || buildSessionTaskForm(session.task, session.id);
@@ -1337,12 +1337,12 @@ export default function AcademicsAdminPage({ shared }) {
 
                         <div className="mt-4 grid gap-4 lg:grid-cols-2">
                           <div>
-                            <label className="mb-2 block text-sm font-medium text-slate-700">作業</label>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">報告</label>
                             <textarea
                               value={draft.homeworkNotice}
                               onChange={(event) => updateSessionTaskDraft_(session.id, { homeworkNotice: event.target.value })}
                               rows={4}
-                              placeholder={"每行一筆\n例如：下週前提交個案分析"}
+                              placeholder={"可分行補充說明，同一堂次會視為 1 份報告\n例如：下週前提交個案分析"}
                               className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-slate-400"
                             />
                           </div>
@@ -1362,7 +1362,7 @@ export default function AcademicsAdminPage({ shared }) {
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
                               <p className="text-sm font-medium text-slate-800">學習資料檔案</p>
-                              <p className="mt-1 text-xs text-slate-500">可上傳作業題目、考古題、參考答案、講義等，會依類型顯示在同學課程頁與找資料。</p>
+                              <p className="mt-1 text-xs text-slate-500">可上傳報告題目、考古題、參考答案、講義等，會依類型顯示在同學課程頁與找資料。</p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <select
