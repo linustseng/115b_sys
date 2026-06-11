@@ -533,9 +533,17 @@ export default function AcademicsPage({ shared }) {
     setLoading(true);
     setError("");
     try {
-      const { result } = await apiRequest({
-        action: includeMakeupDetails ? "listAcademicsBootstrap" : "listAcademicsCourseBootstrap",
-      });
+      const requestedAction = includeMakeupDetails ? "listAcademicsBootstrap" : "listAcademicsCourseBootstrap";
+      let { result } = await apiRequest({ action: requestedAction });
+      if (
+        requestedAction === "listAcademicsCourseBootstrap" &&
+        result &&
+        !result.ok &&
+        String(result.error || "").includes("Unsupported action")
+      ) {
+        const fallbackResponse = await apiRequest({ action: "listAcademicsBootstrap" });
+        result = fallbackResponse.result;
+      }
       if (!result || !result.ok) {
         throw new Error((result && result.error) || "載入失敗");
       }
