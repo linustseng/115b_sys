@@ -83,8 +83,8 @@ const RESOURCE_KIND_META = {
   course_note: { label: "課程筆記", tone: "emerald", synonyms: "筆記 note notebooklm summary 摘要" },
   homework: { label: "報告", tone: "amber", synonyms: "報告 report 題目 繳交" },
   quiz: { label: "小考 / 考試", tone: "rose", synonyms: "小考 考試 quiz exam 期中 期末 範圍" },
-  homework_file: { label: "報告題目", tone: "amber", synonyms: "報告 report 題目 檔案" },
-  homework_reference: { label: "報告參考", tone: "sky", synonyms: "報告 補充 reference solution 解答" },
+  homework_file: { label: "報告", tone: "amber", synonyms: "報告 report 題目 檔案" },
+  homework_reference: { label: "報告", tone: "amber", synonyms: "報告 補充 reference solution 解答" },
   past_exam: { label: "考古題", tone: "violet", synonyms: "考古題 past exam old exam 歷屆 試題 期中 期末" },
   answer_key: { label: "參考答案", tone: "emerald", synonyms: "答案 解答 answer key solution reference 參考答案" },
   handout: { label: "講義", tone: "slate", synonyms: "講義 handout 教材 補充資料 slides" },
@@ -100,6 +100,8 @@ const RESOURCE_KIND_FILTERS = [
   { id: "handout", label: "講義" },
   { id: "course_note", label: "筆記" },
 ];
+
+const REPORT_ATTACHMENT_KINDS = new Set(["homework_file", "homework_reference"]);
 
 function getResourceKindMeta_(kind) {
   return RESOURCE_KIND_META[kind] || RESOURCE_KIND_META.other;
@@ -130,6 +132,10 @@ function getResourceToneClasses_(kind) {
 function normalizeResourceKind_(value) {
   const kind = String(value || "").trim();
   return RESOURCE_KIND_META[kind] ? kind : "homework_file";
+}
+
+function isReportAttachmentKind_(kind) {
+  return REPORT_ATTACHMENT_KINDS.has(normalizeResourceKind_(kind));
 }
 
 function normalizeSearchText_(value) {
@@ -274,11 +280,11 @@ function ResourceListItem({ resource, apiRequest, formatSessionSchedule_, onReve
 
 function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded, onToggle, resourceCountsByCourseId }) {
   const counts = (resourceCountsByCourseId && resourceCountsByCourseId.get(unit.id)) || {};
+  const reportAttachmentCount = (counts.homework_file || 0) + (counts.homework_reference || 0);
+  const reportCount = (counts.homework || 0) || (reportAttachmentCount ? 1 : 0);
   const countItems = [
     ["course_note", counts.course_note || 0],
-    ["homework", counts.homework || 0],
-    ["homework_file", counts.homework_file || 0],
-    ["homework_reference", counts.homework_reference || 0],
+    ["homework", reportCount],
     ["past_exam", counts.past_exam || 0],
     ["answer_key", counts.answer_key || 0],
     ["quiz", counts.quiz || 0],
@@ -389,7 +395,9 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
           const reportText = getReportText_(homeworkItems);
           const quizItems = Array.isArray(session.task && session.task.quizItems) ? session.task.quizItems : [];
           const attachments = Array.isArray(session.task && session.task.attachments) ? session.task.attachments : [];
-          const groupedAttachments = attachments.reduce((groups, item) => {
+          const reportAttachments = attachments.filter((item) => isReportAttachmentKind_(item && item.attachmentKind));
+          const learningAttachments = attachments.filter((item) => !isReportAttachmentKind_(item && item.attachmentKind));
+          const groupedAttachments = learningAttachments.reduce((groups, item) => {
             const kind = normalizeResourceKind_(item && item.attachmentKind);
             groups[kind] = groups[kind] || [];
             groups[kind].push(item);
@@ -397,9 +405,9 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
           }, {});
           const attachmentKinds = Object.keys(groupedAttachments);
           const sessionBadges = [
-            reportText ? ["homework", 1] : null,
+            reportText || reportAttachments.length ? ["homework", 1] : null,
             quizItems.length ? ["quiz", quizItems.length] : null,
-            attachments.length ? ["other", attachments.length] : null,
+            learningAttachments.length ? ["other", learningAttachments.length] : null,
           ].filter(Boolean);
           return (
             <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
@@ -417,9 +425,26 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">報告</p>
                   {reportText ? (
                     <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{reportText}</p>
-                  ) : (
+                  ) : reportAttachments.length ? null : (
                     <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無報告通知</p>
                   )}
+                  {reportAttachments.length ? (
+                    <div className="mt-3 space-y-2">
+                      <p className="text-xs font-semibold text-slate-500">報告附件</p>
+                      <div className="flex flex-col gap-2">
+                        {reportAttachments.map((item, index) => (
+                          <button
+                            key={`${item.attachmentId || item.url || "report-attachment"}-${index}`}
+                            type="button"
+                            onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                            className="rounded-xl border border-amber-200 bg-white px-3 py-2 text-left text-sm text-slate-700 hover:border-amber-300 hover:bg-amber-50"
+                          >
+                            {item.name || item.url || "報告附件"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-rose-500">小考</p>
