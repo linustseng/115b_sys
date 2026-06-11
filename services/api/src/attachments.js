@@ -427,7 +427,7 @@ export async function softDeleteAttachment(query, { attachmentId, deletedBy = ""
   return { ok: true, row };
 }
 
-export async function hydrateAttachmentItems(query, value) {
+export async function hydrateAttachmentItems(query, value, { signUrls = true } = {}) {
   const normalized = normalizeAttachmentItems(value);
   if (!normalized.length) {
     return [];
@@ -447,7 +447,7 @@ export async function hydrateAttachmentItems(query, value) {
       }
       continue;
     }
-    const signedUrl = await createSignedReadUrlForAttachment(row);
+    const signedUrl = signUrls ? await createSignedReadUrlForAttachment(row) : "";
     output.push(buildAttachmentPublicShape(row, signedUrl) || item);
   }
   return output;

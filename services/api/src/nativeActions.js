@@ -1469,6 +1469,18 @@ async function ensureAcademicCourseLayerFresh_(query, sessions = []) {
     return;
   }
 
+  const freshnessResult = await query(
+    `select count(*)::int as linked_count, max(synced_at) as latest_synced_at
+       from academic_course_sessions`
+  );
+  const freshness = freshnessResult.rows[0] || {};
+  if (
+    Number(freshness.linked_count || 0) >= regularSessions.length &&
+    isRecentDate_(freshness.latest_synced_at, 10 * 60 * 1000)
+  ) {
+    return;
+  }
+
   const now = nowIso();
   const courseMap = new Map();
   regularSessions.forEach((session) => {
@@ -1652,7 +1664,7 @@ async function loadAcademicCourseLayer_(query, sessions = [], { includeDraftMake
   const sessionTasks = await Promise.all(
     (await query(`select * from academic_session_tasks order by coalesce(updated_at,'' ) desc, id desc`)).rows.map(async (row) => {
       const item = mapAcademicSessionTaskRow_(row);
-      item.attachments = await hydrateAttachmentItems(query, item.attachments);
+      item.attachments = await hydrateAttachmentItems(query, item.attachments, { signUrls: false });
       return item;
     })
   );
@@ -1796,6 +1808,11 @@ function buildMakeupSummaryByTarget_(requests = []) {
     const b = `${firstText(right.targetSession && right.targetSession.sessionDate)} ${firstText(right.targetSessionId)}`;
     return a.localeCompare(b, "zh-Hant", { numeric: true, sensitivity: "base" });
   });
+}
+
+function isRecentDate_(value, maxAgeMs) {
+  const time = value ? new Date(value).getTime() : 0;
+  return Number.isFinite(time) && time > 0 && Date.now() - time < Number(maxAgeMs || 0);
 }
 
 async function listAcademicStudentOptions_(query) {
