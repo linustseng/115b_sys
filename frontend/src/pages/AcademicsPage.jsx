@@ -81,10 +81,10 @@ function normalizeMakeupReminder_(note) {
 
 const RESOURCE_KIND_META = {
   course_note: { label: "課程筆記", tone: "emerald", synonyms: "筆記 note notebooklm summary 摘要" },
-  homework: { label: "作業", tone: "amber", synonyms: "作業 homework hw assignment 題目 繳交" },
+  homework: { label: "作業 / 報告", tone: "amber", synonyms: "作業 報告 homework hw assignment report 題目 繳交" },
   quiz: { label: "小考 / 考試", tone: "rose", synonyms: "小考 考試 quiz exam 期中 期末 範圍" },
-  homework_file: { label: "作業題目", tone: "amber", synonyms: "作業 homework hw assignment 題目 檔案" },
-  homework_reference: { label: "作業參考", tone: "sky", synonyms: "作業參考 補充 reference solution 解答" },
+  homework_file: { label: "作業 / 報告題目", tone: "amber", synonyms: "作業 報告 homework hw assignment report 題目 檔案" },
+  homework_reference: { label: "作業 / 報告參考", tone: "sky", synonyms: "作業 報告 作業參考 補充 reference solution 解答" },
   past_exam: { label: "考古題", tone: "violet", synonyms: "考古題 past exam old exam 歷屆 試題 期中 期末" },
   answer_key: { label: "參考答案", tone: "emerald", synonyms: "答案 解答 answer key solution reference 參考答案" },
   handout: { label: "講義", tone: "slate", synonyms: "講義 handout 教材 補充資料 slides" },
@@ -93,7 +93,7 @@ const RESOURCE_KIND_META = {
 
 const RESOURCE_KIND_FILTERS = [
   { id: "all", label: "全部" },
-  { id: "homework", label: "作業" },
+  { id: "homework", label: "作業/報告" },
   { id: "past_exam", label: "考古題" },
   { id: "answer_key", label: "參考答案" },
   { id: "quiz", label: "小考/考試" },
@@ -161,6 +161,24 @@ function ResourceKindChip({ kind, count }) {
       {getResourceKindLabel_(kind)}
       {typeof count === "number" ? <span className="ml-1 text-[10px] opacity-75">{count}</span> : null}
     </span>
+  );
+}
+
+function ResourceCountButton({ kind, count, onClick }) {
+  if (!kind) {
+    return null;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-300 ${getResourceToneClasses_(kind)}`}
+      aria-label={`查看${getResourceKindLabel_(kind)} ${count} 筆`}
+    >
+      {getResourceKindLabel_(kind)}
+      <span className="ml-1 text-[10px] opacity-75">{count}</span>
+      <span className="ml-1 text-[10px] opacity-70">查看</span>
+    </button>
   );
 }
 
@@ -253,28 +271,75 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
     ["quiz", counts.quiz || 0],
     ["handout", counts.handout || 0],
   ].filter(([, count]) => count > 0);
+  const totalResourceCount = countItems.reduce((sum, [, count]) => sum + count, 0);
+  const sessionCountLabel = `共 ${unit.sessions.length} 堂`;
+  const nextSessionLabel = unit.nextSession
+    ? `下一堂 ${formatSessionSchedule_(unit.nextSession)}`
+    : unit.lastSessionDate
+      ? `最後上課 ${unit.lastSessionDate}`
+      : "";
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">{unit.title}</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            共 {unit.sessions.length} 堂
-            {unit.nextSession ? `｜下一堂 ${formatSessionSchedule_(unit.nextSession)}` : unit.lastSessionDate ? `｜最後上課 ${unit.lastSessionDate}` : ""}
-          </p>
-        </div>
+    <div
+      className={`rounded-3xl border bg-white p-5 transition sm:p-6 ${
+        expanded ? "border-slate-300 shadow-sm ring-1 ring-slate-100" : "border-slate-200 hover:border-slate-300"
+      }`}
+    >
+      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-start">
         <button
           type="button"
           onClick={() => onToggle(unit.id)}
-          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+          className="group min-w-0 rounded-2xl px-1 py-1 text-left focus:outline-none focus:ring-2 focus:ring-slate-300"
+          aria-expanded={expanded}
         >
-          {expanded ? "收合堂次" : "看堂次資料"}
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-base font-semibold transition ${
+                expanded ? "border-slate-300 bg-slate-900 text-white" : "border-slate-200 bg-slate-50 text-slate-500 group-hover:border-slate-300"
+              }`}
+              aria-hidden="true"
+            >
+              {expanded ? "−" : "+"}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-semibold text-slate-900">{unit.title}</span>
+              <span className="mt-1 block text-xs text-slate-500">
+                {[sessionCountLabel, nextSessionLabel].filter(Boolean).join("｜")}
+              </span>
+              <span className="mt-2 inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {expanded ? "已展開" : totalResourceCount ? `${totalResourceCount} 筆資料` : "尚無資料"}
+              </span>
+            </span>
+          </div>
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggle(unit.id)}
+          className={`inline-flex items-center justify-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-slate-300 ${
+            expanded
+              ? "border-slate-300 bg-slate-900 text-white hover:bg-slate-800"
+              : "border-slate-200 bg-slate-50 text-slate-700 hover:border-slate-300 hover:bg-white"
+          }`}
+          aria-expanded={expanded}
+        >
+          <span aria-hidden="true">{expanded ? "▲" : "▼"}</span>
+          {expanded ? "收合" : "展開"}
         </button>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {countItems.length ? countItems.map(([kind, count]) => <ResourceKindChip key={kind} kind={kind} count={count} />) : (
+        {countItems.length ? countItems.map(([kind, count]) => (
+          <ResourceCountButton
+            key={kind}
+            kind={kind}
+            count={count}
+            onClick={() => {
+              if (!expanded) {
+                onToggle(unit.id);
+              }
+            }}
+          />
+        )) : (
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">尚無資料</span>
         )}
       </div>
@@ -317,19 +382,29 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
             return groups;
           }, {});
           const attachmentKinds = Object.keys(groupedAttachments);
+          const sessionBadges = [
+            homeworkItems.length ? ["homework", homeworkItems.length] : null,
+            quizItems.length ? ["quiz", quizItems.length] : null,
+            attachments.length ? ["other", attachments.length] : null,
+          ].filter(Boolean);
           return (
             <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm font-semibold text-slate-900">{formatSessionSchedule_(session) || "日期時間待補"}</p>
+                {sessionBadges.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {sessionBadges.map(([kind, count]) => <ResourceKindChip key={kind} kind={kind} count={count} />)}
+                  </div>
+                ) : null}
               </div>
               {session.location ? <p className="mt-1 text-xs text-slate-500">地點：{session.location}</p> : null}
               <div className="mt-3 grid gap-3 lg:grid-cols-2">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-500">作業 / 報告</p>
                   {homeworkItems.length ? (
                     <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{homeworkItems.join("\n")}</p>
                   ) : (
-                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無作業通知</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">目前尚無作業 / 報告通知</p>
                   )}
                 </div>
                 <div>
@@ -347,7 +422,7 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded,
                   <div className="mt-2 grid gap-3">
                     {attachmentKinds.map((kind) => (
                       <div key={kind}>
-                        <ResourceKindChip kind={kind} />
+                        <ResourceKindChip kind={kind} count={groupedAttachments[kind].length} />
                         <div className="mt-2 flex flex-col gap-2">
                           {groupedAttachments[kind].map((item, index) => (
                             <button
@@ -692,13 +767,13 @@ export default function AcademicsPage({ shared }) {
           rows.push({
             id: `homework-${session.id}-${index}`,
             kind: "homework",
-            title: `作業：${String(text || "").slice(0, 24) || "作業提醒"}`,
+            title: `作業 / 報告：${String(text || "").slice(0, 24) || "提醒"}`,
             preview: text,
             courseId: course.id,
             courseTitle,
             session,
             courseStatus,
-            searchText: normalizeSearchText_([courseTitle, schedule, text, "作業", getResourceKindMeta_("homework").synonyms].join(" ")),
+            searchText: normalizeSearchText_([courseTitle, schedule, text, "作業 報告", getResourceKindMeta_("homework").synonyms].join(" ")),
           });
         });
         quizItems.forEach((text, index) => {
@@ -1231,7 +1306,7 @@ export default function AcademicsPage({ shared }) {
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500">Resources</p>
-                <h2 className="mt-2 text-xl font-semibold text-slate-900">找作業 / 考古題 / 參考答案</h2>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">找作業 / 報告 / 考古題</h2>
                 <p className="mt-2 text-sm text-slate-500">直接搜尋資料內容，不用先猜是哪一天上課。</p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -1243,7 +1318,7 @@ export default function AcademicsPage({ shared }) {
               <input
                 value={resourceQuery}
                 onChange={(event) => setResourceQuery(event.target.value)}
-                placeholder="搜尋課名、檔名、作業、考古題、答案、期中、quiz..."
+                placeholder="搜尋課名、檔名、作業、報告、考古題、答案、期中、quiz..."
                 className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
               />
 
