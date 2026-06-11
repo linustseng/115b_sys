@@ -846,11 +846,11 @@ export default function AcademicsPage({ shared }) {
 
   const resourceIndex = useMemo(() => {
     const rows = [];
+    const reportRowsByKey = new Map();
+    const quizRowsByKey = new Map();
     allCourseCatalog.forEach((course) => {
       const courseTitle = String(course.title || "").trim() || "未命名課程";
       const courseStatus = course.status || getCourseStatus_(course, todayText);
-      const reportRowsByKey = new Map();
-      const quizRowsByKey = new Map();
       const noteItems = Array.isArray(course.note && course.note.linkItems) ? course.note.linkItems : [];
       noteItems.forEach((item, index) => {
         rows.push({
@@ -873,7 +873,7 @@ export default function AcademicsPage({ shared }) {
         const quizItems = Array.isArray(task.quizItems) ? task.quizItems : [];
         const reportText = getReportText_(homeworkItems);
         if (reportText) {
-          const reportKey = getReportKey_(reportText) || `session-${session.id}`;
+          const reportKey = `${getReportKey_(courseTitle)}__${getReportKey_(reportText) || `session-${session.id}`}`;
           const existing = reportRowsByKey.get(reportKey);
           if (existing) {
             existing.searchText = normalizeSearchText_([existing.searchText, schedule].join(" "));
@@ -893,7 +893,7 @@ export default function AcademicsPage({ shared }) {
         }
         quizItems.forEach((text, index) => {
           const quizText = String(text || "").trim();
-          const quizKey = getReportKey_(quizText) || `session-${session.id}-${index}`;
+          const quizKey = `${getReportKey_(courseTitle)}__${getReportKey_(quizText) || `session-${session.id}-${index}`}`;
           const existing = quizRowsByKey.get(quizKey);
           if (existing) {
             existing.searchText = normalizeSearchText_([existing.searchText, schedule].join(" "));
@@ -928,9 +928,9 @@ export default function AcademicsPage({ shared }) {
           });
         });
       });
-      reportRowsByKey.forEach((row) => rows.push(row));
-      quizRowsByKey.forEach((row) => rows.push(row));
     });
+    reportRowsByKey.forEach((row) => rows.push(row));
+    quizRowsByKey.forEach((row) => rows.push(row));
     return rows.sort((a, b) => {
       const left = `${String((a.session && a.session.sessionDate) || "")} ${a.courseTitle} ${a.title}`;
       const right = `${String((b.session && b.session.sessionDate) || "")} ${b.courseTitle} ${b.title}`;
