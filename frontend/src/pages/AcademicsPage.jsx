@@ -891,9 +891,9 @@ export default function AcademicsPage({ shared }) {
             });
           }
         }
-        quizItems.forEach((text, index) => {
-          const quizText = String(text || "").trim();
-          const quizKey = `${getReportKey_(courseTitle)}__${getReportKey_(quizText) || `session-${session.id}-${index}`}`;
+        const quizText = getReportText_(quizItems);
+        if (quizText) {
+          const quizKey = `${getReportKey_(courseTitle)}__${getReportKey_(quizText) || `session-${session.id}`}`;
           const existing = quizRowsByKey.get(quizKey);
           if (existing) {
             existing.searchText = normalizeSearchText_([existing.searchText, schedule].join(" "));
@@ -910,7 +910,7 @@ export default function AcademicsPage({ shared }) {
               searchText: normalizeSearchText_([courseTitle, schedule, quizText, "小考 考試", getResourceKindMeta_("quiz").synonyms].join(" ")),
             });
           }
-        });
+        }
         (Array.isArray(task.attachments) ? task.attachments : []).forEach((attachment, index) => {
           const kind = normalizeResourceKind_(attachment && attachment.attachmentKind);
           const title = String((attachment && (attachment.name || attachment.url)) || "附件").trim();
