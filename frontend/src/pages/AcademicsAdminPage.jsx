@@ -93,6 +93,20 @@ function buildSessionTaskForm(task, sessionId = "") {
   };
 }
 
+const ACADEMIC_ATTACHMENT_KIND_OPTIONS = [
+  { id: "homework_file", label: "作業題目" },
+  { id: "homework_reference", label: "作業參考" },
+  { id: "past_exam", label: "考古題" },
+  { id: "answer_key", label: "參考答案" },
+  { id: "handout", label: "講義" },
+  { id: "other", label: "其他資料" },
+];
+
+function getAcademicAttachmentKindLabel_(value) {
+  const item = ACADEMIC_ATTACHMENT_KIND_OPTIONS.find((candidate) => candidate.id === value);
+  return item ? item.label : "作業題目";
+}
+
 function buildMakeupNoteForm(note, sessionId = "") {
   return {
     sessionId: sessionId || (note && note.sessionId) || "",
@@ -175,6 +189,7 @@ export default function AcademicsAdminPage({ shared }) {
   const [makeupNoteForm, setMakeupNoteForm] = useState(() => buildMakeupNoteForm(null, ""));
   const [requestDrafts, setRequestDrafts] = useState({});
   const [sessionTaskUploadState, setSessionTaskUploadState] = useState({});
+  const [sessionTaskAttachmentKinds, setSessionTaskAttachmentKinds] = useState({});
   const [selectedTargetDate, setSelectedTargetDate] = useState("");
   const [manualForm, setManualForm] = useState({
     studentId: "",
@@ -649,7 +664,7 @@ export default function AcademicsAdminPage({ shared }) {
     }
   };
 
-  const handleUploadSessionTaskAttachment_ = async (sessionId, file) => {
+  const handleUploadSessionTaskAttachment_ = async (sessionId, file, attachmentKind = "homework_file") => {
     if (!file || !sessionId) {
       return;
     }
@@ -674,7 +689,7 @@ export default function AcademicsAdminPage({ shared }) {
         formData.append("file", file);
         formData.append("entityType", "academic_session_note");
         formData.append("entityId", sessionId);
-        formData.append("attachmentKind", "homework_file");
+        formData.append("attachmentKind", attachmentKind || "homework_file");
         const headers = {};
         if (nextSessionToken) {
           headers.Authorization = `Bearer ${nextSessionToken}`;
@@ -1303,6 +1318,7 @@ export default function AcademicsAdminPage({ shared }) {
                   {(courseCatalog.find((item) => item.id === selectedCourseId)?.sessions || []).map((session) => {
                     const draft = sessionTaskDrafts[session.id] || buildSessionTaskForm(session.task, session.id);
                     const uploadState = sessionTaskUploadState[session.id] || { uploading: false, error: "" };
+                    const selectedAttachmentKind = sessionTaskAttachmentKinds[session.id] || "homework_file";
                     return (
                       <div key={session.id} className="rounded-3xl border border-slate-200 bg-white p-5">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1345,29 +1361,40 @@ export default function AcademicsAdminPage({ shared }) {
                         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-4">
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div>
-                              <p className="text-sm font-medium text-slate-800">作業檔案</p>
-                              <p className="mt-1 text-xs text-slate-500">可上傳 PDF、圖片、Office 檔，會直接顯示在同學課程頁。</p>
+                              <p className="text-sm font-medium text-slate-800">學習資料檔案</p>
+                              <p className="mt-1 text-xs text-slate-500">可上傳作業題目、考古題、參考答案、講義等，會依類型顯示在同學課程頁與找資料。</p>
                             </div>
-                            <label
-                              className={`inline-flex cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-semibold ${
-                                uploadState.uploading
-                                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
-                                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
-                              }`}
-                            >
-                              <input
-                                type="file"
-                                className="hidden"
-                                disabled={uploadState.uploading}
-                                accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                                onChange={(event) => {
-                                  const f = event.target.files && event.target.files[0];
-                                  event.target.value = "";
-                                  handleUploadSessionTaskAttachment_(session.id, f);
-                                }}
-                              />
-                              {uploadState.uploading ? "上傳中..." : "上傳作業檔案"}
-                            </label>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <select
+                                value={selectedAttachmentKind}
+                                onChange={(event) => setSessionTaskAttachmentKinds((prev) => ({ ...prev, [session.id]: event.target.value }))}
+                                className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none focus:border-slate-400"
+                              >
+                                {ACADEMIC_ATTACHMENT_KIND_OPTIONS.map((item) => (
+                                  <option key={item.id} value={item.id}>{item.label}</option>
+                                ))}
+                              </select>
+                              <label
+                                className={`inline-flex cursor-pointer items-center rounded-full border px-4 py-2 text-sm font-semibold ${
+                                  uploadState.uploading
+                                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+                                    : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                                }`}
+                              >
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  disabled={uploadState.uploading}
+                                  accept="application/pdf,image/jpeg,image/png,image/heic,image/heif,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                  onChange={(event) => {
+                                    const f = event.target.files && event.target.files[0];
+                                    event.target.value = "";
+                                    handleUploadSessionTaskAttachment_(session.id, f, selectedAttachmentKind);
+                                  }}
+                                />
+                                {uploadState.uploading ? "上傳中..." : `上傳${getAcademicAttachmentKindLabel_(selectedAttachmentKind)}`}
+                              </label>
+                            </div>
                           </div>
                           {uploadState.error ? <div className="mt-3 alert alert-error text-xs">{uploadState.error}</div> : null}
                           {Array.isArray(draft.attachments) && draft.attachments.length ? (
@@ -1381,7 +1408,7 @@ export default function AcademicsAdminPage({ shared }) {
                                       onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
                                       className="flex-1 truncate text-left text-xs text-slate-600 underline-offset-2 hover:underline"
                                     >
-                                      {item.name || item.url || "附件"}
+                                      {getAcademicAttachmentKindLabel_(item.attachmentKind)}｜{item.name || item.url || "附件"}
                                     </button>
                                     <button
                                       type="button"
@@ -1395,7 +1422,7 @@ export default function AcademicsAdminPage({ shared }) {
                               })}
                             </div>
                           ) : (
-                            <p className="mt-3 text-xs text-slate-400">目前尚未上傳作業檔案。</p>
+                            <p className="mt-3 text-xs text-slate-400">目前尚未上傳學習資料檔案。</p>
                           )}
                         </div>
                       </div>

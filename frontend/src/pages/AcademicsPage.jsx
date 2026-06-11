@@ -79,6 +79,91 @@ function normalizeMakeupReminder_(note) {
   };
 }
 
+const RESOURCE_KIND_META = {
+  course_note: { label: "課程筆記", tone: "emerald", synonyms: "筆記 note notebooklm summary 摘要" },
+  homework: { label: "作業", tone: "amber", synonyms: "作業 homework hw assignment 題目 繳交" },
+  quiz: { label: "小考 / 考試", tone: "rose", synonyms: "小考 考試 quiz exam 期中 期末 範圍" },
+  homework_file: { label: "作業題目", tone: "amber", synonyms: "作業 homework hw assignment 題目 檔案" },
+  homework_reference: { label: "作業參考", tone: "sky", synonyms: "作業參考 補充 reference solution 解答" },
+  past_exam: { label: "考古題", tone: "violet", synonyms: "考古題 past exam old exam 歷屆 試題 期中 期末" },
+  answer_key: { label: "參考答案", tone: "emerald", synonyms: "答案 解答 answer key solution reference 參考答案" },
+  handout: { label: "講義", tone: "slate", synonyms: "講義 handout 教材 補充資料 slides" },
+  other: { label: "其他資料", tone: "slate", synonyms: "其他 資料 file attachment" },
+};
+
+const RESOURCE_KIND_FILTERS = [
+  { id: "all", label: "全部" },
+  { id: "homework", label: "作業" },
+  { id: "past_exam", label: "考古題" },
+  { id: "answer_key", label: "參考答案" },
+  { id: "quiz", label: "小考/考試" },
+  { id: "handout", label: "講義" },
+  { id: "course_note", label: "筆記" },
+];
+
+function getResourceKindMeta_(kind) {
+  return RESOURCE_KIND_META[kind] || RESOURCE_KIND_META.other;
+}
+
+function getResourceKindLabel_(kind) {
+  return getResourceKindMeta_(kind).label;
+}
+
+function getResourceToneClasses_(kind) {
+  const tone = getResourceKindMeta_(kind).tone;
+  switch (tone) {
+    case "amber":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "rose":
+      return "border-rose-200 bg-rose-50 text-rose-700";
+    case "violet":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    case "sky":
+      return "border-sky-200 bg-sky-50 text-sky-700";
+    case "emerald":
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    default:
+      return "border-slate-200 bg-slate-50 text-slate-600";
+  }
+}
+
+function normalizeResourceKind_(value) {
+  const kind = String(value || "").trim();
+  return RESOURCE_KIND_META[kind] ? kind : "homework_file";
+}
+
+function normalizeSearchText_(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function getCourseStatus_(course, todayText) {
+  const firstDate = String(course && course.firstSessionDate ? course.firstSessionDate : "").trim();
+  const lastDate = String(course && course.lastSessionDate ? course.lastSessionDate : "").trim();
+  if (lastDate && lastDate < todayText) {
+    return "completed";
+  }
+  if (firstDate && firstDate > todayText) {
+    return "upcoming";
+  }
+  return "active";
+}
+
+function getCourseNextSession_(course, todayText) {
+  return (course.sessions || []).find((session) => String(session.sessionDate || "") >= todayText) || null;
+}
+
+function ResourceKindChip({ kind, count }) {
+  if (!kind) {
+    return null;
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getResourceToneClasses_(kind)}`}>
+      {getResourceKindLabel_(kind)}
+      {typeof count === "number" ? <span className="ml-1 text-[10px] opacity-75">{count}</span> : null}
+    </span>
+  );
+}
+
 function MakeupReminderCard({ reminder }) {
   if (!reminder) {
     return null;
@@ -102,16 +187,99 @@ function MakeupReminderCard({ reminder }) {
   );
 }
 
-function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_ }) {
+function ResourceAction({ resource, apiRequest, onRevealCourse }) {
+  if (resource && resource.attachment) {
+    return (
+      <button
+        type="button"
+        onClick={() => resolveAndOpenAttachment_(resource.attachment, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+      >
+        開啟檔案
+      </button>
+    );
+  }
+  if (resource && resource.url) {
+    return (
+      <a
+        href={resource.url}
+        target="_blank"
+        rel="noopener"
+        className="rounded-full bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+      >
+        開啟連結
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onRevealCourse(resource.courseId)}
+      className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+    >
+      查看堂次
+    </button>
+  );
+}
+
+function ResourceListItem({ resource, apiRequest, formatSessionSchedule_, onRevealCourse }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <ResourceKindChip kind={resource.kind} />
+            <p className="text-sm font-semibold text-slate-900">{resource.title}</p>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {resource.courseTitle}
+            {resource.session ? `｜${formatSessionSchedule_(resource.session) || "日期待補"}` : ""}
+          </p>
+          {resource.preview ? <p className="mt-2 whitespace-pre-line text-sm leading-6 text-slate-700">{resource.preview}</p> : null}
+        </div>
+        <ResourceAction resource={resource} apiRequest={apiRequest} onRevealCourse={onRevealCourse} />
+      </div>
+    </div>
+  );
+}
+
+function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_, expanded, onToggle, resourceCountsByCourseId }) {
+  const counts = (resourceCountsByCourseId && resourceCountsByCourseId.get(unit.id)) || {};
+  const countItems = [
+    ["course_note", counts.course_note || 0],
+    ["homework", (counts.homework || 0) + (counts.homework_file || 0)],
+    ["past_exam", counts.past_exam || 0],
+    ["answer_key", counts.answer_key || 0],
+    ["quiz", counts.quiz || 0],
+    ["handout", counts.handout || 0],
+  ].filter(([, count]) => count > 0);
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-slate-900">{unit.title}</h3>
-          <p className="mt-1 text-xs text-slate-500">共 {unit.sessions.length} 堂</p>
+          <p className="mt-1 text-xs text-slate-500">
+            共 {unit.sessions.length} 堂
+            {unit.nextSession ? `｜下一堂 ${formatSessionSchedule_(unit.nextSession)}` : unit.lastSessionDate ? `｜最後上課 ${unit.lastSessionDate}` : ""}
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => onToggle(unit.id)}
+          className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300"
+        >
+          {expanded ? "收合堂次" : "看堂次資料"}
+        </button>
       </div>
-      {unit.note ? (
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {countItems.length ? countItems.map(([kind, count]) => <ResourceKindChip key={kind} kind={kind} count={count} />) : (
+          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">尚無資料</span>
+        )}
+      </div>
+
+      {expanded && unit.note ? (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">課程筆記連結</p>
 
@@ -131,17 +299,24 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_ }) {
             </div>
           ) : null}
         </div>
-      ) : (
+      ) : expanded ? (
         <div className="mt-4 rounded-2xl bg-white px-4 py-3 text-sm text-slate-500">
           這門課目前還沒有上架筆記連結。
         </div>
-      )}
+      ) : null}
 
-      <div className="mt-4 grid gap-3">
+      {expanded ? <div className="mt-4 grid gap-3">
         {(unit.sessions || []).map((session) => {
           const homeworkItems = Array.isArray(session.task && session.task.homeworkItems) ? session.task.homeworkItems : [];
           const quizItems = Array.isArray(session.task && session.task.quizItems) ? session.task.quizItems : [];
           const attachments = Array.isArray(session.task && session.task.attachments) ? session.task.attachments : [];
+          const groupedAttachments = attachments.reduce((groups, item) => {
+            const kind = normalizeResourceKind_(item && item.attachmentKind);
+            groups[kind] = groups[kind] || [];
+            groups[kind].push(item);
+            return groups;
+          }, {});
+          const attachmentKinds = Object.keys(groupedAttachments);
           return (
             <div key={session.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -166,19 +341,26 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_ }) {
                   )}
                 </div>
               </div>
-              {attachments.length ? (
+              {attachmentKinds.length ? (
                 <div className="mt-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">作業檔案</p>
-                  <div className="mt-2 flex flex-col gap-2">
-                    {attachments.map((item, index) => (
-                      <button
-                        key={`${item.attachmentId || item.url || "attachment"}-${index}`}
-                        type="button"
-                        onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
-                        className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-white"
-                      >
-                        {item.name || item.url || "附件"}
-                      </button>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-600">學習資料</p>
+                  <div className="mt-2 grid gap-3">
+                    {attachmentKinds.map((kind) => (
+                      <div key={kind}>
+                        <ResourceKindChip kind={kind} />
+                        <div className="mt-2 flex flex-col gap-2">
+                          {groupedAttachments[kind].map((item, index) => (
+                            <button
+                              key={`${item.attachmentId || item.url || "attachment"}-${index}`}
+                              type="button"
+                              onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(() => window.alert("附件暫時無法開啟，請稍後再試"))}
+                              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm text-slate-700 hover:border-slate-300 hover:bg-white"
+                            >
+                              {item.name || item.url || "附件"}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -186,7 +368,7 @@ function CourseCatalogCard({ unit, apiRequest, formatSessionSchedule_ }) {
             </div>
           );
         })}
-      </div>
+      </div> : null}
     </div>
   );
 }
@@ -208,7 +390,11 @@ export default function AcademicsPage({ shared }) {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [activeTab, setActiveTab] = useState("courses");
-  const [courseScope, setCourseScope] = useState("recent");
+  const [courseScope, setCourseScope] = useState("focus");
+  const [resourceScope, setResourceScope] = useState("all");
+  const [resourceKind, setResourceKind] = useState("all");
+  const [resourceQuery, setResourceQuery] = useState("");
+  const [expandedCourseId, setExpandedCourseId] = useState("");
   const [form, setForm] = useState(() => defaultForm());
   const [bootstrap, setBootstrap] = useState({
     sessions: [],
@@ -348,8 +534,9 @@ export default function AcademicsPage({ shared }) {
     return map;
   }, [bootstrap.sessionTasks]);
 
+  const todayText = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const courseDateWindow = useMemo(() => {
-    const todayText = new Date().toISOString().slice(0, 10);
     const uniqueDates = Array.from(
       new Set(
         regularSessions
@@ -362,7 +549,7 @@ export default function AcademicsPage({ shared }) {
       pastDates: uniqueDates.filter((date) => date <= todayText).slice(-2),
       futureDates: uniqueDates.filter((date) => date > todayText).slice(0, 2),
     };
-  }, [regularSessions]);
+  }, [regularSessions, todayText]);
 
   const allCourseCatalog = useMemo(() => {
     const buckets = new Map();
@@ -399,11 +586,23 @@ export default function AcademicsPage({ shared }) {
           sessions,
           firstSessionDate: sessions[0] ? String(sessions[0].sessionDate || "") : "",
           lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
+          nextSession: getCourseNextSession_({ sessions }, todayText),
+          status: getCourseStatus_(
+            {
+              firstSessionDate: sessions[0] ? String(sessions[0].sessionDate || "") : "",
+              lastSessionDate: sessions.length ? String(sessions[sessions.length - 1].sessionDate || "") : "",
+            },
+            todayText
+          ),
         };
       })
       .filter((course) => course.sessions.length)
-      .sort((a, b) => String(a.firstSessionDate || "").localeCompare(String(b.firstSessionDate || ""), "zh-Hant", { numeric: true, sensitivity: "base" }) || String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
-  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionsById, sessionTasksBySessionId]);
+      .sort((a, b) => {
+        const aSort = a.nextSession ? String(a.nextSession.sessionDate || "") : String(a.lastSessionDate || a.firstSessionDate || "");
+        const bSort = b.nextSession ? String(b.nextSession.sessionDate || "") : String(b.lastSessionDate || b.firstSessionDate || "");
+        return aSort.localeCompare(bSort, "zh-Hant", { numeric: true, sensitivity: "base" }) || String(a.title || "").localeCompare(String(b.title || ""), "zh-Hant", { numeric: true, sensitivity: "base" });
+      });
+  }, [bootstrap.courses, bootstrap.courseSessions, courseNotesByCourseId, sessionsById, sessionTasksBySessionId, todayText]);
 
   const recentCourseCatalog = useMemo(() => {
     const selectedDates = new Set([...courseDateWindow.pastDates, ...courseDateWindow.futureDates]);
@@ -452,7 +651,144 @@ export default function AcademicsPage({ shared }) {
       });
   }, [recentCourseCatalog, courseDateWindow]);
 
-  const courseCatalog = courseScope === "all" ? allCourseCatalog : recentCourseCatalog;
+  const focusCourseCatalog = useMemo(() => {
+    return allCourseCatalog.filter((course) => course.status !== "completed");
+  }, [allCourseCatalog]);
+
+  const completedCourseCatalog = useMemo(() => {
+    return allCourseCatalog
+      .filter((course) => course.status === "completed")
+      .sort((a, b) => String(b.lastSessionDate || "").localeCompare(String(a.lastSessionDate || ""), "zh-Hant", { numeric: true, sensitivity: "base" }));
+  }, [allCourseCatalog]);
+
+  const courseCatalog = courseScope === "all" ? allCourseCatalog : courseScope === "completed" ? completedCourseCatalog : focusCourseCatalog;
+
+  const resourceIndex = useMemo(() => {
+    const rows = [];
+    allCourseCatalog.forEach((course) => {
+      const courseTitle = String(course.title || "").trim() || "未命名課程";
+      const courseStatus = course.status || getCourseStatus_(course, todayText);
+      const noteItems = Array.isArray(course.note && course.note.linkItems) ? course.note.linkItems : [];
+      noteItems.forEach((item, index) => {
+        rows.push({
+          id: `note-${course.id}-${index}`,
+          kind: "course_note",
+          title: item.label || (course.note && course.note.title) || `${courseTitle} 筆記`,
+          preview: "",
+          url: item.url,
+          courseId: course.id,
+          courseTitle,
+          session: null,
+          courseStatus,
+          searchText: normalizeSearchText_([courseTitle, item.label, item.url, "課程筆記", getResourceKindMeta_("course_note").synonyms].join(" ")),
+        });
+      });
+      (course.sessions || []).forEach((session) => {
+        const schedule = String(session.sessionDate || "");
+        const task = session.task || {};
+        const homeworkItems = Array.isArray(task.homeworkItems) ? task.homeworkItems : [];
+        const quizItems = Array.isArray(task.quizItems) ? task.quizItems : [];
+        homeworkItems.forEach((text, index) => {
+          rows.push({
+            id: `homework-${session.id}-${index}`,
+            kind: "homework",
+            title: `作業：${String(text || "").slice(0, 24) || "作業提醒"}`,
+            preview: text,
+            courseId: course.id,
+            courseTitle,
+            session,
+            courseStatus,
+            searchText: normalizeSearchText_([courseTitle, schedule, text, "作業", getResourceKindMeta_("homework").synonyms].join(" ")),
+          });
+        });
+        quizItems.forEach((text, index) => {
+          rows.push({
+            id: `quiz-${session.id}-${index}`,
+            kind: "quiz",
+            title: `小考 / 考試：${String(text || "").slice(0, 22) || "考試提醒"}`,
+            preview: text,
+            courseId: course.id,
+            courseTitle,
+            session,
+            courseStatus,
+            searchText: normalizeSearchText_([courseTitle, schedule, text, "小考 考試", getResourceKindMeta_("quiz").synonyms].join(" ")),
+          });
+        });
+        (Array.isArray(task.attachments) ? task.attachments : []).forEach((attachment, index) => {
+          const kind = normalizeResourceKind_(attachment && attachment.attachmentKind);
+          const title = String((attachment && (attachment.name || attachment.url)) || "附件").trim();
+          rows.push({
+            id: `attachment-${session.id}-${attachment.attachmentId || attachment.url || index}`,
+            kind,
+            title,
+            preview: "",
+            attachment,
+            courseId: course.id,
+            courseTitle,
+            session,
+            courseStatus,
+            searchText: normalizeSearchText_([courseTitle, schedule, title, getResourceKindLabel_(kind), getResourceKindMeta_(kind).synonyms].join(" ")),
+          });
+        });
+      });
+    });
+    return rows.sort((a, b) => {
+      const left = `${String((a.session && a.session.sessionDate) || "")} ${a.courseTitle} ${a.title}`;
+      const right = `${String((b.session && b.session.sessionDate) || "")} ${b.courseTitle} ${b.title}`;
+      return right.localeCompare(left, "zh-Hant", { numeric: true, sensitivity: "base" });
+    });
+  }, [allCourseCatalog, todayText]);
+
+  const resourceCountsByCourseId = useMemo(() => {
+    const map = new Map();
+    resourceIndex.forEach((item) => {
+      const courseId = String(item.courseId || "");
+      if (!courseId) {
+        return;
+      }
+      const counts = map.get(courseId) || {};
+      counts[item.kind] = (counts[item.kind] || 0) + 1;
+      map.set(courseId, counts);
+    });
+    return map;
+  }, [resourceIndex]);
+
+  const filteredResourceIndex = useMemo(() => {
+    const tokens = normalizeSearchText_(resourceQuery).split(" ").filter(Boolean);
+    return resourceIndex.filter((item) => {
+      if (resourceScope === "focus" && item.courseStatus === "completed") {
+        return false;
+      }
+      if (resourceScope === "completed" && item.courseStatus !== "completed") {
+        return false;
+      }
+      if (resourceKind !== "all") {
+        if (resourceKind === "homework" && item.kind !== "homework" && item.kind !== "homework_file" && item.kind !== "homework_reference") {
+          return false;
+        } else if (resourceKind !== "homework" && item.kind !== resourceKind) {
+          return false;
+        }
+      }
+      if (tokens.length && !tokens.every((token) => item.searchText.includes(token))) {
+        return false;
+      }
+      return true;
+    });
+  }, [resourceIndex, resourceKind, resourceQuery, resourceScope]);
+
+  const handleRevealCourse_ = (courseId) => {
+    setActiveTab("courses");
+    setCourseScope("all");
+    setExpandedCourseId(courseId);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        const node = document.getElementById(`course-${courseId}`);
+        if (node && node.scrollIntoView) {
+          node.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 80);
+    }
+  };
 
   const updateForm_ = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -657,6 +993,7 @@ export default function AcademicsPage({ shared }) {
           <div className="flex flex-wrap gap-2">
             {[
               { id: "courses", label: "課程索引" },
+              { id: "resources", label: "找資料" },
               { id: "makeup", label: "補課登記" },
             ].map((item) => (
               <button
@@ -839,17 +1176,26 @@ export default function AcademicsPage({ shared }) {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-emerald-500">Courses</p>
               <h2 className="mt-2 text-xl font-semibold text-slate-900">課程索引</h2>
-              <p className="mt-2 text-sm text-slate-500">預設顯示前 2 個上課日與後 2 個上課日；前面看複習 / 作業，後面看小考提醒。</p>
+              <p className="mt-2 text-sm text-slate-500">先看課程，再展開堂次。日期保留當線索，不再當主入口。</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => setCourseScope("recent")}
+                onClick={() => setCourseScope("focus")}
                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                  courseScope === "recent" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                  courseScope === "focus" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
                 }`}
               >
-                前 2 天＋後 2 天
+                進行中/即將（{focusCourseCatalog.length}）
+              </button>
+              <button
+                type="button"
+                onClick={() => setCourseScope("completed")}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                  courseScope === "completed" ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                已上完（{completedCourseCatalog.length}）
               </button>
               <button
                 type="button"
@@ -864,56 +1210,95 @@ export default function AcademicsPage({ shared }) {
           </div>
           <div className="mt-5 space-y-4">
             {!courseCatalog.length ? <div className="alert alert-info text-xs">目前還沒有同步到正式課程。</div> : null}
-            {courseScope === "all" ? (
-              courseCatalog.map((unit) => (
-                <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
-              ))
-            ) : (
-              <div className="space-y-6">
-                <section className="rounded-3xl border border-amber-200 bg-amber-50/50 p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-500">Review</p>
-                      <h3 className="mt-1 text-lg font-semibold text-slate-900">剛上完</h3>
-                      <p className="mt-1 text-xs text-slate-500">前 2 個上課日，方便回頭看複習重點與作業。</p>
-                    </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-amber-700 shadow-sm">
-                      {recentPastCourseCatalog.length} 堂
-                    </span>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    {!recentPastCourseCatalog.length ? (
-                      <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的已上課課程。</div>
-                    ) : null}
-                    {recentPastCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
-                    ))}
-                  </div>
-                </section>
-
-                <section className="rounded-3xl border border-rose-200 bg-rose-50/40 p-4 sm:p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-rose-500">Upcoming</p>
-                      <h3 className="mt-1 text-lg font-semibold text-slate-900">即將上課</h3>
-                      <p className="mt-1 text-xs text-slate-500">後 2 個上課日，方便課前看摘要與小考提醒。</p>
-                    </div>
-                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-rose-700 shadow-sm">
-                      {recentFutureCourseCatalog.length} 堂
-                    </span>
-                  </div>
-                  <div className="mt-4 space-y-4">
-                    {!recentFutureCourseCatalog.length ? (
-                      <div className="rounded-2xl bg-white px-4 py-4 text-sm text-slate-500">目前沒有可顯示的即將上課課程。</div>
-                    ) : null}
-                    {recentFutureCourseCatalog.map((unit) => (
-                      <CourseCatalogCard key={unit.id} unit={unit} apiRequest={apiRequest} formatSessionSchedule_={formatSessionSchedule_} />
-                    ))}
-                  </div>
-                </section>
+            {courseCatalog.map((unit) => (
+              <div key={unit.id} id={`course-${unit.id}`} className="scroll-mt-6">
+                <CourseCatalogCard
+                  unit={unit}
+                  apiRequest={apiRequest}
+                  formatSessionSchedule_={formatSessionSchedule_}
+                  expanded={expandedCourseId === unit.id}
+                  onToggle={(courseId) => setExpandedCourseId((prev) => (prev === courseId ? "" : courseId))}
+                  resourceCountsByCourseId={resourceCountsByCourseId}
+                />
               </div>
-            )}
+            ))}
           </div>
+          </section>
+        ) : null}
+
+        {activeTab === "resources" ? (
+          <section className="mt-6 card p-6 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-500">Resources</p>
+                <h2 className="mt-2 text-xl font-semibold text-slate-900">找作業 / 考古題 / 參考答案</h2>
+                <p className="mt-2 text-sm text-slate-500">直接搜尋資料內容，不用先猜是哪一天上課。</p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+                {filteredResourceIndex.length} / {resourceIndex.length} 筆
+              </span>
+            </div>
+
+            <div className="mt-5 space-y-4">
+              <input
+                value={resourceQuery}
+                onChange={(event) => setResourceQuery(event.target.value)}
+                placeholder="搜尋課名、檔名、作業、考古題、答案、期中、quiz..."
+                className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 outline-none focus:border-slate-400"
+              />
+
+              <div className="flex flex-wrap gap-2">
+                {RESOURCE_KIND_FILTERS.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setResourceKind(item.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                      resourceKind === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: "all", label: "全部" },
+                  { id: "focus", label: "即將/進行中" },
+                  { id: "completed", label: "已上完可複習" },
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setResourceScope(item.id)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
+                      resourceScope === item.id ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid gap-3">
+                {!filteredResourceIndex.length ? (
+                  <div className="alert alert-info text-xs">目前沒有符合條件的資料。</div>
+                ) : null}
+                {filteredResourceIndex.slice(0, 80).map((resource) => (
+                  <ResourceListItem
+                    key={resource.id}
+                    resource={resource}
+                    apiRequest={apiRequest}
+                    formatSessionSchedule_={formatSessionSchedule_}
+                    onRevealCourse={handleRevealCourse_}
+                  />
+                ))}
+                {filteredResourceIndex.length > 80 ? (
+                  <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-500">只顯示前 80 筆，請用搜尋或類型縮小範圍。</div>
+                ) : null}
+              </div>
+            </div>
           </section>
         ) : null}
       </main>
