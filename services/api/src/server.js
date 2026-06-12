@@ -255,6 +255,10 @@ SELECT
   s.name AS student_name,
   s.google_sub,
   s.google_email,
+  s.lifecycle_status,
+  s.lifecycle_updated_at,
+  s.lifecycle_reason,
+  s.lifecycle_notes,
   d.id AS directory_id,
   d.email AS directory_email,
   d.name_zh,
@@ -267,6 +271,8 @@ SELECT
   d.dietary_restrictions,
   d.group_id
 `;
+
+const ACTIVE_STUDENT_WHERE_SQL = `coalesce(nullif(s.lifecycle_status, ''), 'active') = 'active'`;
 
 function normalizeEmail(value) {
   return String(value || "").trim().toLowerCase();
@@ -572,6 +578,8 @@ function toStudentPayload(row) {
     name: row.name || "",
     googleSub: row.google_sub || "",
     googleEmail: row.google_email || "",
+    status: row.lifecycle_status || "active",
+    lifecycleStatus: row.lifecycle_status || "active",
   };
 }
 
@@ -613,6 +621,8 @@ function toStudentProfile(row, fallbackEmail = "") {
     photoUrl: String(row.photo_url || "").trim(),
     dietaryPreference: String(row.dietary_restrictions || "").trim(),
     group: String(row.group_id || "").trim(),
+    status: String(row.lifecycle_status || "active").trim() || "active",
+    lifecycleStatus: String(row.lifecycle_status || "active").trim() || "active",
   };
 }
 
@@ -622,10 +632,12 @@ async function listMembershipsByStudentId(studentId) {
     return [];
   }
   const result = await query(
-    `SELECT *
-     FROM group_memberships
-     WHERE person_id = $1
-     ORDER BY coalesce(group_id, ''), coalesce(role_in_group, ''), id`,
+    `SELECT gm.*
+     FROM group_memberships gm
+     JOIN students s ON s.id = gm.person_id
+     WHERE gm.person_id = $1
+       AND ${ACTIVE_STUDENT_WHERE_SQL}
+     ORDER BY coalesce(gm.group_id, ''), coalesce(gm.role_in_group, ''), gm.id`,
     [targetId]
   );
   return result.rows.map(toMembershipPayload);
@@ -641,6 +653,7 @@ async function findStudentProfileById(studentId) {
      FROM students s
      LEFT JOIN directories d ON d.id = s.id
      WHERE s.id = $1
+       AND ${ACTIVE_STUDENT_WHERE_SQL}
      LIMIT 1`,
     [targetId]
   );
@@ -657,6 +670,7 @@ async function findStudentProfileByGoogleSub(sub) {
      FROM students s
      LEFT JOIN directories d ON d.id = s.id
      WHERE s.google_sub = $1
+       AND ${ACTIVE_STUDENT_WHERE_SQL}
      LIMIT 1`,
     [targetSub]
   );
@@ -673,6 +687,7 @@ async function findStudentProfileByEmail(email) {
      FROM directories d
      LEFT JOIN students s ON s.id = d.id
      WHERE lower(coalesce(d.email, '')) = $1
+       AND ${ACTIVE_STUDENT_WHERE_SQL}
      LIMIT 1`,
     [targetEmail]
   );
@@ -848,8 +863,9 @@ app.get("/v1/students", async (req, res) => {
       return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
     }
     const result = await query(
-      `SELECT id, name, google_sub, google_email
-       FROM students
+      `SELECT id, name, google_sub, google_email, lifecycle_status
+       FROM students s
+       WHERE ${ACTIVE_STUDENT_WHERE_SQL}
        ORDER BY coalesce(id, '')`
     );
     return res.json({
@@ -1026,6 +1042,7 @@ app.get("/v1/lookup-student", async (req, res) => {
        FROM directories d
        JOIN students s ON s.id = d.id
        WHERE lower(coalesce(d.email, '')) = $1
+       AND ${ACTIVE_STUDENT_WHERE_SQL}
        LIMIT 1`,
       [email]
     );

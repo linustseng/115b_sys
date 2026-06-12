@@ -907,6 +907,19 @@ function rowOrNull(result) {
   return result && result.rows && result.rows.length ? result.rows[0] : null;
 }
 
+const ACTIVE_STUDENT_WHERE_SQL = `coalesce(nullif(s.lifecycle_status, ''), 'active') = 'active'`;
+
+function mapStudentListRow_(row) {
+  return {
+    id: row.id || "",
+    name: row.name || "",
+    googleSub: row.google_sub || "",
+    googleEmail: row.google_email || "",
+    status: row.lifecycle_status || "active",
+    lifecycleStatus: row.lifecycle_status || "active",
+  };
+}
+
 const ACADEMICS_ALLOWED_GROUPS = ["E", "F"];
 
 function todayDateText_() {
@@ -1938,6 +1951,7 @@ async function listAcademicStudentOptions_(query) {
        d.group_id
      from students s
      left join directories d on d.id = s.id
+     where ${ACTIVE_STUDENT_WHERE_SQL}
      order by coalesce(d.group_id,''), coalesce(d.preferred_name,''), coalesce(d.name_zh,''), coalesce(s.name,''), s.id`
   );
   return result.rows.map((row) => ({
@@ -2676,8 +2690,14 @@ export async function dispatchNativeAction({
     const [membershipsResult, rolesResult, studentsResult, directoriesResult] = await Promise.all([
       query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
       query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
-      query(`select id, google_email from students order by coalesce(id,'')`),
-      query(`select id, email from directories order by coalesce(id,'')`),
+        query(`select id, google_email from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
+      query(
+        `select d.id, d.email
+         from directories d
+         join students s on s.id = d.id
+         where ${ACTIVE_STUDENT_WHERE_SQL}
+         order by coalesce(d.id,'')`
+      ),
     ]);
 
     financeApprovalContextCache = {
@@ -3515,8 +3535,10 @@ export async function dispatchNativeAction({
            d.group_id,
            s.name as student_name
          from directories d
-         left join students s on s.id = d.id
-         where coalesce(d.birthday_month, '') <> '' and coalesce(d.birthday_day, '') <> ''
+         join students s on s.id = d.id
+         where ${ACTIVE_STUDENT_WHERE_SQL}
+           and coalesce(d.birthday_month, '') <> ''
+           and coalesce(d.birthday_day, '') <> ''
          order by
            case when coalesce(d.birthday_month,'') ~ '^[0-9]{1,2}$' then d.birthday_month::int else 99 end,
            case when coalesce(d.birthday_day,'') ~ '^[0-9]{1,2}$' then d.birthday_day::int else 99 end,
@@ -5086,7 +5108,7 @@ export async function dispatchNativeAction({
       const includeCheckins = body.includeCheckins === true;
       const [events, students, memberships] = await Promise.all([
         query(`select * from events order by coalesce(start_at, ''), id`),
-        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select id, name, google_sub, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
         query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
       ]);
       const data = {
@@ -5109,12 +5131,7 @@ export async function dispatchNativeAction({
           category: row.category || "",
           formSchema: row.form_schema || {},
         })),
-        students: students.rows.map((row) => ({
-          id: row.id || "",
-          name: row.name || "",
-          googleSub: row.google_sub || "",
-          googleEmail: row.google_email || "",
-        })),
+        students: students.rows.map(mapStudentListRow_),
         groupMemberships: memberships.rows.map((row) => ({
           id: row.id || "",
           personId: row.person_id || "",
@@ -7012,7 +7029,7 @@ export async function dispatchNativeAction({
     case "listFinanceBootstrap": {
       requireAuth();
       const [students, memberships, categoryTypes, fundEvents] = await Promise.all([
-        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select id, name, google_sub, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
         query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
         query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
@@ -7027,12 +7044,7 @@ export async function dispatchNativeAction({
       return {
         ok: true,
         data: {
-          students: students.rows.map((row) => ({
-            id: row.id || "",
-            name: row.name || "",
-            googleSub: row.google_sub || "",
-            googleEmail: row.google_email || "",
-          })),
+          students: students.rows.map(mapStudentListRow_),
           groupMemberships: memberships.rows.map((row) => ({
             id: row.id || "",
             personId: row.person_id || "",
@@ -7054,7 +7066,7 @@ export async function dispatchNativeAction({
     case "listFinanceApplicantBootstrap": {
       requireAuth();
       const [students, memberships, categoryTypes, fundEvents, requests, financeRolesResult] = await Promise.all([
-        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select id, name, google_sub, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
         query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
         query(`select * from fund_events order by coalesce(due_date,'') desc, id desc`),
@@ -7084,12 +7096,7 @@ export async function dispatchNativeAction({
         ok: true,
         data: {
           requests: requestRows.map((row) => mapFinanceRequestRow(row)),
-          students: students.rows.map((row) => ({
-            id: row.id || "",
-            name: row.name || "",
-            googleSub: row.google_sub || "",
-            googleEmail: row.google_email || "",
-          })),
+          students: students.rows.map(mapStudentListRow_),
           groupMemberships: memberships.rows.map((row) => ({
             id: row.id || "",
             personId: row.person_id || "",
@@ -7113,7 +7120,7 @@ export async function dispatchNativeAction({
       const includeRequests = body.includeRequests === true;
 
       const [students, memberships, categoryTypes, roles, fundEvents, fundSummary, requests] = await Promise.all([
-        query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`),
+        query(`select id, name, google_sub, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
         query(`select * from group_memberships order by coalesce(group_id,''), coalesce(person_id,''), id`),
         query(`select * from finance_category_types order by coalesce(label,''), id`),
         query(`select * from finance_roles order by coalesce(role,''), coalesce(student_id,''), id`),
@@ -7173,12 +7180,7 @@ export async function dispatchNativeAction({
         ok: true,
         data: {
           requests: includeRequests ? requestRows.map((row) => mapFinanceRequestRow(row)) : undefined,
-          students: students.rows.map((row) => ({
-            id: row.id || "",
-            name: row.name || "",
-            googleSub: row.google_sub || "",
-            googleEmail: row.google_email || "",
-          })),
+          students: students.rows.map(mapStudentListRow_),
           groupMemberships: memberships.rows.map((row) => ({
             id: row.id || "",
             personId: row.person_id || "",
@@ -7210,7 +7212,7 @@ export async function dispatchNativeAction({
       const memberships = await listMembershipsByStudentId(auth.studentId);
       const canManage = canAccessByGroups(memberships, ["E", "F"]);
       const [studentsResult, entriesResult] = await Promise.all([
-        query(`select id, name, google_email from students order by coalesce(id,'')`),
+        query(`select id, name, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`),
         query(`select * from drink_queue_entries order by
           case lower(coalesce(status,'')) when 'queued' then 0 when 'served' then 1 when 'excused' then 2 else 3 end,
           coalesce(next_class_date,''), coalesce(created_at,''), id`),
@@ -7241,7 +7243,7 @@ export async function dispatchNativeAction({
       const offenderId = firstText(data.offenderId);
       let offender = null;
       if (offenderId) {
-        offender = rowOrNull(await query(`select id, name, google_email from students where id = $1 limit 1`, [offenderId]));
+        offender = rowOrNull(await query(`select id, name, google_email from students s where id = $1 and ${ACTIVE_STUDENT_WHERE_SQL} limit 1`, [offenderId]));
       }
       const offenderName = firstNonEmptyText(data.offenderName, offender && offender.name);
       if (!offenderId && !offenderName) {
@@ -7644,9 +7646,11 @@ export async function dispatchNativeAction({
       await requireCheerleadingAdminAccess();
       const [studentsResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
         query(
-          `select id, email, name_zh, name_en, preferred_name, group_id
-           from directories
-           order by coalesce(group_id,''), coalesce(name_zh,''), coalesce(preferred_name,''), id`
+          `select d.id, d.email, d.name_zh, d.name_en, d.preferred_name, d.group_id, s.lifecycle_status
+           from directories d
+           join students s on s.id = d.id
+           where ${ACTIVE_STUDENT_WHERE_SQL}
+           order by coalesce(d.group_id,''), coalesce(d.name_zh,''), coalesce(d.preferred_name,''), d.id`
         ),
         query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
         query(`select * from cheerleading_fields order by coalesce(name,''), id`),
@@ -7815,7 +7819,12 @@ export async function dispatchNativeAction({
     case "listSoftballMemberships": {
       await requireSoftballAdminAccess();
       const result = await query(
-        `select * from group_memberships where group_id = 'K' order by coalesce(role_in_group,''), coalesce(person_name,''), person_id`
+        `select gm.*
+         from group_memberships gm
+         join students s on s.id = gm.person_id
+         where gm.group_id = 'K'
+           and ${ACTIVE_STUDENT_WHERE_SQL}
+         order by coalesce(gm.role_in_group,''), coalesce(gm.person_name,''), gm.person_id`
       );
       const memberships = result.rows.map((row) => ({
         id: row.id || "",
@@ -7849,7 +7858,15 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: `Invalid role: ${role}. Must be one of: ${validRoles.join(", ")}, none` };
       }
       // 查詢球員姓名
-      const personResult = await query(`select name_zh, name_en, preferred_name from directories where id = $1 limit 1`, [personId]);
+      const personResult = await query(
+        `select d.name_zh, d.name_en, d.preferred_name
+         from directories d
+         join students s on s.id = d.id
+         where d.id = $1
+           and ${ACTIVE_STUDENT_WHERE_SQL}
+         limit 1`,
+        [personId]
+      );
       const personRow = rowOrNull(personResult);
       const personName = personRow ? firstText(personRow.preferred_name, firstText(personRow.name_zh, personRow.name_en)) : "";
       // 設定角色
@@ -8808,13 +8825,8 @@ export async function dispatchNativeAction({
 
 
     case "listStudents": {
-      const result = await query(`select id, name, google_sub, google_email from students order by coalesce(id,'')`);
-      const students = result.rows.map((row) => ({
-        id: row.id || "",
-        name: row.name || "",
-        googleSub: row.google_sub || "",
-        googleEmail: row.google_email || "",
-      }));
+      const result = await query(`select id, name, google_sub, google_email, lifecycle_status from students s where ${ACTIVE_STUDENT_WHERE_SQL} order by coalesce(id,'')`);
+      const students = result.rows.map(mapStudentListRow_);
       return { ok: true, data: { students }, error: null };
     }
 
@@ -8825,15 +8837,19 @@ export async function dispatchNativeAction({
       }
       const like = `%${q}%`;
       const result = await query(
-        `select id, email, name_zh, name_en, preferred_name, company, title, group_id
-         from directories
-         where lower(coalesce(id,'')) like $1
-            or lower(coalesce(email,'')) like $1
-            or lower(coalesce(name_zh,'')) like $1
-            or lower(coalesce(name_en,'')) like $1
-            or lower(coalesce(preferred_name,'')) like $1
-            or lower(coalesce(company,'')) like $1
-         order by coalesce(group_id,''), coalesce(name_zh,''), id
+        `select d.id, d.email, d.name_zh, d.name_en, d.preferred_name, d.company, d.title, d.group_id, s.lifecycle_status
+         from directories d
+         join students s on s.id = d.id
+         where ${ACTIVE_STUDENT_WHERE_SQL}
+           and (
+             lower(coalesce(d.id,'')) like $1
+             or lower(coalesce(d.email,'')) like $1
+             or lower(coalesce(d.name_zh,'')) like $1
+             or lower(coalesce(d.name_en,'')) like $1
+             or lower(coalesce(d.preferred_name,'')) like $1
+             or lower(coalesce(d.company,'')) like $1
+           )
+         order by coalesce(d.group_id,''), coalesce(d.name_zh,''), d.id
          limit 30`,
         [like]
       );
@@ -8862,6 +8878,7 @@ export async function dispatchNativeAction({
         `select s.id
          from students s
          where s.google_sub = $1
+           and ${ACTIVE_STUDENT_WHERE_SQL}
          limit 1`,
         [googleSub]
       );
@@ -8874,8 +8891,11 @@ export async function dispatchNativeAction({
               `select s.id
                from students s
                left join directories d on d.id = s.id
-               where lower(coalesce(s.google_email, '')) = $1
-                  or lower(coalesce(d.email, '')) = $1
+               where ${ACTIVE_STUDENT_WHERE_SQL}
+                 and (
+                   lower(coalesce(s.google_email, '')) = $1
+                   or lower(coalesce(d.email, '')) = $1
+                 )
                order by case when lower(coalesce(s.google_email, '')) = $1 then 0 else 1 end
                limit 1`,
               [email]
@@ -8938,6 +8958,10 @@ export async function dispatchNativeAction({
         return { ok: false, data: null, error: "Unauthorized" };
       }
       const studentId = String(verified.studentId || "").trim();
+      const activeStudent = await findStudentProfileById(studentId);
+      if (!activeStudent) {
+        return { ok: false, data: null, error: "Unauthorized" };
+      }
       const memberships = await listMembershipsByStudentId(studentId);
       const sessionToken = createSessionToken({
         studentId,
@@ -8981,10 +9005,13 @@ export async function dispatchNativeAction({
       }
       await query(
         `update students set google_sub = $2, google_email = $3, synced_at = now(), raw = coalesce(raw, '{}'::jsonb)
-         where id = $1`,
+         where id = $1 and coalesce(nullif(lifecycle_status, ''), 'active') = 'active'`,
         [studentId, String(googleProfile.sub || ""), normalizeEmail(googleProfile.email || "")]
       );
       const student = await findStudentProfileById(studentId);
+      if (!student) {
+        return { ok: false, data: null, error: "Student not found" };
+      }
       const memberships = await listMembershipsByStudentId(studentId);
       const sessionToken = createSessionToken({
         studentId,
