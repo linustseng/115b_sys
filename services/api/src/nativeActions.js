@@ -4672,6 +4672,105 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Todo notification: finance requests waiting for the current user.
+      try {
+        const context = await loadFinanceApprovalContext_();
+        const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+        const pendingRequestsResult = await query(
+          `select *
+             from finance_requests
+            where lower(coalesce(status,'')) like 'pending_%'
+            order by coalesce(updated_at,'') desc, id desc
+            limit 200`
+        );
+        const activeFinanceTodoIds = new Set();
+        const statusLabels = {
+          pending_lead: "待組長審核",
+          pending_rep: "待班代覆核",
+          pending_committee: "待幹部審核",
+          pending_accounting: "待會計作帳",
+          pending_cashier: "待出納付款/發放",
+        };
+
+        for (const requestRow of pendingRequestsResult.rows) {
+          const record = mapFinanceRequestRow(requestRow);
+          const requestId = firstText(record && record.id);
+          if (!requestId) {
+            continue;
+          }
+          const canApprove = canApproveFinanceRequestForIdentity_(
+            record,
+            studentId,
+            actorEmail,
+            context.memberships,
+            context.financeRoles,
+            context.studentIdByEmail
+          );
+          if (!canApprove) {
+            continue;
+          }
+
+          const todoId = `todo:finance-approval:${requestId}:${studentId}`;
+          activeFinanceTodoIds.add(todoId);
+          const createdAtText = firstText(record.submittedAt, record.updatedAt, record.createdAt, nowIso());
+          const status = firstText(record.status).toLowerCase();
+          const amount = Number(record.amountActual || record.amountEstimated || 0) || 0;
+          const amountText = amount ? `NT$ ${amount.toLocaleString("en-US")}` : "";
+          const applicantText = firstText(record.applicantName, record.applicantId);
+          const title = `財務簽核｜${firstText(record.title, "待簽核申請")}`;
+          const body = [statusLabels[status] || "待簽核", applicantText, amountText].filter(Boolean).join(" · ");
+          const url = `/approvals/${encodeURIComponent(requestId)}`;
+          const raw = {
+            kind: "todo",
+            todoKey: todoId,
+            category: "finance_approval",
+            requestId,
+            status,
+            title,
+            message: body,
+            url,
+            createdAt: createdAtText,
+          };
+
+          await query(
+            `insert into notifications (
+               id, dedupe_key, kind, status,
+               target_student_id, target_group_id,
+               title, body, url,
+               created_at, updated_at, raw
+             ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+             on conflict (id) do update set
+               status = 'open',
+               title = excluded.title,
+               body = excluded.body,
+               url = excluded.url,
+               raw = excluded.raw,
+               target_student_id = excluded.target_student_id,
+               updated_at = case
+                 when notifications.status <> 'open'
+                   or notifications.title is distinct from excluded.title
+                   or notifications.body is distinct from excluded.body
+                   or notifications.url is distinct from excluded.url
+                 then excluded.updated_at
+                 else notifications.updated_at
+               end`,
+            [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+          );
+        }
+
+        await query(
+          `update notifications
+              set status = 'closed', updated_at = now()
+            where coalesce(raw->>'category','') = 'finance_approval'
+              and coalesce(target_student_id,'') = $1
+              and coalesce(status,'open') <> 'closed'
+              and not (id = any($2::text[]))`,
+          [studentId, activeFinanceTodoIds.size ? Array.from(activeFinanceTodoIds) : ["__none__"]]
+        );
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
         `select n.*, r.read_at, r.seen_updated_at
          from notifications n
