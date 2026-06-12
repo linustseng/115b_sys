@@ -4771,6 +4771,166 @@ export async function dispatchNativeAction({
         // Best-effort only; don't break landing page.
       }
 
+      // Todo notification: finance requests returned to the applicant.
+      try {
+        const actorEmail = normalizeEmail(auth && auth.profile && auth.profile.email ? auth.profile.email : "");
+        const returnedRequestsResult = await query(
+          `select *
+             from finance_requests
+            where lower(coalesce(status,'')) = 'returned'
+              and (
+                coalesce(applicant_id,'') = $1
+                or lower(coalesce(raw->>'applicantEmail','')) = $2
+                or coalesce(raw->>'manualCreatedBy','') = $1
+              )
+            order by coalesce(updated_at,'') desc, id desc
+            limit 50`,
+          [studentId, actorEmail]
+        );
+        const activeReturnedTodoIds = new Set();
+
+        for (const requestRow of returnedRequestsResult.rows) {
+          const record = mapFinanceRequestRow(requestRow);
+          const requestId = firstText(record && record.id);
+          if (!requestId) {
+            continue;
+          }
+          const todoId = `todo:finance-returned:${requestId}:${studentId}`;
+          activeReturnedTodoIds.add(todoId);
+          const title = `財務補件｜${firstText(record.title, "退回申請")}`;
+          const amount = Number(record.amountActual || record.amountEstimated || 0) || 0;
+          const amountText = amount ? `NT$ ${amount.toLocaleString("en-US")}` : "";
+          const body = ["已退回，請補件或修正後重新送出", amountText].filter(Boolean).join(" · ");
+          const url = "/finance?tab=requests";
+          const createdAtText = firstText(record.updatedAt, record.submittedAt, record.createdAt, nowIso());
+          const raw = {
+            kind: "todo",
+            todoKey: todoId,
+            category: "finance_returned",
+            requestId,
+            title,
+            message: body,
+            url,
+            createdAt: createdAtText,
+          };
+
+          await query(
+            `insert into notifications (
+               id, dedupe_key, kind, status,
+               target_student_id, target_group_id,
+               title, body, url,
+               created_at, updated_at, raw
+             ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+             on conflict (id) do update set
+               status = 'open',
+               title = excluded.title,
+               body = excluded.body,
+               url = excluded.url,
+               raw = excluded.raw,
+               target_student_id = excluded.target_student_id,
+               updated_at = case
+                 when notifications.status <> 'open'
+                   or notifications.title is distinct from excluded.title
+                   or notifications.body is distinct from excluded.body
+                   or notifications.url is distinct from excluded.url
+                 then excluded.updated_at
+                 else notifications.updated_at
+               end`,
+            [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+          );
+        }
+
+        await query(
+          `update notifications
+              set status = 'closed', updated_at = now()
+            where coalesce(raw->>'category','') = 'finance_returned'
+              and coalesce(target_student_id,'') = $1
+              and coalesce(status,'open') <> 'closed'
+              and not (id = any($2::text[]))`,
+          [studentId, activeReturnedTodoIds.size ? Array.from(activeReturnedTodoIds) : ["__none__"]]
+        );
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
+      // Todo notification: drink queue entries waiting for the current student.
+      try {
+        const queuedDrinkResult = await query(
+          `select *
+             from drink_queue_entries
+            where coalesce(status,'queued') = 'queued'
+              and coalesce(offender_id,'') = $1
+            order by coalesce(next_class_date,''), coalesce(created_at,''), id
+            limit 20`,
+          [studentId]
+        );
+        const activeDrinkTodoIds = new Set();
+
+        for (const row of queuedDrinkResult.rows) {
+          const entry = mapDrinkQueueEntryRow(row);
+          const entryId = firstText(entry && entry.id);
+          if (!entryId) {
+            continue;
+          }
+          const todoId = `todo:drink-queue:${entryId}:${studentId}`;
+          activeDrinkTodoIds.add(todoId);
+          const nextClassDate = firstText(entry.nextClassDate);
+          const title = "飲料待辦｜輪到你請飲料";
+          const body = [nextClassDate ? `預計 ${nextClassDate}` : "", firstText(entry.drinkTheme, entry.reason)]
+            .filter(Boolean)
+            .join(" · ");
+          const url = "/drink-queue";
+          const createdAtText = firstText(entry.createdAt, entry.updatedAt, nowIso());
+          const raw = {
+            kind: "todo",
+            todoKey: todoId,
+            category: "drink_queue",
+            entryId,
+            title,
+            message: body,
+            url,
+            createdAt: createdAtText,
+          };
+
+          await query(
+            `insert into notifications (
+               id, dedupe_key, kind, status,
+               target_student_id, target_group_id,
+               title, body, url,
+               created_at, updated_at, raw
+             ) values ($1,$2,'todo','open',$3,'',$4,$5,$6,$7,now(),$8::jsonb)
+             on conflict (id) do update set
+               status = 'open',
+               title = excluded.title,
+               body = excluded.body,
+               url = excluded.url,
+               raw = excluded.raw,
+               target_student_id = excluded.target_student_id,
+               updated_at = case
+                 when notifications.status <> 'open'
+                   or notifications.title is distinct from excluded.title
+                   or notifications.body is distinct from excluded.body
+                   or notifications.url is distinct from excluded.url
+                 then excluded.updated_at
+                 else notifications.updated_at
+               end`,
+            [todoId, todoId, studentId, title, body, url, createdAtText, jsonbParam(raw, {})]
+          );
+        }
+
+        await query(
+          `update notifications
+              set status = 'closed', updated_at = now()
+            where coalesce(raw->>'category','') = 'drink_queue'
+              and coalesce(target_student_id,'') = $1
+              and coalesce(status,'open') <> 'closed'
+              and not (id = any($2::text[]))`,
+          [studentId, activeDrinkTodoIds.size ? Array.from(activeDrinkTodoIds) : ["__none__"]]
+        );
+      } catch (error) {
+        // Best-effort only; don't break landing page.
+      }
+
       const notificationsResult = await query(
         `select n.*, r.read_at, r.seen_updated_at
          from notifications n
