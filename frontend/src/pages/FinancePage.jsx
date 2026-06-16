@@ -1355,6 +1355,25 @@ function FinancePage({ shared }) {
           </div>
         ) : null}
 
+        {googleLinkedStudent ? (
+          <section className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-950 sm:px-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">要簽核別人的財務申請，請到簽核中心</p>
+                <p className="mt-1 text-xs text-amber-800">
+                  這裡是同學版財務前台，只顯示自己的申請；班代、組長、會計與出納的待簽核項目會在簽核中心。
+                </p>
+              </div>
+              <a
+                href="/approvals"
+                className="inline-flex shrink-0 items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-700"
+              >
+                前往簽核中心
+              </a>
+            </div>
+          </section>
+        ) : null}
+
         <section className="mt-6 card p-4 sm:p-6">
           <div className="flex flex-wrap gap-2 text-sm font-semibold text-slate-600">
             {[
