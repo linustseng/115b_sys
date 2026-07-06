@@ -111,6 +111,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [memberships, setMemberships] = useState(initialMembershipCache.memberships);
   const [membershipsLoaded, setMembershipsLoaded] = useState(initialMembershipCache.loaded);
   const [softballAdminAllowed, setSoftballAdminAllowed] = useState(false);
+  const [cheerleadingAdminAllowed, setCheerleadingAdminAllowed] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationUnread, setNotificationUnread] = useState(0);
@@ -527,6 +528,37 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
 
   useEffect(() => {
     if (!hasGoogleLogin || needsReauth) {
+      setCheerleadingAdminAllowed(false);
+      return;
+    }
+    let ignore = false;
+    apiRequest({ action: "getCheerleadingAdminAccess" })
+      .then(({ result }) => {
+        if (ignore) {
+          return;
+        }
+        if (result && result.ok) {
+          setCheerleadingAdminAllowed(Boolean(result.data && result.data.allowed));
+        } else {
+          if (shouldDowngradeToReauthState_(String((result && result.error) || ""))) {
+            downgradeToReauthState_();
+            return;
+          }
+          setCheerleadingAdminAllowed(false);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setCheerleadingAdminAllowed(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiRequest, hasGoogleLogin, needsReauth, googleLinkedStudent && googleLinkedStudent.id]);
+
+  useEffect(() => {
+    if (!hasGoogleLogin || needsReauth) {
       return;
     }
     let ignore = false;
@@ -819,6 +851,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeAcademicsAdmin = membershipsLoaded && hasGroupAccess_(["E", "F"]);
   const canSeeSoftballAdmin = membershipsLoaded && (hasGroupAccess_(["E", "H"]) || softballAdminAllowed);
+  const canSeeCheerleadingAdmin =
+    membershipsLoaded && (hasGroupAccess_(["E", "L"]) || cheerleadingAdminAllowed);
   const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
   const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
@@ -1373,7 +1407,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 同學入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
-              {canSeeSoftballAdmin ? (
+              {canSeeCheerleadingAdmin ? (
                 <a
                   href="/cheerleading"
                   className="text-xs font-semibold text-pink-700 underline decoration-pink-300 underline-offset-4 hover:text-pink-800"
