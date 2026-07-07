@@ -15,6 +15,7 @@ function CheerleadingPage({ shared }) {
   const [attendance, setAttendance] = useState([]);
   const [activePracticeId, setActivePracticeId] = useState("");
   const [statsScope, setStatsScope] = useState("recent10");
+  const [showAttendanceEditor, setShowAttendanceEditor] = useState(false);
   const [practiceForm, setPracticeForm] = useState({
     id: "",
     date: "",
@@ -390,7 +391,19 @@ function CheerleadingPage({ shared }) {
               </div>
             ) : null}
 
-            <div className="mt-5 space-y-3">
+            {activePractice ? (
+              <div className="mt-5 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowAttendanceEditor((value) => !value)}
+                  className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  {showAttendanceEditor ? "收起修改" : "修改紀錄"}
+                </button>
+              </div>
+            ) : null}
+
+            {showAttendanceEditor ? <div className="mt-5 space-y-3">
               {activePractice && sortedStudents.map((student) => {
                 const key = `${normalizeId_(activePractice.id)}:${normalizeId_(student.id)}`;
                 const record = attendanceMap.get(key);
@@ -408,7 +421,7 @@ function CheerleadingPage({ shared }) {
                   </div>
                 );
               })}
-            </div>
+            </div> : null}
           </section>
         ) : null}
 
