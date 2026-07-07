@@ -39,6 +39,12 @@ function CheerleadingPage({ shared }) {
   ];
   const STATUS_LABELS = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
   const PRESENT_STATUSES = new Set(["attend", "late", "early_leave"]);
+  const ATTENDANCE_SUMMARY_GROUPS = [
+    { id: "available", label: "可以到", statuses: ["attend", "late", "early_leave"], tone: "border-emerald-200 bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
+    { id: "unavailable", label: "不能到", statuses: ["absent"], tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
+    { id: "excused", label: "請假", statuses: ["excused"], tone: "border-sky-200 bg-sky-50 text-sky-800", dot: "bg-sky-500" },
+    { id: "pending", label: "還沒有填", statuses: ["unknown"], tone: "border-slate-200 bg-slate-50 text-slate-700", dot: "bg-slate-400" },
+  ];
 
   const normalizeId_ = (value) => String(value || "").trim();
   const normalizeStatus_ = (value) => {
@@ -162,6 +168,28 @@ function CheerleadingPage({ shared }) {
     }).sort((a, b) => b.present - a.present || a.participationRate - b.participationRate || getStudentName_(a.student).localeCompare(getStudentName_(b.student), "zh-Hant"));
     return { practiceStats, studentStats, pastPracticeCount: pastPractices.length };
   }, [ATTENDANCE_OPTIONS, attendanceMap, scopedPractices, sortedStudents]);
+
+  const activePracticeAttendanceSummary = useMemo(() => {
+    const groups = ATTENDANCE_SUMMARY_GROUPS.map((group) => ({ ...group, students: [] }));
+    const groupByStatus = new Map();
+    groups.forEach((group) => {
+      group.statuses.forEach((status) => groupByStatus.set(status, group));
+    });
+
+    if (!activePractice) {
+      return groups;
+    }
+
+    sortedStudents.forEach((student) => {
+      const key = `${normalizeId_(activePractice.id)}:${normalizeId_(student.id)}`;
+      const record = attendanceMap.get(key);
+      const status = normalizeStatus_(record?.status);
+      const group = groupByStatus.get(status) || groupByStatus.get("unknown");
+      group.students.push({ student, record, status });
+    });
+
+    return groups;
+  }, [attendanceMap, activePractice, sortedStudents]);
 
   const savePractice = async (event) => {
     event.preventDefault();
@@ -320,12 +348,48 @@ function CheerleadingPage({ shared }) {
         {activeTab === "attendance" ? (
           <section className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-xl font-bold">出席紀錄</h2>
+              <div>
+                <h2 className="text-xl font-bold">出席紀錄</h2>
+                {activePractice ? (
+                  <p className="mt-1 text-sm text-slate-500">
+                    {formatPracticeSchedule_(activePractice)} · {activePractice.title || "啦啦隊練習"}
+                  </p>
+                ) : null}
+              </div>
               <select value={activePractice?.id || ""} onChange={(event) => setActivePracticeId(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
                 {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatPracticeSchedule_(practice)} · {practice.title || "啦啦隊練習"}</option>)}
               </select>
             </div>
             {!activePractice ? <p className="mt-4 text-sm text-slate-500">請先建立練習。</p> : null}
+
+            {activePractice ? (
+              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {activePracticeAttendanceSummary.map((group) => (
+                  <div key={group.id} className={`rounded-2xl border p-4 ${group.tone}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${group.dot}`} />
+                        <p className="text-sm font-semibold">{group.label}</p>
+                      </div>
+                      <p className="text-2xl font-bold leading-none">{group.students.length}</p>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {group.students.length ? (
+                        group.students.map(({ student, status }) => (
+                          <span key={student.id} className="rounded-full border border-white/70 bg-white/70 px-2.5 py-1 text-xs font-semibold shadow-sm">
+                            {getStudentName_(student)}
+                            {group.id === "available" && status !== "attend" ? ` · ${STATUS_LABELS[status]}` : ""}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs opacity-70">目前沒有人</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             <div className="mt-5 space-y-3">
               {activePractice && sortedStudents.map((student) => {
                 const key = `${normalizeId_(activePractice.id)}:${normalizeId_(student.id)}`;
@@ -333,8 +397,13 @@ function CheerleadingPage({ shared }) {
                 const status = normalizeStatus_(record?.status);
                 return (
                   <div key={student.id} className="rounded-2xl border border-slate-200 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3"><p className="font-semibold">{getStudentName_(student)}</p><p className="text-xs text-slate-500">目前：{STATUS_LABELS[status]}</p></div>
-                    <div className="mt-3 flex flex-wrap gap-2">{ATTENDANCE_OPTIONS.map((item) => <button key={item.value} disabled={saving} type="button" onClick={() => submitAttendance(student.id, item.value)} className={`rounded-full border px-3 py-1 text-xs font-semibold ${status === item.value ? item.tone : "border-slate-200 bg-white text-slate-600"}`}>{item.label}</button>)}</div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="font-semibold">{getStudentName_(student)}</p>
+                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${ATTENDANCE_OPTIONS.find((item) => item.value === status)?.tone || "border-slate-200 bg-slate-50 text-slate-600"}`}>
+                        {STATUS_LABELS[status]}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{ATTENDANCE_OPTIONS.map((item) => <button key={item.value} disabled={saving} type="button" onClick={() => submitAttendance(student.id, item.value)} className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${status === item.value ? item.tone : "border-slate-200 bg-white text-slate-600"}`}>{item.label}</button>)}</div>
                     <input value={attendanceNoteMap[key] ?? record?.notes ?? ""} onChange={(event) => setAttendanceNoteMap((current) => ({ ...current, [key]: event.target.value }))} onBlur={() => submitAttendance(student.id, status)} placeholder="備註" className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
                   </div>
                 );
