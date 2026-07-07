@@ -77,6 +77,12 @@ function CheerleadingPage({ shared }) {
     return `${now.getFullYear()}-${pad2_ ? pad2_(now.getMonth() + 1) : String(now.getMonth() + 1).padStart(2, "0")}-${pad2_ ? pad2_(now.getDate()) : String(now.getDate()).padStart(2, "0")}`;
   };
   const isPracticePast_ = (practice) => String(practice?.date || practice?.startAt || "").slice(0, 10) <= todayKey_();
+  const getDefaultPracticeId_ = (practiceList) => {
+    if (!Array.isArray(practiceList) || !practiceList.length) return "";
+    const today = todayKey_();
+    const nextPractice = practiceList.find((practice) => String(practice?.date || practice?.startAt || "").slice(0, 10) >= today);
+    return (nextPractice || practiceList[practiceList.length - 1])?.id || "";
+  };
 
   const loadBootstrap = async () => {
     setLoading(true);
@@ -89,9 +95,6 @@ function CheerleadingPage({ shared }) {
       setPractices(Array.isArray(data.practices) ? data.practices : []);
       setFields(Array.isArray(data.fields) ? data.fields : []);
       setAttendance(Array.isArray(data.attendance) ? data.attendance : []);
-      if (!activePracticeId && Array.isArray(data.practices) && data.practices[0]) {
-        setActivePracticeId(data.practices[0].id || "");
-      }
     } catch (err) {
       setError(err.message || "啦啦隊資料載入失敗");
     } finally {
@@ -114,6 +117,14 @@ function CheerleadingPage({ shared }) {
     [practices]
   );
   const activePractice = sortedPractices.find((item) => normalizeId_(item.id) === normalizeId_(activePracticeId)) || null;
+  const activePracticeIndex = sortedPractices.findIndex((item) => normalizeId_(item.id) === normalizeId_(activePracticeId));
+  const canSelectPreviousPractice = activePracticeIndex > 0;
+  const canSelectNextPractice = activePracticeIndex >= 0 && activePracticeIndex < sortedPractices.length - 1;
+  const selectPracticeByOffset = (offset) => {
+    if (activePracticeIndex < 0) return;
+    const next = sortedPractices[activePracticeIndex + offset];
+    if (next) setActivePracticeId(next.id || "");
+  };
 
   useEffect(() => {
     if (!sortedPractices.length) {
@@ -126,7 +137,7 @@ function CheerleadingPage({ shared }) {
       (practice) => normalizeId_(practice.id) === normalizeId_(activePracticeId)
     );
     if (!activePracticeId || !hasSelected) {
-      setActivePracticeId(sortedPractices[0].id || "");
+      setActivePracticeId(getDefaultPracticeId_(sortedPractices));
     }
   }, [activePracticeId, sortedPractices]);
 
@@ -357,9 +368,27 @@ function CheerleadingPage({ shared }) {
                   </p>
                 ) : null}
               </div>
-              <select value={activePractice?.id || ""} onChange={(event) => setActivePracticeId(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
-                {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatPracticeSchedule_(practice)} · {practice.title || "啦啦隊練習"}</option>)}
-              </select>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={!canSelectPreviousPractice}
+                  onClick={() => selectPracticeByOffset(-1)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  上一次
+                </button>
+                <select value={activePractice?.id || ""} onChange={(event) => setActivePracticeId(event.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                  {sortedPractices.map((practice) => <option key={practice.id} value={practice.id}>{formatPracticeSchedule_(practice)} · {practice.title || "啦啦隊練習"}</option>)}
+                </select>
+                <button
+                  type="button"
+                  disabled={!canSelectNextPractice}
+                  onClick={() => selectPracticeByOffset(1)}
+                  className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  下一次
+                </button>
+              </div>
             </div>
             {!activePractice ? <p className="mt-4 text-sm text-slate-500">請先建立練習。</p> : null}
 
