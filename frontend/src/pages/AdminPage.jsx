@@ -2560,6 +2560,8 @@ export default function AdminPage({
       if (!activeId) {
         const fallbackDate = parseLocalInputDate_(prev.startAt) || addDays_(new Date(), 10);
         next.id = generateEventId_(fallbackDate, value, events, seedTimestamp);
+        const baseUrl = normalizeBaseUrl_(PUBLIC_SITE_URL) || window.location.origin;
+        next.registerUrl = `${baseUrl}/register?eventId=${encodeURIComponent(next.id)}`;
         next.checkinUrl = `${baseUrl}/checkin?eventId=${encodeURIComponent(next.id)}`;
       }
       return next;
@@ -2650,7 +2652,7 @@ export default function AdminPage({
         next.id = generateEventId_(startDate, prev.category, events, seedTimestamp);
         const baseUrl = normalizeBaseUrl_(PUBLIC_SITE_URL) || window.location.origin;
         next.registerUrl = `${baseUrl}/register?eventId=${encodeURIComponent(next.id)}`;
-        next.checkinUrl = `${window.location.origin}/checkin?eventId=${encodeURIComponent(next.id)}`;
+        next.checkinUrl = `${baseUrl}/checkin?eventId=${encodeURIComponent(next.id)}`;
       }
       return next;
     });
