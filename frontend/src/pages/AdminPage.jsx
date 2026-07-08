@@ -3080,6 +3080,14 @@ export default function AdminPage({
         .filter(([label]) => !(travelTransportationField.options || []).includes(label))
         .sort((a, b) => b[1] - a[1])
     );
+  const travelTransportationAttendeeGroups = travelTransportationStatsList.map(([label, count]) => ({
+    label,
+    count,
+    attendees: prepStats.attendees
+      .filter((item) => (String(item.travelTransportation || "").trim() || "未填寫") === label)
+      .slice()
+      .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant")),
+  }));
   const drinkQtyStatsList = [
     { key: "redWineQty", label: "紅酒" },
     { key: "whiteWineQty", label: "白酒" },
@@ -5281,15 +5289,29 @@ export default function AdminPage({
                     <div className="mt-3 rounded-xl border border-sky-200/70 bg-sky-50/50 p-3">
                       <p className="text-xs font-semibold text-sky-700">旅遊交通方式</p>
                       <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
-                        {travelTransportationStatsList.map(([label, count]) => (
+                        {travelTransportationAttendeeGroups.map((group) => (
                           <div
-                            key={`travel-transportation-${label}`}
+                            key={`travel-transportation-${group.label}`}
                             className="rounded-lg border border-sky-200/70 bg-white px-3 py-2"
                           >
-                            <p className="font-semibold text-slate-700">{label}</p>
+                            <p className="font-semibold text-slate-700">{group.label}</p>
                             <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
-                              {count}
+                              {group.count}
                             </p>
+                            <div className="mt-2 flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
+                              {group.attendees.length ? (
+                                group.attendees.map((item) => (
+                                  <span
+                                    key={`travel-transportation-${group.label}-${item.name}`}
+                                    className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[11px] font-semibold text-sky-700"
+                                  >
+                                    {item.name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-[11px] text-slate-400">目前沒有人選擇</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
