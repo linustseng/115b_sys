@@ -35,6 +35,7 @@ function RegistrationPage({ shared }) {
   const buildEmptyEventInfo_ = () => ({
     ...DEFAULT_EVENT,
     title: "",
+    description: "",
     location: "",
     address: "",
     startAt: "",
@@ -70,6 +71,7 @@ function RegistrationPage({ shared }) {
           ...DEFAULT_EVENT,
           ...cachedEventInfo,
           title: titleParam || cachedEventInfo.title || "",
+          description: cachedEventInfo.description || "",
           location: locationParam || cachedEventInfo.location || "",
           category: categoryParam || cachedEventInfo.category || DEFAULT_EVENT.category,
         }
@@ -334,6 +336,7 @@ function RegistrationPage({ shared }) {
           const event = result.data.event;
           const nextEventInfo = {
             title: titleParam || event.title || "",
+            description: event.description || "",
             location: locationParam || event.location || "",
             address: event.address || DEFAULT_EVENT.address,
             startAt: event.startAt || DEFAULT_EVENT.startAt,
@@ -1075,6 +1078,11 @@ function RegistrationPage({ shared }) {
             <h2 className="mt-3 text-xl font-semibold text-slate-900">
               {eventInfo.title} · {eventInfo.location}
             </h2>
+            {eventInfo.description ? (
+              <div className="mt-4 rounded-2xl border border-slate-200/70 bg-white/80 p-4 text-sm leading-6 text-slate-700 whitespace-pre-wrap">
+                {eventInfo.description}
+              </div>
+            ) : null}
             <div className="mt-5 space-y-3 text-sm text-slate-600">
               {(() => {
                 const schedule = formatEventSchedule_(eventInfo.startAt, eventInfo.endAt);
