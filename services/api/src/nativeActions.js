@@ -5129,6 +5129,10 @@ export async function dispatchNativeAction({
           capacity: row.capacity == null ? "" : String(row.capacity),
           status: row.status || "",
           category: row.category || "",
+          allowCompanions:
+            row.raw && typeof row.raw === "object" ? row.raw.allowCompanions || "yes" : "yes",
+          allowBringDrinks:
+            row.raw && typeof row.raw === "object" ? row.raw.allowBringDrinks || "yes" : "yes",
           formSchema: row.form_schema || {},
         })),
         students: students.rows.map(mapStudentListRow_),

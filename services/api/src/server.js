@@ -527,7 +527,9 @@ function getIdTokenFromRequest(req) {
 }
 
 function toEventPayload(row) {
+  const raw = row && row.raw && typeof row.raw === "object" ? row.raw : {};
   return {
+    ...raw,
     id: row.id,
     title: row.title || "",
     description: row.description || "",
@@ -544,6 +546,8 @@ function toEventPayload(row) {
     capacity: row.capacity == null ? "" : String(row.capacity),
     status: row.status || "",
     category: row.category || "",
+    allowCompanions: raw.allowCompanions || "yes",
+    allowBringDrinks: raw.allowBringDrinks || "yes",
     formSchema: row.form_schema || {},
     revisionNo: Number(row.revision_no || 0) || 0,
     lastChangeBatchId: row.last_change_batch_id || "",

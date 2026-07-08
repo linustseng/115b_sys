@@ -2574,7 +2574,11 @@ export default function AdminPage({
 
   const handleCategoryChange = (value) => {
     setForm((prev) => {
-      const next = { ...prev, category: value };
+      const next = {
+        ...prev,
+        category: value,
+        ...(value === "travel" ? { allowCompanions: "no", allowBringDrinks: "no" } : {}),
+      };
       if (!activeId) {
         const fallbackDate = parseLocalInputDate_(prev.startAt) || addDays_(new Date(), 10);
         next.id = generateEventId_(fallbackDate, value, events, seedTimestamp);
