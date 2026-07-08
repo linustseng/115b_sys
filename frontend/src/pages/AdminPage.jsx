@@ -974,6 +974,20 @@ export default function AdminPage({
   }, [sortedEvents, eventListId]);
 
   useEffect(() => {
+    if (activeTab !== "events" || !selectedEventForList) {
+      return;
+    }
+    const selectedId = normalizeEventId_(selectedEventForList.id);
+    if (!selectedId) {
+      return;
+    }
+    if (normalizeEventId_(activeId) === selectedId) {
+      return;
+    }
+    handleEdit(selectedEventForList);
+  }, [activeTab, selectedEventForList, isEventFormOpen, activeId]);
+
+  useEffect(() => {
     if (activeTab !== "ordering" || isCreatingOrder) {
       return;
     }
