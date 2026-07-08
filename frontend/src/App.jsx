@@ -316,6 +316,7 @@ const DEFAULT_EVENT = {
 
 const EVENT_CATEGORIES = [
   { value: "gathering", label: "聚餐" },
+  { value: "travel", label: "旅遊" },
   { value: "meeting", label: "會議" },
   { value: "softball", label: "壘球練習" },
 ];
