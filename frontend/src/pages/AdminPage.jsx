@@ -26,6 +26,11 @@ export default function AdminPage({
   GROUP_ROLE_LABELS,
   ROLE_BADGE_STYLES,
   EVENT_CATEGORIES,
+  travelTransportationField = {
+    id: "travelTransportation",
+    label: "旅遊交通方式",
+    options: ["全程搭高鐵跟遊覽車", "只搭遊覽車", "全程交通自理"],
+  },
   CLASS_GROUPS,
   initialTab = "events",
   allowedTabs = ["events", "ordering", "dietary", "registrations", "checkins", "students"],
@@ -87,6 +92,7 @@ export default function AdminPage({
   const [manualRegistrationForm, setManualRegistrationForm] = useState({
     studentQuery: "",
     attendance: "出席",
+    travelTransportation: "",
     notes: "",
   });
   const [copyStatus, setCopyStatus] = useState("");
@@ -1627,6 +1633,10 @@ export default function AdminPage({
         String(targetStudent.name || "").trim() ||
         userEmail;
       const attendance = String(manualRegistrationForm.attendance || "").trim() || "尚未確定";
+      const travelTransportation = String(manualRegistrationForm.travelTransportation || "").trim();
+      if (isRegistrationTravelEvent && !travelTransportation) {
+        throw new Error("旅遊活動請選擇交通方式。");
+      }
       const notes = String(manualRegistrationForm.notes || "").trim();
       const dietaryPreference = String(targetStudent.dietaryRestrictions || targetStudent.dietary || "").trim();
       const customFields = {
@@ -1636,6 +1646,9 @@ export default function AdminPage({
       };
       if (dietaryPreference) {
         customFields.dietary = dietaryPreference;
+      }
+      if (isRegistrationTravelEvent) {
+        customFields.travelTransportation = travelTransportation;
       }
       if (notes) {
         customFields.notes = notes;
@@ -1655,7 +1668,12 @@ export default function AdminPage({
         throw new Error(result.error || "補報名失敗");
       }
       await loadRegistrations();
-      setManualRegistrationForm((prev) => ({ ...prev, studentQuery: "", notes: "" }));
+      setManualRegistrationForm((prev) => ({
+        ...prev,
+        studentQuery: "",
+        travelTransportation: "",
+        notes: "",
+      }));
       setManualRegistrationStatusMessage("已完成補報名");
     } catch (err) {
       setError(err.message || "補報名失敗");
@@ -2734,6 +2752,9 @@ export default function AdminPage({
   const registrationAllowBringDrinks =
     String((selectedRegistrationEvent && selectedRegistrationEvent.allowBringDrinks) || "yes").trim() !==
     "no";
+  const isRegistrationTravelEvent =
+    String((selectedRegistrationEvent && selectedRegistrationEvent.category) || "").trim() ===
+    "travel";
   const displayStudents = directory.length ? directory : students;
   const parseTimestampValue_ = (value) => {
     if (!value) {
@@ -2977,11 +2998,17 @@ export default function AdminPage({
         name: attendeeName,
         dietary: dietary,
         parking: parking,
+        travelTransportation: String(fields.travelTransportation || "").trim(),
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
         bringDrinks: bringDrinks || "",
         drinkItems,
       };
       acc.attendees.push(attendeeEntry);
+      if (isRegistrationTravelEvent) {
+        const travelTransportation = attendeeEntry.travelTransportation || "未填寫";
+        acc.travelTransportation[travelTransportation] =
+          (acc.travelTransportation[travelTransportation] || 0) + 1;
+      }
       if (attendeeEntry.companions > 0) {
         acc.companionAttendees.push(attendeeEntry);
       }
@@ -3010,6 +3037,7 @@ export default function AdminPage({
       notBringDrinksCount: 0,
       dietary: {},
       parking: {},
+      travelTransportation: {},
       drinks: {
         redWineQty: 0,
         whiteWineQty: 0,
@@ -3027,6 +3055,13 @@ export default function AdminPage({
   );
   const dietaryStatsList = Object.entries(prepStats.dietary).sort((a, b) => b[1] - a[1]);
   const parkingStatsList = Object.entries(prepStats.parking).sort((a, b) => b[1] - a[1]);
+  const travelTransportationStatsList = (travelTransportationField.options || [])
+    .map((option) => [option, prepStats.travelTransportation[option] || 0])
+    .concat(
+      Object.entries(prepStats.travelTransportation)
+        .filter(([label]) => !(travelTransportationField.options || []).includes(label))
+        .sort((a, b) => b[1] - a[1])
+    );
   const drinkQtyStatsList = [
     { key: "redWineQty", label: "紅酒" },
     { key: "whiteWineQty", label: "白酒" },
@@ -3092,6 +3127,7 @@ export default function AdminPage({
         name,
         studentId,
         group: String((student && student.group) || "").trim(),
+        travelTransportation: String(fields.travelTransportation || "").trim(),
         dietary: resolveRegistrationDietary_(registration, fields),
         parking: String(fields.parking || "").trim(),
         companions: !isNaN(companions) && companions > 0 ? companions : 0,
@@ -3162,6 +3198,11 @@ export default function AdminPage({
 
     pushRow_(["摘要", "數值"]);
     pushRow_(["出席人數", prepStats.attendingTotal]);
+    if (isRegistrationTravelEvent) {
+      travelTransportationStatsList.forEach(([label, count]) => {
+        pushRow_([`交通方式：${label}`, count]);
+      });
+    }
     pushRow_(["停車位需求", prepStats.parkingNeeded]);
     if (registrationAllowCompanions) {
       pushRow_(["攜伴總人數", prepStats.companionsTotal]);
@@ -3171,6 +3212,12 @@ export default function AdminPage({
       pushRow_(["不攜帶酒水（人）", prepStats.notBringDrinksCount]);
     }
     pushRow_([]);
+
+    if (isRegistrationTravelEvent) {
+      pushRow_(["旅遊交通方式", "人數"]);
+      travelTransportationStatsList.forEach(([label, count]) => pushRow_([label, count]));
+      pushRow_([]);
+    }
 
     pushRow_(["飲食偏好", "人數"]);
     if (dietaryStatsList.length) {
@@ -3198,13 +3245,34 @@ export default function AdminPage({
       pushRow_([]);
     }
 
-    pushRow_(["出席名單", "飲食偏好", "停車", "攜伴", "自帶酒水"]);
+    pushRow_(
+      isRegistrationTravelEvent
+        ? ["出席名單", "交通方式", "飲食偏好", "停車", "攜伴", "自帶酒水"]
+        : ["出席名單", "飲食偏好", "停車", "攜伴", "自帶酒水"]
+    );
     if (attendingNameList.length) {
       attendingNameList.forEach((item) =>
-        pushRow_([item.name, item.dietary || "-", item.parking || "-", item.companions || 0, item.bringDrinks || "-"])
+        pushRow_(
+          isRegistrationTravelEvent
+            ? [
+                item.name,
+                item.travelTransportation || "-",
+                item.dietary || "-",
+                item.parking || "-",
+                item.companions || 0,
+                item.bringDrinks || "-",
+              ]
+            : [
+                item.name,
+                item.dietary || "-",
+                item.parking || "-",
+                item.companions || 0,
+                item.bringDrinks || "-",
+              ]
+        )
       );
     } else {
-      pushRow_(["(無資料)", "", "", "", ""]);
+      pushRow_(isRegistrationTravelEvent ? ["(無資料)", "", "", "", "", ""] : ["(無資料)", "", "", "", ""]);
     }
     pushRow_([]);
 
@@ -3250,6 +3318,7 @@ export default function AdminPage({
       "姓名",
       "學號",
       "組別",
+      ...(isRegistrationTravelEvent ? ["交通方式"] : []),
       "飲食偏好",
       "停車",
       "攜伴人數",
@@ -3284,6 +3353,7 @@ export default function AdminPage({
           item.name,
           item.studentId,
           item.group,
+          ...(isRegistrationTravelEvent ? [item.travelTransportation] : []),
           item.dietary,
           item.parking,
           item.companions,
@@ -5189,6 +5259,24 @@ export default function AdminPage({
                       </div>
                     ) : null}
                   </div>
+                  {isRegistrationTravelEvent ? (
+                    <div className="mt-3 rounded-xl border border-sky-200/70 bg-sky-50/50 p-3">
+                      <p className="text-xs font-semibold text-sky-700">旅遊交通方式</p>
+                      <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
+                        {travelTransportationStatsList.map(([label, count]) => (
+                          <div
+                            key={`travel-transportation-${label}`}
+                            className="rounded-lg border border-sky-200/70 bg-white px-3 py-2"
+                          >
+                            <p className="font-semibold text-slate-700">{label}</p>
+                            <p className="mt-1 text-lg font-semibold tabular-nums text-slate-900">
+                              {count}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div
                     className={`mt-3 grid gap-3 ${
                       registrationAllowBringDrinks ? "sm:grid-cols-3" : "sm:grid-cols-2"
@@ -6798,6 +6886,32 @@ export default function AdminPage({
                     <option value="尚未確定">尚未確定</option>
                   </select>
                 </div>
+                {isRegistrationTravelEvent ? (
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700">
+                      {travelTransportationField.label}
+                    </label>
+                    <select
+                      value={manualRegistrationForm.travelTransportation}
+                      onChange={(event) =>
+                        setManualRegistrationForm((prev) => ({
+                          ...prev,
+                          travelTransportation: event.target.value,
+                        }))
+                      }
+                      className="input-sm"
+                    >
+                      <option value="" disabled>
+                        請選擇
+                      </option>
+                      {(travelTransportationField.options || []).map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null}
                 <div className="grid gap-2">
                   <label className="text-sm font-medium text-slate-700">備註</label>
                   <input

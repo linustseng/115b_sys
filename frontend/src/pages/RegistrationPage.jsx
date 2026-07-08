@@ -7,6 +7,7 @@ function RegistrationPage({ shared }) {
     DEFAULT_EVENT,
     DRINK_FIELD_IDS,
     gatheringFieldConfig,
+    travelTransportationField,
     meetingFields,
     normalizePhoneInputValue_,
     formatDisplayDate_,
@@ -104,6 +105,7 @@ function RegistrationPage({ shared }) {
       : null;
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
+  const isTravelEvent = String(eventInfo.category || "").trim() === "travel";
   const registrationDeadlineLabel = eventInfo.registrationCloseAt
     ? formatDisplayDate_(eventInfo.registrationCloseAt, { withTime: true })
     : "-";
@@ -449,6 +451,10 @@ function RegistrationPage({ shared }) {
       setSubmitError("請填寫聯絡資訊。");
       return;
     }
+    if (isTravelEvent && !String(customFields.travelTransportation || "").trim()) {
+      setSubmitError("請選擇旅遊交通方式。");
+      return;
+    }
     if (existingRegistration) {
       setUpdatePromptOpen(true);
       return;
@@ -505,6 +511,12 @@ function RegistrationPage({ shared }) {
     setSubmitError("");
     setSubmitSuccess(false);
     setSubmitSuccessType("");
+    if (isTravelEvent && !String(customFields.travelTransportation || "").trim()) {
+      setUpdatePromptOpen(false);
+      setUpdateSubmitting(false);
+      setSubmitError("請選擇旅遊交通方式。");
+      return;
+    }
     try {
       const linkedStudentId =
         effectiveGoogleLinkedStudent && effectiveGoogleLinkedStudent.id
@@ -832,6 +844,59 @@ function RegistrationPage({ shared }) {
                     </div>
                   );
                 })}
+              </div>
+            ) : isTravelEvent ? (
+              <div className="mt-5 grid gap-6">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label
+                      className="text-sm font-medium text-slate-700"
+                      htmlFor={travelTransportationField.id}
+                    >
+                      {travelTransportationField.label}
+                    </label>
+                    {renderOptionButtons(
+                      travelTransportationField,
+                      customFields.travelTransportation || "",
+                      (next) => handleCustomFieldChange(travelTransportationField.id, next)
+                    )}
+                  </div>
+                  <div className="grid gap-2 sm:col-span-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="attendance">
+                      {gatheringFieldConfig.attendance.label}
+                    </label>
+                    {renderOptionButtons(
+                      gatheringFieldConfig.attendance,
+                      customFields.attendance || "",
+                      (next) => handleCustomFieldChange(gatheringFieldConfig.attendance.id, next)
+                    )}
+                  </div>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
+                      {gatheringFieldConfig.dietary.label}
+                    </label>
+                    <select
+                      id="dietary"
+                      value={customFields.dietary || ""}
+                      onChange={(event) =>
+                        handleCustomFieldChange(
+                          gatheringFieldConfig.dietary.id,
+                          event.target.value
+                        )
+                      }
+                      className="input-base"
+                    >
+                      <option value="" disabled>
+                        請選擇
+                      </option>
+                      {gatheringFieldConfig.dietary.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="mt-5 grid gap-6">

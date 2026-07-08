@@ -222,6 +222,12 @@ const gatheringFieldConfig = {
   },
 };
 
+const travelTransportationField = {
+  id: "travelTransportation",
+  label: "旅遊交通方式",
+  options: ["全程搭高鐵跟遊覽車", "只搭遊覽車", "全程交通自理"],
+};
+
 const meetingFields = [
   {
     id: "attendance",
@@ -3239,6 +3245,7 @@ function AppShell() {
     DEFAULT_EVENT,
     DRINK_FIELD_IDS,
     gatheringFieldConfig,
+    travelTransportationField,
     meetingFields,
     normalizePhoneInputValue_,
     formatDisplayDate_,
@@ -3491,6 +3498,7 @@ function AppShell() {
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
           EVENT_CATEGORIES={EVENT_CATEGORIES}
+          travelTransportationField={travelTransportationField}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
@@ -3517,6 +3525,7 @@ function AppShell() {
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}
           EVENT_CATEGORIES={EVENT_CATEGORIES}
+          travelTransportationField={travelTransportationField}
           PUBLIC_SITE_URL={PUBLIC_SITE_URL}
           GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
           ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
