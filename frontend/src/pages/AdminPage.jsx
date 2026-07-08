@@ -1648,7 +1648,9 @@ export default function AdminPage({
         userEmail;
       const attendance = String(manualRegistrationForm.attendance || "").trim() || "尚未確定";
       const travelTransportation = String(manualRegistrationForm.travelTransportation || "").trim();
-      if (isRegistrationTravelEvent && !travelTransportation) {
+      const shouldAskTravelTransportation =
+        isRegistrationTravelEvent && normalizeAttendanceStatus_(attendance) === "attending";
+      if (shouldAskTravelTransportation && !travelTransportation) {
         throw new Error("旅遊活動請選擇交通方式。");
       }
       const notes = String(manualRegistrationForm.notes || "").trim();
@@ -1661,7 +1663,7 @@ export default function AdminPage({
       if (dietaryPreference) {
         customFields.dietary = dietaryPreference;
       }
-      if (isRegistrationTravelEvent) {
+      if (shouldAskTravelTransportation) {
         customFields.travelTransportation = travelTransportation;
       }
       if (notes) {
@@ -6917,7 +6919,11 @@ export default function AdminPage({
                   <select
                     value={manualRegistrationForm.attendance}
                     onChange={(event) =>
-                      setManualRegistrationForm((prev) => ({ ...prev, attendance: event.target.value }))
+                      setManualRegistrationForm((prev) => ({
+                        ...prev,
+                        attendance: event.target.value,
+                        ...(event.target.value === "出席" ? {} : { travelTransportation: "" }),
+                      }))
                     }
                     className="input-sm"
                   >
@@ -6926,7 +6932,8 @@ export default function AdminPage({
                     <option value="尚未確定">尚未確定</option>
                   </select>
                 </div>
-                {isRegistrationTravelEvent ? (
+                {isRegistrationTravelEvent &&
+                normalizeAttendanceStatus_(manualRegistrationForm.attendance) === "attending" ? (
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700">
                       {travelTransportationField.label}

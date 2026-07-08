@@ -108,6 +108,8 @@ function RegistrationPage({ shared }) {
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
   const isTravelEvent = String(eventInfo.category || "").trim() === "travel";
+  const attendanceValue = String(customFields.attendance || "").trim();
+  const shouldAskTravelTransportation = isTravelEvent && attendanceValue === "出席";
   const registrationDeadlineLabel = eventInfo.registrationCloseAt
     ? formatDisplayDate_(eventInfo.registrationCloseAt, { withTime: true })
     : "-";
@@ -423,7 +425,13 @@ function RegistrationPage({ shared }) {
   }, [email, autoFilled]);
 
   const handleCustomFieldChange = (fieldId, value) => {
-    setCustomFields((prev) => ({ ...prev, [fieldId]: value }));
+    setCustomFields((prev) => {
+      const next = { ...prev, [fieldId]: value };
+      if (fieldId === "attendance" && value !== "出席") {
+        delete next.travelTransportation;
+      }
+      return next;
+    });
   };
 
   const handleBringDrinksChange = (value) => {
@@ -454,7 +462,7 @@ function RegistrationPage({ shared }) {
       setSubmitError("請填寫聯絡資訊。");
       return;
     }
-    if (isTravelEvent && !String(customFields.travelTransportation || "").trim()) {
+    if (shouldAskTravelTransportation && !String(customFields.travelTransportation || "").trim()) {
       setSubmitError("請選擇旅遊交通方式。");
       return;
     }
@@ -514,7 +522,7 @@ function RegistrationPage({ shared }) {
     setSubmitError("");
     setSubmitSuccess(false);
     setSubmitSuccessType("");
-    if (isTravelEvent && !String(customFields.travelTransportation || "").trim()) {
+    if (shouldAskTravelTransportation && !String(customFields.travelTransportation || "").trim()) {
       setUpdatePromptOpen(false);
       setUpdateSubmitting(false);
       setSubmitError("請選擇旅遊交通方式。");
@@ -852,19 +860,6 @@ function RegistrationPage({ shared }) {
               <div className="mt-5 grid gap-6">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="grid gap-2 sm:col-span-2">
-                    <label
-                      className="text-sm font-medium text-slate-700"
-                      htmlFor={travelTransportationField.id}
-                    >
-                      {travelTransportationField.label}
-                    </label>
-                    {renderOptionButtons(
-                      travelTransportationField,
-                      customFields.travelTransportation || "",
-                      (next) => handleCustomFieldChange(travelTransportationField.id, next)
-                    )}
-                  </div>
-                  <div className="grid gap-2 sm:col-span-2">
                     <label className="text-sm font-medium text-slate-700" htmlFor="attendance">
                       {gatheringFieldConfig.attendance.label}
                     </label>
@@ -874,6 +869,21 @@ function RegistrationPage({ shared }) {
                       (next) => handleCustomFieldChange(gatheringFieldConfig.attendance.id, next)
                     )}
                   </div>
+                  {shouldAskTravelTransportation ? (
+                    <div className="grid gap-2 sm:col-span-2">
+                      <label
+                        className="text-sm font-medium text-slate-700"
+                        htmlFor={travelTransportationField.id}
+                      >
+                        {travelTransportationField.label}
+                      </label>
+                      {renderOptionButtons(
+                        travelTransportationField,
+                        customFields.travelTransportation || "",
+                        (next) => handleCustomFieldChange(travelTransportationField.id, next)
+                      )}
+                    </div>
+                  ) : null}
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
                       {gatheringFieldConfig.dietary.label}
