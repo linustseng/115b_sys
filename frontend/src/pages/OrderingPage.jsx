@@ -128,26 +128,66 @@ function OrderingPage({ shared }) {
   const hasVegetarianChoice_ = (plan) =>
     Boolean(String((plan && (plan.optionVegetarian || plan.optionVegetarianImage)) || "").trim());
 
+  const isGenericChoiceLabel_ = (value, choice) => {
+    const text = String(value || "").trim().replace(/\s+/g, "");
+    const normalized = String(choice || "").trim().toUpperCase();
+    return Boolean(text && ["A餐", "B餐", "C餐", "餐點A", "餐點B", "餐點C", normalized].includes(text));
+  };
+
+  const getItemChoiceLabel_ = (plan, choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    const candidates = [
+      ...((plan && Array.isArray(plan.items)) ? plan.items : []),
+      ...((plan && Array.isArray(plan.choices)) ? plan.choices : []),
+    ];
+    const match = candidates.find((item) => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      return [item.value, item.choice, item.code, item.key, item.id, item.option, item.type]
+        .map((value) => String(value || "").trim().toUpperCase())
+        .includes(normalized);
+    });
+    return match ? String(match.label || match.name || match.title || match.text || match.itemName || match.mealName || "").trim() : "";
+  };
+
+  const getChoiceDisplayLabel_ = (plan, choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    const fieldByChoice = { A: "optionA", B: "optionB", C: "optionC", VEG: "optionVegetarian" };
+    const configured = fieldByChoice[normalized] ? String((plan && plan[fieldByChoice[normalized]]) || "").trim() : "";
+    if (configured && !isGenericChoiceLabel_(configured, normalized)) {
+      return configured;
+    }
+    const fallback = normalized === "NONE"
+      ? "不吃"
+      : normalized === "VEG"
+        ? "素食餐"
+        : normalized === "C" && !hasVegetarianChoice_(plan)
+          ? "素食餐"
+          : `餐點 ${normalized}`;
+    return getItemChoiceLabel_(plan, normalized) || configured || fallback;
+  };
+
   const getPlanChoices_ = (plan) => {
     const hasVegetarianChoice = hasVegetarianChoice_(plan);
     return [
       {
         value: "A",
-        label: plan.optionA || "A 餐",
+        label: getChoiceDisplayLabel_(plan, "A"),
         image: plan.optionAImage,
         placeholderIcon: "🍱",
         placeholderHint: "店家圖片待補",
       },
       {
         value: "B",
-        label: plan.optionB || "B 餐",
+        label: getChoiceDisplayLabel_(plan, "B"),
         image: plan.optionBImage,
         placeholderIcon: "🥡",
         placeholderHint: "店家圖片待補",
       },
       {
         value: "C",
-        label: plan.optionC || (hasVegetarianChoice ? "C 餐" : "素食餐"),
+        label: getChoiceDisplayLabel_(plan, "C"),
         image: plan.optionCImage,
         placeholderIcon: "🍛",
         placeholderHint: "C 餐圖片待補",

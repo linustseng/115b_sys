@@ -669,14 +669,63 @@ function buildOrderPlanForClient_(row) {
   };
 }
 
+function isGenericOrderChoiceLabel_(value, choice) {
+  const text = String(value || "").trim().replace(/\s+/g, "");
+  const normalized = String(choice || "").trim().toUpperCase();
+  return Boolean(text && ["A餐", "B餐", "C餐", "餐點A", "餐點B", "餐點C", normalized].includes(text));
+}
+
+function getOrderItemLabel_(plan, choice) {
+  const normalized = String(choice || "").trim().toUpperCase();
+  const candidates = [
+    ...((plan && Array.isArray(plan.items)) ? plan.items : []),
+    ...((plan && Array.isArray(plan.choices)) ? plan.choices : []),
+  ];
+  const match = candidates.find((item) => {
+    if (!item || typeof item !== "object") {
+      return false;
+    }
+    return [item.value, item.choice, item.code, item.key, item.id, item.option, item.type]
+      .map((value) => String(value || "").trim().toUpperCase())
+      .includes(normalized);
+  });
+  return match ? firstNonEmptyText(match.label, match.name, match.title, match.text, match.itemName, match.mealName) : "";
+}
+
+function getOrderChoiceLabelForPlan_(plan, choice) {
+  const normalized = String(choice || "").trim().toUpperCase();
+  const hasVegetarianChoice = Boolean(
+    firstText(plan && plan.optionVegetarian, plan && plan.optionVegetarianImage)
+  );
+  const fieldByChoice = {
+    A: "optionA",
+    B: "optionB",
+    C: "optionC",
+    VEG: "optionVegetarian",
+  };
+  const fallbackByChoice = {
+    A: "餐點 A",
+    B: "餐點 B",
+    C: hasVegetarianChoice ? "餐點 C" : "素食餐",
+    VEG: "素食餐",
+    NONE: "不吃",
+  };
+  const field = fieldByChoice[normalized];
+  const configured = field ? firstText(plan && plan[field]) : "";
+  if (configured && !isGenericOrderChoiceLabel_(configured, normalized)) {
+    return configured;
+  }
+  return firstNonEmptyText(getOrderItemLabel_(plan, normalized), configured, fallbackByChoice[normalized], normalized, "-");
+}
+
 function getOrderChoicesForPlan_(plan) {
   const hasVegetarianChoice = Boolean(
     firstText(plan && plan.optionVegetarian, plan && plan.optionVegetarianImage)
   );
   return [
-    { value: "A", label: firstText(plan && plan.optionA, "A 餐"), image: firstText(plan && plan.optionAImage) },
-    { value: "B", label: firstText(plan && plan.optionB, "B 餐"), image: firstText(plan && plan.optionBImage) },
-    { value: "C", label: firstText(plan && plan.optionC, hasVegetarianChoice ? "C 餐" : "素食餐"), image: firstText(plan && plan.optionCImage) },
+    { value: "A", label: getOrderChoiceLabelForPlan_(plan, "A"), image: firstText(plan && plan.optionAImage) },
+    { value: "B", label: getOrderChoiceLabelForPlan_(plan, "B"), image: firstText(plan && plan.optionBImage) },
+    { value: "C", label: getOrderChoiceLabelForPlan_(plan, "C"), image: firstText(plan && plan.optionCImage) },
     ...(hasVegetarianChoice
       ? [{ value: "VEG", label: firstText(plan && plan.optionVegetarian, "素食餐"), image: firstText(plan && plan.optionVegetarianImage) }]
       : []),

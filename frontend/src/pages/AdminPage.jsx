@@ -108,8 +108,8 @@ export default function AdminPage({
     id: "",
     date: "",
     title: "",
-    optionA: "A 餐",
-    optionB: "B 餐",
+    optionA: "",
+    optionB: "",
     optionC: "C 餐",
     optionVegetarian: "素食餐",
     optionAImage: "",
@@ -645,8 +645,8 @@ export default function AdminPage({
       id: "",
       date: dateValue,
       title: dateValue ? `訂餐 ${dateValue}` : "",
-      optionA: "A 餐",
-      optionB: "B 餐",
+      optionA: "",
+      optionB: "",
       optionC: "C 餐",
       optionVegetarian: "素食餐",
       optionAImage: "",
@@ -663,12 +663,61 @@ export default function AdminPage({
   const hasOrderVegetarianChoice_ = (plan) =>
     Boolean(String((plan && (plan.optionVegetarian || plan.optionVegetarianImage)) || "").trim());
 
+  const isGenericOrderChoiceLabel_ = (value, choice) => {
+    const text = String(value || "").trim().replace(/\s+/g, "");
+    const normalized = String(choice || "").trim().toUpperCase();
+    return Boolean(text && ["A餐", "B餐", "C餐", "餐點A", "餐點B", "餐點C", normalized].includes(text));
+  };
+
+  const getOrderItemLabel_ = (plan, choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    const candidates = [
+      ...((plan && Array.isArray(plan.items)) ? plan.items : []),
+      ...((plan && Array.isArray(plan.choices)) ? plan.choices : []),
+    ];
+    const match = candidates.find((item) => {
+      if (!item || typeof item !== "object") {
+        return false;
+      }
+      return [item.value, item.choice, item.code, item.key, item.id, item.option, item.type]
+        .map((value) => String(value || "").trim().toUpperCase())
+        .includes(normalized);
+    });
+    if (!match || typeof match !== "object") {
+      return "";
+    }
+    return String(match.label || match.name || match.title || match.text || match.itemName || match.mealName || "").trim();
+  };
+
+  const getOrderChoiceLabelForPlan_ = (plan, choice) => {
+    const normalized = String(choice || "").trim().toUpperCase();
+    const fieldByChoice = {
+      A: "optionA",
+      B: "optionB",
+      C: "optionC",
+      VEG: "optionVegetarian",
+    };
+    const fallbackByChoice = {
+      A: "餐點 A",
+      B: "餐點 B",
+      C: hasOrderVegetarianChoice_(plan) ? "餐點 C" : "素食餐",
+      VEG: "素食餐",
+      NONE: "不吃",
+    };
+    const field = fieldByChoice[normalized];
+    const configured = field ? String((plan && plan[field]) || "").trim() : "";
+    if (configured && !isGenericOrderChoiceLabel_(configured, normalized)) {
+      return configured;
+    }
+    return getOrderItemLabel_(plan, normalized) || configured || fallbackByChoice[normalized] || normalized || "-";
+  };
+
   const getOrderChoiceOptions_ = (plan) => {
     const hasVegetarianChoice = hasOrderVegetarianChoice_(plan);
     return [
-      { value: "A", label: plan.optionA || "A 餐" },
-      { value: "B", label: plan.optionB || "B 餐" },
-      { value: "C", label: plan.optionC || (hasVegetarianChoice ? "C 餐" : "素食餐") },
+      { value: "A", label: getOrderChoiceLabelForPlan_(plan, "A") },
+      { value: "B", label: getOrderChoiceLabelForPlan_(plan, "B") },
+      { value: "C", label: getOrderChoiceLabelForPlan_(plan, "C") },
       ...(hasVegetarianChoice
         ? [{ value: "VEG", label: plan.optionVegetarian || "素食餐" }]
         : []),
@@ -1027,9 +1076,9 @@ export default function AdminPage({
       id: selected.id || "",
       date: normalizeDateInput_(selected.date),
       title: selected.title || "",
-      optionA: selected.optionA || "A 餐",
-      optionB: selected.optionB || "B 餐",
-      optionC: selected.optionC || (hasOrderVegetarianChoice_(selected) ? "C 餐" : "素食餐"),
+      optionA: (!selected.optionA || isGenericOrderChoiceLabel_(selected.optionA, "A")) ? getOrderItemLabel_(selected, "A") : (selected.optionA || ""),
+      optionB: (!selected.optionB || isGenericOrderChoiceLabel_(selected.optionB, "B")) ? getOrderItemLabel_(selected, "B") : (selected.optionB || ""),
+      optionC: (!selected.optionC || isGenericOrderChoiceLabel_(selected.optionC, "C")) ? (getOrderItemLabel_(selected, "C") || (hasOrderVegetarianChoice_(selected) ? "" : "素食餐")) : selected.optionC,
       optionVegetarian: selected.optionVegetarian || "",
       optionAImage: selected.optionAImage || "",
       optionBImage: selected.optionBImage || "",
@@ -3543,13 +3592,13 @@ export default function AdminPage({
   const getOrderChoiceLabel_ = (choice) => {
     const normalized = String(choice || "").trim().toUpperCase();
     if (normalized === "A") {
-      return orderForm.optionA || "A 餐";
+      return getOrderChoiceLabelForPlan_(orderForm, "A");
     }
     if (normalized === "B") {
-      return orderForm.optionB || "B 餐";
+      return getOrderChoiceLabelForPlan_(orderForm, "B");
     }
     if (normalized === "C") {
-      return orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐");
+      return getOrderChoiceLabelForPlan_(orderForm, "C");
     }
     if (normalized === "VEG") {
       return orderForm.optionVegetarian || "素食餐";
@@ -3765,8 +3814,8 @@ export default function AdminPage({
     : [];
 
   const groupedOrderResponses = [
-    { key: "A", label: orderForm.optionA || "A 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "A")) },
-    { key: "B", label: orderForm.optionB || "B 餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "B")) },
+    { key: "A", label: getOrderChoiceLabelForPlan_(orderForm, "A"), items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "A")) },
+    { key: "B", label: getOrderChoiceLabelForPlan_(orderForm, "B"), items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "B")) },
     { key: "C", label: orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐"), items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "C")) },
     ...(hasOrderVegetarianChoice_(orderForm)
       ? [{ key: "VEG", label: orderForm.optionVegetarian || "素食餐", items: sortOrderRosterItems_(orderResponses.filter((item) => String(item.choice || "").toUpperCase() === "VEG")) }]
@@ -4722,15 +4771,15 @@ export default function AdminPage({
                     <p className="text-lg font-semibold text-slate-900">{orderStats.total}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <p className="text-xs text-slate-400">A 餐</p>
+                    <p className="text-xs text-slate-400">{getOrderChoiceLabelForPlan_(orderForm, "A")}</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.A}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <p className="text-xs text-slate-400">B 餐</p>
+                    <p className="text-xs text-slate-400">{getOrderChoiceLabelForPlan_(orderForm, "B")}</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.B}</p>
                   </div>
                   <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                    <p className="text-xs text-slate-400">{orderForm.optionC || (hasOrderVegetarianChoice_(orderForm) ? "C 餐" : "素食餐")}</p>
+                    <p className="text-xs text-slate-400">{getOrderChoiceLabelForPlan_(orderForm, "C")}</p>
                     <p className="text-lg font-semibold text-slate-900">{orderStats.C}</p>
                   </div>
                   {hasOrderVegetarianChoice_(orderForm) ? (
