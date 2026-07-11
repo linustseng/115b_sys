@@ -940,6 +940,8 @@ function toDirectoryEntry(row) {
     birthdayDay: String(row.birthday_day || "").trim(),
     group: String(row.group_id || "").trim(),
     photoUrl: String(row.photo_url || "").trim(),
+    status: String(row.lifecycle_status || "active").trim() || "active",
+    lifecycleStatus: String(row.lifecycle_status || "active").trim() || "active",
   };
 }
 
@@ -1012,9 +1014,11 @@ app.get("/v1/directory", async (req, res) => {
     }
 
     const result = await query(
-      `SELECT *
-       FROM directories
-       ORDER BY coalesce(group_id, ''), coalesce(name_zh, ''), coalesce(preferred_name, ''), id`
+      `SELECT d.*, s.lifecycle_status
+       FROM directories d
+       JOIN students s ON s.id = d.id
+       WHERE ${ACTIVE_STUDENT_WHERE_SQL}
+       ORDER BY coalesce(d.group_id, ''), coalesce(d.name_zh, ''), coalesce(d.preferred_name, ''), d.id`
     );
     const directory = result.rows.map(toDirectoryEntry).filter(Boolean);
     return res.json({ ok: true, data: { directory }, error: null });
