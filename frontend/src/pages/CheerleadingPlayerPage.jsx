@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
+const VIDEO_SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 function CheerleadingPlayerPage({ shared }) {
   const { apiRequest, authedApiRequest } = shared;
@@ -16,6 +18,13 @@ function CheerleadingPlayerPage({ shared }) {
   const [videoLoading, setVideoLoading] = useState(false);
   const [watermarkTick, setWatermarkTick] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState("attendance");
+  const videoRef = useRef(null);
+  const videoShellRef = useRef(null);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
+  const [videoSpeed, setVideoSpeed] = useState(1);
+  const [videoFullscreen, setVideoFullscreen] = useState(false);
 
   const OPTIONS = [
     { value: "attend", label: "會到", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
@@ -74,6 +83,11 @@ function CheerleadingPlayerPage({ shared }) {
     const timer = window.setInterval(() => setWatermarkTick(Date.now()), 15000);
     return () => window.clearInterval(timer);
   }, [playingVideo]);
+  useEffect(() => {
+    const syncFullscreen = () => setVideoFullscreen(document.fullscreenElement === videoShellRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreen);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreen);
+  }, []);
 
   const attendanceByPractice = useMemo(() => {
     const map = new Map();
@@ -128,13 +142,38 @@ function CheerleadingPlayerPage({ shared }) {
     try {
       const { result } = await effectiveApiRequest({ action: "getCheerleadingVideoPlayback", data: { videoId: video.id } });
       if (!result.ok || !result.data?.url) throw new Error(result.error || "取得播放權限失敗");
-      setPlayingVideo(video); setVideoUrl(result.data.url);
+      setPlayingVideo(video); setVideoUrl(result.data.url); setVideoPlaying(false); setVideoProgress(0); setVideoDuration(0);
     } catch (err) { setError(err.message || "取得播放權限失敗"); }
     finally { setVideoLoading(false); }
   };
 
+  const enterVideoFullscreen = async () => {
+    const shell = videoShellRef.current;
+    if (!shell?.requestFullscreen || document.fullscreenElement === shell) return;
+    try { await shell.requestFullscreen(); } catch { /* A browser can reject fullscreen outside a direct tap. */ }
+  };
+  const exitVideoFullscreen = async () => {
+    if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+  };
+  const startVideoPlayback = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    await enterVideoFullscreen();
+    try { await video.play(); } catch (err) { setError(err.message || "無法播放影片"); }
+  };
+  const toggleVideoPlayback = async () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) await startVideoPlayback(); else video.pause();
+  };
+  const changeVideoSpeed = (speed) => {
+    setVideoSpeed(speed);
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+  };
+  const formatVideoTime = (seconds) => `${Math.floor((seconds || 0) / 60)}:${String(Math.floor((seconds || 0) % 60)).padStart(2, "0")}`;
+
   return (
-    <main className="min-h-screen bg-pink-50/60 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
+    <><style>{`.cheer-player-video-shell{height:clamp(18rem,58dvh,36rem)}.cheer-player-video-shell video{width:100%;height:100%;object-fit:contain}.cheer-player-video-shell:fullscreen,.cheer-player-video-shell:-webkit-full-screen{width:100vw;height:100dvh;border-radius:0}.cheer-player-video-shell:fullscreen video,.cheer-player-video-shell:-webkit-full-screen video{width:100%;height:100%;object-fit:contain}`}</style><main className="min-h-screen bg-pink-50/60 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl space-y-6">
         <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-6 text-white shadow-lg">
           <p className="text-sm font-semibold uppercase tracking-[0.25em] text-pink-100">115B Cheerleading</p>
@@ -161,7 +200,7 @@ function CheerleadingPlayerPage({ shared }) {
 
         {activeTab === "videos" ? <section className="rounded-3xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">啦啦隊教學影片</h2><p className="mt-1 text-xs text-slate-500">限登入同學觀看，請勿錄製或轉傳。</p></div></div>
-          {playingVideo && videoUrl ? <div className="mt-4"><p className="mb-2 text-sm font-semibold">{playingVideo.title}</p><div className="relative overflow-hidden rounded-2xl bg-black"><video key={videoUrl} src={videoUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full" /><div className={`pointer-events-none absolute z-10 select-none whitespace-nowrap rounded bg-black/35 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/85 ${["left-3 top-3", "right-3 top-3", "bottom-12 left-3", "bottom-12 right-3"][Math.floor(watermarkTick / 15000) % 4]}`}>{getName(student)} · {new Date(watermarkTick).toLocaleString("zh-TW", { hour12: false })}</div></div></div> : null}
+          {playingVideo && videoUrl ? <div className="mt-4"><p className="mb-2 text-sm font-semibold">{playingVideo.title}</p><div ref={videoShellRef} className="cheer-player-video-shell relative overflow-hidden rounded-2xl bg-black"><video key={videoUrl} ref={videoRef} src={videoUrl} playsInline disablePictureInPicture onContextMenu={(e) => e.preventDefault()} onTimeUpdate={(e) => setVideoProgress(e.currentTarget.currentTime)} onLoadedMetadata={(e) => { setVideoDuration(e.currentTarget.duration); e.currentTarget.playbackRate = videoSpeed; }} onPlay={() => setVideoPlaying(true)} onPause={() => setVideoPlaying(false)} /><div className={`pointer-events-none absolute z-10 select-none whitespace-nowrap rounded bg-black/35 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/85 ${["left-3 top-3", "right-3 top-3", "bottom-16 left-3", "bottom-16 right-3"][Math.floor(watermarkTick / 15000) % 4]}`}>{getName(student)} · {new Date(watermarkTick).toLocaleString("zh-TW", { hour12: false })}</div><div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-3 bg-black/75 p-3 text-white"><button type="button" onClick={toggleVideoPlayback} className="rounded bg-white px-3 py-1 text-sm font-bold text-slate-900">{videoPlaying ? "暫停" : "播放並全螢幕"}</button><input aria-label="播放進度" type="range" min="0" max={videoDuration || 0} value={videoProgress} onChange={(e) => { const video = videoRef.current; if (video) video.currentTime = Number(e.target.value); setVideoProgress(Number(e.target.value)); }} className="min-w-24 flex-1" /><span className="text-xs">{formatVideoTime(videoProgress)} / {formatVideoTime(videoDuration)}</span><select aria-label="播放速度" value={videoSpeed} onChange={(e) => changeVideoSpeed(Number(e.target.value))} className="rounded border border-white/60 bg-black px-2 py-1 text-sm">{VIDEO_SPEEDS.map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>{videoFullscreen ? <button type="button" onClick={exitVideoFullscreen} className="rounded border border-white/60 px-3 py-1 text-sm">退出全螢幕</button> : <button type="button" onClick={enterVideoFullscreen} className="rounded border border-white/60 px-3 py-1 text-sm">全螢幕</button>}</div></div></div> : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">{videos.length ? videos.map((video) => <button key={video.id} type="button" disabled={videoLoading} onClick={() => playVideo(video)} className="rounded-2xl border border-pink-100 bg-pink-50/40 p-4 text-left hover:bg-pink-50 disabled:opacity-60"><p className="font-semibold text-slate-900">{video.title}</p>{video.category ? <p className="mt-1 text-xs font-semibold text-pink-700">{video.category}</p> : null}{video.description ? <p className="mt-2 text-sm text-slate-500">{video.description}</p> : null}<p className="mt-3 text-xs font-semibold text-pink-700">{videoLoading ? "取得播放權限…" : "點此觀看"}</p></button>) : <p className="text-sm text-slate-500">目前尚未上架教學影片。</p>}</div>
         </section> : null}
 
@@ -194,7 +233,7 @@ function CheerleadingPlayerPage({ shared }) {
           </div>
         </section> : null}
       </div>
-    </main>
+    </main></>
   );
 }
 
