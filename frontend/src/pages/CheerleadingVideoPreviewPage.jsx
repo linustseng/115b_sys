@@ -81,7 +81,7 @@ export default function CheerleadingVideoPreviewPage({ shared }) {
   const watermarkPosition = ["left-3 top-3", "right-3 top-3", "bottom-16 left-3", "bottom-16 right-3"][Math.floor(tick / 15000) % 4];
 
   return <>
-    <style>{`.cheer-video-shell:fullscreen,.cheer-video-shell:-webkit-full-screen{width:100vw;height:100dvh;border-radius:0}.cheer-video-shell:fullscreen video,.cheer-video-shell:-webkit-full-screen video{width:100%;height:100%;object-fit:contain}`}</style>
+    <style>{`.cheer-video-shell{height:clamp(18rem,58dvh,36rem)}.cheer-video-shell video{width:100%;height:100%;object-fit:contain}.cheer-video-shell:fullscreen,.cheer-video-shell:-webkit-full-screen{width:100vw;height:100dvh;border-radius:0}.cheer-video-shell:fullscreen video,.cheer-video-shell:-webkit-full-screen video{width:100%;height:100%;object-fit:contain}`}</style>
     <main className="min-h-screen bg-slate-950 px-4 py-6 text-white">
       <div className="mx-auto max-w-5xl space-y-5">
         <h1 className="text-2xl font-bold">啦啦隊影片 · 自製播放器預覽</h1>
