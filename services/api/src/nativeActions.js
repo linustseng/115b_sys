@@ -4392,9 +4392,17 @@ export async function dispatchNativeAction({
 
       // Todo notification: event attendance confirmation (treat "尚未確定" as not-yet-confirmed).
       try {
+        // The World Cup prediction contest has its own module and deadline UI; it is
+        // not a regular attendance task. Close any notification created before this rule.
+        await query(
+          `update notifications set status = 'closed', updated_at = now()
+           where id like 'todo:event-attendance:world-cup-final-2026:%'
+             and coalesce(status, 'open') <> 'closed'`
+        );
         const eventsResult = await query(
           `select id, title, start_at, end_at, location, registration_close_at, status
            from events
+           where id <> 'world-cup-final-2026'
            order by coalesce(start_at,''), id
            limit 80`
         );

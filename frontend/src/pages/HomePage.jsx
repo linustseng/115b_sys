@@ -325,7 +325,11 @@ function HomePage({
         throw new Error(result.error || "載入失敗");
       }
       const data = result.data || {};
-      const eventsList = data.events || [];
+      // Prediction contests have their own entry page and should not be duplicated
+      // as a normal class activity in the activity list.
+      const eventsList = (data.events || []).filter(
+        (event) => String((event && event.id) || "").trim() !== "world-cup-final-2026"
+      );
       setEvents(eventsList);
       try {
         localStorage.setItem(eventsCacheKey, JSON.stringify({ ts: Date.now(), events: eventsList }));
