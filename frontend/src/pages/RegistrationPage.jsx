@@ -108,6 +108,10 @@ function RegistrationPage({ shared }) {
   const allowCompanions = String(eventInfo.allowCompanions || "yes").trim() !== "no";
   const allowBringDrinks = String(eventInfo.allowBringDrinks || "yes").trim() !== "no";
   const isTravelEvent = String(eventInfo.category || "").trim() === "travel";
+  const isWorldCupPrediction =
+    String(eventId || "").trim() === "world-cup-final-2026" ||
+    String((eventInfo.formSchema && eventInfo.formSchema.type) || "").trim() ===
+      "world_cup_prediction";
   const attendanceValue = String(customFields.attendance || "").trim();
   const shouldAskTravelTransportation = isTravelEvent && attendanceValue === "出席";
   const registrationDeadlineLabel = eventInfo.registrationCloseAt
@@ -349,6 +353,7 @@ function RegistrationPage({ shared }) {
             status: event.status || "",
             allowCompanions: event.allowCompanions || DEFAULT_EVENT.allowCompanions,
             allowBringDrinks: event.allowBringDrinks || DEFAULT_EVENT.allowBringDrinks,
+            formSchema: event.formSchema || {},
           };
           setEventInfo(nextEventInfo);
           saveCachedEventInfo_(eventId, nextEventInfo);
@@ -460,6 +465,17 @@ function RegistrationPage({ shared }) {
     }
     if (!String(student.phone || "").trim()) {
       setSubmitError("請填寫聯絡資訊。");
+      return;
+    }
+    if (
+      isWorldCupPrediction &&
+      (!String(customFields.predictedChampion || "").trim() ||
+        String(customFields.spainScore || "").trim() === "" ||
+        String(customFields.argentinaScore || "").trim() === "" ||
+        !String(customFields.firstScorerTeam || "").trim() ||
+        !String(customFields.extraTimeOrPenalties || "").trim())
+    ) {
+      setSubmitError("請完成冠軍、90 分鐘比分、先進球隊與延長／PK 預測。");
       return;
     }
     if (shouldAskTravelTransportation && !String(customFields.travelTransportation || "").trim()) {
@@ -796,9 +812,51 @@ function RegistrationPage({ shared }) {
 
           <div className="mt-10 border-t border-slate-200/70 pt-8">
             <h3 className="text-base font-semibold text-slate-900">
-              {getCategoryLabel_(eventInfo.category)} 自訂欄位
+              {isWorldCupPrediction ? "你的冠軍賽預測" : `${getCategoryLabel_(eventInfo.category)} 自訂欄位`}
             </h3>
-            {eventInfo.category === "meeting" ? (
+            {isWorldCupPrediction ? (
+              <div className="mt-5 grid gap-5">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                  <p className="font-semibold text-slate-900">猜得準有掌聲，猜不準有晚餐。</p>
+                  <p className="mt-1 text-xs leading-5">比分以 90 分鐘正規時間計；冠軍以加時／PK 後的正式結果計。封盤後不再修改。</p>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">最終冠軍</label>
+                  {renderOptionButtons(
+                    { options: ["西班牙", "阿根廷"] },
+                    customFields.predictedChampion || "",
+                    (next) => handleCustomFieldChange("predictedChampion", next)
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="spain-score">西班牙（90 分鐘）</label>
+                    <input id="spain-score" type="number" min="0" max="20" inputMode="numeric" value={customFields.spainScore || ""} onChange={(event) => handleCustomFieldChange("spainScore", event.target.value)} className="input-base" placeholder="0" />
+                  </div>
+                  <span className="hidden pb-3 text-lg font-bold text-slate-400 sm:block">:</span>
+                  <div className="grid gap-2">
+                    <label className="text-sm font-medium text-slate-700" htmlFor="argentina-score">阿根廷（90 分鐘）</label>
+                    <input id="argentina-score" type="number" min="0" max="20" inputMode="numeric" value={customFields.argentinaScore || ""} onChange={(event) => handleCustomFieldChange("argentinaScore", event.target.value)} className="input-base" placeholder="0" />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">誰先進球？</label>
+                  {renderOptionButtons(
+                    { options: ["西班牙", "阿根廷", "90 分鐘無進球"] },
+                    customFields.firstScorerTeam || "",
+                    (next) => handleCustomFieldChange("firstScorerTeam", next)
+                  )}
+                </div>
+                <div className="grid gap-2">
+                  <label className="text-sm font-medium text-slate-700">會不會踢到延長／PK？</label>
+                  {renderOptionButtons(
+                    { options: ["不會，90 分鐘定生死", "會，延長／PK 見"] },
+                    customFields.extraTimeOrPenalties || "",
+                    (next) => handleCustomFieldChange("extraTimeOrPenalties", next)
+                  )}
+                </div>
+              </div>
+            ) : eventInfo.category === "meeting" ? (
               <div className="mt-5 grid gap-4 sm:grid-cols-2">
                 {meetingFields.map((field) => {
                   const value = customFields[field.id] || "";
