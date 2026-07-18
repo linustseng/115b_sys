@@ -3,6 +3,36 @@ import { computeLandingAuthState, shouldAttemptLandingAuthRecovery } from "../ut
 import emblem115b from "../assets/115b_icon.png";
 const ApprovalsCenter = lazy(() => import("./ApprovalsCenter"));
 
+function NationalTeamCrest({ team }) {
+  const isSpain = team === "spain";
+  const label = isSpain ? "西班牙" : "阿根廷";
+  const colors = isSpain
+    ? { outer: "#A61C2D", inner: "#F6C445", detail: "#A61C2D" }
+    : { outer: "#71B8E7", inner: "#FFFFFF", detail: "#F3B63D" };
+
+  return (
+    <div
+      className="relative flex h-16 w-14 shrink-0 items-center justify-center overflow-hidden rounded-b-[1.35rem] rounded-t-[1rem] border-2 shadow-lg sm:h-20 sm:w-[4.5rem]"
+      style={{ backgroundColor: colors.outer, borderColor: colors.inner }}
+      aria-label={`${label} 隊徽`}
+      title={`${label} 隊徽`}
+    >
+      {isSpain ? (
+        <>
+          <span className="absolute inset-x-0 top-[31%] h-[34%] bg-[#F6C445]" />
+          <span className="relative flex h-7 w-7 items-center justify-center rounded-full border-2 border-[#F6C445] bg-[#A61C2D] text-[10px] font-black text-[#F6C445] sm:h-8 sm:w-8">ES</span>
+        </>
+      ) : (
+        <>
+          <span className="absolute inset-x-0 top-0 h-1/3 bg-[#71B8E7]" />
+          <span className="absolute inset-x-0 bottom-0 h-1/3 bg-[#71B8E7]" />
+          <span className="relative text-xl text-[#F3B63D] sm:text-2xl">☀</span>
+        </>
+      )}
+    </div>
+  );
+}
+
 function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const {
     apiRequest,
@@ -1250,6 +1280,54 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
             ) : null}
           </section>
         ) : null}
+
+        <section className="entrance entrance-delay-2 mb-6 overflow-hidden rounded-[2rem] border border-slate-800 bg-[#101827] text-white shadow-[0_30px_80px_-45px_rgba(15,23,42,0.9)] sm:rounded-[2.5rem]">
+          <div className="relative isolate overflow-hidden px-5 py-6 sm:px-8 sm:py-8">
+            <div className="absolute -left-12 -top-20 h-48 w-48 rounded-full bg-[#F6C445]/20 blur-3xl" />
+            <div className="absolute -right-16 -bottom-24 h-56 w-56 rounded-full bg-sky-400/20 blur-3xl" />
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="max-w-xl">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  115B 限定預測賽 · 無金流，輸的人請吃飯
+                </div>
+                <p className="mt-4 text-xs font-semibold tracking-[0.22em] text-slate-400">WORLD CUP FINAL</p>
+                <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">猜冠軍，別猜誰會先賴帳。</h2>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  90 分鐘比分、最終冠軍、先進球隊伍一次選好；封盤後才揭曉大家的足球第六感。
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-3 sm:gap-5">
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <NationalTeamCrest team="spain" />
+                  <span className="text-xs font-bold text-white">西班牙</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-lg font-black italic text-[#F6C445]">VS</span>
+                  <span className="mt-1 whitespace-nowrap text-[10px] font-medium text-slate-400">誰請晚餐？</span>
+                </div>
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <NationalTeamCrest team="argentina" />
+                  <span className="text-xs font-bold text-white">阿根廷</span>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 text-center lg:min-w-[12.5rem] lg:text-right">
+                <div>
+                  <p className="text-[11px] font-semibold tracking-wide text-slate-400">台灣時間 7/20 03:00 開踢</p>
+                  <p className="mt-1 text-sm font-semibold text-[#F6C445]">02:30 自動封盤</p>
+                </div>
+                <a
+                  href="/events"
+                  className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#F6C445]"
+                >
+                  進入預測賽 <span className="ml-2">→</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section className="grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-5">
           <div className="entrance entrance-delay-3 group flex h-full flex-col justify-between card-system card-system--slate">
