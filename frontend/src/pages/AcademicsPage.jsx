@@ -105,6 +105,10 @@ const REPORT_ATTACHMENT_KINDS = new Set(["homework_file", "homework_reference"])
 const ACADEMICS_BOOTSTRAP_CACHE_PREFIX = "emba115b.academicsBootstrap.v1";
 const ACADEMICS_BOOTSTRAP_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
+function isNonAcademicCourse_(course) {
+  return String(course && course.title ? course.title : "").includes("啦啦隊");
+}
+
 function emptyAcademicsBootstrap_() {
   return {
     sessions: [],
@@ -734,7 +738,7 @@ export default function AcademicsPage({ shared }) {
 
   const allCourseCatalog = useMemo(() => {
     const buckets = new Map();
-    (bootstrap.courses || []).forEach((course) => {
+    (bootstrap.courses || []).filter((course) => !isNonAcademicCourse_(course)).forEach((course) => {
       buckets.set(course.id, {
         ...course,
         title: String(course.title || "").trim() || "未命名課程",
