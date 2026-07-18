@@ -10,6 +10,10 @@ function CheerleadingPlayerPage({ shared }) {
   const [practices, setPractices] = useState([]);
   const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [playingVideo, setPlayingVideo] = useState(null);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoLoading, setVideoLoading] = useState(false);
 
   const OPTIONS = [
     { value: "attend", label: "會到", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
@@ -54,6 +58,7 @@ function CheerleadingPlayerPage({ shared }) {
       setPractices(Array.isArray(result.data?.practices) ? result.data.practices : []);
       setFields(Array.isArray(result.data?.fields) ? result.data.fields : []);
       setAttendance(Array.isArray(result.data?.attendance) ? result.data.attendance : []);
+      setVideos(Array.isArray(result.data?.videos) ? result.data.videos : []);
     } catch (err) {
       setError(err.message || "啦啦隊資料載入失敗");
     } finally {
@@ -111,6 +116,16 @@ function CheerleadingPlayerPage({ shared }) {
     }
   };
 
+  const playVideo = async (video) => {
+    setVideoLoading(true); setError("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "getCheerleadingVideoPlayback", data: { videoId: video.id } });
+      if (!result.ok || !result.data?.url) throw new Error(result.error || "取得播放權限失敗");
+      setPlayingVideo(video); setVideoUrl(result.data.url);
+    } catch (err) { setError(err.message || "取得播放權限失敗"); }
+    finally { setVideoLoading(false); }
+  };
+
   return (
     <main className="min-h-screen bg-pink-50/60 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-4xl space-y-6">
@@ -131,6 +146,12 @@ function CheerleadingPlayerPage({ shared }) {
           {[{ label: "練習場次", value: stats.total }, { label: "已參與/可參與", value: stats.present }, { label: "參與率", value: `${stats.rate}%` }].map((item) => (
             <div key={item.label} className="rounded-2xl border border-pink-100 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p></div>
           ))}
+        </section>
+
+        <section className="rounded-3xl bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">啦啦隊教學影片</h2><p className="mt-1 text-xs text-slate-500">限登入同學觀看，請勿錄製或轉傳。</p></div></div>
+          {playingVideo && videoUrl ? <div className="mt-4"><p className="mb-2 text-sm font-semibold">{playingVideo.title}</p><video key={videoUrl} src={videoUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full rounded-2xl bg-black" /></div> : null}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">{videos.length ? videos.map((video) => <button key={video.id} type="button" disabled={videoLoading} onClick={() => playVideo(video)} className="rounded-2xl border border-pink-100 bg-pink-50/40 p-4 text-left hover:bg-pink-50 disabled:opacity-60"><p className="font-semibold text-slate-900">{video.title}</p>{video.category ? <p className="mt-1 text-xs font-semibold text-pink-700">{video.category}</p> : null}{video.description ? <p className="mt-2 text-sm text-slate-500">{video.description}</p> : null}<p className="mt-3 text-xs font-semibold text-pink-700">{videoLoading ? "取得播放權限…" : "點此觀看"}</p></button>) : <p className="text-sm text-slate-500">目前尚未上架教學影片。</p>}</div>
         </section>
 
         <section className="rounded-3xl bg-white p-5 shadow-sm">

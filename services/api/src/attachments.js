@@ -108,6 +108,9 @@ export function isAllowedAttachmentMime(mime) {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "video/mp4",
+    "video/webm",
+    "video/quicktime",
   ]).has(normalized);
 }
 
@@ -209,7 +212,10 @@ export async function uploadAttachmentFile({
   if (!isAllowedAttachmentMime(normalizedMime)) {
     throw new Error("不支援的檔案格式（僅支援 pdf/jpg/png/heic/xlsx/docx/pptx）");
   }
-  if (fileBuffer.length > parseNumber(config.attachmentMaxFileSizeBytes, DEFAULT_MAX_FILE_SIZE_BYTES)) {
+  const maxSize = normalizeEntityType(entityType) === "cheerleading_video"
+    ? Math.max(parseNumber(config.cheerleadingVideoMaxFileSizeBytes, 500 * 1024 * 1024), DEFAULT_MAX_FILE_SIZE_BYTES)
+    : parseNumber(config.attachmentMaxFileSizeBytes, DEFAULT_MAX_FILE_SIZE_BYTES);
+  if (fileBuffer.length > maxSize) {
     throw new Error("檔案大小超過限制");
   }
 

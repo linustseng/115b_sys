@@ -7749,11 +7749,12 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingPlayerBootstrap": {
       requireAuth();
-      const [studentResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
+      const [studentResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
         query(`select id, email, name_zh, name_en, preferred_name, group_id from directories where id = $1 limit 1`, [auth.studentId]),
         query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
         query(`select * from cheerleading_fields order by coalesce(name,''), id`),
         query(`select * from cheerleading_attendance where student_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`, [auth.studentId]),
+        query(`select id, original_name, attachment_kind, raw, created_at from attachments where entity_type = 'cheerleading_video' and status = 'ready' order by coalesce((raw->>'sortOrder')::int, 9999), coalesce(created_at,'') desc`),
       ]);
       const studentRow = rowOrNull(studentResult);
       return {
@@ -7772,9 +7773,21 @@ export async function dispatchNativeAction({
           practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          videos: videosResult.rows.map((row) => ({ id: row.id, title: firstText(row.raw?.title, row.original_name), category: firstText(row.raw?.category), description: firstText(row.raw?.description), createdAt: firstText(row.created_at) })),
         },
         error: null,
       };
+    }
+
+    case "getCheerleadingVideoPlayback": {
+      requireAuth();
+      const videoId = firstText(body.id || body.videoId || body.data?.id || body.data?.videoId);
+      if (!videoId) return { ok: false, data: null, error: "Missing video id" };
+      const result = await query(`select * from attachments where id = $1 and entity_type = 'cheerleading_video' and status = 'ready' limit 1`, [videoId]);
+      const row = rowOrNull(result);
+      if (!row) return { ok: false, data: null, error: "影片不存在或已下架" };
+      const url = await createSignedReadUrlForAttachment(row, 300, { throwOnError: true });
+      return { ok: true, data: { url, expiresInSeconds: 300 }, error: null };
     }
 
     case "createCheerleadingPractice":

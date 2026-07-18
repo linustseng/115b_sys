@@ -47,6 +47,7 @@ export function getConfig() {
   const supabaseAttachmentBucket = String(process.env.SUPABASE_ATTACHMENT_BUCKET || "attachments").trim() || "attachments";
   const attachmentSignedUrlTtlSeconds = parseNumber(process.env.ATTACHMENT_SIGNED_URL_TTL_SECONDS, 1800);
   const attachmentMaxFileSizeBytes = parseNumber(process.env.ATTACHMENT_MAX_FILE_SIZE_BYTES, 20 * 1024 * 1024);
+  const cheerleadingVideoMaxFileSizeBytes = parseNumber(process.env.CHEERLEADING_VIDEO_MAX_FILE_SIZE_BYTES, 500 * 1024 * 1024);
 
   const nodeEnv = String(process.env.NODE_ENV || "development").trim();
   const strictNodeOnly = parseBoolean(process.env.STRICT_NODE_ONLY, nodeEnv === "production");
@@ -73,6 +74,7 @@ export function getConfig() {
     supabaseAttachmentBucket,
     attachmentSignedUrlTtlSeconds,
     attachmentMaxFileSizeBytes,
+    cheerleadingVideoMaxFileSizeBytes,
   };
 
   return cachedConfig;

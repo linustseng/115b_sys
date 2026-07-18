@@ -14,6 +14,7 @@ import {
   isAllowedAttachmentMime,
   isAttachmentStorageConfigured,
   listAttachmentsByEntity,
+  createSignedReadUrlForAttachment,
   softDeleteAttachment,
   uploadAttachmentFile,
 } from "./attachments.js";
@@ -77,7 +78,7 @@ app.use(express.json({ limit: "2mb" }));
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024,
+    fileSize: Math.max(25 * 1024 * 1024, Number(config.cheerleadingVideoMaxFileSizeBytes || 0)),
   },
 });
 
@@ -243,6 +244,11 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
       const groupId = String(item.groupId || item.group_id || "").trim();
       return groupId === "F" || groupId === "E" || groupId === "A";
     });
+    return { canView: true, canUpload: canManage, canDelete: canManage };
+  }
+
+  if (entityType === "cheerleading_video") {
+    const canManage = isAdminLike || memberships.some((item) => String(item.groupId || item.group_id || "").trim() === "L");
     return { canView: true, canUpload: canManage, canDelete: canManage };
   }
 
@@ -1707,6 +1713,19 @@ async function handleAttachmentUpload_(req, res, defaults = {}) {
 }
 
 app.post("/v1/attachments/upload", upload.single("file"), async (req, res) => handleAttachmentUpload_(req, res));
+
+app.get("/v1/cheerleading/videos/:id/play", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    const id = String(req.params.id || "").trim();
+    const result = await query("select * from attachments where id = $1 and entity_type = 'cheerleading_video' and status = 'ready' limit 1", [id]);
+    const row = result.rows[0];
+    if (!row) return res.status(404).json({ ok: false, data: null, error: "影片不存在或已下架" });
+    const url = await createSignedReadUrlForAttachment(row, 300, { throwOnError: true });
+    return res.json({ ok: true, data: { url, expiresInSeconds: 300 }, error: null });
+  } catch (error) { return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" }); }
+});
 
 app.get("/v1/attachments", async (req, res) => {
   try {
