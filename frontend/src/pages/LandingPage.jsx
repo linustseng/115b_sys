@@ -1319,7 +1319,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   <p className="mt-1 text-sm font-semibold text-[#F6C445]">02:30 自動封盤</p>
                 </div>
                 <a
-                  href="/register?eventId=world-cup-final-2026"
+                  href="/world-cup"
                   className="inline-flex items-center justify-center rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-[#F6C445]"
                 >
                   進入預測賽 <span className="ml-2">→</span>
