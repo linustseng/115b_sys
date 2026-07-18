@@ -1688,6 +1688,9 @@ async function handleAttachmentUpload_(req, res, defaults = {}) {
       raw: {
         originalFieldName: firstText(file.fieldname),
         uploadSource: "http_upload",
+        title: firstText(mergedBody.title),
+        category: firstText(mergedBody.category),
+        description: firstText(mergedBody.description),
       },
       query,
     });

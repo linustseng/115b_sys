@@ -7705,7 +7705,7 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingBootstrap": {
       await requireCheerleadingAdminAccess();
-      const [studentsResult, practicesResult, fieldsResult, attendanceResult] = await Promise.all([
+      const [studentsResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
         query(
           `select d.id, d.email, d.name_zh, d.name_en, d.preferred_name, d.group_id, s.lifecycle_status
            from directories d
@@ -7727,6 +7727,7 @@ export async function dispatchNativeAction({
            order by practice_key, student_key, coalesce(updated_at,'') desc, id desc
            limit 5000`
         ),
+        query(`select id, original_name, raw from attachments where entity_type = 'cheerleading_video' and status = 'ready' order by coalesce(created_at,'') desc`),
       ]);
       return {
         ok: true,
@@ -7742,6 +7743,7 @@ export async function dispatchNativeAction({
           practices: practicesResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           fields: fieldsResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
           attendance: attendanceResult.rows.map((row) => ({ ...(row.raw && typeof row.raw === "object" ? row.raw : {}), id: row.id })),
+          videos: videosResult.rows.map((row) => ({ id: row.id, title: firstText(row.raw?.title, row.original_name), category: firstText(row.raw?.category), description: firstText(row.raw?.description) })),
         },
         error: null,
       };

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 function CheerleadingPage({ shared }) {
-  const { apiRequest, authedApiRequest, pad2_, confirmDelete_ } = shared;
+  const { apiRequest, authedApiRequest, pad2_, confirmDelete_, API_V2_URL, loadStoredAdminSession_ } = shared;
   const effectiveApiRequest = typeof authedApiRequest === "function" ? authedApiRequest : apiRequest;
 
   const [activeTab, setActiveTab] = useState("stats");
@@ -13,6 +13,8 @@ function CheerleadingPage({ shared }) {
   const [practices, setPractices] = useState([]);
   const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
+  const [videos, setVideos] = useState([]);
+  const [videoForm, setVideoForm] = useState({ title: "", category: "", description: "", file: null });
   const [activePracticeId, setActivePracticeId] = useState("");
   const [statsScope, setStatsScope] = useState("recent10");
   const [showAttendanceEditor, setShowAttendanceEditor] = useState(false);
@@ -95,6 +97,7 @@ function CheerleadingPage({ shared }) {
       setPractices(Array.isArray(data.practices) ? data.practices : []);
       setFields(Array.isArray(data.fields) ? data.fields : []);
       setAttendance(Array.isArray(data.attendance) ? data.attendance : []);
+      setVideos(Array.isArray(data.videos) ? data.videos : []);
     } catch (err) {
       setError(err.message || "啦啦隊資料載入失敗");
     } finally {
@@ -294,6 +297,31 @@ function CheerleadingPage({ shared }) {
     }
   };
 
+  const uploadVideo = async (event) => {
+    event.preventDefault();
+    if (!videoForm.file) return setError("請選擇影片檔案");
+    setSaving(true); setError("");
+    try {
+      const form = new FormData();
+      form.append("file", videoForm.file); form.append("entityType", "cheerleading_video");
+      form.append("entityId", globalThis.crypto?.randomUUID?.() || `video-${Date.now()}`);
+      form.append("title", videoForm.title); form.append("category", videoForm.category); form.append("description", videoForm.description);
+      const sessionToken = loadStoredAdminSession_?.()?.token || "";
+      const response = await fetch(`${String(API_V2_URL || "").replace(/\/$/, "")}/v1/attachments/upload`, { method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}, body: form });
+      const result = await response.json(); if (!result.ok) throw new Error(result.error || "影片上傳失敗");
+      setVideoForm({ title: "", category: "", description: "", file: null }); setStatusMessage("教學影片已上架"); await loadBootstrap();
+    } catch (err) { setError(err.message || "影片上傳失敗"); } finally { setSaving(false); }
+  };
+
+  const deleteVideo = async (video) => {
+    if (!(confirmDelete_ ? confirmDelete_(`下架「${video.title}」？`) : window.confirm("確定下架影片？"))) return;
+    setSaving(true); try {
+      const token = loadStoredAdminSession_?.()?.token || "";
+      const response = await fetch(`${String(API_V2_URL || "").replace(/\/$/, "")}/v1/attachments/${encodeURIComponent(video.id)}`, { method: "DELETE", headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      const result = await response.json(); if (!result.ok) throw new Error(result.error || "下架失敗"); await loadBootstrap();
+    } catch (err) { setError(err.message || "下架失敗"); } finally { setSaving(false); }
+  };
+
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl space-y-6">
@@ -311,7 +339,7 @@ function CheerleadingPage({ shared }) {
         {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
 
         <nav className="flex flex-wrap gap-2">
-          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }].map((tab) => (
+          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }, { id: "videos", label: "教學影片" }].map((tab) => (
             <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
               {tab.label}
             </button>
@@ -497,6 +525,8 @@ function CheerleadingPage({ shared }) {
             </div>
           </section>
         ) : null}
+
+        {activeTab === "videos" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">教學影片管理</h2><form onSubmit={uploadVideo} className="mt-4 grid gap-3 sm:grid-cols-2"><input value={videoForm.title} onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })} placeholder="影片標題" className="rounded-xl border border-slate-200 px-3 py-2" /><input value={videoForm.category} onChange={(e) => setVideoForm({ ...videoForm, category: e.target.value })} placeholder="分類" className="rounded-xl border border-slate-200 px-3 py-2" /><textarea value={videoForm.description} onChange={(e) => setVideoForm({ ...videoForm, description: e.target.value })} placeholder="說明" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" /><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideoForm({ ...videoForm, file: e.target.files?.[0] || null })} className="sm:col-span-2" /><button disabled={saving} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{saving ? "上傳中…" : "上傳並上架"}</button></form><div className="mt-6 space-y-3">{videos.map((video) => <div key={video.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{video.title}</p><p className="text-sm text-slate-500">{[video.category, video.description].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={() => deleteVideo(video)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">下架</button></div>)}</div></section> : null}
       </div>
     </main>
   );
