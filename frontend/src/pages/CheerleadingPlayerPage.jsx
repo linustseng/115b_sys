@@ -15,6 +15,7 @@ function CheerleadingPlayerPage({ shared }) {
   const [videoUrl, setVideoUrl] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
   const [watermarkTick, setWatermarkTick] = useState(() => Date.now());
+  const [activeTab, setActiveTab] = useState("attendance");
 
   const OPTIONS = [
     { value: "attend", label: "會到", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
@@ -148,19 +149,23 @@ function CheerleadingPlayerPage({ shared }) {
         {error ? <div className="rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         {loading ? <p className="text-sm text-slate-500">載入中…</p> : null}
 
-        <section className="grid gap-3 sm:grid-cols-3">
+        <nav className="flex gap-2 rounded-2xl bg-white p-2 shadow-sm">
+          {[{ id: "attendance", label: "練習報名" }, { id: "videos", label: "教學影片" }].map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-pink-600 text-white" : "text-slate-600 hover:bg-pink-50"}`}>{tab.label}</button>)}
+        </nav>
+
+        {activeTab === "attendance" ? <section className="grid gap-3 sm:grid-cols-3">
           {[{ label: "練習場次", value: stats.total }, { label: "已參與/可參與", value: stats.present }, { label: "參與率", value: `${stats.rate}%` }].map((item) => (
             <div key={item.label} className="rounded-2xl border border-pink-100 bg-white p-4 shadow-sm"><p className="text-xs text-slate-500">{item.label}</p><p className="mt-2 text-2xl font-bold text-slate-900">{item.value}</p></div>
           ))}
-        </section>
+        </section> : null}
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm">
+        {activeTab === "videos" ? <section className="rounded-3xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold">啦啦隊教學影片</h2><p className="mt-1 text-xs text-slate-500">限登入同學觀看，請勿錄製或轉傳。</p></div></div>
           {playingVideo && videoUrl ? <div className="mt-4"><p className="mb-2 text-sm font-semibold">{playingVideo.title}</p><div className="relative overflow-hidden rounded-2xl bg-black"><video key={videoUrl} src={videoUrl} controls controlsList="nodownload noplaybackrate" disablePictureInPicture onContextMenu={(e) => e.preventDefault()} className="w-full" /><div className={`pointer-events-none absolute z-10 select-none whitespace-nowrap rounded bg-black/35 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/85 ${["left-3 top-3", "right-3 top-3", "bottom-12 left-3", "bottom-12 right-3"][Math.floor(watermarkTick / 15000) % 4]}`}>{getName(student)} · {new Date(watermarkTick).toLocaleString("zh-TW", { hour12: false })}</div></div></div> : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">{videos.length ? videos.map((video) => <button key={video.id} type="button" disabled={videoLoading} onClick={() => playVideo(video)} className="rounded-2xl border border-pink-100 bg-pink-50/40 p-4 text-left hover:bg-pink-50 disabled:opacity-60"><p className="font-semibold text-slate-900">{video.title}</p>{video.category ? <p className="mt-1 text-xs font-semibold text-pink-700">{video.category}</p> : null}{video.description ? <p className="mt-2 text-sm text-slate-500">{video.description}</p> : null}<p className="mt-3 text-xs font-semibold text-pink-700">{videoLoading ? "取得播放權限…" : "點此觀看"}</p></button>) : <p className="text-sm text-slate-500">目前尚未上架教學影片。</p>}</div>
-        </section>
+        </section> : null}
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm">
+        {activeTab === "attendance" ? <section className="rounded-3xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-bold">練習與出席回覆</h2>
             <button type="button" onClick={load} className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-600">重新整理</button>
@@ -187,7 +192,7 @@ function CheerleadingPlayerPage({ shared }) {
               );
             }) : <p className="text-sm text-slate-500">目前尚無練習。</p>}
           </div>
-        </section>
+        </section> : null}
       </div>
     </main>
   );
