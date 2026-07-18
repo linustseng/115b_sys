@@ -877,6 +877,8 @@ const API_V2_READ_ACTIONS = new Set([
   "listCheerleadingBootstrap",
   "listCheerleadingPlayerBootstrap",
   "getCheerleadingVideoPlayback",
+  "getCheerleadingVideoPreview",
+  "getCheerleadingVideoPreviewPlayback",
   "listSoftballPlayerBootstrap",
   "listSoftballPlayers",
   "listSoftballPractices",
