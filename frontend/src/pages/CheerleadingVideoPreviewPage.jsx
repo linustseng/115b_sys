@@ -88,7 +88,7 @@ export default function CheerleadingVideoPreviewPage({ shared }) {
         <p className="text-sm text-slate-400">僅 Linus 測試；播放會嘗試直接進入全螢幕，浮水印會保留。</p>
         {error ? <p className="rounded-xl bg-rose-950 p-3 text-rose-200">{error}</p> : null}
         <div className="flex flex-wrap gap-2">{videos.map((v) => <button key={v.id} onClick={() => open(v)} className="rounded-full bg-slate-800 px-4 py-2 text-sm hover:bg-pink-600">{v.title}</button>)}</div>
-        {url ? <div ref={shellRef} className="cheer-video-shell relative overflow-hidden rounded-2xl bg-black">
+        {url ? <div ref={shellRef} onContextMenu={(e) => e.preventDefault()} className="cheer-video-shell relative overflow-hidden rounded-2xl bg-black">
           <video ref={videoRef} src={url} playsInline onTimeUpdate={(e) => setProgress(e.currentTarget.currentTime)} onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); e.currentTarget.playbackRate = speed; }} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} className="w-full" />
           <div className={`pointer-events-none absolute z-10 rounded bg-black/45 px-2 py-1 text-xs font-semibold ${watermarkPosition}`}>Linus Tseng · {new Date(tick).toLocaleString("zh-TW", { hour12: false })}</div>
           <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-3 bg-black/75 p-3">
