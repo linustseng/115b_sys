@@ -798,6 +798,7 @@ const API_POST_ACTIONS = new Set([
   "listApprovalsOverview",
   "getCheckinBootstrap",
   "getRegistrationBootstrap",
+  "getWorldCupPredictionStats",
   "listEvents",
   "listEventAuditEvents",
   "listFinanceApplicantBootstrap",
@@ -828,6 +829,7 @@ const API_V2_READ_ACTIONS = new Set([
   "lookupStudent",
   "listMyMemberships",
   "getRegistrationBootstrap",
+  "getWorldCupPredictionStats",
   "getCheckinBootstrap",
   "listCheckinStatus",
   "listDirectory",
@@ -1314,6 +1316,15 @@ function buildApiV2Request_(payload) {
       method: "GET",
       url: url.toString(),
       headers,
+      body: null,
+    };
+  }
+
+  if (action === "getWorldCupPredictionStats") {
+    return {
+      method: "GET",
+      url: `${base}/v1/world-cup/prediction-stats`,
+      headers: { Accept: "application/json" },
       body: null,
     };
   }

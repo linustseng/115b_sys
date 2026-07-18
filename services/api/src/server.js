@@ -1154,6 +1154,30 @@ app.get("/v1/bootstrap/registration", async (req, res) => {
   }
 });
 
+// Aggregate-only public data for the landing card; individual picks stay private.
+app.get("/v1/world-cup/prediction-stats", async (_req, res) => {
+  try {
+    const result = await query(
+      `SELECT
+         count(*)::int AS participants,
+         count(*) FILTER (WHERE custom_fields ->> 'predictedChampion' = '西班牙')::int AS spain_votes,
+         count(*) FILTER (WHERE custom_fields ->> 'predictedChampion' = '阿根廷')::int AS argentina_votes
+       FROM registrations
+       WHERE event_id = 'world-cup-final-2026'
+         AND lower(coalesce(status, '')) <> 'cancelled'
+         AND coalesce(custom_fields ->> 'predictedChampion', '') <> ''`
+    );
+    const row = result.rows[0] || {};
+    return res.json({ ok: true, data: {
+      participants: Number(row.participants || 0),
+      spainVotes: Number(row.spain_votes || 0),
+      argentinaVotes: Number(row.argentina_votes || 0),
+    }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
 app.get("/v1/bootstrap/checkin", async (req, res) => {
   const eventId = String(req.query.eventId || "").trim();
   const email = normalizeEmail(req.query.email || "");

@@ -147,6 +147,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
+  const [worldCupStats, setWorldCupStats] = useState(null);
   const initialApprovalsOverview = (() => {
     try {
       const studentId =
@@ -271,6 +272,22 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setLoginCollapsed(true);
     }
   }, [hasGoogleLogin, needsReauth]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest({ action: "getWorldCupPredictionStats" })
+      .then(({ result }) => {
+        if (!cancelled && result && result.ok) {
+          setWorldCupStats(result.data || null);
+        }
+      })
+      .catch(() => {
+        // The activity card remains useful even if the aggregate is temporarily unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiRequest]);
 
   useEffect(() => {
     if (shouldShowReauthPrompt) {
@@ -1311,6 +1328,25 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                   <NationalTeamCrest team="argentina" />
                   <span className="text-xs font-bold text-white">阿根廷</span>
                 </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 lg:min-w-[17rem]">
+                {worldCupStats ? (
+                  <>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-xs font-semibold text-slate-300">目前已有 <span className="text-base font-black text-white">{worldCupStats.participants}</span> 人下好離手</p>
+                      <span className="text-[10px] font-semibold text-slate-400">冠軍票向</span>
+                    </div>
+                    <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-700" aria-label={`西班牙 ${worldCupStats.spainVotes} 票，阿根廷 ${worldCupStats.argentinaVotes} 票`}>
+                      <span className="bg-[#F6C445]" style={{ width: `${worldCupStats.participants ? Math.round((worldCupStats.spainVotes / worldCupStats.participants) * 100) : 0}%` }} />
+                      <span className="flex-1 bg-sky-400" />
+                    </div>
+                    <div className="mt-2 flex justify-between text-[11px] font-bold"><span className="text-[#F6C445]">西班牙 {worldCupStats.participants ? Math.round((worldCupStats.spainVotes / worldCupStats.participants) * 100) : 0}%</span><span className="text-sky-300">阿根廷 {worldCupStats.participants ? Math.round((worldCupStats.argentinaVotes / worldCupStats.participants) * 100) : 0}%</span></div>
+                    <p className="mt-2 text-[10px] text-slate-500">只顯示整體票向，個人預測封盤前保密。</p>
+                  </>
+                ) : (
+                  <p className="text-xs font-semibold text-slate-400">正在統計大家的足球第六感…</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-3 text-center lg:min-w-[12.5rem] lg:text-right">
