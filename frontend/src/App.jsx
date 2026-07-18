@@ -69,6 +69,7 @@ const SoftballPage = lazyImportWithRetry_(() => import("./pages/SoftballPage"), 
 const SoftballPlayerPage = lazyImportWithRetry_(() => import("./pages/SoftballPlayerPage"), "SoftballPlayerPage");
 const CheerleadingPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPage"), "CheerleadingPage");
 const CheerleadingPlayerPage = lazyImportWithRetry_(() => import("./pages/CheerleadingPlayerPage"), "CheerleadingPlayerPage");
+const CheerleadingVideoPreviewPage = lazyImportWithRetry_(() => import("./pages/CheerleadingVideoPreviewPage"), "CheerleadingVideoPreviewPage");
 const DocumentsPage = lazyImportWithRetry_(() => import("./pages/DocumentsPage"), "DocumentsPage");
 const QuickLinksPage = lazyImportWithRetry_(() => import("./pages/QuickLinksPage"), "QuickLinksPage");
 import {
@@ -788,6 +789,8 @@ const API_POST_ACTIONS = new Set([
   "listCheerleadingBootstrap",
   "listCheerleadingPlayerBootstrap",
   "getCheerleadingVideoPlayback",
+  "getCheerleadingVideoPreview",
+  "getCheerleadingVideoPreviewPlayback",
   "listStudents",
   "listGroupMemberships",
   "listMyMemberships",
@@ -3235,6 +3238,7 @@ function AppShell() {
   const isSoftballPlayerPage = pathname.includes("softball/player");
   const isSoftballPage = pathname.includes("softball");
   const isCheerleadingPlayerPage = pathname.includes("cheerleading/player");
+  const isCheerleadingVideoPreviewPage = pathname.includes("cheerleading/video-preview");
   const isCheerleadingPage = pathname.includes("cheerleading");
   const isApprovalsPage = pathname.startsWith("/approvals");
   const isDocumentsPage = pathname.includes("documents");
@@ -3662,6 +3666,8 @@ function AppShell() {
     content = <ApprovalsPage shared={shared} />;
   } else if (isSoftballPlayerPage) {
     content = <SoftballPlayerPage shared={shared} />;
+  } else if (isCheerleadingVideoPreviewPage) {
+    content = <CheerleadingVideoPreviewPage shared={shared} />;
   } else if (isCheerleadingPlayerPage) {
     content = <CheerleadingPlayerPage shared={shared} />;
   } else if (isCheerleadingPage) {

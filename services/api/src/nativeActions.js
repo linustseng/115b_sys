@@ -7792,6 +7792,26 @@ export async function dispatchNativeAction({
       return { ok: true, data: { url, expiresInSeconds: 300 }, error: null };
     }
 
+    case "getCheerleadingVideoPreview": {
+      requireAuth();
+      if (normalizeEmail(auth.profile?.email || "") !== "linus.tseng@gmail.com") {
+        const error = new Error("Forbidden"); error.statusCode = 403; throw error;
+      }
+      const result = await query(`select id, original_name, raw from attachments where entity_type = 'cheerleading_video' and status = 'ready' order by coalesce(created_at,'') desc`);
+      return { ok: true, data: { videos: result.rows.map((row) => ({ id: row.id, title: firstText(row.raw?.title, row.original_name) })) }, error: null };
+    }
+
+    case "getCheerleadingVideoPreviewPlayback": {
+      requireAuth();
+      if (normalizeEmail(auth.profile?.email || "") !== "linus.tseng@gmail.com") {
+        const error = new Error("Forbidden"); error.statusCode = 403; throw error;
+      }
+      const videoId = firstText(body.videoId || body.data?.videoId);
+      const result = await query(`select * from attachments where id = $1 and entity_type = 'cheerleading_video' and status = 'ready' limit 1`, [videoId]);
+      const row = rowOrNull(result); if (!row) return { ok: false, data: null, error: "影片不存在" };
+      return { ok: true, data: { url: await createSignedReadUrlForAttachment(row, 300, { throwOnError: true }) }, error: null };
+    }
+
     case "createCheerleadingPractice":
     case "updateCheerleadingPractice": {
       await requireCheerleadingAdminAccess();
