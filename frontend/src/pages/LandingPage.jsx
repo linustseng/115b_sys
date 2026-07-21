@@ -147,7 +147,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const [notificationUnread, setNotificationUnread] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationError, setNotificationError] = useState("");
-  const [worldCupStats, setWorldCupStats] = useState(null);
+  const [worldCupStats] = useState(null);
   const initialApprovalsOverview = (() => {
     try {
       const studentId =
@@ -272,22 +272,6 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       setLoginCollapsed(true);
     }
   }, [hasGoogleLogin, needsReauth]);
-
-  useEffect(() => {
-    let cancelled = false;
-    apiRequest({ action: "getWorldCupPredictionStats" })
-      .then(({ result }) => {
-        if (!cancelled && result && result.ok) {
-          setWorldCupStats(result.data || null);
-        }
-      })
-      .catch(() => {
-        // The activity card remains useful even if the aggregate is temporarily unavailable.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiRequest]);
 
   useEffect(() => {
     if (shouldShowReauthPrompt) {
@@ -1298,7 +1282,8 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
           </section>
         ) : null}
 
-        <section className="entrance entrance-delay-2 mb-6 overflow-hidden rounded-[2rem] border border-slate-800 bg-[#101827] text-white shadow-[0_30px_80px_-45px_rgba(15,23,42,0.9)] sm:rounded-[2.5rem]">
+        {/* 足球預測賽已結束，保留版型程式碼以便日後復用，但不再對外顯示。 */}
+        <section hidden className="entrance entrance-delay-2 mb-6 overflow-hidden rounded-[2rem] border border-slate-800 bg-[#101827] text-white shadow-[0_30px_80px_-45px_rgba(15,23,42,0.9)] sm:rounded-[2.5rem]">
           <div className="relative isolate overflow-hidden px-5 py-6 sm:px-8 sm:py-8">
             <div className="absolute -left-12 -top-20 h-48 w-48 rounded-full bg-[#F6C445]/20 blur-3xl" />
             <div className="absolute -right-16 -bottom-24 h-56 w-56 rounded-full bg-sky-400/20 blur-3xl" />

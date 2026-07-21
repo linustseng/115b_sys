@@ -55,7 +55,6 @@ const LandingPage = lazyImportWithRetry_(() => import("./pages/LandingPage"), "L
 const ProfilePage = lazyImportWithRetry_(() => import("./pages/ProfilePage"), "ProfilePage");
 const BirthdayPage = lazyImportWithRetry_(() => import("./pages/BirthdayPage"), "BirthdayPage");
 const RegistrationPage = lazyImportWithRetry_(() => import("./pages/RegistrationPage"), "RegistrationPage");
-const WorldCupPredictionPage = lazyImportWithRetry_(() => import("./pages/WorldCupPredictionPage"), "WorldCupPredictionPage");
 const CheckinPage = lazyImportWithRetry_(() => import("./pages/CheckinPage"), "CheckinPage");
 const OrderingPage = lazyImportWithRetry_(() => import("./pages/OrderingPage"), "OrderingPage");
 const OrderingPublicPage = lazyImportWithRetry_(() => import("./pages/OrderingPublicPage"), "OrderingPublicPage");
@@ -3229,7 +3228,6 @@ function AppShell() {
   const isAdminAcademicsPage = pathname.includes("admin/academics");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
-  const isWorldCupPredictionPage = pathname.includes("world-cup");
   const isProfilePage = pathname.includes("profile");
   const isEventsPage = pathname.includes("events");
   const isAcademicsPage = pathname.includes("academics");
@@ -3632,8 +3630,6 @@ function AppShell() {
         />
       </AdminAccessGuard>
     );
-  } else if (isWorldCupPredictionPage) {
-    content = <WorldCupPredictionPage shared={shared} />;
   } else if (isRegisterPage) {
     content = <RegistrationPage shared={shared} />;
   } else if (isEventsPage) {
