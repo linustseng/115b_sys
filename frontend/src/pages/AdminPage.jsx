@@ -56,6 +56,7 @@ export default function AdminPage({
   const [error, setError] = useState("");
   const [activeId, setActiveId] = useState("");
   const [isEventFormOpen, setIsEventFormOpen] = useState(false);
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const [eventAuditEvents, setEventAuditEvents] = useState([]);
   const [eventAuditLoading, setEventAuditLoading] = useState(false);
   const [eventListId, setEventListId] = useState("");
@@ -1023,7 +1024,7 @@ export default function AdminPage({
   }, [sortedEvents, eventListId]);
 
   useEffect(() => {
-    if (activeTab !== "events" || !selectedEventForList) {
+    if (activeTab !== "events" || !selectedEventForList || isCreatingEvent) {
       return;
     }
     const selectedId = normalizeEventId_(selectedEventForList.id);
@@ -1034,7 +1035,7 @@ export default function AdminPage({
       return;
     }
     handleEdit(selectedEventForList);
-  }, [activeTab, selectedEventForList, isEventFormOpen, activeId]);
+  }, [activeTab, selectedEventForList, isEventFormOpen, activeId, isCreatingEvent]);
 
   useEffect(() => {
     if (activeTab !== "ordering" || isCreatingOrder) {
@@ -1130,6 +1131,7 @@ export default function AdminPage({
   }, []);
 
   const handleEdit = (event) => {
+    setIsCreatingEvent(false);
     setEventListId(event.id || "");
     setActiveId(event.id || "");
     setIsEventFormOpen(true);
@@ -2420,6 +2422,7 @@ export default function AdminPage({
       await loadEvents();
       if (activeId === eventId) {
         setActiveId("");
+        setIsCreatingEvent(false);
         setIsEventFormOpen(false);
         setEventAuditEvents([]);
       }
@@ -2447,6 +2450,7 @@ export default function AdminPage({
         );
       }
       setActiveId("");
+      setIsCreatingEvent(false);
       setIsEventFormOpen(false);
       setForm(buildDefaultForm(events));
       setEventAuditEvents([]);
@@ -2766,6 +2770,7 @@ export default function AdminPage({
 
   const handleStartCreateEvent = () => {
     setError("");
+    setIsCreatingEvent(true);
     setActiveId("");
     setForm(buildDefaultForm(events));
     setIsEventFormOpen(true);
@@ -6352,7 +6357,10 @@ export default function AdminPage({
               </h2>
               <button
                 type="button"
-                onClick={() => setIsEventFormOpen(false)}
+                onClick={() => {
+                  setIsCreatingEvent(false);
+                  setIsEventFormOpen(false);
+                }}
                 className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300"
               >
                 收合
@@ -6791,6 +6799,7 @@ export default function AdminPage({
                   type="button"
                   onClick={() => {
                     setActiveId("");
+                    setIsCreatingEvent(false);
                     setForm(buildDefaultForm(events));
                     setIsEventFormOpen(false);
                   }}
