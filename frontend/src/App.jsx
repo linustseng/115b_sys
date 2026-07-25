@@ -3256,7 +3256,6 @@ function AppShell() {
   const showLineBanner = lineInfo.isLineInApp && !hideLineBanner;
   const shared = {
     apiRequest,
-    authedApiRequest,
     API_URL,
     API_V2_URL,
     PUBLIC_SITE_URL,
