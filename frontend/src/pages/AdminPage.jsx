@@ -3231,6 +3231,26 @@ export default function AdminPage({
     })
     .filter(Boolean)
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant"));
+  const registrationStatusExportRows = displayStudents
+    .map((student) => {
+      const studentId = String(student.id || "").trim();
+      const registration = dedupedActiveRegistrations.find((item) => {
+        const fields = parseCustomFields_(item.customFields);
+        return resolveRegistrationStudentId_(item, fields) === studentId;
+      });
+      const fields = registration ? parseCustomFields_(registration.customFields) : {};
+      return {
+        name: getChineseName_(student) || getDisplayName_(student) || "未命名",
+        studentId,
+        group: String(student.group || "").trim(),
+        email: String(student.email || student.googleEmail || "").trim(),
+        attendanceStatus: registration ? normalizeAttendanceStatus_(fields.attendance) : "unregistered",
+        notes: String(fields.notes || fields.note || "").trim(),
+        submittedAt: registration ? registration.createdAt || "" : "",
+        updatedAt: registration ? registration.updatedAt || "" : "",
+      };
+    })
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "zh-Hant"));
   const manualRegistrationEntries = registrationList
     .map((registration) => {
       const fields = parseCustomFields_(registration.customFields);
@@ -3461,6 +3481,38 @@ export default function AdminPage({
     return rows;
   };
 
+  const buildRegistrationStatusExcelRows_ = (status) => {
+    const eventTitle = String((selectedRegistrationEvent && selectedRegistrationEvent.title) || "").trim();
+    const eventId = String((selectedRegistrationEvent && selectedRegistrationEvent.id) || registrationEventId || "").trim();
+    const statusLabel = status === "unregistered" ? "未報名" : "不克出席";
+    const rows = [
+      ["活動名稱", eventTitle || "-"],
+      ["活動ID", eventId || "-"],
+      ["匯出時間", new Date().toLocaleString()],
+      ["狀態", statusLabel],
+      [],
+      ["序號", "姓名", "學號", "組別", "Email", "備註", "報名時間", "更新時間"],
+    ];
+    const entries = registrationStatusExportRows.filter((item) => item.attendanceStatus === status);
+    if (entries.length) {
+      entries.forEach((item, index) => {
+        rows.push([
+          index + 1,
+          item.name,
+          item.studentId,
+          item.group,
+          item.email,
+          item.notes,
+          item.submittedAt,
+          item.updatedAt,
+        ]);
+      });
+    } else {
+      rows.push(["", `(無${statusLabel}資料)`]);
+    }
+    return rows;
+  };
+
   const buildSafeFilename_ = (value, fallback = "出席名單") =>
     String(value || fallback)
       .trim()
@@ -3477,8 +3529,11 @@ export default function AdminPage({
     const safeEventTitle = buildSafeFilename_(eventTitle || "活動", "活動");
     downloadXlsx({
       filename: `${safeEventTitle}-出席名單.xlsx`,
-      sheetName: eventTitle || "出席名單",
-      rows: buildAttendanceExcelRows_(),
+      sheets: [
+        { sheetName: "已報名", rows: buildAttendanceExcelRows_() },
+        { sheetName: "未報名", rows: buildRegistrationStatusExcelRows_("unregistered") },
+        { sheetName: "不克出席", rows: buildRegistrationStatusExcelRows_("not_attending") },
+      ],
     });
   };
 

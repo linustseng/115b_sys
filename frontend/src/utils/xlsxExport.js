@@ -173,9 +173,31 @@ function buildWorksheetXml_(rows) {
 </worksheet>`;
 }
 
-export function createXlsxBytes({ sheetName = "Sheet1", rows = [] }) {
-  const safeSheetName = normalizeSheetName_(sheetName);
-  const worksheetXml = buildWorksheetXml_(rows);
+export function createXlsxBytes({ sheetName = "Sheet1", rows = [], sheets = null }) {
+  const normalizedSheets = (Array.isArray(sheets) && sheets.length ? sheets : [{ sheetName, rows }]).map(
+    (sheet, index) => ({
+      sheetName: normalizeSheetName_(sheet && sheet.sheetName ? sheet.sheetName : `Sheet${index + 1}`),
+      rows: Array.isArray(sheet && sheet.rows) ? sheet.rows : [],
+    })
+  );
+  const worksheetOverrides = normalizedSheets
+    .map(
+      (_, index) =>
+        `  <Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+    )
+    .join("\n");
+  const workbookSheets = normalizedSheets
+    .map(
+      (sheet, index) =>
+        `<sheet name="${escapeXml_(sheet.sheetName)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+    )
+    .join("");
+  const workbookRelationships = normalizedSheets
+    .map(
+      (_, index) =>
+        `  <Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+    )
+    .join("\n");
   const files = [
     {
       name: "[Content_Types].xml",
@@ -184,7 +206,7 @@ export function createXlsxBytes({ sheetName = "Sheet1", rows = [] }) {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
-  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+${worksheetOverrides}
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`,
     },
@@ -199,15 +221,15 @@ export function createXlsxBytes({ sheetName = "Sheet1", rows = [] }) {
       name: "xl/workbook.xml",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <sheets><sheet name="${escapeXml_(safeSheetName)}" sheetId="1" r:id="rId1"/></sheets>
+  <sheets>${workbookSheets}</sheets>
 </workbook>`,
     },
     {
       name: "xl/_rels/workbook.xml.rels",
       data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
-  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+${workbookRelationships}
+  <Relationship Id="rId${normalizedSheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`,
     },
     {
@@ -221,13 +243,16 @@ export function createXlsxBytes({ sheetName = "Sheet1", rows = [] }) {
   <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
 </styleSheet>`,
     },
-    { name: "xl/worksheets/sheet1.xml", data: worksheetXml },
+    ...normalizedSheets.map((sheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      data: buildWorksheetXml_(sheet.rows),
+    })),
   ];
   return createZipBytes(files);
 }
 
-export function downloadXlsx({ filename, sheetName, rows }) {
-  const bytes = createXlsxBytes({ sheetName, rows });
+export function downloadXlsx({ filename, sheetName, rows, sheets }) {
+  const bytes = createXlsxBytes({ sheetName, rows, sheets });
   const blob = new Blob([bytes], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
