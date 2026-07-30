@@ -44,9 +44,12 @@ function CheerleadingPage({ shared }) {
   const PRESENT_STATUSES = new Set(["attend", "late", "early_leave"]);
   const ATTENDANCE_SUMMARY_GROUPS = [
     { id: "available", label: "可以到", statuses: ["attend", "late", "early_leave"], tone: "border-emerald-200 bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
-    { id: "unavailable", label: "不能到", statuses: ["absent"], tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
-    { id: "excused", label: "請假", statuses: ["excused"], tone: "border-sky-200 bg-sky-50 text-sky-800", dot: "bg-sky-500" },
+    { id: "unavailable", label: "未到／請假", statuses: ["absent", "excused"], tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
     { id: "pending", label: "還沒有填", statuses: ["unknown"], tone: "border-slate-200 bg-slate-50 text-slate-700", dot: "bg-slate-400" },
+  ];
+  const ATTENDANCE_STATISTIC_OPTIONS = [
+    ...ATTENDANCE_OPTIONS.filter((item) => item.value !== "absent" && item.value !== "excused"),
+    { value: "unavailable", label: "未到／請假", tone: "bg-rose-50 text-rose-700 border-rose-200" },
   ];
 
   const normalizeId_ = (value) => String(value || "").trim();
@@ -369,7 +372,7 @@ function CheerleadingPage({ shared }) {
                 <div key={practice.id} className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{formatPracticeSchedule_(practice)} · {practice.title || "啦啦隊練習"}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}%</p></div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-5 lg:grid-cols-9">
-                    {ATTENDANCE_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{counts[item.value] || 0}</p></div>)}
+                    {ATTENDANCE_STATISTIC_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{item.value === "unavailable" ? (counts.absent || 0) + (counts.excused || 0) : counts[item.value] || 0}</p></div>)}
                   </div>
                 </div>
               ))}
