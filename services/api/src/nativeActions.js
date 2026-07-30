@@ -7896,7 +7896,9 @@ export async function dispatchNativeAction({
       const createdAt = firstText(existingRow && existingRow.created_at ? existingRow.created_at : "", data.createdAt, nowIso());
       const updatedAt = nowIso();
       const notes = firstText(data.notes || data.note || body.note || body.notes);
-      const raw = { ...(data || {}), id, practiceId, studentId, playerId: studentId, notes };
+      const requestedStatus = firstText(data.status, "unknown").toLowerCase();
+      const status = requestedStatus === "excused" ? "absent" : requestedStatus;
+      const raw = { ...(data || {}), id, practiceId, studentId, playerId: studentId, status, notes };
       await query(
         `insert into cheerleading_attendance (id, practice_id, student_id, status, notes, raw, created_at, updated_at)
          values ($1,$2,$3,$4,$5,$6::jsonb,$7,$8)
@@ -7907,7 +7909,7 @@ export async function dispatchNativeAction({
            raw=excluded.raw,
            updated_at=excluded.updated_at,
            synced_at=now()`,
-        [id, practiceId, studentId, firstText(data.status, "unknown"), notes, jsonbParam(raw, {}), createdAt, updatedAt]
+        [id, practiceId, studentId, status, notes, jsonbParam(raw, {}), createdAt, updatedAt]
       );
       return { ok: true, data: { id, attendance: raw }, error: null };
     }

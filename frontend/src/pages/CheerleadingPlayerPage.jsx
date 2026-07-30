@@ -30,14 +30,17 @@ function CheerleadingPlayerPage({ shared }) {
     { value: "attend", label: "會到", tone: "border-emerald-200 bg-emerald-50 text-emerald-700" },
     { value: "late", label: "會遲到", tone: "border-amber-200 bg-amber-50 text-amber-700" },
     { value: "early_leave", label: "會早退", tone: "border-orange-200 bg-orange-50 text-orange-700" },
-    { value: "excused", label: "請假", tone: "border-sky-200 bg-sky-50 text-sky-700" },
     { value: "absent", label: "無法到", tone: "border-rose-200 bg-rose-50 text-rose-700" },
     { value: "unknown", label: "未回覆", tone: "border-slate-200 bg-slate-50 text-slate-600" },
   ];
   const PRESENT = new Set(["attend", "late", "early_leave"]);
   const labelByStatus = OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
   const normalizeId = (value) => String(value || "").trim();
-  const normalizeStatus = (value) => OPTIONS.some((item) => item.value === String(value || "").trim()) ? String(value || "").trim() : "unknown";
+  const normalizeStatus = (value) => {
+    const raw = String(value || "").trim();
+    const status = raw === "excused" ? "absent" : raw;
+    return OPTIONS.some((item) => item.value === status) ? status : "unknown";
+  };
   const pad2 = (value) => String(value).padStart(2, "0");
   const getDateParts = (value) => {
     const raw = String(value || "").trim();

@@ -36,26 +36,22 @@ function CheerleadingPage({ shared }) {
     { value: "attend", label: "出席", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
     { value: "late", label: "遲到", tone: "bg-amber-50 text-amber-700 border-amber-200" },
     { value: "early_leave", label: "早退", tone: "bg-orange-50 text-orange-700 border-orange-200" },
-    { value: "excused", label: "請假", tone: "bg-sky-50 text-sky-700 border-sky-200" },
-    { value: "absent", label: "未到", tone: "bg-rose-50 text-rose-700 border-rose-200" },
+    { value: "absent", label: "無法到", tone: "bg-rose-50 text-rose-700 border-rose-200" },
     { value: "unknown", label: "未記錄", tone: "bg-slate-50 text-slate-600 border-slate-200" },
   ];
   const STATUS_LABELS = ATTENDANCE_OPTIONS.reduce((acc, item) => ({ ...acc, [item.value]: item.label }), {});
   const PRESENT_STATUSES = new Set(["attend", "late", "early_leave"]);
   const ATTENDANCE_SUMMARY_GROUPS = [
     { id: "available", label: "可以到", statuses: ["attend", "late", "early_leave"], tone: "border-emerald-200 bg-emerald-50 text-emerald-800", dot: "bg-emerald-500" },
-    { id: "unavailable", label: "未到／請假", statuses: ["absent", "excused"], tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
+    { id: "unavailable", label: "無法到", statuses: ["absent"], tone: "border-rose-200 bg-rose-50 text-rose-800", dot: "bg-rose-500" },
     { id: "pending", label: "還沒有填", statuses: ["unknown"], tone: "border-slate-200 bg-slate-50 text-slate-700", dot: "bg-slate-400" },
-  ];
-  const ATTENDANCE_STATISTIC_OPTIONS = [
-    ...ATTENDANCE_OPTIONS.filter((item) => item.value !== "absent" && item.value !== "excused"),
-    { value: "unavailable", label: "未到／請假", tone: "bg-rose-50 text-rose-700 border-rose-200" },
   ];
 
   const normalizeId_ = (value) => String(value || "").trim();
   const normalizeStatus_ = (value) => {
     const raw = String(value || "").trim().toLowerCase();
-    return ATTENDANCE_OPTIONS.some((item) => item.value === raw) ? raw : "unknown";
+    const status = raw === "excused" ? "absent" : raw;
+    return ATTENDANCE_OPTIONS.some((item) => item.value === status) ? status : "unknown";
   };
   const getStudentName_ = (student) =>
     String(student?.nameZh || student?.preferredName || student?.name || student?.nameEn || student?.email || student?.id || "").trim();
@@ -372,7 +368,7 @@ function CheerleadingPage({ shared }) {
                 <div key={practice.id} className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex flex-wrap justify-between gap-2"><p className="font-semibold">{formatPracticeSchedule_(practice)} · {practice.title || "啦啦隊練習"}</p><p className="text-sm text-slate-500">參與 {present}/{total} · {participationRate}%</p></div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-5 lg:grid-cols-9">
-                    {ATTENDANCE_STATISTIC_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{item.value === "unavailable" ? (counts.absent || 0) + (counts.excused || 0) : counts[item.value] || 0}</p></div>)}
+                    {ATTENDANCE_OPTIONS.map((item) => <div key={item.value} className={`rounded-xl border px-3 py-2 ${item.tone}`}><p>{item.label}</p><p className="mt-1 text-base font-bold">{counts[item.value] || 0}</p></div>)}
                   </div>
                 </div>
               ))}
