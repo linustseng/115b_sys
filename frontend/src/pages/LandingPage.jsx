@@ -882,8 +882,10 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeFinanceAdmin = membershipsLoaded && hasGroupAccess_(["D", "E"]);
   const canSeeAcademicsAdmin = membershipsLoaded && hasGroupAccess_(["E", "F"]);
   const canSeeSoftballAdmin = membershipsLoaded && (hasGroupAccess_(["E", "H"]) || softballAdminAllowed);
+  // The dedicated access check is authoritative.  Do not hide the entrance while
+  // the separate membership bootstrap is still loading (or recovering a session).
   const canSeeCheerleadingAdmin =
-    membershipsLoaded && (hasGroupAccess_(["E", "L"]) || cheerleadingAdminAllowed);
+    cheerleadingAdminAllowed || (membershipsLoaded && hasGroupAccess_(["E", "L"]));
   const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
   const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
