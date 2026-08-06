@@ -88,6 +88,7 @@ function FinancePage({ shared }) {
   const [financeCategories, setFinanceCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [paymentPurchaseRequirementError, setPaymentPurchaseRequirementError] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [form, setForm] = useState(buildFinanceDraft_());
   const [editingId, setEditingId] = useState("");
@@ -110,6 +111,8 @@ function FinancePage({ shared }) {
   const [uploadAttachmentError, setUploadAttachmentError] = useState("");
   const [memberGroups, setMemberGroups] = useState([]);
   const [fundEvents, setFundEvents] = useState([]);
+  const paymentPurchaseRequirementRef = useRef(null);
+  const relatedPurchaseInputRef = useRef(null);
 
   const ensureAttachmentDraftRequestId_ = () => {
     const current = String(form.id || editingId || "").trim();
@@ -604,6 +607,7 @@ function FinancePage({ shared }) {
 
   const resetForm = () => {
     setForm(buildFinanceDraft_());
+    setPaymentPurchaseRequirementError(false);
     setEditingId("");
     setBankPickerQuery("");
     setBankPickerOpen(false);
@@ -612,6 +616,13 @@ function FinancePage({ shared }) {
 
   const handleFormChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    if (
+      paymentPurchaseRequirementError &&
+      (key === "relatedPurchaseId" || key === "noPurchaseReason") &&
+      String(value || "").trim()
+    ) {
+      setPaymentPurchaseRequirementError(false);
+    }
   };
 
   const handleFundPaymentChange = (key, value) => {
@@ -880,6 +891,7 @@ function FinancePage({ shared }) {
     event.preventDefault();
     setStatusMessage("");
     setError("");
+    setPaymentPurchaseRequirementError(false);
     if (!googleLinkedStudent || !googleLinkedStudent.email) {
       setError("請先登入 Google");
       return;
@@ -928,7 +940,12 @@ function FinancePage({ shared }) {
       return;
     }
     if (isPayment && !form.relatedPurchaseId && !form.noPurchaseReason) {
+      setPaymentPurchaseRequirementError(true);
       setError("請填寫對應請購或未經請購原因");
+      requestAnimationFrame(() => {
+        paymentPurchaseRequirementRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+        relatedPurchaseInputRef.current?.focus({ preventScroll: true });
+      });
       return;
     }
     if (isPayment && !String(form.payeeName || "").trim()) {
@@ -1998,14 +2015,29 @@ function FinancePage({ shared }) {
                 </div>
               ) : null}
               {isPayment ? (
-                <div className="grid gap-2 sm:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">對應請購</label>
+                <div
+                  ref={paymentPurchaseRequirementRef}
+                  className="grid gap-2 sm:col-span-2"
+                >
+                  <label
+                    className={`text-sm font-medium ${
+                      paymentPurchaseRequirementError ? "text-rose-700" : "text-slate-700"
+                    }`}
+                  >
+                    對應請購 <span className="required-mark">*</span>
+                    <span className="ml-1 text-xs font-normal text-slate-500">或填寫下方未經請購原因</span>
+                  </label>
                   <input
+                    ref={relatedPurchaseInputRef}
                     value={form.relatedPurchaseId}
                     onChange={(event) => handleFormChange("relatedPurchaseId", event.target.value)}
                     list="purchase-options"
                     placeholder="請購單號 (可選)"
-                    className="input-sm"
+                    aria-invalid={paymentPurchaseRequirementError}
+                    aria-describedby={
+                      paymentPurchaseRequirementError ? "payment-purchase-requirement-error" : undefined
+                    }
+                    className={paymentPurchaseRequirementError ? "input-sm input-error" : "input-sm"}
                   />
                   <datalist id="purchase-options">
                     {purchaseOptions.map((item) => (
@@ -2022,14 +2054,34 @@ function FinancePage({ shared }) {
               ) : null}
               {isPayment ? (
                 <div className="grid gap-2 sm:col-span-2">
-                  <label className="text-sm font-medium text-slate-700">未經請購原因</label>
+                  <label
+                    className={`text-sm font-medium ${
+                      paymentPurchaseRequirementError ? "text-rose-700" : "text-slate-700"
+                    }`}
+                  >
+                    未經請購原因 <span className="required-mark">*</span>
+                    <span className="ml-1 text-xs font-normal text-slate-500">或填寫上方對應請購</span>
+                  </label>
                   <textarea
                     value={form.noPurchaseReason}
                     onChange={(event) => handleFormChange("noPurchaseReason", event.target.value)}
                     rows="2"
                     placeholder="若未事先請購請填寫原因"
-                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900"
+                    aria-invalid={paymentPurchaseRequirementError}
+                    aria-describedby={
+                      paymentPurchaseRequirementError ? "payment-purchase-requirement-error" : undefined
+                    }
+                    className={`rounded-2xl border bg-white px-4 py-3 text-sm text-slate-900 ${
+                      paymentPurchaseRequirementError
+                        ? "border-rose-400 focus:border-rose-500 focus:ring-rose-200"
+                        : "border-slate-200"
+                    }`}
                   />
+                  {paymentPurchaseRequirementError ? (
+                    <p id="payment-purchase-requirement-error" role="alert" className="help-error">
+                      請至少填寫一項：選擇對應請購單，或說明未經請購原因。
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               {isPayment ? (
