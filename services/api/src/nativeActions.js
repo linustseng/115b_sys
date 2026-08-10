@@ -2703,6 +2703,7 @@ export async function dispatchNativeAction({
     "verifyGoogle",
     "linkGoogleStudent",
     "refreshSession",
+    "searchStudents",
     // Landing can render without login; it will return empty private sections when unauthenticated.
     "listLandingBootstrap",
     "listQuickLinks",
