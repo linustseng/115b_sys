@@ -1806,11 +1806,18 @@ function shouldSkipAutoAuthRecovery_(payload) {
   if (!action) {
     return true;
   }
+  // These actions happen before a student has been linked.  Treating a stale
+  // API response as a global session failure would navigate the user away from
+  // the Google-linking flow (most visibly in iOS standalone/PWA mode).
+  const isPreAuthAction = new Set([
+    "refreshSession",
+    "verifyGoogle",
+    "linkGoogleStudent",
+    "searchStudents",
+  ]).has(action);
   return Boolean(
     (payload && payload.__skipAuthRecovery) ||
-      action === "refreshSession" ||
-      action === "verifyGoogle" ||
-      action === "linkGoogleStudent"
+      isPreAuthAction
   );
 }
 
@@ -2413,6 +2420,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
       } catch (err) {
         if (!ignore) {
           setResults([]);
+          setError(err.message || "搜尋同學資料失敗，請稍後再試。");
         }
       } finally {
         if (!ignore) {
