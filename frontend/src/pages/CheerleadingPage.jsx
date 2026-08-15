@@ -14,6 +14,7 @@ function CheerleadingPage({ shared }) {
   const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [cheerPlaylistText, setCheerPlaylistText] = useState("");
   const [videoForm, setVideoForm] = useState({ title: "", category: "", description: "", file: null });
   const [activePracticeId, setActivePracticeId] = useState("");
   const [statsScope, setStatsScope] = useState("recent10");
@@ -31,6 +32,28 @@ function CheerleadingPage({ shared }) {
   });
   const [fieldForm, setFieldForm] = useState({ id: "", name: "", address: "", mapUrl: "", notes: "" });
   const [attendanceNoteMap, setAttendanceNoteMap] = useState({});
+
+  const normalizeTrackUrl_ = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    return /^https?:\/\//i.test(text) || text.startsWith("/") ? text : `/${text.replace(/^\/+/, "")}`;
+  };
+  const formatPlaylist_ = (playlist) => (Array.isArray(playlist) ? playlist : [])
+    .map((track) => {
+      const title = String(track?.title || track?.name || "").trim();
+      const url = normalizeTrackUrl_(track?.url || track?.audioUrl || "");
+      return title && url ? `${title}${track?.subtitle ? `（${String(track.subtitle).trim()}）` : ""} | ${url}` : "";
+    }).filter(Boolean).join("\n");
+  const parsePlaylist_ = (value) => String(value || "").split("\n").map((line, index) => {
+    const text = line.trim();
+    if (!text) return null;
+    const parts = text.split("|");
+    if (parts.length < 2) throw new Error(`歌曲第 ${index + 1} 行格式錯誤，請使用「歌名 | mp3 路徑」`);
+    const title = parts[0].trim();
+    const url = normalizeTrackUrl_(parts.slice(1).join("|").trim());
+    if (!title || !url) throw new Error(`歌曲第 ${index + 1} 行缺少歌名或路徑`);
+    return { id: `track-${index + 1}`, title, url };
+  }).filter(Boolean);
 
   const ATTENDANCE_OPTIONS = [
     { value: "attend", label: "出席", tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -97,6 +120,7 @@ function CheerleadingPage({ shared }) {
       setFields(Array.isArray(data.fields) ? data.fields : []);
       setAttendance(Array.isArray(data.attendance) ? data.attendance : []);
       setVideos(Array.isArray(data.videos) ? data.videos : []);
+      setCheerPlaylistText(formatPlaylist_(data.config?.cheerPlaylist || []));
     } catch (err) {
       setError(err.message || "啦啦隊資料載入失敗");
     } finally {
@@ -312,6 +336,17 @@ function CheerleadingPage({ shared }) {
     } catch (err) { setError(err.message || "影片上傳失敗"); } finally { setSaving(false); }
   };
 
+  const savePlaylist = async (event) => {
+    event.preventDefault();
+    setSaving(true); setError("");
+    try {
+      const { result } = await effectiveApiRequest({ action: "updateCheerleadingConfig", data: { cheerPlaylist: parsePlaylist_(cheerPlaylistText) } });
+      if (!result.ok) throw new Error(result.error || "儲存歌曲清單失敗");
+      setCheerPlaylistText(formatPlaylist_(result.data?.config?.cheerPlaylist || []));
+      setStatusMessage("啦啦隊歌曲清單已儲存");
+    } catch (err) { setError(err.message || "儲存歌曲清單失敗"); } finally { setSaving(false); }
+  };
+
   const deleteVideo = async (video) => {
     if (!(confirmDelete_ ? confirmDelete_(`下架「${video.title}」？`) : window.confirm("確定下架影片？"))) return;
     setSaving(true); try {
@@ -338,7 +373,7 @@ function CheerleadingPage({ shared }) {
         {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
 
         <nav className="flex flex-wrap gap-2">
-          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }, { id: "videos", label: "教學影片" }].map((tab) => (
+          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }, { id: "playlist", label: "歌曲播放" }, { id: "videos", label: "教學影片" }].map((tab) => (
             <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
               {tab.label}
             </button>
@@ -524,6 +559,8 @@ function CheerleadingPage({ shared }) {
             </div>
           </section>
         ) : null}
+
+        {activeTab === "playlist" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">啦啦隊歌曲播放</h2><p className="mt-2 text-sm text-slate-500">一行一首；先將 mp3 放入前端 public/media/cheerleading-songs/，再填入歌名與路徑。</p><form onSubmit={savePlaylist} className="mt-4"><textarea value={cheerPlaylistText} onChange={(e) => setCheerPlaylistText(e.target.value)} rows="8" placeholder={"開場曲 | /media/cheerleading-songs/01-opening.mp3\n中場應援 | /media/cheerleading-songs/02-cheer.mp3"} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" /><p className="mt-2 text-xs text-slate-400">格式為「歌名 | mp3 路徑」。儲存後會立即顯示在啦啦隊前台的歌曲播放分頁。</p><button disabled={saving} type="submit" className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">儲存歌曲清單</button></form></section> : null}
 
         {activeTab === "videos" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">教學影片管理</h2><form onSubmit={uploadVideo} className="mt-4 grid gap-3 sm:grid-cols-2"><input value={videoForm.title} onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })} placeholder="影片標題" className="rounded-xl border border-slate-200 px-3 py-2" /><input value={videoForm.category} onChange={(e) => setVideoForm({ ...videoForm, category: e.target.value })} placeholder="分類" className="rounded-xl border border-slate-200 px-3 py-2" /><textarea value={videoForm.description} onChange={(e) => setVideoForm({ ...videoForm, description: e.target.value })} placeholder="說明" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" /><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideoForm({ ...videoForm, file: e.target.files?.[0] || null })} className="sm:col-span-2" /><button disabled={saving} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{saving ? "上傳中…" : "上傳並上架"}</button></form><div className="mt-6 space-y-3">{videos.map((video) => <div key={video.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{video.title}</p><p className="text-sm text-slate-500">{[video.category, video.description].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={() => deleteVideo(video)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">下架</button></div>)}</div></section> : null}
       </div>

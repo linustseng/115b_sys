@@ -13,12 +13,17 @@ function CheerleadingPlayerPage({ shared }) {
   const [fields, setFields] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [videos, setVideos] = useState([]);
+  const [config, setConfig] = useState({});
   const [playingVideo, setPlayingVideo] = useState(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
   const [watermarkTick, setWatermarkTick] = useState(() => Date.now());
   const [activeTab, setActiveTab] = useState("attendance");
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [audioError, setAudioError] = useState("");
+  const [audioPlaying, setAudioPlaying] = useState(false);
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const videoShellRef = useRef(null);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
@@ -61,6 +66,16 @@ function CheerleadingPlayerPage({ shared }) {
     return [dateLabel, start || end ? `${start || "-"}–${end || "-"}` : ""].filter(Boolean).join(" ");
   };
   const getName = (row) => String(row?.nameZh || row?.preferredName || row?.nameEn || row?.email || row?.id || "同學").trim();
+  const normalizeTrackUrl = (value) => {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    return /^https?:\/\//i.test(text) || text.startsWith("/") ? text : `/${text.replace(/^\/+/, "")}`;
+  };
+  const playlist = useMemo(() => (Array.isArray(config?.cheerPlaylist) ? config.cheerPlaylist : []).map((track, index) => {
+    const url = normalizeTrackUrl(track?.url || track?.audioUrl);
+    return url ? { id: String(track?.id || `track-${index + 1}`), title: String(track?.title || track?.name || `歌曲 ${index + 1}`), subtitle: String(track?.subtitle || track?.artist || ""), url } : null;
+  }).filter(Boolean), [config]);
+  const currentTrack = playlist[currentTrackIndex] || null;
 
   const load = async () => {
     setLoading(true);
@@ -73,6 +88,7 @@ function CheerleadingPlayerPage({ shared }) {
       setFields(Array.isArray(result.data?.fields) ? result.data.fields : []);
       setAttendance(Array.isArray(result.data?.attendance) ? result.data.attendance : []);
       setVideos(Array.isArray(result.data?.videos) ? result.data.videos : []);
+      setConfig(result.data?.config || {});
     } catch (err) {
       setError(err.message || "啦啦隊資料載入失敗");
     } finally {
@@ -81,6 +97,15 @@ function CheerleadingPlayerPage({ shared }) {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (currentTrackIndex >= playlist.length) setCurrentTrackIndex(0);
+  }, [currentTrackIndex, playlist.length]);
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !currentTrack) return;
+    audio.pause(); audio.load(); setAudioError("");
+    if (audioPlaying) audio.play().catch(() => { setAudioPlaying(false); setAudioError("瀏覽器暫時阻擋自動播放，請再按一次播放。"); });
+  }, [currentTrack, currentTrackIndex]);
   useEffect(() => {
     if (!playingVideo) return undefined;
     const timer = window.setInterval(() => setWatermarkTick(Date.now()), 15000);
@@ -174,6 +199,12 @@ function CheerleadingPlayerPage({ shared }) {
     if (videoRef.current) videoRef.current.playbackRate = speed;
   };
   const formatVideoTime = (seconds) => `${Math.floor((seconds || 0) / 60)}:${String(Math.floor((seconds || 0) % 60)).padStart(2, "0")}`;
+  const toggleAudio = async () => {
+    const audio = audioRef.current; if (!audio || !currentTrack) return;
+    setAudioError("");
+    if (audio.paused) { try { await audio.play(); } catch { setAudioError("播放失敗，請再試一次。"); } } else audio.pause();
+  };
+  const selectTrack = (index) => { setCurrentTrackIndex(index); setAudioError(""); };
 
   return (
     <><style>{`.cheer-player-video-shell{height:clamp(18rem,58dvh,36rem)}.cheer-player-video-shell video{width:100%;height:100%;object-fit:contain}.cheer-player-video-shell:fullscreen,.cheer-player-video-shell:-webkit-full-screen{width:100vw;height:100dvh;border-radius:0}.cheer-player-video-shell:fullscreen video,.cheer-player-video-shell:-webkit-full-screen video{width:100%;height:100%;object-fit:contain}`}</style><main className="min-h-screen bg-pink-50/60 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -192,7 +223,7 @@ function CheerleadingPlayerPage({ shared }) {
         {loading ? <p className="text-sm text-slate-500">載入中…</p> : null}
 
         <nav className="flex gap-2 rounded-2xl bg-white p-2 shadow-sm">
-          {[{ id: "attendance", label: "練習報名" }, { id: "videos", label: "教學影片" }].map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-pink-600 text-white" : "text-slate-600 hover:bg-pink-50"}`}>{tab.label}</button>)}
+          {[{ id: "attendance", label: "練習報名" }, { id: "playlist", label: "歌曲播放" }, { id: "videos", label: "教學影片" }].map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-pink-600 text-white" : "text-slate-600 hover:bg-pink-50"}`}>{tab.label}</button>)}
         </nav>
 
         {activeTab === "attendance" ? <section className="grid gap-3 sm:grid-cols-3">
@@ -206,6 +237,8 @@ function CheerleadingPlayerPage({ shared }) {
           {playingVideo && videoUrl ? <div className="mt-4"><p className="mb-2 text-sm font-semibold">{playingVideo.title}</p><div ref={videoShellRef} onContextMenu={(e) => e.preventDefault()} className="cheer-player-video-shell relative overflow-hidden rounded-2xl bg-black"><video key={videoUrl} ref={videoRef} src={videoUrl} playsInline disablePictureInPicture onContextMenu={(e) => e.preventDefault()} onTimeUpdate={(e) => setVideoProgress(e.currentTarget.currentTime)} onLoadedMetadata={(e) => { setVideoDuration(e.currentTarget.duration); e.currentTarget.playbackRate = videoSpeed; }} onPlay={() => setVideoPlaying(true)} onPause={() => setVideoPlaying(false)} /><div className={`pointer-events-none absolute z-10 select-none whitespace-nowrap rounded bg-black/35 px-2 py-1 text-[10px] font-semibold tracking-wide text-white/85 ${["left-3 top-3", "right-3 top-3", "bottom-16 left-3", "bottom-16 right-3"][Math.floor(watermarkTick / 15000) % 4]}`}>{getName(student)} · {new Date(watermarkTick).toLocaleString("zh-TW", { hour12: false })}</div><div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center gap-3 bg-black/75 p-3 text-white"><button type="button" onClick={toggleVideoPlayback} className="rounded bg-white px-3 py-1 text-sm font-bold text-slate-900">{videoPlaying ? "暫停" : "播放並全螢幕"}</button><input aria-label="播放進度" type="range" min="0" max={videoDuration || 0} value={videoProgress} onChange={(e) => { const video = videoRef.current; if (video) video.currentTime = Number(e.target.value); setVideoProgress(Number(e.target.value)); }} className="min-w-24 flex-1" /><span className="text-xs">{formatVideoTime(videoProgress)} / {formatVideoTime(videoDuration)}</span><select aria-label="播放速度" value={videoSpeed} onChange={(e) => changeVideoSpeed(Number(e.target.value))} className="rounded border border-white/60 bg-black px-2 py-1 text-sm">{VIDEO_SPEEDS.map((speed) => <option key={speed} value={speed}>{speed}x</option>)}</select>{videoFullscreen ? <button type="button" onClick={exitVideoFullscreen} className="rounded border border-white/60 px-3 py-1 text-sm">退出全螢幕</button> : <button type="button" onClick={enterVideoFullscreen} className="rounded border border-white/60 px-3 py-1 text-sm">全螢幕</button>}</div></div></div> : null}
           <div className="mt-4 grid gap-3 sm:grid-cols-2">{videos.length ? videos.map((video) => <button key={video.id} type="button" disabled={videoLoading} onClick={() => playVideo(video)} className="rounded-2xl border border-pink-100 bg-pink-50/40 p-4 text-left hover:bg-pink-50 disabled:opacity-60"><p className="font-semibold text-slate-900">{video.title}</p>{video.category ? <p className="mt-1 text-xs font-semibold text-pink-700">{video.category}</p> : null}{video.description ? <p className="mt-2 text-sm text-slate-500">{video.description}</p> : null}<p className="mt-3 text-xs font-semibold text-pink-700">{videoLoading ? "取得播放權限…" : "點此觀看"}</p></button>) : <p className="text-sm text-slate-500">目前尚未上架教學影片。</p>}</div>
         </section> : null}
+
+        {activeTab === "playlist" ? <section className="rounded-3xl bg-gradient-to-br from-pink-600 via-rose-500 to-orange-400 p-5 text-white shadow-sm"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold">啦啦隊歌曲</h2><p className="mt-1 text-xs text-pink-100">選曲後可直接播放；可用系統播放器調整音量與進度。</p></div>{currentTrack ? <button type="button" onClick={toggleAudio} className="rounded-full bg-white px-4 py-2 text-sm font-bold text-pink-700">{audioPlaying ? "暫停播放" : "開始播放"}</button> : null}</div>{currentTrack ? <div className="mt-5 rounded-2xl bg-white/15 p-4"><p className="text-xs font-semibold tracking-[0.2em] text-pink-100">現在播放</p><p className="mt-2 text-2xl font-bold">{currentTrack.title}</p>{currentTrack.subtitle ? <p className="mt-1 text-sm text-pink-100">{currentTrack.subtitle}</p> : null}<audio ref={audioRef} className="mt-4 w-full" controls preload="none" src={currentTrack.url} loop onPlay={() => { setAudioPlaying(true); setAudioError(""); }} onPause={() => setAudioPlaying(false)} onError={() => { setAudioPlaying(false); setAudioError("音檔載入失敗，請確認路徑是否正確。"); }} />{audioError ? <p className="mt-2 text-xs text-rose-100">{audioError}</p> : null}</div> : <p className="mt-5 text-sm text-pink-100">目前尚未設定歌曲。</p>}<div className="mt-4 space-y-2">{playlist.map((track, index) => <button key={track.id} type="button" onClick={() => selectTrack(index)} className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm ${index === currentTrackIndex ? "bg-white text-pink-700" : "bg-white/15 text-white hover:bg-white/25"}`}><span className="font-semibold">{track.title}</span><span className="text-xs opacity-80">{index === currentTrackIndex ? "播放中" : "選擇"}</span></button>)}</div></section> : null}
 
         {activeTab === "attendance" ? <section className="rounded-3xl bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-3">

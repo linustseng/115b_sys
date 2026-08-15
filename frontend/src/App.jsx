@@ -787,6 +787,7 @@ const API_POST_ACTIONS = new Set([
   "listSoftballBootstrap",
   "listCheerleadingBootstrap",
   "listCheerleadingPlayerBootstrap",
+  "updateCheerleadingConfig",
   "getCheerleadingVideoPlayback",
   "getCheerleadingVideoPreview",
   "getCheerleadingVideoPreviewPlayback",
@@ -981,6 +982,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "updateCheerleadingField",
   "deleteCheerleadingField",
   "submitCheerleadingAttendance",
+  "updateCheerleadingConfig",
   // Documents
   "createDocument",
   "createDocumentVersion",

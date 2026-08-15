@@ -7706,7 +7706,8 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingBootstrap": {
       await requireCheerleadingAdminAccess();
-      const [studentsResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
+      const [configResult, studentsResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
+        query(`select * from cheerleading_config where id = 'singleton' limit 1`),
         query(
           `select d.id, d.email, d.name_zh, d.name_en, d.preferred_name, d.group_id, s.lifecycle_status
            from directories d
@@ -7730,9 +7731,11 @@ export async function dispatchNativeAction({
         ),
         query(`select id, original_name, raw from attachments where entity_type = 'cheerleading_video' and status = 'ready' order by coalesce(created_at,'') desc`),
       ]);
+      const configRow = rowOrNull(configResult);
       return {
         ok: true,
         data: {
+          config: configRow ? configRow.raw || {} : {},
           students: studentsResult.rows.map((row) => ({
             id: firstText(row.id),
             email: normalizeEmail(row.email || ""),
@@ -7752,17 +7755,20 @@ export async function dispatchNativeAction({
 
     case "listCheerleadingPlayerBootstrap": {
       requireAuth();
-      const [studentResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
+      const [configResult, studentResult, practicesResult, fieldsResult, attendanceResult, videosResult] = await Promise.all([
+        query(`select * from cheerleading_config where id = 'singleton' limit 1`),
         query(`select id, email, name_zh, name_en, preferred_name, group_id from directories where id = $1 limit 1`, [auth.studentId]),
         query(`select * from cheerleading_practices order by coalesce(date,'') desc, id desc`),
         query(`select * from cheerleading_fields order by coalesce(name,''), id`),
         query(`select * from cheerleading_attendance where student_id = $1 order by coalesce(updated_at,'') desc, id desc limit 500`, [auth.studentId]),
         query(`select id, original_name, attachment_kind, raw, created_at from attachments where entity_type = 'cheerleading_video' and status = 'ready' order by coalesce((raw->>'sortOrder')::int, 9999), coalesce(created_at,'') desc`),
       ]);
+      const configRow = rowOrNull(configResult);
       const studentRow = rowOrNull(studentResult);
       return {
         ok: true,
         data: {
+          config: configRow ? configRow.raw || {} : {},
           student: studentRow
             ? {
                 id: firstText(studentRow.id),
@@ -7780,6 +7786,17 @@ export async function dispatchNativeAction({
         },
         error: null,
       };
+    }
+
+    case "updateCheerleadingConfig": {
+      await requireCheerleadingAdminAccess();
+      const data = safeJsonObject(body.data || body.config || body);
+      await query(
+        `insert into cheerleading_config (id, raw, updated_at) values ('singleton',$1::jsonb,$2)
+         on conflict (id) do update set raw=excluded.raw, updated_at=excluded.updated_at, synced_at=now()`,
+        [jsonbParam(data, {}), nowIso()]
+      );
+      return { ok: true, data: { config: data }, error: null };
     }
 
     case "getCheerleadingVideoPlayback": {
