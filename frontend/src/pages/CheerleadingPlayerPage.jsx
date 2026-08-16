@@ -223,7 +223,7 @@ function CheerleadingPlayerPage({ shared }) {
         {loading ? <p className="text-sm text-slate-500">載入中…</p> : null}
 
         <nav className="flex gap-2 rounded-2xl bg-white p-2 shadow-sm">
-          {[{ id: "attendance", label: "練習報名" }, { id: "playlist", label: "歌曲播放" }, { id: "videos", label: "教學影片" }].map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-pink-600 text-white" : "text-slate-600 hover:bg-pink-50"}`}>{tab.label}</button>)}
+          {[{ id: "attendance", label: "練習報名" }, { id: "videos", label: "教學影片" }].map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-pink-600 text-white" : "text-slate-600 hover:bg-pink-50"}`}>{tab.label}</button>)}
         </nav>
 
         {activeTab === "attendance" ? <section className="grid gap-3 sm:grid-cols-3">

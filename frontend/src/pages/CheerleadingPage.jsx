@@ -373,7 +373,7 @@ function CheerleadingPage({ shared }) {
         {statusMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{statusMessage}</div> : null}
 
         <nav className="flex flex-wrap gap-2">
-          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }, { id: "playlist", label: "歌曲播放" }, { id: "videos", label: "教學影片" }].map((tab) => (
+          {[{ id: "stats", label: "統計" }, { id: "attendance", label: "出席紀錄" }, { id: "practices", label: "練習管理" }, { id: "fields", label: "地點管理" }, { id: "videos", label: "教學影片" }].map((tab) => (
             <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-full px-4 py-2 text-sm font-semibold ${activeTab === tab.id ? "bg-slate-900 text-white" : "bg-white text-slate-600"}`}>
               {tab.label}
             </button>
