@@ -70,14 +70,25 @@ Required / recommended env:
 - `SUPABASE_URL` — project URL
 - `SUPABASE_SERVICE_ROLE_KEY` — server-side only; never expose to frontend
 - `SUPABASE_ATTACHMENT_BUCKET` — defaults to `attachments`
+- `SUPABASE_ACTIVITY_ALBUM_BUCKET` — defaults to the private `activity-albums` bucket
+- `SUPABASE_STORAGE_MONITORING_QUOTA_BYTES` — optional, approved project-scoped quota in bytes; required before remaining capacity/percentage is calculated
+- `SUPABASE_STORAGE_MONITORING_PLAN_LABEL` — optional label for that approved project quota
 - `ATTACHMENT_SIGNED_URL_TTL_SECONDS` — defaults to `1800`
 - `ATTACHMENT_MAX_FILE_SIZE_BYTES` — defaults to `20971520` (20 MB)
+
+Activity album uploads use a Supabase signed upload capability fixed by Supabase at 2 hours (7,200 seconds), with overwrite disabled. It is not immediately revocable after issuance; the API blocks revoked members from complete/read operations and the global orphan sweep eventually removes uncompleted objects.
 
 Runtime notes:
 
 - bucket should be **private**
 - backend signs read URLs dynamically
 - frontend must never receive the service role key
+
+## Storage monitoring
+
+The management screen calls the admin-only `GET /v1/admin/storage-monitoring` route. Its used-byte value is an actual Supabase Storage `storage.objects` metadata snapshot across the current project's buckets, not a sum of `activity_photos` or `attachments` rows. The response contains only aggregate bucket/type information (never object paths, names, or credentials), current usage, a snapshot time, and 70/85/95% statuses.
+
+The existing server database connection reads the Supabase Storage system catalog. A quota is deliberately unavailable until Mary/Linus configures the approved, project-scoped `SUPABASE_STORAGE_MONITORING_QUOTA_BYTES` value; the service does not guess an organization billing quota from a plan name. No service or management key is exposed to the browser.
 
 ## Security note
 

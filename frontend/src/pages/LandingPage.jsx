@@ -1119,12 +1119,20 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 常用鏈結
               </a>
               {canSeeAdminPortal ? (
-                <a
-                  href="/admin"
-                  className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
-                >
-                  系統後台
-                </a>
+                <>
+                  <a
+                    href="/admin/storage-monitoring"
+                    className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-800 shadow-sm hover:border-cyan-300"
+                  >
+                    儲存監控
+                  </a>
+                  <a
+                    href="/admin"
+                    className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
+                  >
+                    系統後台
+                  </a>
+                </>
               ) : null}
             </div>
             <div className="rounded-2xl border border-slate-200/70 bg-white/90 px-5 py-4 text-xs text-slate-600 shadow-sm">

@@ -45,6 +45,12 @@ export function getConfig() {
   const supabaseUrl = String(process.env.SUPABASE_URL || "").trim();
   const supabaseServiceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
   const supabaseAttachmentBucket = String(process.env.SUPABASE_ATTACHMENT_BUCKET || "attachments").trim() || "attachments";
+  const supabaseActivityAlbumBucket = String(process.env.SUPABASE_ACTIVITY_ALBUM_BUCKET || "activity-albums").trim() || "activity-albums";
+  // This is deliberately an explicit, project-scoped value supplied by an owner
+  // from the Supabase billing/usage console.  Do not infer an organization quota
+  // from the plan name: Storage quotas and billing are organization scoped.
+  const supabaseStorageMonitoringQuotaBytes = parseNumber(process.env.SUPABASE_STORAGE_MONITORING_QUOTA_BYTES, 0);
+  const supabaseStorageMonitoringPlanLabel = String(process.env.SUPABASE_STORAGE_MONITORING_PLAN_LABEL || "").trim().slice(0, 80);
   const attachmentSignedUrlTtlSeconds = parseNumber(process.env.ATTACHMENT_SIGNED_URL_TTL_SECONDS, 1800);
   const attachmentMaxFileSizeBytes = parseNumber(process.env.ATTACHMENT_MAX_FILE_SIZE_BYTES, 20 * 1024 * 1024);
   const cheerleadingVideoMaxFileSizeBytes = parseNumber(process.env.CHEERLEADING_VIDEO_MAX_FILE_SIZE_BYTES, 500 * 1024 * 1024);
@@ -72,6 +78,9 @@ export function getConfig() {
     supabaseUrl,
     supabaseServiceRoleKey,
     supabaseAttachmentBucket,
+    supabaseActivityAlbumBucket,
+    supabaseStorageMonitoringQuotaBytes: Math.max(0, supabaseStorageMonitoringQuotaBytes),
+    supabaseStorageMonitoringPlanLabel,
     attachmentSignedUrlTtlSeconds,
     attachmentMaxFileSizeBytes,
     cheerleadingVideoMaxFileSizeBytes,

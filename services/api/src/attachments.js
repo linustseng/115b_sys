@@ -118,6 +118,10 @@ export function isAttachmentStorageConfigured() {
   return Boolean(firstText(config.supabaseUrl) && firstText(config.supabaseServiceRoleKey));
 }
 
+export function getAttachmentStorageBucket() {
+  return firstText(config.supabaseAttachmentBucket, DEFAULT_BUCKET);
+}
+
 function getSupabaseClient() {
   if (!isAttachmentStorageConfigured()) {
     throw new Error("Supabase Storage not configured");
@@ -314,6 +318,56 @@ export async function createSignedReadUrlForAttachment(row, ttlSeconds = null, o
     return "";
   }
   return firstText(data && data.signedUrl);
+}
+
+// Kept server-side: callers receive only the signed upload URL, never the
+// bucket/path/token metadata used to create it.
+export async function createSignedUploadUrl({ bucket: requestedBucket = "", storagePath, mimeType }) {
+  const bucket = firstText(requestedBucket, getAttachmentStorageBucket());
+  const supabase = getSupabaseClient();
+  // Be explicit: an upload capability is for one new object path only. The
+  // client-side x-upsert header cannot turn this into an overwrite capability.
+  const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(firstText(storagePath), { upsert: false });
+  if (error || !firstText(data && data.signedUrl)) throw new Error(firstText(error && error.message, "Failed to create upload URL"));
+  return { bucket, signedUrl: firstText(data.signedUrl), mimeType: firstText(mimeType).toLowerCase() };
+}
+
+export async function listStoragePaths({ bucket, prefix = "" }) {
+  const storage = getSupabaseClient().storage.from(firstText(bucket));
+  const paths = [];
+  async function visit(folder) {
+    let offset = 0;
+    while (true) {
+      const { data, error } = await storage.list(folder, { limit: 1000, offset, sortBy: { column: "name", order: "asc" } });
+      if (error) throw new Error(firstText(error.message, "Failed to list storage objects"));
+      const entries = Array.isArray(data) ? data : [];
+      for (const entry of entries) {
+        const name = firstText(entry && entry.name);
+        if (!name) continue;
+        const path = folder ? `${folder}/${name}` : name;
+        // Storage folders have no object id; recurse so cleanup is global for
+        // the feature prefix without touching other buckets/prefixes.
+        if (entry && entry.id) paths.push(path); else await visit(path);
+      }
+      if (entries.length < 1000) break;
+      offset += entries.length;
+    }
+  }
+  await visit(String(prefix || "").replace(/^\/+|\/+$/g, ""));
+  return paths;
+}
+
+export async function downloadStorageObject({ bucket, storagePath }) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.storage.from(firstText(bucket)).download(firstText(storagePath));
+  if (error || !data) throw new Error(firstText(error && error.message, "Failed to download uploaded object"));
+  return Buffer.from(await data.arrayBuffer());
+}
+
+export async function removeStorageObject({ bucket, storagePath }) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.storage.from(firstText(bucket)).remove([firstText(storagePath)]);
+  if (error) throw new Error(firstText(error.message, "Failed to delete storage object"));
 }
 
 export async function listAttachmentsByEntity(query, { entityType, entityId, includeDeleted = false } = {}) {

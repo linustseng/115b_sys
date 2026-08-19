@@ -71,6 +71,8 @@ const CheerleadingPlayerPage = lazyImportWithRetry_(() => import("./pages/Cheerl
 const CheerleadingVideoPreviewPage = lazyImportWithRetry_(() => import("./pages/CheerleadingVideoPreviewPage"), "CheerleadingVideoPreviewPage");
 const DocumentsPage = lazyImportWithRetry_(() => import("./pages/DocumentsPage"), "DocumentsPage");
 const QuickLinksPage = lazyImportWithRetry_(() => import("./pages/QuickLinksPage"), "QuickLinksPage");
+const ActivityAlbumsPage = lazyImportWithRetry_(() => import("./pages/ActivityAlbumsPage"), "ActivityAlbumsPage");
+const StorageMonitoringPage = lazyImportWithRetry_(() => import("./pages/StorageMonitoringPage"), "StorageMonitoringPage");
 import {
   addDays_,
   addMinutes_,
@@ -3236,6 +3238,7 @@ function AppShell() {
   const isOrderingPublicPage = pathname.includes("ordering-public");
   const isAdminFinancePage = pathname.includes("admin/finance");
   const isAdminAcademicsPage = pathname.includes("admin/academics");
+  const isAdminStorageMonitoringPage = pathname.includes("admin/storage-monitoring");
   const isAdminPage = pathname.includes("admin");
   const isRegisterPage = pathname.includes("register");
   const isProfilePage = pathname.includes("profile");
@@ -3253,6 +3256,7 @@ function AppShell() {
   const isApprovalsPage = pathname.startsWith("/approvals");
   const isDocumentsPage = pathname.includes("documents");
   const isQuickLinksPage = pathname.includes("quick-links");
+  const isActivityAlbumsPage = pathname.includes("activity-albums");
   const lineInfo = getLineInAppInfo_();
   const [hideLineBanner, setHideLineBanner] = useState(() => {
     try {
@@ -3584,6 +3588,16 @@ function AppShell() {
         <AcademicsAdminPage shared={shared} />
       </AdminAccessGuard>
     );
+  } else if (isAdminStorageMonitoringPage) {
+    content = (
+      <AdminAccessGuard
+        title="儲存空間監控 · 後台"
+        helperText="僅限班代、副班代、資管組成員。"
+        allowedGroupIds={["E"]}
+      >
+        <StorageMonitoringPage shared={shared} />
+      </AdminAccessGuard>
+    );
   } else if (isAdminPage) {
     content = (
       <AdminAccessGuard
@@ -3612,6 +3626,8 @@ function AppShell() {
     );
   } else if (isQuickLinksPage) {
     content = <QuickLinksPage shared={shared} />;
+  } else if (isActivityAlbumsPage) {
+    content = <ActivityAlbumsPage shared={shared} />;
   } else if (isProfilePage) {
     content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {

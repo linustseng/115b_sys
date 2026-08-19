@@ -15,12 +15,28 @@ import {
   isAttachmentStorageConfigured,
   listAttachmentsByEntity,
   createSignedReadUrlForAttachment,
+  createSignedUploadUrl,
+  downloadStorageObject,
+  listStoragePaths,
+  removeStorageObject,
   softDeleteAttachment,
   uploadAttachmentFile,
 } from "./attachments.js";
+import {
+  ACTIVITY_ALBUM_MAX_IMAGE_BYTES,
+  isAcceptedActivityAlbumMime,
+  validateActivityAlbumImage,
+} from "./activityAlbumImageValidation.js";
+import { activityPhotoPublicFields, canReadActivityPhoto, isCurrentActiveActivityMember } from "./activityAlbumSecurity.js";
+import { cleanActivityAlbumOrphans, cleanExpiredActivityPending } from "./activityAlbumPendingCleanup.js";
+import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
+import { loadStorageMonitoringSnapshot } from "./storageMonitoring.js";
 
 const config = getConfig();
 const app = express();
+// Render terminates TLS at its proxy. One trusted hop gives the album abuse
+// limiter a client IP while not accepting an arbitrary forwarded chain.
+app.set("trust proxy", 1);
 
 const ACADEMICS_AUTO_SYNC_INTERVAL_MS = Math.max(
   30 * 60 * 1000,
@@ -67,7 +83,7 @@ if (!config.googleClientId) {
 app.use(
   cors({
     origin: true,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-id-token", "x-goog-id-token"],
   })
 );
@@ -755,6 +771,17 @@ async function resolveAuthContext(req) {
     studentId: linkedStudent.id,
     profile: googleProfile,
   };
+}
+
+function resolveActivityAlbumBearerAuth(req) {
+  // Album endpoints intentionally do not inherit legacy body/query token
+  // compatibility. In particular, an invalid Bearer token must never fall
+  // back to a valid token smuggled in a query string or JSON payload.
+  const bearerToken = getBearerToken(req);
+  if (!bearerToken) return null;
+  const payload = verifySessionToken(bearerToken);
+  if (!payload || !payload.studentId) return null;
+  return { sessionToken: bearerToken, studentId: payload.studentId, profile: payload };
 }
 
 app.get("/health", async (_req, res) => {
@@ -1730,6 +1757,250 @@ app.get("/v1/cheerleading/videos/:id/play", async (req, res) => {
   } catch (error) { return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" }); }
 });
 
+const ACTIVITY_PENDING_TTL_MINUTES = 30;
+const ACTIVITY_SIGNED_UPLOAD_URL_TTL_SECONDS = 2 * 60 * 60;
+
+function activityAlbumPayload_(row, { photoCount = 0, coverUrl = "" } = {}) {
+  if (!row) return null;
+  return {
+    id: firstText(row.id), title: firstText(row.title), description: firstText(row.description),
+    eventDate: firstText(row.event_date), location: firstText(row.location), status: firstText(row.status),
+    coverPhotoId: firstText(row.cover_photo_id), photoCount: Number(photoCount || 0), coverUrl: firstText(coverUrl),
+  };
+}
+
+function activityPhotoPayload_(row, signedUrl = "") {
+  return activityPhotoPublicFields(row, signedUrl, safeFilename_);
+}
+
+async function requireActiveActivityAlbumMember_(req, res) {
+  const auth = resolveActivityAlbumBearerAuth(req);
+  if (!auth || !auth.studentId) {
+    res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    return null;
+  }
+  // Do not trust a session's historical claims. This DB lookup applies the
+  // lifecycle_status=active predicate on every album/photo request.
+  const profile = await findStudentProfileById(auth.studentId);
+  if (!isCurrentActiveActivityMember(profile)) {
+    res.status(403).json({ ok: false, data: null, error: "已不具 115B 班級成員資格" });
+    return null;
+  }
+  return { ...auth, profile, canManage: await canManageActivityAlbums_(auth.studentId) };
+}
+
+async function getActivityAlbum_(albumId) {
+  const result = await query("select * from activity_albums where id = $1 limit 1", [firstText(albumId)]);
+  return result.rows[0] || null;
+}
+
+async function hydrateActivityAlbum_(album, photoCount = 0) {
+  let coverUrl = "";
+  if (album && album.cover_photo_id) {
+    const result = await query("select * from activity_photos where id = $1 and album_id = $2 and status = 'ready' limit 1", [album.cover_photo_id, album.id]);
+    if (result.rows[0]) coverUrl = await createSignedReadUrlForAttachment(result.rows[0], 60);
+  }
+  return activityAlbumPayload_(album, { photoCount, coverUrl });
+}
+
+async function cleanExpiredActivityPending_(studentId, albumId) {
+  return cleanExpiredActivityPending({ query, removeStorageObject, studentId, albumId, ttlMinutes: ACTIVITY_PENDING_TTL_MINUTES });
+}
+
+async function runGlobalActivityAlbumCleanup_() {
+  if (!isAttachmentStorageConfigured() || config.supabaseActivityAlbumBucket !== "activity-albums") return;
+  await cleanActivityAlbumOrphans({
+    query,
+    removeStorageObject,
+    listStoragePaths,
+    bucket: config.supabaseActivityAlbumBucket,
+    ttlMinutes: ACTIVITY_PENDING_TTL_MINUTES,
+  });
+  // Retain only a small investigation window for rate-limit events. This is
+  // independent of photo status, so deleted/invalid intents remain countable.
+  await query("delete from activity_album_upload_attempts where created_at < now() - interval '48 hours'");
+}
+
+async function canManageActivityAlbums_(studentId) {
+  const memberships = await listMembershipsByStudentId(studentId);
+  return memberships.some((item) => {
+    const groupId = firstText(item.groupId || item.group_id);
+    const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
+    return groupId === "E" || (groupId === "A" && (role === "lead" || role === "deputy"));
+  });
+}
+
+app.get("/v1/admin/storage-monitoring", async (req, res) => {
+  try {
+    // Same per-request active-member and manager matrix as activity-album admin
+    // actions. Do not rely on a historical session membership claim.
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    const snapshot = await loadStorageMonitoringSnapshot({
+      query,
+      quotaBytes: config.supabaseStorageMonitoringQuotaBytes,
+      planLabel: config.supabaseStorageMonitoringPlanLabel,
+    });
+    return res.json({ ok: true, data: snapshot, error: null });
+  } catch (error) {
+    // Do not return database/storage details or credentials to the browser.
+    return res.status(503).json({ ok: false, data: null, error: "Storage monitoring is temporarily unavailable" });
+  }
+});
+
+app.get("/v1/activity-albums", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    const includeArchived = auth.canManage && String(req.query.includeArchived || "") === "1";
+    const result = await query(`select a.*, count(p.id)::int as photo_count from activity_albums a
+      left join activity_photos p on p.album_id = a.id and p.status = 'ready'
+      where ($1::boolean or a.status <> 'archived') group by a.id
+      order by a.event_date desc nulls last, a.created_at desc`, [includeArchived]);
+    const albums = await Promise.all(result.rows.map((row) => hydrateActivityAlbum_(row, row.photo_count)));
+    return res.json({ ok: true, data: { albums, canManage: auth.canManage }, error: null });
+  } catch (error) { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity albums" }); }
+});
+
+app.post("/v1/activity-albums", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    const title = firstText(req.body && req.body.title).slice(0, 120);
+    const eventDate = firstText(req.body && req.body.eventDate);
+    if (!title || (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate))) return res.status(400).json({ ok: false, data: null, error: "Invalid album settings" });
+    const result = await query(`insert into activity_albums (id,title,description,event_date,location,created_by)
+      values ($1,$2,$3,$4,$5,$6) returning *`, [crypto.randomUUID(), title, firstText(req.body.description).slice(0, 1000), eventDate || null, firstText(req.body.location).slice(0, 160), auth.studentId]);
+    return res.json({ ok: true, data: { album: activityAlbumPayload_(result.rows[0]) }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to create activity album" }); }
+});
+
+app.patch("/v1/activity-albums/:id", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    const existing = await getActivityAlbum_(req.params.id); if (!existing) return res.status(404).json({ ok: false, data: null, error: "Album not found" });
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const title = Object.hasOwn(body, "title") ? firstText(body.title).slice(0, 120) : existing.title;
+    const eventDate = Object.hasOwn(body, "eventDate") ? firstText(body.eventDate) : firstText(existing.event_date);
+    const status = Object.hasOwn(body, "status") ? firstText(body.status) : existing.status;
+    const coverPhotoId = Object.hasOwn(body, "coverPhotoId") ? firstText(body.coverPhotoId) : firstText(existing.cover_photo_id);
+    if (!title || (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) || !["active", "archived"].includes(status)) return res.status(400).json({ ok: false, data: null, error: "Invalid album settings" });
+    if (coverPhotoId) {
+      const cover = await query("select id from activity_photos where id = $1 and album_id = $2 and status = 'ready' limit 1", [coverPhotoId, existing.id]);
+      if (!cover.rows[0]) return res.status(400).json({ ok: false, data: null, error: "Cover photo must be ready in this album" });
+    }
+    const result = await query(`update activity_albums set title=$2,description=$3,event_date=$4,location=$5,status=$6,cover_photo_id=$7,updated_at=now()
+      where id=$1 returning *`, [existing.id, title, Object.hasOwn(body, "description") ? firstText(body.description).slice(0, 1000) : existing.description, eventDate || null, Object.hasOwn(body, "location") ? firstText(body.location).slice(0, 160) : existing.location, status, coverPhotoId || null]);
+    return res.json({ ok: true, data: { album: await hydrateActivityAlbum_(result.rows[0]) }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to update activity album" }); }
+});
+
+app.get("/v1/activity-albums/:id/photos", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    const album = await getActivityAlbum_(req.params.id); if (!album || (album.status === "archived" && !auth.canManage)) return res.status(404).json({ ok: false, data: null, error: "Album not found" });
+    const includeHidden = auth.canManage && String(req.query.includeHidden || "") === "1";
+    const result = await query(`select * from activity_photos where album_id=$1 and (status='ready' or ($2::boolean and status='hidden'))
+      order by captured_at desc nulls last, created_at desc`, [album.id, includeHidden]);
+    const photos = await Promise.all(result.rows.map(async (row) => activityPhotoPayload_(row, await createSignedReadUrlForAttachment(row, 60))));
+    return res.json({ ok: true, data: { album: await hydrateActivityAlbum_(album, result.rows.filter((row) => row.status === "ready").length), photos, canManage: auth.canManage }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity photos" }); }
+});
+
+app.post("/v1/activity-albums/:id/upload-intent", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    const rate = await recordAndCheckActivityUploadIntent({
+      query,
+      studentId: auth.studentId,
+      ipHash: activityUploadIpHash(req.ip || req.socket?.remoteAddress || "unknown", config.sessionSecret),
+    });
+    if (!rate.allowed) return res.status(429).json({ ok: false, data: null, error: "上傳意圖過於頻繁，請稍後再試" });
+    if (!isAttachmentStorageConfigured() || config.supabaseActivityAlbumBucket !== "activity-albums") return res.status(503).json({ ok: false, data: null, error: "Private activity photo storage is not configured" });
+    const album = await getActivityAlbum_(req.params.id);
+    const mimeType = firstText(req.body && req.body.mimeType).toLowerCase();
+    const sizeBytes = Number(req.body && req.body.sizeBytes);
+    const fileName = safeFilename_(req.body && req.body.fileName);
+    if (!album || album.status !== "active") return res.status(404).json({ ok: false, data: null, error: "Album not found" });
+    if (!fileName || !isAcceptedActivityAlbumMime(mimeType) || !Number.isFinite(sizeBytes) || sizeBytes <= 0 || sizeBytes > ACTIVITY_ALBUM_MAX_IMAGE_BYTES) return res.status(400).json({ ok: false, data: null, error: "僅支援已驗證的 JPG、PNG，且每張不可超過 15 MB；HEIC／HEIF 暫不支援" });
+    await cleanExpiredActivityPending_(auth.studentId, album.id);
+    const photoId = crypto.randomUUID();
+    const storagePath = `activity-albums/${album.id}/${photoId}`;
+    // Persist pending first. If signing fails, delete that row as a real
+    // rollback so no orphaned capability or metadata remains.
+    await query(`insert into activity_photos (id,album_id,bucket,storage_path,original_name,mime_type,size_bytes,uploaded_by,uploaded_by_name,status)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,'pending')`, [photoId, album.id, config.supabaseActivityAlbumBucket, storagePath, fileName, mimeType, sizeBytes, auth.studentId, auth.profile.name]);
+    try {
+      const upload = await createSignedUploadUrl({ bucket: config.supabaseActivityAlbumBucket, storagePath, mimeType });
+      return res.json({ ok: true, data: { photoId, signedUrl: upload.signedUrl, expiresInSeconds: ACTIVITY_SIGNED_UPLOAD_URL_TTL_SECONDS }, error: null });
+    } catch (error) {
+      await query("delete from activity_photos where id=$1 and status='pending'", [photoId]);
+      return res.status(503).json({ ok: false, data: null, error: "Unable to prepare photo upload" });
+    }
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to prepare photo upload" }); }
+});
+
+app.post("/v1/activity-photos/:id/complete", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    const result = await query(`select p.*, a.status as album_status from activity_photos p join activity_albums a on a.id=p.album_id
+      where p.id=$1 and p.uploaded_by=$2 and p.status='pending' limit 1`, [req.params.id, auth.studentId]);
+    const pending = result.rows[0];
+    if (!pending || pending.album_status !== "active") return res.status(404).json({ ok: false, data: null, error: "Upload not found" });
+    let content;
+    try { content = await downloadStorageObject({ bucket: pending.bucket, storagePath: pending.storage_path }); } catch { content = null; }
+    const image = await validateActivityAlbumImage(content);
+    if (!image) {
+      try { if (content) await removeStorageObject({ bucket: pending.bucket, storagePath: pending.storage_path }); } catch { /* cleanup retry is handled by later maintenance */ }
+      await query("update activity_photos set status='deleted', deleted_at=now(), updated_at=now() where id=$1 and status='pending'", [pending.id]);
+      return res.status(400).json({ ok: false, data: null, error: "上傳內容不是完整且安全可驗證的 JPG 或 PNG 圖片" });
+    }
+    const updated = await query(`update activity_photos set status='ready',mime_type=$3,size_bytes=$4,updated_at=now()
+      where id=$1 and uploaded_by=$2 and status='pending' returning *`, [pending.id, auth.studentId, image.mimeType, content.length]);
+    return res.json({ ok: true, data: { photo: activityPhotoPayload_(updated.rows[0]) }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to complete photo upload" }); }
+});
+
+app.get("/v1/activity-photos/:id/download", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    const result = await query(`select p.*,a.status as album_status from activity_photos p join activity_albums a on a.id=p.album_id where p.id=$1 limit 1`, [req.params.id]);
+    const photo = result.rows[0];
+    const readable = photo && canReadActivityPhoto({ status: photo.status, canManage: auth.canManage });
+    if (!readable || (photo.album_status === "archived" && !auth.canManage)) return res.status(404).json({ ok: false, data: null, error: "Photo not found" });
+    const url = await createSignedReadUrlForAttachment(photo, 60, { throwOnError: true, download: photo.original_name });
+    return res.json({ ok: true, data: { url, expiresInSeconds: 60 }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to download photo" }); }
+});
+
+app.patch("/v1/activity-photos/:id", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    const status = firstText(req.body && req.body.status);
+    if (!["ready", "hidden"].includes(status)) return res.status(400).json({ ok: false, data: null, error: "Invalid status" });
+    const result = await query("update activity_photos set status=$2,updated_at=now() where id=$1 and status in ('ready','hidden') returning *", [req.params.id, status]);
+    if (!result.rows[0]) return res.status(404).json({ ok: false, data: null, error: "Photo not found" });
+    if (status === "hidden") await query("update activity_albums set cover_photo_id=null,updated_at=now() where cover_photo_id=$1", [result.rows[0].id]);
+    return res.json({ ok: true, data: { photo: activityPhotoPayload_(result.rows[0]) }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to update photo" }); }
+});
+
+app.delete("/v1/activity-photos/:id", async (req, res) => {
+  try {
+    const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
+    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    const found = await query("select * from activity_photos where id=$1 and status in ('ready','hidden') limit 1", [req.params.id]);
+    const photo = found.rows[0]; if (!photo) return res.status(404).json({ ok: false, data: null, error: "Photo not found" });
+    await removeStorageObject({ bucket: photo.bucket, storagePath: photo.storage_path });
+    await withTransaction(async ({ query: tx }) => {
+      await tx("update activity_photos set status='deleted',deleted_at=now(),updated_at=now() where id=$1", [photo.id]);
+      await tx("update activity_albums set cover_photo_id=null,updated_at=now() where cover_photo_id=$1", [photo.id]);
+    });
+    return res.json({ ok: true, data: { id: firstText(photo.id) }, error: null });
+  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to delete photo" }); }
+});
+
 app.get("/v1/attachments", async (req, res) => {
   try {
     const auth = await resolveAuthContext(req);
@@ -1815,7 +2086,9 @@ app.use((_req, res) => {
   res.status(404).json({ ok: false, data: null, error: "Not found" });
 });
 
-app.listen(config.port, () => {
+export { app };
+
+if (process.env.NODE_ENV !== "test") app.listen(config.port, () => {
   console.log(`115b-sys-api listening on :${config.port}`);
 
   // 定期背景同步正式課程，避免完全依賴人工按鈕。
@@ -1829,4 +2102,14 @@ app.listen(config.port, () => {
   if (timer && typeof timer.unref === "function") {
     timer.unref();
   }
+
+  // A member does not need to visit the same album for stale pending rows or
+  // raced signed-URL uploads to be swept. Failures are logged and retried; they
+  // never make the HTTP server unavailable.
+  const cleanActivityAlbums = () => runGlobalActivityAlbumCleanup_().catch((error) => {
+    console.error("[activity-albums] orphan cleanup failed:", (error && error.message) || error);
+  });
+  setTimeout(cleanActivityAlbums, 30 * 1000);
+  const cleanupTimer = setInterval(cleanActivityAlbums, 15 * 60 * 1000);
+  if (cleanupTimer && typeof cleanupTimer.unref === "function") cleanupTimer.unref();
 });
