@@ -190,57 +190,6 @@ function buildStoragePath({ entityType, entityId, attachmentId, fileName }) {
   return `${safeEntityType}/${safeEntityId}/${attachmentId}-${safeFileName}`;
 }
 
-// Used by high-volume modules (such as activity albums). The browser uploads
-// straight to private Storage so the API does not become a file-transfer proxy.
-export async function createSignedUploadUrl({ storagePath, mimeType }) {
-  if (!isAttachmentStorageConfigured()) {
-    throw new Error("Supabase Storage not configured");
-  }
-  const normalizedMime = firstText(mimeType).toLowerCase();
-  if (!normalizedMime) {
-    throw new Error("Missing mime type");
-  }
-  const bucket = firstText(config.supabaseAttachmentBucket, DEFAULT_BUCKET);
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.storage.from(bucket).createSignedUploadUrl(storagePath, {
-    upsert: false,
-  });
-  if (error || !data || !data.signedUrl) {
-    throw new Error(firstText(error && error.message, "Failed to create upload URL"));
-  }
-  return { bucket, signedUrl: data.signedUrl, token: firstText(data.token) };
-}
-
-export async function removeStorageObject({ bucket, storagePath }) {
-  const normalizedBucket = firstText(bucket);
-  const normalizedPath = firstText(storagePath);
-  if (!normalizedBucket || !normalizedPath) {
-    throw new Error("Missing storage object path");
-  }
-  const supabase = getSupabaseClient();
-  const { error } = await supabase.storage.from(normalizedBucket).remove([normalizedPath]);
-  if (error) {
-    throw new Error(firstText(error.message, "Failed to delete storage object"));
-  }
-}
-
-export async function getStorageObjectMetadata({ bucket, storagePath }) {
-  const normalizedBucket = firstText(bucket);
-  const normalizedPath = firstText(storagePath);
-  if (!normalizedBucket || !normalizedPath) {
-    throw new Error("Missing storage object path");
-  }
-  const slash = normalizedPath.lastIndexOf("/");
-  const folder = slash >= 0 ? normalizedPath.slice(0, slash) : "";
-  const fileName = slash >= 0 ? normalizedPath.slice(slash + 1) : normalizedPath;
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase.storage.from(normalizedBucket).list(folder, { limit: 100, search: fileName });
-  if (error) {
-    throw new Error(firstText(error.message, "Failed to inspect storage object"));
-  }
-  return (Array.isArray(data) ? data : []).find((item) => firstText(item && item.name) === fileName) || null;
-}
-
 export async function uploadAttachmentFile({
   fileBuffer,
   fileName,
@@ -354,15 +303,10 @@ export async function createSignedReadUrlForAttachment(row, ttlSeconds = null, o
     return "";
   }
   const throwOnError = Boolean(options && options.throwOnError);
-  const download = options && options.download ? firstText(options.download) : undefined;
   const supabase = getSupabaseClient();
   const { data, error } = await supabase.storage
     .from(bucket)
-    .createSignedUrl(
-      storagePath,
-      parseNumber(ttlSeconds, parseNumber(config.attachmentSignedUrlTtlSeconds, DEFAULT_SIGNED_URL_TTL_SECONDS)),
-      download ? { download } : undefined
-    );
+    .createSignedUrl(storagePath, parseNumber(ttlSeconds, parseNumber(config.attachmentSignedUrlTtlSeconds, DEFAULT_SIGNED_URL_TTL_SECONDS)));
   if (error) {
     if (throwOnError) {
       throw new Error(firstText(error.message, "Failed to create signed URL"));
@@ -465,7 +409,11 @@ export async function softDeleteAttachment(query, { attachmentId, deletedBy = ""
   if (!row) {
     return { ok: false, row: null };
   }
-  await removeStorageObject({ bucket: row.bucket, storagePath: row.storage_path });
+  const supabase = getSupabaseClient();
+  const { error } = await supabase.storage.from(firstText(row.bucket)).remove([firstText(row.storage_path)]);
+  if (error) {
+    throw new Error(firstText(error.message, "Failed to delete attachment object"));
+  }
   const deletedAt = nowIso();
   const mergedRaw = {
     ...(row.raw && typeof row.raw === "object" ? row.raw : {}),
