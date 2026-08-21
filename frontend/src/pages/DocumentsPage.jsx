@@ -299,6 +299,7 @@ function emptyMeetingForm() {
     chairperson: "",
     recorder: "",
     attendees: "",
+    leaveAttendees: "",
     absentees: "",
     agenda: "",
     discussion: "",
@@ -315,7 +316,7 @@ function hasMeetingFormContent(form) {
   return Object.values(form).some((value) => String(value || "").trim());
 }
 
-function buildMeetingMinutesContent(draft) {
+export function buildMeetingMinutesContent(draft) {
   const form = draft && draft.meetingForm ? draft.meetingForm : emptyMeetingForm();
   const meetingDate = String(form.meetingDate || "").trim() || String((draft && draft.meetingDate) || "").trim();
   const meetingTime = String(form.meetingTime || "").trim();
@@ -329,7 +330,8 @@ function buildMeetingMinutesContent(draft) {
 
 # 出席情況
 - 出席：${String(form.attendees || "").trim()}
-- 請假：${String(form.absentees || "").trim()}
+- 請假：${String(form.leaveAttendees || "").trim()}
+- 缺席：${String(form.absentees || "").trim()}
 
 # 議程
 ${String(form.agenda || "").trim()}
@@ -356,7 +358,7 @@ function buildMeetingMinutesSummary(draft) {
   return joined ? joined.slice(0, 120) : "";
 }
 
-function parseMeetingMinutesContent(content) {
+export function parseMeetingMinutesContent(content) {
   const raw = String(content || "").replace(/\r/g, "");
   const headings = ["會議資訊", "出席情況", "議程", "討論摘要", "決議事項", "待辦事項", "備註"];
   const sections = {};
@@ -393,19 +395,24 @@ function parseMeetingMinutesContent(content) {
     }
   });
 
-  const attendanceLines = sections["出席情況"]
-    .split("\n")
-    .map((line) => line.replace(/^[-*]\s*/, "").trim())
-    .filter(Boolean);
-  const attendanceMap = {};
-  attendanceLines.forEach((line) => {
-    const parts = line.split("：");
-    if (parts.length >= 2) {
-      const key = String(parts.shift() || "").trim();
-      const value = parts.join("：").trim();
-      attendanceMap[key] = value;
+  const attendanceLines = sections["出席情況"].split("\n");
+  const attendanceValues = {};
+  let currentAttendanceKey = "";
+  attendanceLines.forEach((rawLine) => {
+    const line = String(rawLine || "").replace(/^\s*[-*]\s*/, "").trim();
+    const labelMatch = line.match(/^(出席|請假|缺席)\s*：\s*(.*)$/);
+    if (labelMatch) {
+      currentAttendanceKey = labelMatch[1];
+      attendanceValues[currentAttendanceKey] = [String(labelMatch[2] || "").trim()];
+      return;
+    }
+    if (currentAttendanceKey) {
+      attendanceValues[currentAttendanceKey].push(String(rawLine || "").trimEnd());
     }
   });
+  const attendanceMap = Object.fromEntries(
+    Object.entries(attendanceValues).map(([key, lines]) => [key, lines.join("\n").trim()])
+  );
 
   const dateRaw = String(infoMap["日期"] || "").trim();
   const dateMatch = dateRaw.match(/\d{4}-\d{2}-\d{2}/);
@@ -420,7 +427,8 @@ function parseMeetingMinutesContent(content) {
     chairperson: infoMap["主席"] || "",
     recorder: infoMap["紀錄"] || "",
     attendees: attendanceMap["出席"] || "",
-    absentees: attendanceMap["請假"] || attendanceMap["缺席"] || "",
+    leaveAttendees: attendanceMap["請假"] || "",
+    absentees: attendanceMap["缺席"] || "",
     agenda: sections["議程"] || "",
     discussion: sections["討論摘要"] || "",
     resolutions: sections["決議事項"] || "",
@@ -445,7 +453,8 @@ function renderMeetingMinutesDetail(parsed, latestVersion) {
       title: "出席情況",
       content: [
         parsed.attendees ? `出席：${parsed.attendees}` : "",
-        parsed.absentees ? `請假 / 缺席：${parsed.absentees}` : "",
+        parsed.leaveAttendees ? `請假：${parsed.leaveAttendees}` : "",
+        parsed.absentees ? `缺席：${parsed.absentees}` : "",
       ].filter(Boolean).join("\n"),
     },
     { title: "議程", content: parsed.agenda },
@@ -826,7 +835,8 @@ export default function DocumentsPage({ shared }) {
                 <label className="block text-sm font-medium text-slate-700">地點<input value={draft.meetingForm.location} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, location: e.target.value } }))} className="input-base mt-2 w-full" /></label>
                 <label className="block text-sm font-medium text-slate-700">主席 / 紀錄<div className="mt-2 grid gap-3 sm:grid-cols-2"><input value={draft.meetingForm.chairperson} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, chairperson: e.target.value } }))} placeholder="主席" className="input-base w-full" /><input value={draft.meetingForm.recorder} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, recorder: e.target.value } }))} placeholder="紀錄" className="input-base w-full" /></div></label>
                 <label className="block text-sm font-medium text-slate-700">出席<textarea value={draft.meetingForm.attendees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, attendees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
-                <label className="block text-sm font-medium text-slate-700">請假 / 缺席<textarea value={draft.meetingForm.absentees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, absentees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">請假<textarea value={draft.meetingForm.leaveAttendees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, leaveAttendees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
+                <label className="block text-sm font-medium text-slate-700">缺席<textarea value={draft.meetingForm.absentees} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, absentees: e.target.value } }))} rows={3} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
               </div>
               <div className="mt-4 grid gap-4">
                 <label className="block text-sm font-medium text-slate-700">議程<textarea value={draft.meetingForm.agenda} onChange={(e) => setDraft((prev) => ({ ...prev, meetingForm: { ...prev.meetingForm, agenda: e.target.value } }))} rows={4} className="mt-2 w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400" /></label>
