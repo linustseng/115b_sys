@@ -3,7 +3,8 @@
 -- policies: all reads/signing and signed upload issuance go through Node.
 alter table if exists activity_albums enable row level security;
 alter table if exists activity_photos enable row level security;
-alter table storage.objects enable row level security;
+-- storage.objects is owned and RLS-managed by Supabase. Migration 031 verifies
+-- its safe state without assuming this database role owns the Storage table.
 
 do $$
 begin

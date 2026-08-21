@@ -1376,6 +1376,13 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 同學入口
                 <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
               </a>
+              <a
+                href="/activity-albums"
+                className="inline-flex items-center rounded-full border border-cyan-200 bg-cyan-50 px-4 py-1.5 text-sm font-semibold text-cyan-700 shadow-sm hover:border-cyan-300"
+              >
+                活動相簿
+                <span className="ml-2 text-base transition group-hover:translate-x-1">→</span>
+              </a>
               {canSeeEventAdmin ? (
                 <a
                   href="/admin/events"

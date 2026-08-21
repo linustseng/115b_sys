@@ -38,7 +38,7 @@ create index if not exists idx_activity_photos_pending_cleanup on activity_photo
 create index if not exists idx_activity_photos_rate_limit on activity_photos(uploaded_by, created_at) where status <> 'deleted';
 create index if not exists idx_activity_albums_active on activity_albums(status, event_date desc, created_at desc);
 
--- Create/reassert the exact private bucket used by SUPABASE_ATTACHMENT_BUCKET.
+-- Create/reassert the exact private bucket used by SUPABASE_ACTIVITY_ALBUM_BUCKET.
 -- Deployment must set it to `activity-albums`; this migration establishes the
 -- production safety invariant rather than relying on a dashboard checkbox.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -50,4 +50,5 @@ on conflict (id) do update set
 
 alter table activity_albums enable row level security;
 alter table activity_photos enable row level security;
-alter table storage.objects enable row level security;
+-- storage.objects is owned and RLS-managed by Supabase. Migration 031 verifies
+-- its safe state without assuming this database role owns the Storage table.

@@ -17,6 +17,8 @@ services:
         sync: false
       - key: SUPABASE_ATTACHMENT_BUCKET
         value: attachments
+      - key: SUPABASE_ACTIVITY_ALBUM_BUCKET
+        value: activity-albums
       - key: ATTACHMENT_SIGNED_URL_TTL_SECONDS
         value: "1800"
       - key: ATTACHMENT_MAX_FILE_SIZE_BYTES
