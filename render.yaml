@@ -19,6 +19,10 @@ services:
         value: attachments
       - key: SUPABASE_ACTIVITY_ALBUM_BUCKET
         value: activity-albums
+      - key: SUPABASE_STORAGE_MONITORING_QUOTA_BYTES
+        value: "100000000000"
+      - key: SUPABASE_STORAGE_MONITORING_PLAN_LABEL
+        value: Supabase Pro
       - key: ATTACHMENT_SIGNED_URL_TTL_SECONDS
         value: "1800"
       - key: ATTACHMENT_MAX_FILE_SIZE_BYTES
