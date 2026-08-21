@@ -2698,7 +2698,7 @@ function GoogleSigninPanel({ onLinkedStudent = () => {}, title, helperText }) {
   );
 }
 
-function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessAction, children }) {
+function AdminAccessGuard({ title, allowedGroupIds, allowedStudentIds, helperText, extraAccessAction, children }) {
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
   const [googleIdToken, setGoogleIdToken] = useState(() => loadStoredGoogleIdToken_());
   const [adminSession, setAdminSession] = useState(() => loadStoredAdminSession_());
@@ -2933,9 +2933,7 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
       return groupId === "K" && (roleInGroup === "manager" || roleInGroup === "lead" || roleInGroup === "deputy");
     });
 
-  const hasAccess =
-    hasSoftballTeamRole ||
-    userMemberships.some((item) => {
+  const hasGroupAccess = hasSoftballTeamRole || userMemberships.some((item) => {
       const groupId = String(item.groupId || "").trim();
       const roleInGroup = String(item.roleInGroup || "").trim();
       if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
@@ -2943,6 +2941,9 @@ function AdminAccessGuard({ title, allowedGroupIds, helperText, extraAccessActio
       }
       return allowedGroupIds.includes(groupId);
     });
+  const hasAccess = Array.isArray(allowedStudentIds)
+    ? allowedStudentIds.includes(normalizedId)
+    : hasGroupAccess;
   const allowedLabel = buildAccessLabel_(allowedGroupIds);
 
   useEffect(() => {
@@ -3592,8 +3593,9 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="儲存空間監控 · 後台"
-        helperText="僅限班代、副班代、資管組成員。"
-        allowedGroupIds={["E"]}
+        helperText="此功能僅限指定管理者使用。"
+        allowedGroupIds={[]}
+        allowedStudentIds={["P15747021"]}
       >
         <StorageMonitoringPage shared={shared} />
       </AdminAccessGuard>

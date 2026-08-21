@@ -31,6 +31,7 @@ import { activityPhotoPublicFields, canReadActivityPhoto, isCurrentActiveActivit
 import { cleanActivityAlbumOrphans, cleanExpiredActivityPending } from "./activityAlbumPendingCleanup.js";
 import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
 import { loadStorageMonitoringSnapshot } from "./storageMonitoring.js";
+import { canViewStorageMonitoring } from "./storageMonitoringAccess.js";
 
 const config = getConfig();
 const app = express();
@@ -1832,10 +1833,10 @@ async function canManageActivityAlbums_(studentId) {
 
 app.get("/v1/admin/storage-monitoring", async (req, res) => {
   try {
-    // Same per-request active-member and manager matrix as activity-album admin
-    // actions. Do not rely on a historical session membership claim.
+    // Re-check the active member on every request, then enforce the dedicated
+    // single-user allowlist. Group/admin roles do not grant this permission.
     const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
-    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    if (!canViewStorageMonitoring(auth.studentId)) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     const snapshot = await loadStorageMonitoringSnapshot({
       query,
       quotaBytes: config.supabaseStorageMonitoringQuotaBytes,

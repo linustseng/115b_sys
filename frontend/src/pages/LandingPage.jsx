@@ -887,6 +887,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
   const canSeeCheerleadingAdmin =
     cheerleadingAdminAllowed || (membershipsLoaded && hasGroupAccess_(["E", "L"]));
   const canSeeAdminPortal = membershipsLoaded && hasGroupAccess_(["E"]);
+  const canSeeStorageMonitoring = normalizedId === "P15747021";
   const pendingApprovalCount = Number(approvalsOverview.pending || 0);
   const inProgressApprovalCount = Number(approvalsOverview.inProgress || 0);
   const returnedApprovalCount = Number(approvalsOverview.returned || 0);
@@ -1118,14 +1119,16 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
               >
                 常用鏈結
               </a>
+              {canSeeStorageMonitoring ? (
+                <a
+                  href="/admin/storage-monitoring"
+                  className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-800 shadow-sm hover:border-cyan-300"
+                >
+                  儲存監控
+                </a>
+              ) : null}
               {canSeeAdminPortal ? (
                 <>
-                  <a
-                    href="/admin/storage-monitoring"
-                    className="rounded-full border border-cyan-200 bg-cyan-50 px-3 py-1 text-[11px] font-semibold text-cyan-800 shadow-sm hover:border-cyan-300"
-                  >
-                    儲存監控
-                  </a>
                   <a
                     href="/admin"
                     className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-slate-400"
