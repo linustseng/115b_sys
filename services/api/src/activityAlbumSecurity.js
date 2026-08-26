@@ -2,6 +2,10 @@ export function isCurrentActiveActivityMember(profile) {
   return Boolean(profile && String(profile.id || "").trim() && String(profile.lifecycleStatus || profile.status || "active").trim() === "active");
 }
 
+export function canCreateActivityAlbum(profile) {
+  return isCurrentActiveActivityMember(profile);
+}
+
 export function canReadActivityPhoto({ status, canManage = false } = {}) {
   return status === "ready" || (Boolean(canManage) && status === "hidden");
 }

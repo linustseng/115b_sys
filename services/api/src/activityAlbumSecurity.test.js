@@ -1,13 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import sharp from "sharp";
-import { isCurrentActiveActivityMember, canReadActivityPhoto, activityPhotoPublicFields } from "./activityAlbumSecurity.js";
+import { isCurrentActiveActivityMember, canCreateActivityAlbum, canReadActivityPhoto, activityPhotoPublicFields } from "./activityAlbumSecurity.js";
 import { isAcceptedActivityAlbumMime, validateActivityAlbumImage } from "./activityAlbumImageValidation.js";
 
 test("activity album guard rejects revoked/old-session members", () => {
   assert.equal(isCurrentActiveActivityMember({ id: "s-1", lifecycleStatus: "active" }), true);
   assert.equal(isCurrentActiveActivityMember({ id: "s-1", lifecycleStatus: "inactive" }), false);
   assert.equal(isCurrentActiveActivityMember(null), false);
+});
+
+test("every active member can create an activity album without a manager role", () => {
+  assert.equal(canCreateActivityAlbum({ id: "regular-member", lifecycleStatus: "active" }), true);
+  assert.equal(canCreateActivityAlbum({ id: "former-member", lifecycleStatus: "inactive" }), false);
+  assert.equal(canCreateActivityAlbum(null), false);
 });
 
 test("pending and deleted photos never pass read/download policy", () => {

@@ -27,7 +27,7 @@ import {
   isAcceptedActivityAlbumMime,
   validateActivityAlbumImage,
 } from "./activityAlbumImageValidation.js";
-import { activityPhotoPublicFields, canReadActivityPhoto, isCurrentActiveActivityMember } from "./activityAlbumSecurity.js";
+import { activityPhotoPublicFields, canCreateActivityAlbum, canReadActivityPhoto, isCurrentActiveActivityMember } from "./activityAlbumSecurity.js";
 import { cleanActivityAlbumOrphans, cleanExpiredActivityPending } from "./activityAlbumPendingCleanup.js";
 import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
 import { loadStorageMonitoringSnapshot } from "./storageMonitoring.js";
@@ -1858,14 +1858,14 @@ app.get("/v1/activity-albums", async (req, res) => {
       where ($1::boolean or a.status <> 'archived') group by a.id
       order by a.event_date desc nulls last, a.created_at desc`, [includeArchived]);
     const albums = await Promise.all(result.rows.map((row) => hydrateActivityAlbum_(row, row.photo_count)));
-    return res.json({ ok: true, data: { albums, canManage: auth.canManage }, error: null });
+    return res.json({ ok: true, data: { albums, canCreate: canCreateActivityAlbum(auth.profile), canManage: auth.canManage }, error: null });
   } catch (error) { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity albums" }); }
 });
 
 app.post("/v1/activity-albums", async (req, res) => {
   try {
     const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
-    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    if (!canCreateActivityAlbum(auth.profile)) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     const title = firstText(req.body && req.body.title).slice(0, 120);
     const eventDate = firstText(req.body && req.body.eventDate);
     if (!title || (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate))) return res.status(400).json({ ok: false, data: null, error: "Invalid album settings" });

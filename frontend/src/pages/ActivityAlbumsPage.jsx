@@ -33,6 +33,7 @@ export default function ActivityAlbumsPage({ shared }) {
   const [albums, setAlbums] = useState([]);
   const [active, setActive] = useState(null);
   const [photos, setPhotos] = useState([]);
+  const [canCreate, setCanCreate] = useState(false);
   const [canManage, setCanManage] = useState(false);
   const [uploads, setUploads] = useState([]);
   const [error, setError] = useState("");
@@ -52,7 +53,7 @@ export default function ActivityAlbumsPage({ shared }) {
     return body.data;
   };
   const loadAlbums = async () => {
-    try { const data = await request("/v1/activity-albums?includeArchived=1"); setAlbums(data.albums || []); setCanManage(Boolean(data.canManage)); } catch (cause) { setError(cause.message); }
+    try { const data = await request("/v1/activity-albums?includeArchived=1"); setAlbums(data.albums || []); setCanCreate(Boolean(data.canCreate)); setCanManage(Boolean(data.canManage)); } catch (cause) { setError(cause.message); }
   };
   const openAlbum = async (album) => {
     setError(""); setActive(album); setViewerIndex(null);
@@ -110,7 +111,7 @@ export default function ActivityAlbumsPage({ shared }) {
   const visible = albums.filter((album) => album.title.toLowerCase().includes(search.trim().toLowerCase()));
 
   return <main className="min-h-screen bg-slate-50 px-4 py-7 sm:px-10"><div className="mx-auto max-w-6xl">
-    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold tracking-[.25em] text-cyan-600">115B MEMORIES</p><h1 className="mt-2 text-3xl font-bold text-slate-900">活動相簿</h1></div><div className="flex flex-wrap justify-end gap-2"><a href="/" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">回首頁</a>{canManage && <button onClick={createAlbum} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">＋ 建立相簿</button>}</div></div>
+    <div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold tracking-[.25em] text-cyan-600">115B MEMORIES</p><h1 className="mt-2 text-3xl font-bold text-slate-900">活動相簿</h1></div><div className="flex flex-wrap justify-end gap-2"><a href="/" className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50">回首頁</a>{canCreate && <button onClick={createAlbum} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">＋ 建立相簿</button>}</div></div>
     {error && <p role="alert" className="mt-4 rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</p>}
     <label className="mt-6 block max-w-md text-sm text-slate-600">搜尋活動名稱<input value={search} onChange={(event) => setSearch(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2" /></label>
     <div className="mt-4 flex flex-wrap gap-2">{visible.map((album) => <button key={album.id} onClick={() => openAlbum(album)} className="flex w-40 items-center gap-2 rounded-lg border border-slate-200 bg-white p-2 text-left transition hover:border-cyan-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500">{album.coverUrl && <img src={album.coverUrl} alt="" className="h-11 w-11 shrink-0 rounded-md object-cover" />}<div className="min-w-0"><h2 className="truncate text-sm font-semibold text-slate-900">{album.title}</h2><p className="mt-0.5 truncate text-xs text-slate-500">{[album.eventDate?.replaceAll("-", "/"), `${album.photoCount} 張`].filter(Boolean).join(" · ")}</p></div></button>)}</div>
