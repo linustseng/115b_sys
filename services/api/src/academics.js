@@ -4,7 +4,7 @@ import ical from "node-ical";
 const DEFAULT_CALENDAR_TIMEZONE = "Asia/Taipei";
 const DEFAULT_SYNC_PAST_DAYS = 120;
 const DEFAULT_SYNC_FUTURE_DAYS = 365;
-export const ACADEMICS_PARSER_VERSION = "2026-05-07-v8";
+export const ACADEMICS_PARSER_VERSION = "2026-08-29-v9";
 const ACADEMIC_EXCLUDED_KEYWORDS = [
   "壘球",
   "練球",
@@ -458,6 +458,41 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
   const recurrenceOverrides = event.recurrences || {};
   const exdates = event.exdate || {};
   const occurrenceDates = event.rrule.between(rangeStart, rangeEnd, true);
+  const processedOverrideKeys = new Set();
+
+  const appendOverrideSession = (overrideEvent, recurrenceKey = "") => {
+    if (!overrideEvent || !(overrideEvent.start instanceof Date) || Number.isNaN(overrideEvent.start.getTime())) {
+      return;
+    }
+    if (overrideEvent.start < rangeStart || overrideEvent.start > rangeEnd) {
+      return;
+    }
+    const timeZone = DEFAULT_CALENDAR_TIMEZONE;
+    const dateTime = buildBestAcademicDateTimeRange(overrideEvent.start, overrideEvent.end, timeZone);
+    const sessionDate = firstText(dateTime.sessionDate, toDateOnlyTextFromZonedDate(overrideEvent.start, timeZone));
+    const startsAt = firstText(dateTime.startsAt);
+    const endsAt = firstText(dateTime.endsAt);
+    const overrideIsDateOnly = Boolean(overrideEvent.start && overrideEvent.start.dateOnly);
+    const location = firstText(overrideEvent.location, event.location);
+    if (!shouldIncludeAcademicEvent(overrideEvent, { dateText: sessionDate, title, isDateOnly: overrideIsDateOnly, location, startsAt, endsAt })) {
+      return;
+    }
+    results.push(
+      buildCalendarSessionRecord({
+        uid: event.uid,
+        recurrenceKey: startsAt || recurrenceKey || sessionDate,
+        title,
+        teacher: "",
+        location,
+        sessionDate,
+        startsAt,
+        endsAt,
+        registrationDeadline: "",
+        timeZone,
+        status: "published",
+      })
+    );
+  };
 
   for (const occurrence of occurrenceDates) {
     const timeZone = DEFAULT_CALENDAR_TIMEZONE;
@@ -470,6 +505,11 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
     }
 
     if (overrideEvent) {
+      Object.entries(recurrenceOverrides).forEach(([key, value]) => {
+        if (value === overrideEvent) {
+          processedOverrideKeys.add(key);
+        }
+      });
       const dateTime = buildBestAcademicDateTimeRange(overrideEvent.start, overrideEvent.end, timeZone);
       const sessionDate = firstText(dateTime.sessionDate, firstText(occurrenceDateKeyLocal, occurrenceDateKeyUtc));
       const startsAt = firstText(dateTime.startsAt);
@@ -519,6 +559,16 @@ function buildRecurringAcademicSessions(event, rangeStart, rangeEnd) {
       })
     );
   }
+
+  // Google Calendar can move an occurrence beyond the RRULE's original range.
+  // node-ical keeps that detached occurrence in `recurrences`, but rrule.between()
+  // does not return it. Include those overrides explicitly so exam sessions such
+  // as "[期中考]" and "[期末考]" remain part of their parent course.
+  Object.entries(recurrenceOverrides).forEach(([recurrenceKey, overrideEvent]) => {
+    if (!processedOverrideKeys.has(recurrenceKey)) {
+      appendOverrideSession(overrideEvent, recurrenceKey);
+    }
+  });
 
   return results;
 }
