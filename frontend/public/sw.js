@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v12-auth-reset";
+const CACHE_VERSION = "v13-direct-video-upload";
 const STATIC_CACHE = `static-${CACHE_VERSION}`;
 const API_CACHE = `api-${CACHE_VERSION}`;
 const API_CACHE_TTL_MS = 60 * 1000;
@@ -185,6 +185,10 @@ async function handleApiPostRequest_(event, request) {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method === "POST") {
+    const contentType = String(request.headers.get("Content-Type") || "").toLowerCase();
+    if (!contentType.includes("application/json")) {
+      return;
+    }
     event.respondWith(handleApiPostRequest_(event, request));
     return;
   }

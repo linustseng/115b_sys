@@ -32,6 +32,12 @@ import { cleanActivityAlbumOrphans, cleanExpiredActivityPending } from "./activi
 import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
 import { loadStorageMonitoringSnapshot } from "./storageMonitoring.js";
 import { canViewStorageMonitoring } from "./storageMonitoringAccess.js";
+import {
+  cleanExpiredCheerleadingVideoUploads,
+  reserveCheerleadingVideoPending,
+  validateCheerleadingVideoIntent,
+  validateCompletedCheerleadingVideoObject,
+} from "./cheerleadingVideoUpload.js";
 
 const config = getConfig();
 const app = express();
@@ -95,9 +101,20 @@ app.use(express.json({ limit: "2mb" }));
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: Math.max(25 * 1024 * 1024, Number(config.cheerleadingVideoMaxFileSizeBytes || 0)),
+    fileSize: 25 * 1024 * 1024,
+    files: 1,
+    fields: 12,
+    parts: 13,
+    fieldSize: 64 * 1024,
   },
 });
+
+const LEGACY_MULTIPART_MAX_BYTES = 25 * 1024 * 1024;
+const LEGACY_MULTIPART_MAX_CONCURRENCY = 2;
+const CHEERLEADING_VIDEO_UPLOAD_URL_TTL_SECONDS = 2 * 60 * 60;
+const CHEERLEADING_VIDEO_MAX_PENDING_UPLOADS = 3;
+const CHEERLEADING_VIDEO_PENDING_TTL_HOURS = 3;
+let activeLegacyMultipartUploads_ = 0;
 
 function decodeDriveServiceAccountJson_(base64) {
   const raw = String(base64 || "").trim();
@@ -1663,7 +1680,7 @@ app.post("/v1/auth/create-session", async (req, res) => {
 
 async function handleAttachmentUpload_(req, res, defaults = {}) {
   try {
-    const auth = await resolveAuthContext(req);
+    const auth = req.prevalidatedUploadAuth || await resolveAuthContext(req);
     if (!auth || !auth.studentId) {
       return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
     }
@@ -1743,7 +1760,267 @@ async function handleAttachmentUpload_(req, res, defaults = {}) {
   }
 }
 
-app.post("/v1/attachments/upload", upload.single("file"), async (req, res) => handleAttachmentUpload_(req, res));
+function rejectOversizedLegacyMultipart_(req, res, next) {
+  const contentLength = Number(req.headers["content-length"] || 0);
+  if (Number.isFinite(contentLength) && contentLength > LEGACY_MULTIPART_MAX_BYTES) {
+    return res.status(413).json({
+      ok: false,
+      data: null,
+      error: "大型影片請重新整理頁面後使用新版直傳功能",
+    });
+  }
+  return next();
+}
+
+async function requireAttachmentUploadAuthBeforeBody_(req, res, next) {
+  try {
+    const bearerToken = getBearerToken(req);
+    let auth = null;
+    if (bearerToken) {
+      const payload = verifySessionToken(bearerToken);
+      if (payload && payload.studentId) {
+        auth = { sessionToken: bearerToken, studentId: payload.studentId, profile: payload };
+      }
+    } else {
+      const idToken = String(req.headers["x-id-token"] || req.headers["x-goog-id-token"] || "").trim();
+      if (idToken) {
+        const googleProfile = await verifyGoogleIdToken(idToken);
+        const linkedStudent = await findStudentProfileByGoogleSub(googleProfile.sub);
+        if (linkedStudent && linkedStudent.id) {
+          auth = {
+            sessionToken: createSessionToken({
+              studentId: linkedStudent.id,
+              email: googleProfile.email,
+              sub: googleProfile.sub,
+              name: googleProfile.name,
+            }),
+            studentId: linkedStudent.id,
+            profile: googleProfile,
+          };
+        }
+      }
+    }
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    req.prevalidatedUploadAuth = auth;
+    return next();
+  } catch {
+    return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+  }
+}
+
+function limitLegacyMultipartConcurrency_(req, res, next) {
+  if (activeLegacyMultipartUploads_ >= LEGACY_MULTIPART_MAX_CONCURRENCY) {
+    return res.status(429).json({ ok: false, data: null, error: "附件上傳忙碌中，請稍後再試" });
+  }
+  activeLegacyMultipartUploads_ += 1;
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    activeLegacyMultipartUploads_ = Math.max(0, activeLegacyMultipartUploads_ - 1);
+  };
+  res.once("finish", release);
+  res.once("close", release);
+  return next();
+}
+
+function parseSingleAttachmentUpload_(req, res, next) {
+  upload.single("file")(req, res, (error) => {
+    if (!error) return next();
+    const tooLarge = error && error.code === "LIMIT_FILE_SIZE";
+    return res.status(tooLarge ? 413 : 400).json({
+      ok: false,
+      data: null,
+      error: tooLarge ? "檔案大小超過 25 MB；大型影片請使用新版直傳功能" : "無法讀取上傳檔案",
+    });
+  });
+}
+
+async function requireCheerleadingVideoManager_(req, res) {
+  const auth = resolveActivityAlbumBearerAuth(req);
+  if (!auth || !auth.studentId) {
+    res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    return null;
+  }
+  const profile = await findStudentProfileById(auth.studentId);
+  if (!profile) {
+    res.status(403).json({ ok: false, data: null, error: "已不具 115B 班級成員資格" });
+    return null;
+  }
+  const access = await canAccessAttachmentEntity_(auth, "cheerleading_video", "upload", {});
+  if (!access.canUpload) {
+    res.status(403).json({ ok: false, data: null, error: "Forbidden" });
+    return null;
+  }
+  return { ...auth, profile };
+}
+
+async function cleanExpiredCheerleadingVideoUploads_(studentId = "") {
+  return cleanExpiredCheerleadingVideoUploads({
+    query,
+    removeStorageObject,
+    studentId,
+    ttlHours: CHEERLEADING_VIDEO_PENDING_TTL_HOURS,
+    now: nowIso,
+  });
+}
+
+app.post(
+  "/v1/attachments/upload",
+  requireAttachmentUploadAuthBeforeBody_,
+  rejectOversizedLegacyMultipart_,
+  limitLegacyMultipartConcurrency_,
+  parseSingleAttachmentUpload_,
+  async (req, res) => handleAttachmentUpload_(req, res)
+);
+
+app.post("/v1/cheerleading/videos/upload-intent", async (req, res) => {
+  try {
+    const auth = await requireCheerleadingVideoManager_(req, res); if (!auth) return;
+    if (!isAttachmentStorageConfigured()) return res.status(503).json({ ok: false, data: null, error: "影片儲存空間尚未設定" });
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const validation = validateCheerleadingVideoIntent({
+      fileName: body.fileName,
+      mimeType: body.mimeType,
+      sizeBytes: body.sizeBytes,
+      maxSizeBytes: config.cheerleadingVideoMaxFileSizeBytes,
+    });
+    if (!validation.ok) return res.status(400).json({ ok: false, data: null, error: validation.error });
+
+    await cleanExpiredCheerleadingVideoUploads_(auth.studentId);
+    const videoId = crypto.randomUUID();
+    const fileName = safeFilename_(body.fileName);
+    const bucket = config.supabaseAttachmentBucket;
+    const storagePath = `cheerleading_video/${videoId}/${videoId}-${fileName}`;
+    const timestamp = nowIso();
+    const raw = {
+      title: firstText(body.title, fileName),
+      category: firstText(body.category).slice(0, 120),
+      description: firstText(body.description).slice(0, 2000),
+      uploadSource: "signed_direct_upload",
+    };
+    const reserved = await reserveCheerleadingVideoPending({
+      withTransaction,
+      studentId: auth.studentId,
+      maxPending: CHEERLEADING_VIDEO_MAX_PENDING_UPLOADS,
+      insertPending: async (client) => {
+        await client.query(`insert into attachments (
+          id,entity_type,entity_id,bucket,storage_path,original_name,mime_type,size_bytes,
+          attachment_kind,visibility,uploaded_by,uploaded_by_name,status,created_at,updated_at,raw
+        ) values ($1,'cheerleading_video',$1,$2,$3,$4,$5,$6,'general','private',$7,$8,'pending',$9,$9,$10::jsonb)`, [
+          videoId,
+          bucket,
+          storagePath,
+          fileName,
+          validation.mimeType,
+          validation.sizeBytes,
+          auth.studentId,
+          firstText(auth.profile.name, auth.profile.nameZh),
+          timestamp,
+          jsonbParam(raw, {}),
+        ]);
+        return { videoId, bucket, storagePath };
+      },
+    });
+    if (!reserved) {
+      return res.status(429).json({ ok: false, data: null, error: "已有多個影片等待完成，請稍後再試" });
+    }
+    try {
+      const upload = await createSignedUploadUrl({ bucket, storagePath, mimeType: validation.mimeType });
+      return res.json({
+        ok: true,
+        data: { videoId, signedUrl: upload.signedUrl, expiresInSeconds: CHEERLEADING_VIDEO_UPLOAD_URL_TTL_SECONDS },
+        error: null,
+      });
+    } catch (error) {
+      console.error("[cheerleading-videos] signed upload preparation failed:", (error && error.message) || error);
+      await query("delete from attachments where id=$1 and status='pending'", [videoId]);
+      return res.status(503).json({ ok: false, data: null, error: "目前無法準備影片上傳，請稍後再試" });
+    }
+  } catch (error) {
+    console.error("[cheerleading-videos] upload intent failed:", (error && error.message) || error);
+    return res.status(500).json({ ok: false, data: null, error: "目前無法準備影片上傳，請稍後再試" });
+  }
+});
+
+app.post("/v1/cheerleading/videos/:id/complete", async (req, res) => {
+  try {
+    const auth = await requireCheerleadingVideoManager_(req, res); if (!auth) return;
+    const found = await query(`select * from attachments
+      where id=$1 and entity_type='cheerleading_video' and uploaded_by=$2 and status in ('pending','ready') limit 1`, [req.params.id, auth.studentId]);
+    const pending = found.rows[0];
+    if (!pending) return res.status(404).json({ ok: false, data: null, error: "找不到待完成的影片上傳" });
+    if (pending.status === "ready") {
+      return res.json({
+        ok: true,
+        data: {
+          video: {
+            id: pending.id,
+            title: firstText(pending.raw?.title, pending.original_name),
+            category: firstText(pending.raw?.category),
+            description: firstText(pending.raw?.description),
+            sizeBytes: Number(pending.size_bytes || 0),
+            createdAt: firstText(pending.created_at),
+          },
+        },
+        error: null,
+      });
+    }
+
+    const objectResult = await query(`select metadata from storage.objects where bucket_id=$1 and name=$2 limit 1`, [pending.bucket, pending.storage_path]);
+    const validation = validateCompletedCheerleadingVideoObject({
+      objectRow: objectResult.rows[0],
+      expectedMimeType: pending.mime_type,
+      expectedSizeBytes: pending.size_bytes,
+    });
+    if (!validation.ok) {
+      if (!objectResult.rows[0]) return res.status(409).json({ ok: false, data: null, error: "影片尚未完整送達，請稍後再試" });
+      const claim = await query(`update attachments set status='deleting',updated_at=$3
+        where id=$1 and uploaded_by=$2 and status='pending' returning id,bucket,storage_path`, [pending.id, auth.studentId, nowIso()]);
+      const claimed = claim.rows[0];
+      if (!claimed) return res.status(409).json({ ok: false, data: null, error: "影片狀態已變更，請重新整理" });
+      try {
+        await removeStorageObject({ bucket: claimed.bucket, storagePath: claimed.storage_path });
+        const timestamp = nowIso();
+        await query("update attachments set status='deleted',deleted_at=$2,updated_at=$2 where id=$1 and status='deleting'", [claimed.id, timestamp]);
+      } catch {
+        await query("update attachments set status='pending',updated_at=$2 where id=$1 and status='deleting'", [claimed.id, nowIso()]);
+      }
+      return res.status(400).json({ ok: false, data: null, error: validation.error });
+    }
+
+    const timestamp = nowIso();
+    const updated = await query(`update attachments set status='ready',mime_type=$3,size_bytes=$4,updated_at=$5,completed_at=$5
+      where id=$1 and uploaded_by=$2 and status='pending' returning id,original_name,mime_type,size_bytes,raw,created_at`, [
+      pending.id,
+      auth.studentId,
+      validation.mimeType,
+      validation.sizeBytes,
+      timestamp,
+    ]);
+    const row = updated.rows[0];
+    if (!row) return res.status(409).json({ ok: false, data: null, error: "影片狀態已變更，請重新整理" });
+    return res.json({
+      ok: true,
+      data: {
+        video: {
+          id: row.id,
+          title: firstText(row.raw?.title, row.original_name),
+          category: firstText(row.raw?.category),
+          description: firstText(row.raw?.description),
+          sizeBytes: Number(row.size_bytes || 0),
+          createdAt: firstText(row.created_at),
+        },
+      },
+      error: null,
+    });
+  } catch (error) {
+    console.error("[cheerleading-videos] upload completion failed:", (error && error.message) || error);
+    return res.status(500).json({ ok: false, data: null, error: "無法完成影片上架，請稍後再試" });
+  }
+});
 
 app.get("/v1/cheerleading/videos/:id/play", async (req, res) => {
   try {
@@ -2050,7 +2327,7 @@ app.delete("/v1/attachments/:id", async (req, res) => {
   }
 });
 
-app.post("/v1/finance/attachments/upload", upload.single("file"), async (req, res) => {
+app.post("/v1/finance/attachments/upload", requireAttachmentUploadAuthBeforeBody_, rejectOversizedLegacyMultipart_, limitLegacyMultipartConcurrency_, parseSingleAttachmentUpload_, async (req, res) => {
   const draftId = String((req.body && req.body.entityId) || crypto.randomUUID()).trim();
   return handleAttachmentUpload_(req, res, {
     entityType: "finance_request",
@@ -2113,4 +2390,11 @@ if (process.env.NODE_ENV !== "test") app.listen(config.port, () => {
   setTimeout(cleanActivityAlbums, 30 * 1000);
   const cleanupTimer = setInterval(cleanActivityAlbums, 15 * 60 * 1000);
   if (cleanupTimer && typeof cleanupTimer.unref === "function") cleanupTimer.unref();
+
+  const cleanCheerleadingVideoUploads = () => cleanExpiredCheerleadingVideoUploads_().catch((error) => {
+    console.error("[cheerleading-videos] pending upload cleanup failed:", (error && error.message) || error);
+  });
+  setTimeout(cleanCheerleadingVideoUploads, 45 * 1000);
+  const videoCleanupTimer = setInterval(cleanCheerleadingVideoUploads, 15 * 60 * 1000);
+  if (videoCleanupTimer && typeof videoCleanupTimer.unref === "function") videoCleanupTimer.unref();
 });

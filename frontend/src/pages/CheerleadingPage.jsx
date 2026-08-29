@@ -1,5 +1,37 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+const CHEERLEADING_VIDEO_MAX_BYTES = 500 * 1024 * 1024;
+const CHEERLEADING_VIDEO_MIME_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+
+function getVideoMimeType_(file) {
+  const supplied = String(file?.type || "").toLowerCase();
+  if (CHEERLEADING_VIDEO_MIME_TYPES.has(supplied)) return supplied;
+  const name = String(file?.name || "");
+  if (/\.mp4$/i.test(name)) return "video/mp4";
+  if (/\.webm$/i.test(name)) return "video/webm";
+  if (/\.mov$/i.test(name)) return "video/quicktime";
+  return "";
+}
+
+function uploadVideoDirect_(url, file, mimeType, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url, true);
+    xhr.setRequestHeader("Content-Type", mimeType);
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onerror = () => reject(new Error("影片傳送中斷，請確認網路後重試"));
+    xhr.onabort = () => reject(new Error("影片上傳已取消"));
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new Error(`影片傳送失敗（${xhr.status || "無回應"}）`));
+    };
+    xhr.send(file);
+  });
+}
+
 function CheerleadingPage({ shared }) {
   const { apiRequest, authedApiRequest, pad2_, confirmDelete_, API_V2_URL, loadStoredAdminSession_ } = shared;
   const effectiveApiRequest = typeof authedApiRequest === "function" ? authedApiRequest : apiRequest;
@@ -16,6 +48,7 @@ function CheerleadingPage({ shared }) {
   const [videos, setVideos] = useState([]);
   const [cheerPlaylistText, setCheerPlaylistText] = useState("");
   const [videoForm, setVideoForm] = useState({ title: "", category: "", description: "", file: null });
+  const [videoUploadProgress, setVideoUploadProgress] = useState(0);
   const [activePracticeId, setActivePracticeId] = useState("");
   const [statsScope, setStatsScope] = useState("recent10");
   const [showAttendanceEditor, setShowAttendanceEditor] = useState(false);
@@ -323,17 +356,58 @@ function CheerleadingPage({ shared }) {
   const uploadVideo = async (event) => {
     event.preventDefault();
     if (!videoForm.file) return setError("請選擇影片檔案");
+    const file = videoForm.file;
+    const mimeType = getVideoMimeType_(file);
+    if (!mimeType) return setError("僅支援 MP4、WebM 或 MOV 影片");
+    if (!file.size || file.size > CHEERLEADING_VIDEO_MAX_BYTES) return setError("影片不可超過 500 MB");
     setSaving(true); setError("");
+    setVideoUploadProgress(0);
     try {
-      const form = new FormData();
-      form.append("file", videoForm.file); form.append("entityType", "cheerleading_video");
-      form.append("entityId", globalThis.crypto?.randomUUID?.() || `video-${Date.now()}`);
-      form.append("title", videoForm.title); form.append("category", videoForm.category); form.append("description", videoForm.description);
       const sessionToken = loadStoredAdminSession_?.()?.token || "";
-      const response = await fetch(`${String(API_V2_URL || "").replace(/\/$/, "")}/v1/attachments/upload`, { method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}, body: form });
-      const result = await response.json(); if (!result.ok) throw new Error(result.error || "影片上傳失敗");
-      setVideoForm({ title: "", category: "", description: "", file: null }); setStatusMessage("教學影片已上架"); await loadBootstrap();
-    } catch (err) { setError(err.message || "影片上傳失敗"); } finally { setSaving(false); }
+      if (!sessionToken) throw new Error("登入已過期，請重新登入後再上傳");
+      const apiBase = String(API_V2_URL || "").replace(/\/$/, "");
+      const requestJson = async (path, body) => {
+        const response = await fetch(`${apiBase}${path}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${sessionToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.ok) throw new Error(result?.error || `影片上傳失敗（${response.status || "無回應"}）`);
+        return result.data || {};
+      };
+      const intent = await requestJson("/v1/cheerleading/videos/upload-intent", {
+        fileName: file.name,
+        mimeType,
+        sizeBytes: file.size,
+        title: videoForm.title,
+        category: videoForm.category,
+        description: videoForm.description,
+      });
+      await uploadVideoDirect_(intent.signedUrl, file, mimeType, setVideoUploadProgress);
+      let completed = false;
+      let completedVideo = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 3 && !completed; attempt += 1) {
+        try {
+          const completion = await requestJson(`/v1/cheerleading/videos/${encodeURIComponent(intent.videoId)}/complete`, {});
+          completedVideo = completion.video || null;
+          completed = true;
+        } catch (cause) {
+          lastError = cause;
+          if (attempt < 2 && String(cause?.message || "").includes("尚未完整送達")) {
+            await new Promise((resolve) => window.setTimeout(resolve, 500 * (attempt + 1)));
+          } else {
+            break;
+          }
+        }
+      }
+      if (!completed) throw lastError || new Error("無法完成影片上架");
+      if (completedVideo) {
+        setVideos((current) => [completedVideo, ...current.filter((video) => video.id !== completedVideo.id)]);
+      }
+      setVideoForm({ title: "", category: "", description: "", file: null }); setStatusMessage("教學影片已上架");
+    } catch (err) { setError(err.message || "影片上傳失敗"); } finally { setSaving(false); setVideoUploadProgress(0); }
   };
 
   const savePlaylist = async (event) => {
@@ -562,7 +636,7 @@ function CheerleadingPage({ shared }) {
 
         {activeTab === "playlist" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">啦啦隊歌曲播放</h2><p className="mt-2 text-sm text-slate-500">一行一首；先將 mp3 放入前端 public/media/cheerleading-songs/，再填入歌名與路徑。</p><form onSubmit={savePlaylist} className="mt-4"><textarea value={cheerPlaylistText} onChange={(e) => setCheerPlaylistText(e.target.value)} rows="8" placeholder={"開場曲 | /media/cheerleading-songs/01-opening.mp3\n中場應援 | /media/cheerleading-songs/02-cheer.mp3"} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" /><p className="mt-2 text-xs text-slate-400">格式為「歌名 | mp3 路徑」。儲存後會立即顯示在啦啦隊前台的歌曲播放分頁。</p><button disabled={saving} type="submit" className="mt-4 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white">儲存歌曲清單</button></form></section> : null}
 
-        {activeTab === "videos" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">教學影片管理</h2><form onSubmit={uploadVideo} className="mt-4 grid gap-3 sm:grid-cols-2"><input value={videoForm.title} onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })} placeholder="影片標題" className="rounded-xl border border-slate-200 px-3 py-2" /><input value={videoForm.category} onChange={(e) => setVideoForm({ ...videoForm, category: e.target.value })} placeholder="分類" className="rounded-xl border border-slate-200 px-3 py-2" /><textarea value={videoForm.description} onChange={(e) => setVideoForm({ ...videoForm, description: e.target.value })} placeholder="說明" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" /><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideoForm({ ...videoForm, file: e.target.files?.[0] || null })} className="sm:col-span-2" /><button disabled={saving} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white sm:col-span-2">{saving ? "上傳中…" : "上傳並上架"}</button></form><div className="mt-6 space-y-3">{videos.map((video) => <div key={video.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{video.title}</p><p className="text-sm text-slate-500">{[video.category, video.description].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={() => deleteVideo(video)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">下架</button></div>)}</div></section> : null}
+        {activeTab === "videos" ? <section className="rounded-3xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">教學影片管理</h2><form onSubmit={uploadVideo} className="mt-4 grid gap-3 sm:grid-cols-2"><input value={videoForm.title} onChange={(e) => setVideoForm({ ...videoForm, title: e.target.value })} placeholder="影片標題" className="rounded-xl border border-slate-200 px-3 py-2" /><input value={videoForm.category} onChange={(e) => setVideoForm({ ...videoForm, category: e.target.value })} placeholder="分類" className="rounded-xl border border-slate-200 px-3 py-2" /><textarea value={videoForm.description} onChange={(e) => setVideoForm({ ...videoForm, description: e.target.value })} placeholder="說明" className="rounded-xl border border-slate-200 px-3 py-2 sm:col-span-2" /><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={(e) => setVideoForm({ ...videoForm, file: e.target.files?.[0] || null })} className="sm:col-span-2" /><p className="text-xs text-slate-500 sm:col-span-2">支援 MP4、WebM、MOV，單檔上限 500 MB；影片會直接安全傳送至私有儲存空間。</p>{saving ? <div className="sm:col-span-2"><div className="h-2 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-pink-500 transition-[width]" style={{ width: `${videoUploadProgress}%` }} /></div><p className="mt-1 text-xs font-semibold text-pink-700">影片上傳中 {videoUploadProgress}%</p></div> : null}<button disabled={saving} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:col-span-2">{saving ? `上傳中 ${videoUploadProgress}%` : "上傳並上架"}</button></form><div className="mt-6 space-y-3">{videos.map((video) => <div key={video.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-4"><div><p className="font-semibold">{video.title}</p><p className="text-sm text-slate-500">{[video.category, video.description].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={() => deleteVideo(video)} className="rounded-full border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-600">下架</button></div>)}</div></section> : null}
       </div>
     </main>
   );
