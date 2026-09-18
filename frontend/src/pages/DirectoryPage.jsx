@@ -145,7 +145,7 @@ export default function DirectoryPage({ shared }) {
           <div className="mx-auto flex max-w-5xl items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">NTU EMBA 115B</p>
-              <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">在學同學名單</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">同學名單</h1>
             </div>
             <a
               href="/"
@@ -182,7 +182,7 @@ export default function DirectoryPage({ shared }) {
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">NTU EMBA 115B</p>
-            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">在學同學名單</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">同學名單</h1>
           </div>
           <a
             href="/"
