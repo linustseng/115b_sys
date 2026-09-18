@@ -53,6 +53,7 @@ const AdminPage = lazyImportWithRetry_(() => import("./pages/AdminPage"), "Admin
 const HomePage = lazyImportWithRetry_(() => import("./pages/HomePage"), "HomePage");
 const LandingPage = lazyImportWithRetry_(() => import("./pages/LandingPage"), "LandingPage");
 const ProfilePage = lazyImportWithRetry_(() => import("./pages/ProfilePage"), "ProfilePage");
+const DirectoryPage = lazyImportWithRetry_(() => import("./pages/DirectoryPage"), "DirectoryPage");
 const BirthdayPage = lazyImportWithRetry_(() => import("./pages/BirthdayPage"), "BirthdayPage");
 const RegistrationPage = lazyImportWithRetry_(() => import("./pages/RegistrationPage"), "RegistrationPage");
 const CheckinPage = lazyImportWithRetry_(() => import("./pages/CheckinPage"), "CheckinPage");
@@ -839,6 +840,7 @@ const API_V2_READ_ACTIONS = new Set([
   "getCheckinBootstrap",
   "listCheckinStatus",
   "listDirectory",
+  "listDirectorySummary",
   "getDirectoryProfile",
   "listBirthdays",
   "listAcademicsCourseBootstrap",
@@ -1264,6 +1266,17 @@ function buildApiV2Request_(payload) {
     return {
       method: "GET",
       url: `${base}/v1/directory`,
+      headers,
+      body: null,
+    };
+  }
+
+  if (action === "listDirectorySummary") {
+    let headers = { Accept: "application/json" };
+    headers = applyApiV2AuthHeaders_(headers, payload);
+    return {
+      method: "GET",
+      url: `${base}/v1/directory-summary`,
       headers,
       body: null,
     };
@@ -3633,31 +3646,7 @@ function AppShell() {
   } else if (isProfilePage) {
     content = <ProfilePage shared={shared} />;
   } else if (pathname.includes("directory")) {
-    content = (
-      <AdminAccessGuard
-        title="系統管理 · 後台"
-        helperText="僅限班代、副班代、資管組成員。"
-        allowedGroupIds={["E"]}
-      >
-        <AdminPage
-          pageTitle="系統管理 · 後台"
-          apiRequest={apiRequest}
-          API_URL={API_URL}
-          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
-          buildGoogleMapsUrl_={buildGoogleMapsUrl_}
-          formatDisplayDate_={formatDisplayDate_}
-          getGroupLabel_={getGroupLabel_}
-          EVENT_CATEGORIES={EVENT_CATEGORIES}
-          PUBLIC_SITE_URL={PUBLIC_SITE_URL}
-          GROUP_ROLE_LABELS={GROUP_ROLE_LABELS}
-          ROLE_BADGE_STYLES={ROLE_BADGE_STYLES}
-          CLASS_GROUPS={CLASS_GROUPS}
-          getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
-          initialTab="students"
-          allowedTabs={["students"]}
-        />
-      </AdminAccessGuard>
-    );
+    content = <DirectoryPage shared={shared} />;
   } else if (isRegisterPage) {
     content = <RegistrationPage shared={shared} />;
   } else if (isEventsPage) {

@@ -1114,6 +1114,12 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
                 個人資訊維護
               </a>
               <a
+                href="/directory"
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
+              >
+                在學同學名單
+              </a>
+              <a
                 href="/quick-links"
                 className="rounded-full border border-slate-300 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 shadow-sm hover:border-slate-400"
               >

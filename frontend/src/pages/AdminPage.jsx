@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
 import { downloadXlsx } from "../utils/xlsxExport";
+import {
+  buildDirectoryClipboardText,
+  copyTextToClipboard,
+  DIRECTORY_COLUMNS,
+} from "../utils/directoryClipboard";
 import { QRCodeSVG } from "qrcode.react";
 import {
   addDays_,
@@ -143,6 +148,7 @@ export default function AdminPage({
   const [studentsGroupFilter, setStudentsGroupFilter] = useState("all");
   const [studentsSortKey, setStudentsSortKey] = useState("nameZh");
   const [studentsSortDir, setStudentsSortDir] = useState("asc");
+  const [directoryCopyStatus, setDirectoryCopyStatus] = useState("");
   const [unregisteredQuery, setUnregisteredQuery] = useState("");
   const [registrationStatusMessage, setRegistrationStatusMessage] = useState("");
   const [manualRegistrationStatusMessage, setManualRegistrationStatusMessage] = useState("");
@@ -3572,6 +3578,20 @@ export default function AdminPage({
     return list;
   }, [filteredDirectoryStudents, studentsSortDir, studentsSortKey]);
 
+  const handleCopyDirectoryStudents = async () => {
+    if (!sortedDirectoryStudents.length) {
+      return;
+    }
+    try {
+      await copyTextToClipboard(
+        buildDirectoryClipboardText(sortedDirectoryStudents, DIRECTORY_COLUMNS)
+      );
+      setDirectoryCopyStatus(`已複製 ${sortedDirectoryStudents.length} 筆，可直接貼到 Excel`);
+    } catch (copyError) {
+      setDirectoryCopyStatus("複製失敗，請稍後再試");
+    }
+  };
+
   const filteredStudentsForRegistrations = displayStudents.filter((item) =>
     matchesStudentQuery_(item, unregisteredQuery)
   );
@@ -5746,6 +5766,17 @@ export default function AdminPage({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs text-slate-500">共 {sortedDirectoryStudents.length} 筆</p>
                 <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                  {directoryCopyStatus ? (
+                    <span className="text-xs text-slate-500">{directoryCopyStatus}</span>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleCopyDirectoryStudents}
+                    disabled={!sortedDirectoryStudents.length}
+                    className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    複製 Excel 表格
+                  </button>
                   <input
                     value={studentsQuery}
                     onChange={(event) => setStudentsQuery(event.target.value)}

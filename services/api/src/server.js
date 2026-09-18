@@ -32,6 +32,7 @@ import { cleanActivityAlbumOrphans, cleanExpiredActivityPending } from "./activi
 import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
 import { loadStorageMonitoringSnapshot } from "./storageMonitoring.js";
 import { canViewStorageMonitoring } from "./storageMonitoringAccess.js";
+import { toDirectorySummaryEntry } from "./directorySummary.js";
 import {
   cleanExpiredCheerleadingVideoUploads,
   reserveCheerleadingVideoPending,
@@ -1072,6 +1073,26 @@ app.get("/v1/directory", async (req, res) => {
        ORDER BY coalesce(d.group_id, ''), coalesce(d.name_zh, ''), coalesce(d.preferred_name, ''), d.id`
     );
     const directory = result.rows.map(toDirectoryEntry).filter(Boolean);
+    return res.json({ ok: true, data: { directory }, error: null });
+  } catch (error) {
+    return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
+  }
+});
+
+app.get("/v1/directory-summary", async (req, res) => {
+  try {
+    const auth = await resolveAuthContext(req);
+    if (!auth || !auth.studentId) {
+      return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
+    }
+    const result = await query(
+      `SELECT d.name_zh, d.group_id, d.company, d.title
+       FROM directories d
+       JOIN students s ON s.id = d.id
+       WHERE ${ACTIVE_STUDENT_WHERE_SQL}
+       ORDER BY coalesce(d.group_id, ''), coalesce(d.name_zh, ''), d.id`
+    );
+    const directory = result.rows.map(toDirectorySummaryEntry).filter(Boolean);
     return res.json({ ok: true, data: { directory }, error: null });
   } catch (error) {
     return res.status(500).json({ ok: false, data: null, error: error.message || "Internal error" });
