@@ -1086,7 +1086,7 @@ app.get("/v1/directory-summary", async (req, res) => {
       return res.status(401).json({ ok: false, data: null, error: "Unauthorized" });
     }
     const result = await query(
-      `SELECT d.name_zh, d.group_id, d.company, d.title
+      `SELECT d.name_zh, d.preferred_name, d.name_en, d.group_id, d.company, d.title
        FROM directories d
        JOIN students s ON s.id = d.id
        WHERE ${ACTIVE_STUDENT_WHERE_SQL}

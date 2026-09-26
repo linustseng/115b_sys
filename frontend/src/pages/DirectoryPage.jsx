@@ -31,6 +31,8 @@ export default function DirectoryPage({ shared }) {
     }
     const haystack = [
       item.nameZh,
+      item.preferredName,
+      item.nameEn,
       item.group,
       item.company,
       item.title,
@@ -158,7 +160,7 @@ export default function DirectoryPage({ shared }) {
         <main className="mx-auto max-w-5xl px-6 pb-28 pt-10 sm:px-12">
           <section className="card p-7 sm:p-10">
             <h2 className="text-lg font-semibold text-slate-900">Google 登入</h2>
-            <p className="mt-2 text-sm text-slate-500">班級同學登入後可查看姓名、分組、公司與職稱。</p>
+            <p className="mt-2 text-sm text-slate-500">班級同學登入後可查看姓名、稱呼、英文名、分組、公司與職稱。</p>
             <div className="mt-5">
               <GoogleSigninPanel
                 title="Google 登入"
@@ -218,7 +220,7 @@ export default function DirectoryPage({ shared }) {
             <input
               value={directoryQuery}
               onChange={(event) => setDirectoryQuery(event.target.value)}
-              placeholder="搜尋姓名、公司、職稱、分組..."
+              placeholder="搜尋姓名、稱呼、英文名、公司、職稱、分組..."
               type="search"
               inputMode="search"
               className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-400"
@@ -249,12 +251,22 @@ export default function DirectoryPage({ shared }) {
 
           {!loading && !error ? (
             <div className="mt-6 overflow-x-auto rounded-2xl border border-slate-200/80 bg-white">
-              <table className="min-w-[640px] w-full text-left text-sm text-slate-700">
+              <table className="min-w-[800px] w-full text-left text-sm text-slate-700">
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-3 py-3">
                       <button type="button" onClick={() => toggleSort_("nameZh")} className="font-semibold">
                         姓名 {sortKey === "nameZh" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("preferredName")} className="font-semibold">
+                        稱呼 {sortKey === "preferredName" ? (sortDir === "asc" ? "↑" : "↓") : ""}
+                      </button>
+                    </th>
+                    <th className="px-3 py-3">
+                      <button type="button" onClick={() => toggleSort_("nameEn")} className="font-semibold">
+                        英文名 {sortKey === "nameEn" ? (sortDir === "asc" ? "↑" : "↓") : ""}
                       </button>
                     </th>
                     <th className="px-3 py-3">
@@ -276,6 +288,8 @@ export default function DirectoryPage({ shared }) {
                       <td className="px-3 py-3">
                         <p className="font-semibold text-slate-900">{item.nameZh || "未命名"}</p>
                       </td>
+                      <td className="px-3 py-3">{item.preferredName || "-"}</td>
+                      <td className="px-3 py-3">{item.nameEn || "-"}</td>
                       <td className="px-3 py-3">{item.group || "-"}</td>
                       <td className="px-3 py-3">{item.company || "-"}</td>
                       <td className="px-3 py-3">{item.title || "-"}</td>

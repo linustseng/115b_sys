@@ -19,8 +19,8 @@ export const DIRECTORY_COLUMNS = [
   { label: "飲食禁忌", value: (item) => item.dietaryRestrictions },
 ];
 
-export const DIRECTORY_PUBLIC_COLUMNS = DIRECTORY_COLUMNS.filter((column) =>
-  ["姓名", "分組", "公司", "職稱"].includes(column.label)
+export const DIRECTORY_PUBLIC_COLUMNS = ["姓名", "稱呼", "英文名", "分組", "公司", "職稱"].map(
+  (label) => DIRECTORY_COLUMNS.find((column) => column.label === label)
 );
 
 const normalizeCell_ = (value) =>

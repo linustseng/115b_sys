@@ -9,6 +9,8 @@ describe("buildDirectoryClipboardText", () => {
   const student = {
     id: "P001",
     nameZh: "王小明",
+    preferredName: "小明",
+    nameEn: "Ming Wang",
     group: "A",
     email: "student@example.com",
     company: "範例\t公司",
@@ -17,7 +19,7 @@ describe("buildDirectoryClipboardText", () => {
 
   it("builds tab-separated rows that Excel can paste into cells", () => {
     const text = buildDirectoryClipboardText([student], DIRECTORY_PUBLIC_COLUMNS);
-    expect(text).toBe("姓名\t分組\t公司\t職稱\n王小明\tA\t範例 公司\t執行長 兼創辦人");
+    expect(text).toBe("姓名\t稱呼\t英文名\t分組\t公司\t職稱\n王小明\t小明\tMing Wang\tA\t範例 公司\t執行長 兼創辦人");
   });
 
   it("keeps private columns out of the general-student roster", () => {
