@@ -16,6 +16,7 @@ import {
   listAttachmentsByEntity,
   createSignedReadUrlForAttachment,
   createSignedUploadUrl,
+  toStorageSafeFilename,
   downloadStorageObject,
   listStoragePaths,
   removeStorageObject,
@@ -1914,7 +1915,7 @@ app.post("/v1/cheerleading/videos/upload-intent", async (req, res) => {
     const videoId = crypto.randomUUID();
     const fileName = safeFilename_(body.fileName);
     const bucket = config.supabaseAttachmentBucket;
-    const storagePath = `cheerleading_video/${videoId}/${videoId}-${fileName}`;
+    const storagePath = `cheerleading_video/${videoId}/${videoId}-${toStorageSafeFilename(fileName)}`;
     const timestamp = nowIso();
     const raw = {
       title: firstText(body.title, fileName),

@@ -52,7 +52,7 @@ function toStorageSafeSegment(value, fallback = "file") {
   return normalized || fallback;
 }
 
-function toStorageSafeFilename(value) {
+export function toStorageSafeFilename(value) {
   const original = safeFilename(value);
   const dotIndex = original.lastIndexOf(".");
   const hasExt = dotIndex > 0 && dotIndex < original.length - 1;

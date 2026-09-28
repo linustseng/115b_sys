@@ -100,3 +100,14 @@ test("legacy multipart endpoints authenticate before buffering and reject authen
     assert.equal(chunked.status, 400, "each Multer rejection must release its concurrency slot");
   }
 });
+
+
+test("video storage filenames support Chinese original names using ASCII object keys", async () => {
+  const { toStorageSafeFilename } = await import("./attachments.js");
+  for (const name of ["20260928115B啦啦隊團練.mp4", "2026.09.28 115B 啦啦隊團練 - Wencheng Lee (1080p, h264).mp4", "團練.mov"]) {
+    const safe = toStorageSafeFilename(name);
+    assert.match(safe, /^[a-zA-Z0-9._-]+$/);
+    assert.equal(safe.split(".").at(-1), name.split(".").at(-1));
+  }
+  assert.equal(toStorageSafeFilename("7551.mp4"), "7551.mp4");
+});
