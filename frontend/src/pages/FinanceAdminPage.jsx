@@ -988,7 +988,7 @@ function FinanceAdminPage({ shared }) {
   const hasCashierPrivilege = adminRoles.includes("cashier");
   const hasAuditorPrivilege = adminRoles.includes("auditor");
   const hasFinanceGroupPrivilege = financeGroupMembers.length > 0;
-  const canManageProjects = memberships.some((item) => String(item.groupId || "").trim() === "D");
+  const canManageProjects = memberships.some((item) => ["D", "E"].includes(String(item.groupId || "").trim()));
 
   const availableRoles = [
     hasAccountingPrivilege ? "accounting" : null,
