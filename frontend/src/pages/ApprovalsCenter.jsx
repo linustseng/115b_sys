@@ -472,6 +472,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       return Object.values(byName);
     };
 
+    if (status === "pending_project") return [{ name: item.projectApproverName || item.projectApproverId, label: "專案負責人" }];
     if (status === "pending_lead") {
       const groupId = normalizeGroupId_(item.applicantDepartment);
       const roles = applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"];
@@ -521,6 +522,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   };
 
   const roleStatusMap = {
+    project: "pending_project",
     lead: "pending_lead",
     rep: "pending_rep",
     committee: "pending_committee",
@@ -530,6 +532,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   };
 
   const availableRoles = [
+    requests.some((item) => item.projectApproverId === personId) ? "project" : null,
     hasLeadPrivilege ? "lead" : null,
     hasRepPrivilege ? "rep" : null,
     hasCommitteePrivilege ? "committee" : null,
@@ -554,6 +557,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
       if (String(item.status || "").trim() !== targetStatus) {
         continue;
       }
+      if (role === "project" && item.projectApproverId !== personId) continue;
       if (role === "lead") {
         const group = normalizeGroupId_(item.applicantDepartment);
         const applicantRole = String(item.applicantRole || "").trim().toLowerCase();
@@ -603,7 +607,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
   );
   const relevantCompletedRequests = completedRequests.filter((item) =>
     availableRoles.some((role) =>
-      isFinanceRequestRelevantToRole_(item, role, { adminLeadGroups, adminDeputyGroups })
+      isFinanceRequestRelevantToRole_(item, role, { adminLeadGroups, adminDeputyGroups, personId })
     )
   );
   const completedItems = (showAllCompleted ? completedRequests : relevantCompletedRequests)
@@ -973,6 +977,7 @@ function ApprovalsCenter({ shared, embedded = false, requestId = "", initialTab 
                 ) : null}
               </div>
               {copyStatus ? <p className="text-[11px] text-emerald-600">{copyStatus}</p> : null}
+              {selectedRequest.projectId ? <p className="text-sm text-slate-600">專案：{selectedRequest.projectName} · 加簽：{selectedRequest.projectApproverName}{selectedRequest.projectSkipReason === "self" ? "（申請人本人，免加簽）" : selectedRequest.projectSkipLead ? "（本次一併完成組長簽核）" : ""}</p> : null}
               {selectedRequest.attachments ? (
                 <div>
                   <p className="text-xs font-semibold text-slate-600">附件</p>

@@ -1,3 +1,5 @@
+import FinanceProjectSelect from "../components/FinanceProjectSelect";
+import FinanceProjectsAdmin from "../components/FinanceProjectsAdmin";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
@@ -54,6 +56,7 @@ function FinanceAdminPage({ shared }) {
   const [financeAuditLoading, setFinanceAuditLoading] = useState(false);
   const [groupMemberships, setGroupMemberships] = useState([]);
   const [financeRoles, setFinanceRoles] = useState([]);
+  const [financeProjects, setFinanceProjects] = useState([]);
   const [financeCategories, setFinanceCategories] = useState([]);
   const [adminProfile, setAdminProfile] = useState(null);
   const [googleLinkedStudent, setGoogleLinkedStudent] = useState(() => loadStoredGoogleStudent_());
@@ -617,6 +620,14 @@ function FinanceAdminPage({ shared }) {
     }
   };
 
+  const loadFinanceProjects = async () => {
+    try {
+      const { result } = await apiRequest({ action: "listFinanceProjects" });
+      if (!result.ok) throw new Error(result.error || "專案項目載入失敗");
+      setFinanceProjects(result.data?.projects || []);
+    } catch (err) { setError(err.message || "專案項目載入失敗"); }
+  };
+
   const loadFinanceAdminBootstrap = async (options = {}) => {
     const includeRequests = options.includeRequests === true;
     try {
@@ -635,6 +646,7 @@ function FinanceAdminPage({ shared }) {
       setGroupMemberships(data.groupMemberships || []);
       setFinanceRoles((data.roles || []).map(normalizeFinanceRole_));
       setFinanceCategories(data.categories || []);
+      setFinanceProjects(data.projects || []);
       setFundEvents(data.fundEvents || []);
       setFundSummary(data.fundSummary || null);
       return true;
@@ -664,6 +676,7 @@ function FinanceAdminPage({ shared }) {
       loadRequests(),
       loadGroupMemberships(),
       loadFinanceRoles(),
+      loadFinanceProjects(),
     ])
       .finally(() => {
         setInitialLoading(false);
@@ -975,6 +988,7 @@ function FinanceAdminPage({ shared }) {
   const hasCashierPrivilege = adminRoles.includes("cashier");
   const hasAuditorPrivilege = adminRoles.includes("auditor");
   const hasFinanceGroupPrivilege = financeGroupMembers.length > 0;
+  const canManageProjects = memberships.some((item) => String(item.groupId || "").trim() === "D");
 
   const availableRoles = [
     hasAccountingPrivilege ? "accounting" : null,
@@ -1106,6 +1120,13 @@ function FinanceAdminPage({ shared }) {
     type: "申請類型",
     title: "項目名稱",
     description: "用途說明",
+    projectId: "專案 ID",
+    projectName: "專案項目",
+    projectApproverName: "專案負責人",
+    projectApproverId: "專案負責人 ID",
+    projectNextStatus: "專案後續關卡",
+    projectSkipReason: "專案略過原因",
+    projectSkipLead: "合併組長簽核",
     categoryType: "費用類別",
     amountEstimated: "預估金額",
     amountActual: "實際金額",
@@ -1144,6 +1165,7 @@ function FinanceAdminPage({ shared }) {
     "type",
     "title",
     "description",
+    "projectName", "projectApproverName",
     "categoryType",
     "amountEstimated",
     "amountActual",
@@ -2040,6 +2062,7 @@ function FinanceAdminPage({ shared }) {
                 { id: "funds", label: "班費管理" },
                 { id: "roles", label: "財務角色" },
                 { id: "categories", label: "班務性質" },
+                ...(canManageProjects ? [{ id: "projects", label: "專案項目" }] : []),
               ].map((item) => (
                 <button
                   key={item.id}
@@ -2068,6 +2091,11 @@ function FinanceAdminPage({ shared }) {
           </div>
         ) : null}
 
+        {adminTab === "projects" && canManageProjects ? <FinanceProjectsAdmin projects={financeProjects} students={students} apiRequest={apiRequest} onSaved={async () => {
+          const { result } = await apiRequest({ action: "listFinanceProjects" });
+          if (!result.ok) throw new Error(result.error || "重新載入失敗");
+          setFinanceProjects(result.data.projects || []);
+        }} /> : null}
         {adminTab === "requests" ? (
           <section className="mt-6 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <div className="space-y-4">
@@ -2352,6 +2380,7 @@ function FinanceAdminPage({ shared }) {
                   ) : null}
                 </div>
                 {copyStatus ? <p className="text-[11px] text-emerald-600">{copyStatus}</p> : null}
+                {selectedRequest.projectId ? <p className="text-sm text-slate-600">專案：{selectedRequest.projectName} · 加簽：{selectedRequest.projectApproverName}{selectedRequest.projectSkipReason === "self" ? "（申請人本人，免加簽）" : selectedRequest.projectSkipLead ? "（合併組長簽核）" : ""}</p> : null}
                 {selectedRequest.attachments ? (
                   <div>
                     <p className="text-xs font-semibold text-slate-600">附件</p>
@@ -2581,6 +2610,7 @@ function FinanceAdminPage({ shared }) {
                 </select>
               </div>
 
+              {["purchase", "payment"].includes(manualRequestForm.type) ? <FinanceProjectSelect projects={financeProjects} value={manualRequestForm.projectId || ""} onChange={(projectId) => setManualRequestForm((prev) => ({ ...prev, projectId }))} /> : null}
               <div>
                 <label className="block text-sm font-semibold text-slate-900">
                   項目名稱 <span className="text-rose-600">*</span>

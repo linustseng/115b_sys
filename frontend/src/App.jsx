@@ -345,6 +345,7 @@ const FINANCE_PAYMENT_METHODS = [
 
 const FINANCE_STATUS_LABELS = {
   draft: "草稿",
+  pending_project: "待專案負責人加簽",
   pending_lead: "待組長審核",
   pending_rep: "待班代覆核",
   pending_committee: "待幹部審核",
@@ -356,6 +357,7 @@ const FINANCE_STATUS_LABELS = {
 };
 
 const FINANCE_ROLE_LABELS = {
+  project: "專案負責人",
   lead: "組長",
   rep: "班代",
   committee: "幹部",
@@ -570,6 +572,7 @@ const isFinanceRequestRelevantToRole_ = (record, role, context = {}) => {
     return false;
   }
   const { adminLeadGroups = [], adminDeputyGroups = [] } = context;
+  if (role === "project") return Boolean(context.personId) && record.projectApproverId === context.personId;
   if (role === "auditor") {
     return true;
   }
@@ -605,6 +608,7 @@ const parseFinanceAttachments_ = (value) => {
 };
 
 const buildFinanceDraft_ = () => ({
+  projectId: "",
   id: "",
   type: "purchase",
   title: "",
@@ -859,6 +863,7 @@ const API_V2_READ_ACTIONS = new Set([
   "listFinanceAdminBootstrap",
   "listFinanceRequests",
   "listFinanceAuditEvents",
+  "listFinanceProjects",
   "listFinanceCategoryTypes",
   "listFinanceRoles",
   "listFinanceActions",
@@ -924,6 +929,7 @@ const API_V2_WRITE_ACTIONS = new Set([
   "adminCreateFinanceRequest",
   "updateFinanceRequest",
   "restoreFinanceAuditVersion",
+  "upsertFinanceProject",
   "upsertFinanceCategoryType",
   "deleteFinanceCategoryType",
   "upsertFinanceRole",
