@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { mapFinanceProject, prepareFinanceProject } from "./financeProjects.js";
 import {
   ACADEMICS_PARSER_VERSION,
   buildGeneratedThursdaySessionFromId,
@@ -2297,6 +2298,10 @@ function canFinanceActorApprove_(record, actorRole, actorId, actorEmail, members
     return false;
   }
 
+  if (status === "pending_project") {
+    return role === "project" && Boolean(resolvedActorId) && resolvedActorId === String(record.projectApproverId || "").trim();
+  }
+
   if (status === "pending_lead") {
     if (role !== "lead") {
       return false;
@@ -2346,7 +2351,7 @@ function canFinanceActorApprove_(record, actorRole, actorId, actorEmail, members
 }
 
 function canApproveFinanceRequestForIdentity_(record, actorId, actorEmail, memberships, financeRoles, studentIdByEmail = {}) {
-  const roles = ["lead", "rep", "committee", "accounting", "cashier"];
+  const roles = ["project", "lead", "rep", "committee", "accounting", "cashier"];
   return roles.some((role) =>
     canFinanceActorApprove_(record, role, actorId, actorEmail, memberships, financeRoles, studentIdByEmail)
   );
@@ -2463,6 +2468,11 @@ async function autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles = []) {
 }
 
 function resolveFinanceNextStatus_(record, actorRole, financeRoles = [], studentIdByEmail = {}) {
+  if (actorRole === "project") {
+    return record.projectSkipLead
+      ? resolveFinanceNextStatus_(record, "lead", financeRoles, studentIdByEmail)
+      : (record.projectNextStatus === "pending_rep" ? "pending_rep" : "pending_lead");
+  }
   const role = String(actorRole || "")
     .trim()
     .toLowerCase();
@@ -4765,6 +4775,7 @@ export async function dispatchNativeAction({
         );
         const activeFinanceTodoIds = new Set();
         const statusLabels = {
+          pending_project: "待專案負責人加簽",
           pending_lead: "待組長審核",
           pending_rep: "待班代覆核",
           pending_committee: "待幹部審核",
@@ -6093,6 +6104,38 @@ export async function dispatchNativeAction({
       return { ok: true, data: { responses }, error: null };
     }
 
+    case "listFinanceProjects": {
+      requireAuth();
+      const projects = await query(`select * from finance_projects order by active desc, name, id`);
+      return { ok: true, data: { projects: projects.rows.map(mapFinanceProject) }, error: null };
+    }
+
+    case "upsertFinanceProject": {
+      requireAuth();
+      const memberships = await listMembershipsByStudentId(auth.studentId);
+      if (!memberships.some((item) => normalizeGroupId_(item.groupId || item.group_id) === "D")) {
+        const error = new Error("Forbidden"); error.statusCode = 403; throw error;
+      }
+      const data = safeJsonObject(body.data || {});
+      const name = firstText(data.name);
+      const approverId = firstText(data.approverId);
+      if (!name || name.length > 120 || !approverId) {
+        return { ok: false, data: null, error: "請填寫專案名稱（最多 120 字）並選擇負責人" };
+      }
+      const approver = rowOrNull(await query(
+        `select s.id, coalesce(nullif(d.name_zh,''), s.name, s.id) as name
+         from students s left join directories d on d.id = s.id
+         where s.id = $1 and ${ACTIVE_STUDENT_WHERE_SQL}`, [approverId]));
+      if (!approver) return { ok: false, data: null, error: "負責人必須是在籍同學" };
+      const id = firstText(data.id, crypto.randomUUID());
+      await query(`insert into finance_projects (id, name, approver_id, approver_name, active, updated_by)
+        values ($1,$2,$3,$4,$5,$6)
+        on conflict (id) do update set name=excluded.name, approver_id=excluded.approver_id,
+        approver_name=excluded.approver_name, active=excluded.active, updated_by=excluded.updated_by, updated_at=now()`,
+        [id, name, approverId, approver.name, data.active !== false, auth.studentId]);
+      return { ok: true, data: { id }, error: null };
+    }
+
     case "listFinanceCategoryTypes": {
       requireAuth();
       const result = await query(`select * from finance_category_types order by coalesce(label,''), id`);
@@ -6177,8 +6220,15 @@ export async function dispatchNativeAction({
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const workflowCreatedByRole = await resolveFinanceWorkflowRoleForActor_(query, auth.studentId);
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
-      if (!normalizedStatus || normalizedStatus === "pending_lead") {
+      if (normalizedStatus !== "draft") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+      await prepareFinanceProject(query, row, row.status === "draft" ? resolveFinanceInitialStatus_(row, applicantMemberships) : row.status);
+      if (row.status === "pending_project") {
+        const projectMemberships = await listMembershipsByStudentId(row.raw.projectApproverId);
+        row.raw.projectSkipLead = row.raw.projectNextStatus === "pending_lead" && actorHasGroupRole_(
+          projectMemberships, row.raw.projectApproverId, row.applicantDepartment,
+          applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"]);
       }
       const applicantEmail = normalizeEmail(
         firstText(student && student.email ? student.email : "", firstText(row.raw && row.raw.applicantEmail, auth && auth.profile && auth.profile.email ? auth.profile.email : ""))
@@ -6207,7 +6257,7 @@ export async function dispatchNativeAction({
         applicantId: row.applicantId,
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
-        applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
+        applicantRole,
         applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt: row.status !== "draft" ? firstText(row.raw && row.raw.submittedAt, nowIso()) : firstText(row.raw && row.raw.submittedAt),
@@ -6222,7 +6272,8 @@ export async function dispatchNativeAction({
         entityType: "finance_request",
         entityId: row.id,
         loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
-        mutate: async ({ txQuery, nextRevision, batchId, actor }) => {
+        mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          if (current) { const error = new Error("案件已存在，請使用修改功能"); error.statusCode = 409; throw error; }
           const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, null, nextRevision, batchId, actor);
           await txQuery(
             `insert into finance_requests (
@@ -6234,36 +6285,7 @@ export async function dispatchNativeAction({
               applicant_id, applicant_name, applicant_department,
               created_at, updated_at, raw,
               revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
-            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)
-            on conflict (id) do update set
-              type=excluded.type,
-              title=excluded.title,
-              description=excluded.description,
-              category_type=excluded.category_type,
-              amount_estimated=excluded.amount_estimated,
-              amount_actual=excluded.amount_actual,
-              currency=excluded.currency,
-              payment_method=excluded.payment_method,
-              vendor_name=excluded.vendor_name,
-              payee_name=excluded.payee_name,
-              payee_bank=excluded.payee_bank,
-              payee_account=excluded.payee_account,
-              related_purchase_id=excluded.related_purchase_id,
-              no_purchase_reason=excluded.no_purchase_reason,
-              expected_clear_date=excluded.expected_clear_date,
-              attachments=excluded.attachments,
-              status=excluded.status,
-              applicant_id=excluded.applicant_id,
-              applicant_name=excluded.applicant_name,
-              applicant_department=excluded.applicant_department,
-              updated_at=excluded.updated_at,
-              raw=excluded.raw,
-              revision_no=excluded.revision_no,
-              last_change_batch_id=excluded.last_change_batch_id,
-              last_changed_at=excluded.last_changed_at,
-              last_changed_by=excluded.last_changed_by,
-              last_changed_by_name=excluded.last_changed_by_name,
-              synced_at=now()`,
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)`,
             [
               nextRow.id,
               nextRow.type,
@@ -6336,8 +6358,15 @@ export async function dispatchNativeAction({
       }
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
-      if (!normalizedStatus || normalizedStatus === "pending_lead") {
+      if (normalizedStatus !== "draft") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+      await prepareFinanceProject(query, row, row.status === "draft" ? resolveFinanceInitialStatus_(row, applicantMemberships) : row.status);
+      if (row.status === "pending_project") {
+        const projectMemberships = await listMembershipsByStudentId(row.raw.projectApproverId);
+        row.raw.projectSkipLead = row.raw.projectNextStatus === "pending_lead" && actorHasGroupRole_(
+          projectMemberships, row.raw.projectApproverId, row.applicantDepartment,
+          applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"]);
       }
       const applicantEmail = normalizeEmail(firstText(student && student.email ? student.email : "", row.raw && row.raw.applicantEmail));
       row.raw = {
@@ -6364,7 +6393,7 @@ export async function dispatchNativeAction({
         applicantId: row.applicantId,
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
-        applicantRole: firstText(row.raw && row.raw.applicantRole, applicantRole),
+        applicantRole,
         applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt: row.status !== "draft" ? firstText(row.raw && row.raw.submittedAt, nowIso()) : firstText(row.raw && row.raw.submittedAt),
@@ -6382,7 +6411,8 @@ export async function dispatchNativeAction({
         entityType: "finance_request",
         entityId: row.id,
         loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
-        mutate: async ({ txQuery, nextRevision, batchId, actor }) => {
+        mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          if (current) { const error = new Error("案件已存在，請使用修改功能"); error.statusCode = 409; throw error; }
           const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, null, nextRevision, batchId, actor);
           await txQuery(
             `insert into finance_requests (
@@ -6394,36 +6424,7 @@ export async function dispatchNativeAction({
               applicant_id, applicant_name, applicant_department,
               created_at, updated_at, raw,
               revision_no, last_change_batch_id, last_changed_at, last_changed_by, last_changed_by_name
-            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)
-            on conflict (id) do update set
-              type=excluded.type,
-              title=excluded.title,
-              description=excluded.description,
-              category_type=excluded.category_type,
-              amount_estimated=excluded.amount_estimated,
-              amount_actual=excluded.amount_actual,
-              currency=excluded.currency,
-              payment_method=excluded.payment_method,
-              vendor_name=excluded.vendor_name,
-              payee_name=excluded.payee_name,
-              payee_bank=excluded.payee_bank,
-              payee_account=excluded.payee_account,
-              related_purchase_id=excluded.related_purchase_id,
-              no_purchase_reason=excluded.no_purchase_reason,
-              expected_clear_date=excluded.expected_clear_date,
-              attachments=excluded.attachments,
-              status=excluded.status,
-              applicant_id=excluded.applicant_id,
-              applicant_name=excluded.applicant_name,
-              applicant_department=excluded.applicant_department,
-              updated_at=excluded.updated_at,
-              raw=excluded.raw,
-              revision_no=excluded.revision_no,
-              last_change_batch_id=excluded.last_change_batch_id,
-              last_changed_at=excluded.last_changed_at,
-              last_changed_by=excluded.last_changed_by,
-              last_changed_by_name=excluded.last_changed_by_name,
-              synced_at=now()`,
+            ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17::jsonb,$18,$19,$20,$21,$22,$23,$24::jsonb,$25,$26,$27,$28,$29)`,
             [
               nextRow.id, nextRow.type, nextRow.title, nextRow.description, nextRow.categoryType,
               nextRow.amountEstimated, nextRow.amountActual, nextRow.currency, nextRow.paymentMethod,
@@ -6614,8 +6615,15 @@ export async function dispatchNativeAction({
       const applicantRole = resolveApplicantGroupRoleByMemberships_(row, applicantMemberships);
       const normalizedAction = requestAction.toLowerCase();
       const normalizedStatus = String(row.status || "").trim().toLowerCase();
-      if (normalizedAction === "submit" || !normalizedStatus || normalizedStatus === "pending_lead") {
+      if (normalizedAction === "submit" || normalizedStatus !== "draft") {
         row.status = resolveFinanceInitialStatus_(row, applicantMemberships);
+      }
+      await prepareFinanceProject(query, row, row.status === "draft" ? resolveFinanceInitialStatus_(row, applicantMemberships) : row.status);
+      if (row.status === "pending_project") {
+        const projectMemberships = await listMembershipsByStudentId(row.raw.projectApproverId);
+        row.raw.projectSkipLead = row.raw.projectNextStatus === "pending_lead" && actorHasGroupRole_(
+          projectMemberships, row.raw.projectApproverId, row.applicantDepartment,
+          applicantRole === "deputy" ? ["lead"] : ["lead", "deputy"]);
       }
       const applicantEmail = normalizeEmail(
         firstText(applicantProfile && applicantProfile.email ? applicantProfile.email : "", firstText(row.raw && row.raw.applicantEmail, firstText(existingRecord && existingRecord.applicantEmail ? existingRecord.applicantEmail : "", auth && auth.profile && auth.profile.email ? auth.profile.email : "")))
@@ -6646,7 +6654,7 @@ export async function dispatchNativeAction({
         applicantId: row.applicantId,
         applicantName: row.applicantName,
         applicantDepartment: row.applicantDepartment,
-        applicantRole: firstText(row.raw && row.raw.applicantRole, firstText(existingRecord && existingRecord.applicantRole ? existingRecord.applicantRole : "", applicantRole)),
+        applicantRole,
         applicantEmail,
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
@@ -6666,6 +6674,11 @@ export async function dispatchNativeAction({
         expectedRevision: body.expectedRevision,
         loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
         mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
+          if (!current || !["draft", "returned"].includes(firstText(current.status))) {
+            const error = new Error("案件已送出，請先退回補件再修改");
+            error.statusCode = 409;
+            throw error;
+          }
           const nextRow = buildFinanceRequestRowFromSnapshot_(row.raw, current, nextRevision, batchId, actor);
           await txQuery(
             `update finance_requests set
@@ -7117,6 +7130,7 @@ export async function dispatchNativeAction({
             createdAt: row.created_at || "",
             updatedAt: row.updated_at || "",
           })),
+          projects: (await query(`select * from finance_projects order by active desc, name, id`)).rows.map(mapFinanceProject),
           categories,
           categoryTypes: categories,
           fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),
@@ -7169,6 +7183,7 @@ export async function dispatchNativeAction({
             createdAt: row.created_at || "",
             updatedAt: row.updated_at || "",
           })),
+          projects: (await query(`select * from finance_projects order by active desc, name, id`)).rows.map(mapFinanceProject),
           categories,
           categoryTypes: categories,
           fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),
@@ -7254,6 +7269,7 @@ export async function dispatchNativeAction({
             updatedAt: row.updated_at || "",
           })),
           roles: roles.rows.map((row) => mapFinanceRoleRow(row)),
+          projects: (await query(`select * from finance_projects order by active desc, name, id`)).rows.map(mapFinanceProject),
           categories,
           categoryTypes: categories,
           fundEvents: fundEvents.rows.map((row) => mapFundEventRow(row)),

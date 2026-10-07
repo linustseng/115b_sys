@@ -1,3 +1,4 @@
+import FinanceProjectSelect from "../components/FinanceProjectSelect";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
@@ -85,6 +86,7 @@ function FinancePage({ shared }) {
   const [requests, setRequests] = useState([]);
   const [financeActionsByRequest, setFinanceActionsByRequest] = useState({});
   const [students, setStudents] = useState([]);
+  const [financeProjects, setFinanceProjects] = useState([]);
   const [financeCategories, setFinanceCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -301,6 +303,7 @@ function FinancePage({ shared }) {
       const data = result.data || {};
       setStudents(data.students || []);
       setFinanceCategories(data.categories || []);
+      setFinanceProjects(data.projects || []);
       if (data.fundEvents) {
         setFundEvents(data.fundEvents || []);
         try {
@@ -338,6 +341,7 @@ function FinancePage({ shared }) {
       setRequests(data.requests || []);
       setStudents(data.students || []);
       setFinanceCategories(data.categories || []);
+      setFinanceProjects(data.projects || []);
       if (data.fundEvents) {
         setFundEvents(data.fundEvents || []);
         try {
@@ -802,6 +806,7 @@ function FinancePage({ shared }) {
       type: item.type || "purchase",
       title: item.title || "",
       description: item.description || "",
+      projectId: item.projectId || "",
       categoryType: item.categoryType || "general",
       amountEstimated: item.amountEstimated || "",
       amountActual: item.amountActual || "",
@@ -1099,23 +1104,15 @@ function FinancePage({ shared }) {
   const isPettyCash = form.type === "pettycash";
 
   const getCaseStepsForRequest_ = (request) => {
-    const type = String((request && request.type) || "").trim();
-
-    // Purchase requests: lead -> rep -> closed.
-    if (type === "purchase") {
-      return [
-        { id: "pending_lead", label: "組長" },
-        { id: "pending_rep", label: "班代" },
-        { id: "closed", label: "完成" },
-      ];
-    }
-
-    // Payment / pettycash: include accounting + cashier after rep.
+    const projectSteps = request?.projectId && !request.projectSkipReason
+      ? [{ id: "pending_project", label: request.projectSkipLead ? "專案／組長" : "專案加簽" }] : [];
+    const leadSteps = request?.projectSkipLead ? [] : [{ id: "pending_lead", label: "組長" }];
     return [
-      { id: "pending_lead", label: "組長" },
+      ...projectSteps, ...leadSteps,
       { id: "pending_rep", label: "班代" },
-      { id: "pending_accounting", label: "會計" },
-      { id: "pending_cashier", label: "出納" },
+      ...(request?.type === "purchase" ? [] : [
+        { id: "pending_accounting", label: "會計" }, { id: "pending_cashier", label: "出納" },
+      ]),
       { id: "closed", label: "完成" },
     ];
   };
@@ -1129,7 +1126,7 @@ function FinancePage({ shared }) {
       return "todo";
     }
     if (current === "returned") {
-      return stepId === "pending_lead" ? "active" : "todo";
+      return stepId === (steps?.[0]?.id || "pending_lead") ? "active" : "todo";
     }
     if (current === "withdrawn") {
       return "todo";
@@ -1187,7 +1184,7 @@ function FinancePage({ shared }) {
       return formatCaseStepDate_(completedAction?.createdAt || enteredAction?.createdAt);
     }
     if (stepState === "active") {
-      const startedAt = stepId === "pending_lead" ? getRequestSubmittedAt_(request) : enteredAction?.createdAt;
+      const startedAt = ["pending_project", "pending_lead"].includes(stepId) ? getRequestSubmittedAt_(request) : enteredAction?.createdAt;
       return startedAt ? `自 ${formatCaseStepDate_(startedAt)}` : "進行中";
     }
     return "—";
@@ -1931,6 +1928,7 @@ function FinancePage({ shared }) {
                     <p className="text-[11px] text-slate-500">只顯示你所屬的組別。</p>
                   )}
                 </div>
+              {isPurchase || isPayment ? <FinanceProjectSelect projects={financeProjects} value={form.projectId || ""} onChange={(value) => handleFormChange("projectId", value)} /> : null}
               <div className="grid gap-2 sm:col-span-2">
                 <label className="text-sm font-medium text-slate-700">
                   項目名稱 <span className="required-mark">*</span>
@@ -2397,6 +2395,7 @@ function FinancePage({ shared }) {
                                 <p className="mt-0.5 truncate text-xs text-slate-500">
                                   {formatFinanceAmount_(getRequestAmount_(item))} · {statusLabel} · {getRequestGroupLabel_(item)}
                                 </p>
+                                {item.projectId ? <p className="mt-1 text-xs text-slate-500">專案：{item.projectName} · 加簽：{item.projectApproverName}{item.projectSkipReason === "self" ? "（本人免加簽）" : ""}</p> : null}
                                 <p className="mt-1 text-[11px] text-slate-400">申請時間：{formatRequestSubmittedAt_(item)}</p>
                               </div>
                               {canWithdraw ? (

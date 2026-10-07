@@ -272,7 +272,8 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
       return groupId === "D" || groupId === "E" || groupId === "A";
     });
     const canManage = isAdminLike || financeRole;
-    return { canView: isOwner || canManage, canUpload: isOwner || canManage, canDelete: canManage || isOwner };
+    const isProjectApprover = String(row.raw?.projectApproverId || "") === String(auth.studentId || "") && Boolean(auth.studentId);
+    return { canView: isOwner || canManage || isProjectApprover, canUpload: isOwner || canManage, canDelete: canManage || isOwner };
   }
 
   if (entityType === "academic_session_note") {

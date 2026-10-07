@@ -267,3 +267,46 @@ test("updateFinanceRequest approve and return honor finance-role permissions and
   assert.ok(harness.auditVersions.some((item) => item.entityId === "finance-return-1" && item.revisionNo === 2));
   assert.ok(harness.auditEvents.some((item) => item.entityId === "finance-return-1" && /退回財務申請/.test(item.summary)));
 });
+
+test("project assignee approves first, keeps next stage and audit role, and merges only the next group stage", async () => {
+  for (const [skipLead, next, expected] of [[false, "pending_lead", "pending_lead"], [true, "pending_lead", "closed"], [false, "pending_rep", "pending_rep"]]) {
+    const harness = createFinanceWorkflowHarness();
+    const deps = buildDeps(harness);
+    seedFinanceRequest(harness, "project-request", { type: "purchase", status: "pending_project", raw: {
+      type: "purchase", status: "pending_project", projectId: "p1", projectApproverId: "approver-1",
+      projectApproverName: "Project Owner", projectNextStatus: next, projectSkipLead: skipLead,
+    } });
+    const result = await dispatchNativeAction({ action: "updateFinanceRequest", payload: {
+      id: "project-request", expectedRevision: 1, requestAction: "approve", actorRole: "project",
+    }, ...deps });
+    assert.equal(result.ok, true); assert.equal(result.data.status, expected);
+    assert.equal(harness.auditVersions.length, 1);
+    assert.equal(harness.financeActions[0].fromStatus, "pending_project");
+    assert.equal(harness.financeRequests.get("project-request").raw.projectApproverId, "approver-1");
+  }
+});
+
+test("project stage cannot be skipped by group lead or unrelated actor, and forbids self-approval", async () => {
+  for (const [assignee, applicant, actorRole] of [["someone-else", "applicant-1", "project"], ["approver-1", "applicant-1", "lead"], ["approver-1", "approver-1", "project"]]) {
+    const harness = createFinanceWorkflowHarness();
+    seedFinanceRequest(harness, "project-request", { status: "pending_project", applicant_id: applicant, raw: {
+      status: "pending_project", applicantId: applicant, projectId: "p1", projectApproverId: assignee, projectNextStatus: "pending_lead",
+    } });
+    await assert.rejects(dispatchNativeAction({ action: "updateFinanceRequest", payload: {
+      id: "project-request", expectedRevision: 1, requestAction: "approve", actorRole,
+    }, ...buildDeps(harness) }), /Unauthorized/);
+    assert.equal(harness.financeActions.length, 0);
+    assert.equal(harness.financeRequests.get("project-request").status, "pending_project");
+  }
+});
+
+test("project assignee can return a request for supplementary documents", async () => {
+  const harness = createFinanceWorkflowHarness();
+  seedFinanceRequest(harness, "project-return", { status: "pending_project", raw: {
+    status: "pending_project", projectId: "p1", projectApproverId: "approver-1", projectNextStatus: "pending_lead",
+  } });
+  const result = await dispatchNativeAction({ action: "updateFinanceRequest", payload: {
+    id: "project-return", expectedRevision: 1, requestAction: "return", actorRole: "project", note: "請補憑據",
+  }, ...buildDeps(harness) });
+  assert.equal(result.data.status, "returned"); assert.equal(harness.auditVersions.length, 1);
+});
