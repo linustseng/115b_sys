@@ -6113,7 +6113,7 @@ export async function dispatchNativeAction({
     case "upsertFinanceProject": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      if (!memberships.some((item) => normalizeGroupId_(item.groupId || item.group_id) === "D")) {
+      if (!memberships.some((item) => ["D", "E"].includes(normalizeGroupId_(item.groupId || item.group_id)))) {
         const error = new Error("Forbidden"); error.statusCode = 403; throw error;
       }
       const data = safeJsonObject(body.data || {});

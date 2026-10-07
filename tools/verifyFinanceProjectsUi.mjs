@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const browser = await chromium.launch({headless:true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE});
 const project={id:'project1',name:'測試啦啦隊專案',approverId:'owner',approverName:'專案同學',active:true};
 const students=[{id:'applicant',name:'申請同學',email:'applicant@example.test'},{id:'owner',name:'專案同學',email:'owner@example.test'},{id:'finance',name:'財務同學',email:'finance@example.test'}];
-const groupMemberships=[{personId:'applicant',personName:'申請同學',groupId:'D',roleInGroup:'deputy'},{personId:'finance',personName:'財務同學',groupId:'D',roleInGroup:'lead'},{personId:'owner',personName:'專案同學',groupId:'B',roleInGroup:'member'}];
+const groupMemberships=[{personId:'applicant',personName:'申請同學',groupId:'D',roleInGroup:'deputy'},{personId:'finance',personName:'財務同學',groupId:process.env.FINANCE_MANAGER_GROUP || 'D',roleInGroup:'lead'},{personId:'owner',personName:'專案同學',groupId:'B',roleInGroup:'member'}];
 const request={id:'r1',type:'payment',title:'測試專案請款',amountActual:1000,status:'pending_project',applicantId:'applicant',applicantName:'申請同學',applicantDepartment:'D',applicantRole:'deputy',projectId:project.id,projectName:project.name,projectApproverId:'owner',projectApproverName:'專案同學',projectNextStatus:'pending_lead',revisionNo:1,createdAt:new Date().toISOString(),attachments:[]};
 const calls=[];const errors=[];
 async function setup(id,viewport) {

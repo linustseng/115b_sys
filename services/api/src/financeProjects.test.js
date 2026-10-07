@@ -30,13 +30,28 @@ test("resubmission refreshes project config and rejects missing/inactive project
   await assert.rejects(prepareFinanceProject(async () => ({ rows: [] }), row, "pending_lead"), /找不到/);
   await assert.rejects(prepareFinanceProject(async () => ({ rows: [{ ...project, active: false }] }), row, "pending_lead"), /停用/);
 });
-test("only finance group can maintain project assignment (information group is not implicitly permitted)", async () => {
-  for (const groupId of ["B", "E", "A"]) {
+test("unrelated groups cannot maintain project assignment", async () => {
+  for (const groupId of ["B", "A"]) {
     let wrote = false;
     await assert.rejects(dispatchNativeAction({ action: "upsertFinanceProject", payload: { data: { name: "test", approverId: "owner" } },
       auth: { studentId: "member" }, listMembershipsByStudentId: async () => [{ groupId, roleInGroup: "lead" }],
       query: async () => { wrote = true; return { rows: [] }; },
     }), /Forbidden/);
     assert.equal(wrote, false);
+  }
+});
+
+ test("finance and information groups can maintain projects without receiving approval roles", async () => {
+  for (const groupId of ["D", "E"]) {
+    let wrote = false;
+    const result = await dispatchNativeAction({ action: "upsertFinanceProject", payload: { data: { name: "test", approverId: "owner" } },
+      auth: { studentId: "manager" }, listMembershipsByStudentId: async () => [{ groupId, roleInGroup: "lead" }],
+      query: async (sql) => {
+        if (sql.includes("insert into finance_projects")) { wrote = true; return { rows: [] }; }
+        return { rows: [{ id: "owner", name: "Project Owner" }] };
+      },
+    });
+    assert.equal(result.ok, true);
+    assert.equal(wrote, true);
   }
 });
