@@ -988,7 +988,7 @@ function FinanceAdminPage({ shared }) {
   const hasCashierPrivilege = adminRoles.includes("cashier");
   const hasAuditorPrivilege = adminRoles.includes("auditor");
   const hasFinanceGroupPrivilege = financeGroupMembers.length > 0;
-  const canManageProjects = memberships.some((item) => ["D", "E"].includes(String(item.groupId || "").trim()));
+  const canManageProjects = memberships.some((item) => String(item.groupId || "").trim() === "D" || (String(item.groupId || "").trim() === "E" && ["lead", "deputy"].includes(String(item.roleInGroup || "").trim())));
 
   const availableRoles = [
     hasAccountingPrivilege ? "accounting" : null,
@@ -2028,7 +2028,7 @@ function FinanceAdminPage({ shared }) {
         ) : null}
         {!initialLoading && !hasFinanceAccess ? (
           <div className="alert alert-warning">
-            目前帳號沒有財務後台權限，請確認是否屬於財務組、資管組或班代/副班代。
+            目前帳號沒有財務後台權限，請確認是否屬於財務組、資管組正副組長或班代/副班代。
           </div>
         ) : null}
         {!initialLoading && hasFinanceAccess ? (

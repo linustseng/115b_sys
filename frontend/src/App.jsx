@@ -2958,7 +2958,7 @@ function AdminAccessGuard({ title, allowedGroupIds, allowedStudentIds, helperTex
       if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
         return true;
       }
-      return allowedGroupIds.includes(groupId);
+      return allowedGroupIds.includes(groupId) && (groupId !== "E" || roleInGroup === "lead" || roleInGroup === "deputy");
     });
   const hasAccess = Array.isArray(allowedStudentIds)
     ? allowedStudentIds.includes(normalizedId)
@@ -3538,7 +3538,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="活動管理 · 後台"
-        helperText="僅限班代、副班代、活動組、資管組成員。"
+        helperText="僅限班代、副班代、活動組、資管組正副組長。"
         allowedGroupIds={["C", "E"]}
       >
         <AdminPage
@@ -3565,7 +3565,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="訂餐管理 · 後台"
-        helperText="僅限班代、副班代、美食組、資管組成員。"
+        helperText="僅限班代、副班代、美食組、資管組正副組長。"
         allowedGroupIds={["I", "E"]}
       >
         <AdminPage
@@ -3592,7 +3592,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="財務管理 · 後台"
-        helperText="僅限班代、副班代、財務組、資管組成員。"
+        helperText="僅限班代、副班代、財務組、資管組正副組長。"
         allowedGroupIds={["D", "E"]}
       >
         <FinanceAdminPage shared={shared} />
@@ -3602,7 +3602,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="學藝專區 · 後台"
-        helperText="僅限班代、副班代、學藝組、資管組成員。"
+        helperText="僅限班代、副班代、學藝組、資管組正副組長。"
         allowedGroupIds={["E", "F"]}
       >
         <AcademicsAdminPage shared={shared} />
@@ -3623,7 +3623,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="系統管理 · 後台"
-        helperText="僅限班代、副班代、資管組成員。"
+        helperText="僅限班代、副班代、資管組正副組長。"
         allowedGroupIds={["E"]}
       >
         <AdminPage
@@ -3695,7 +3695,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="啦啦隊管理 · 後台"
-        helperText="僅限班代、副班代、資訊組、啦啦隊權限群組。"
+        helperText="僅限班代、副班代、資訊組正副組長、啦啦隊權限群組。"
         allowedGroupIds={["E", "L"]}
         extraAccessAction="getCheerleadingAdminAccess"
       >
@@ -3706,7 +3706,7 @@ function AppShell() {
     content = (
       <AdminAccessGuard
         title="壘球隊管理 · 後台"
-        helperText="僅限班代、副班代、資管組、體育組、球隊經理。"
+        helperText="僅限班代、副班代、資管組正副組長、體育組、球隊經理。"
         allowedGroupIds={["E", "H"]}
         extraAccessAction="getSoftballAdminAccess"
       >

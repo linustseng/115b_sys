@@ -314,7 +314,7 @@ function canAccessByGroups(memberships, allowedGroupIds = []) {
   return list.some((item) => {
     const groupId = String(item.groupId || item.group_id || "").trim();
     const role = String(item.roleInGroup || item.role_in_group || "").trim();
-    if (allowedGroupIds.includes(groupId)) {
+    if (allowedGroupIds.includes(groupId) && (groupId !== "E" || role === "lead" || role === "deputy")) {
       return true;
     }
     // A(班代) lead/deputy counts as admin for most backoffice.
@@ -2671,7 +2671,7 @@ function getEditableDocumentGroupIds_(memberships) {
     if (!groupId) {
       return;
     }
-    if (groupId === "E") {
+    if (groupId === "E" && (role === "lead" || role === "deputy")) {
       editable.add(groupId);
       return;
     }
@@ -6113,7 +6113,7 @@ export async function dispatchNativeAction({
     case "upsertFinanceProject": {
       requireAuth();
       const memberships = await listMembershipsByStudentId(auth.studentId);
-      if (!memberships.some((item) => ["D", "E"].includes(normalizeGroupId_(item.groupId || item.group_id)))) {
+      if (!memberships.some((item) => normalizeGroupId_(item.groupId || item.group_id) === "D" || (normalizeGroupId_(item.groupId || item.group_id) === "E" && ["lead", "deputy"].includes(String(item.roleInGroup || item.role_in_group || "").trim())))) {
         const error = new Error("Forbidden"); error.statusCode = 403; throw error;
       }
       const data = safeJsonObject(body.data || {});

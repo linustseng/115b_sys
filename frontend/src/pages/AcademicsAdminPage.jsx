@@ -885,7 +885,7 @@ export default function AcademicsAdminPage({ shared }) {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">NTU EMBA 115B</p>
             <h1 className="mt-3 text-3xl font-semibold text-slate-900 sm:text-4xl">學藝專區 · 後台</h1>
-            <p className="mt-3 text-sm text-slate-500">班代 / 副班代 / 學藝組 / 資訊組可同步課程、彙整補課與發布筆記。</p>
+            <p className="mt-3 text-sm text-slate-500">班代 / 副班代 / 學藝組 / 資訊組正副組長可同步課程、彙整補課與發布筆記。</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <a
