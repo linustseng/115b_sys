@@ -219,7 +219,7 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
   const isAdminLike = memberships.some((item) => {
     const groupId = String(item.groupId || item.group_id || "").trim();
     const role = String(item.roleInGroup || item.role_in_group || "").trim().toLowerCase();
-    if (groupId === "E") {
+    if (groupId === "E" && (role === "lead" || role === "deputy")) {
       return true;
     }
     return groupId === "A" && (role === "lead" || role === "deputy");
@@ -269,7 +269,7 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
     const isOwner = applicantId && applicantId === String(auth.studentId || "").trim();
     const financeRole = memberships.some((item) => {
       const groupId = String(item.groupId || item.group_id || "").trim();
-      return groupId === "D" || groupId === "E" || groupId === "A";
+      return groupId === "D" || groupId === "A";
     });
     const canManage = isAdminLike || financeRole;
     const isProjectApprover = String(row.raw?.projectApproverId || "") === String(auth.studentId || "") && Boolean(auth.studentId);
@@ -279,7 +279,7 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
   if (entityType === "academic_session_note") {
     const canManage = isAdminLike || memberships.some((item) => {
       const groupId = String(item.groupId || item.group_id || "").trim();
-      return groupId === "F" || groupId === "E" || groupId === "A";
+      return groupId === "F" || groupId === "A";
     });
     return { canView: true, canUpload: canManage, canDelete: canManage };
   }
@@ -2127,7 +2127,7 @@ async function canManageActivityAlbums_(studentId) {
   return memberships.some((item) => {
     const groupId = firstText(item.groupId || item.group_id);
     const role = firstText(item.roleInGroup || item.role_in_group).toLowerCase();
-    return groupId === "E" || (groupId === "A" && (role === "lead" || role === "deputy"));
+    return (groupId === "E" || groupId === "A") && (role === "lead" || role === "deputy");
   });
 }
 

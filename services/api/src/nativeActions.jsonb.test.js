@@ -50,7 +50,7 @@ test("createSoftballSupplyCase serializes vendorIds/raw JSONB params before SQL 
       },
     },
     auth: { studentId: "admin-1", profile: { name: "Admin" } },
-    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "member" }],
+    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "lead" }],
     ...buildBaseDeps(query),
   });
 
@@ -77,7 +77,7 @@ test("upsertFinanceRole serializes group_ids/raw JSONB params before SQL write",
       },
     },
     auth: { studentId: "admin-1", profile: { name: "Admin" } },
-    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "member" }],
+    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "lead" }],
     ...buildBaseDeps(query),
   });
 
@@ -101,7 +101,7 @@ test("updateSoftballConfig serializes raw JSONB param before SQL write", async (
       },
     },
     auth: { studentId: "admin-1", profile: { name: "Admin" } },
-    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "member" }],
+    listMembershipsByStudentId: async () => [{ personId: "admin-1", groupId: "E", roleInGroup: "lead" }],
     ...buildBaseDeps(query),
   });
 

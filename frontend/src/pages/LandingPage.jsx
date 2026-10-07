@@ -875,7 +875,7 @@ function LandingPage({ shared, GoogleSigninPanel, loadStoredGoogleStudent_ }) {
       if (groupId === "A" && (roleInGroup === "lead" || roleInGroup === "deputy")) {
         return true;
       }
-      return allowedGroupIds.includes(groupId);
+      return allowedGroupIds.includes(groupId) && (groupId !== "E" || roleInGroup === "lead" || roleInGroup === "deputy");
     });
   const canSeeEventAdmin = membershipsLoaded && hasGroupAccess_(["C", "E"]);
   const canSeeOrderingAdmin = membershipsLoaded && hasGroupAccess_(["I", "E"]);
