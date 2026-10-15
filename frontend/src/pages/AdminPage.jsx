@@ -3446,6 +3446,17 @@ export default function AdminPage({
     } else {
       rows.push(["", "(無出席資料)"]);
     }
+    // Only the registered table is trimmed; keep the event metadata intact.
+    if (attendingRegistrationExportRows.length) {
+      const dataRows = rows.slice(6);
+      const visibleColumns = headers
+        .map((_, index) => index)
+        .filter((index) => dataRows.some((row) => String(row[index] ?? "").trim() !== ""));
+      return [
+        ...rows.slice(0, 5),
+        ...rows.slice(5).map((row) => visibleColumns.map((index) => row[index])),
+      ];
+    }
     return rows;
   };
 
