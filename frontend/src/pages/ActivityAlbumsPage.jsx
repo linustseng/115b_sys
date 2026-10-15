@@ -1,3 +1,4 @@
+import { fetchUploadResponse, uploadSignedFile } from "../utils/uploadTransport";
 import React, { useEffect, useRef, useState } from "react";
 
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
@@ -9,18 +10,6 @@ function imageMime(file) {
   return /\.jpe?g$/i.test(file?.name || "") ? "image/jpeg" : /\.png$/i.test(file?.name || "") ? "image/png" : "";
 }
 
-function upload(url, file, mimeType, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", mimeType);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (event) => event.lengthComputable && onProgress(Math.round(event.loaded / event.total * 100));
-    xhr.onerror = () => reject(new Error("網路中斷，請重試"));
-    xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`檔案傳送失敗（${xhr.status}）`));
-    xhr.send(file);
-  });
-}
 
 export default function ActivityAlbumsPage({ shared }) {
   const { API_V2_URL, loadStoredAdminSession_ } = shared;
@@ -47,7 +36,7 @@ export default function ActivityAlbumsPage({ shared }) {
 
   const request = async (path, options = {}) => {
     const session = loadStoredAdminSession_();
-    const response = await fetch(`${apiBase}${path}`, { ...options, headers: { Authorization: `Bearer ${session?.token || ""}`, "Content-Type": "application/json", ...(options.headers || {}) } });
+    const response = await fetchUploadResponse(`${apiBase}${path}`, { ...options, headers: { Authorization: `Bearer ${session?.token || ""}`, "Content-Type": "application/json", ...(options.headers || {}) } });
     const body = await response.json().catch(() => null);
     if (!response.ok || !body?.ok) throw new Error(body?.error || "操作失敗");
     return body.data;
@@ -91,7 +80,7 @@ export default function ActivityAlbumsPage({ shared }) {
     setUpload(item.key, { status: "uploading", progress: 0, error: "" });
     try {
       const intent = await request(`/v1/activity-albums/${active.id}/upload-intent`, { method: "POST", body: JSON.stringify({ fileName: item.file.name, mimeType, sizeBytes: item.file.size }) });
-      await upload(intent.signedUrl, item.file, mimeType, (progress) => setUpload(item.key, { progress }));
+      await uploadSignedFile(intent.signedUrl, item.file, mimeType, (progress) => setUpload(item.key, { progress }));
       await request(`/v1/activity-photos/${intent.photoId}/complete`, { method: "POST", body: "{}" });
       setUpload(item.key, { status: "done", progress: 100 });
     } catch (cause) { setUpload(item.key, { status: "failed", error: cause.message }); }

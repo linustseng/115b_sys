@@ -1,3 +1,4 @@
+import { fetchUploadResponse } from "../utils/uploadTransport";
 import React, { useEffect, useMemo, useState } from "react";
 import { resolveAndOpenAttachment_ } from "../utils/attachments";
 
@@ -744,7 +745,7 @@ export default function AcademicsAdminPage({ shared }) {
         } else if (nextIdToken) {
           headers["x-id-token"] = nextIdToken;
         }
-        return fetch(`${base}/v1/attachments/upload`, {
+        return fetchUploadResponse(`${base}/v1/attachments/upload`, {
           method: "POST",
           headers,
           body: formData,

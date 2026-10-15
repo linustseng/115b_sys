@@ -1,3 +1,4 @@
+import { fetchUploadResponse } from "../utils/uploadTransport";
 import FinanceProjectSelect from "../components/FinanceProjectSelect";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { TW_BANK_CODES, normalizeTwBankName } from "../data/twBankCodes";
@@ -674,7 +675,7 @@ function FinancePage({ shared }) {
         } else if (nextIdToken) {
           headers["x-id-token"] = nextIdToken;
         }
-        return fetch(`${base}/v1/attachments/upload`, {
+        return fetchUploadResponse(`${base}/v1/attachments/upload`, {
           method: "POST",
           headers,
           body: formData,

@@ -1,3 +1,4 @@
+import { fetchUploadResponse } from "../utils/uploadTransport";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { isStandalonePwa_, resolveAndOpenAttachment_ } from "../utils/attachments";
 
@@ -1019,7 +1020,7 @@ export default function DocumentsPage({ shared }) {
         } else if (nextIdToken) {
           headers["x-id-token"] = nextIdToken;
         }
-        return fetch(`${base}/v1/attachments/upload`, {
+        return fetchUploadResponse(`${base}/v1/attachments/upload`, {
           method: "POST",
           headers,
           body: formData,

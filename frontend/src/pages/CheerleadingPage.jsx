@@ -1,3 +1,4 @@
+import { fetchUploadResponse, uploadSignedFile } from "../utils/uploadTransport";
 import React, { useEffect, useMemo, useState } from "react";
 
 const CHEERLEADING_VIDEO_MAX_BYTES = 500 * 1024 * 1024;
@@ -11,25 +12,6 @@ function getVideoMimeType_(file) {
   if (/\.webm$/i.test(name)) return "video/webm";
   if (/\.mov$/i.test(name)) return "video/quicktime";
   return "";
-}
-
-function uploadVideoDirect_(url, file, mimeType, onProgress) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url, true);
-    xhr.setRequestHeader("Content-Type", mimeType);
-    xhr.setRequestHeader("x-upsert", "false");
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onerror = () => reject(new Error("影片傳送中斷，請確認網路後重試"));
-    xhr.onabort = () => reject(new Error("影片上傳已取消"));
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new Error(`影片傳送失敗（${xhr.status || "無回應"}）`));
-    };
-    xhr.send(file);
-  });
 }
 
 function CheerleadingPage({ shared }) {
@@ -367,7 +349,7 @@ function CheerleadingPage({ shared }) {
       if (!sessionToken) throw new Error("登入已過期，請重新登入後再上傳");
       const apiBase = String(API_V2_URL || "").replace(/\/$/, "");
       const requestJson = async (path, body) => {
-        const response = await fetch(`${apiBase}${path}`, {
+        const response = await fetchUploadResponse(`${apiBase}${path}`, {
           method: "POST",
           headers: { Authorization: `Bearer ${sessionToken}`, "Content-Type": "application/json" },
           body: JSON.stringify(body || {}),
@@ -384,7 +366,7 @@ function CheerleadingPage({ shared }) {
         category: videoForm.category,
         description: videoForm.description,
       });
-      await uploadVideoDirect_(intent.signedUrl, file, mimeType, setVideoUploadProgress);
+      await uploadSignedFile(intent.signedUrl, file, mimeType, setVideoUploadProgress);
       let completed = false;
       let completedVideo = null;
       let lastError = null;
