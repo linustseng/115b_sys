@@ -3031,6 +3031,7 @@ export default function AdminPage({
       });
       const attendeeEntry = {
         name: attendeeName,
+        email: String(registration.userEmail || fields.email || "").trim(),
         dietary: dietary,
         parking: parking,
         travelTransportation: String(fields.travelTransportation || "").trim(),
@@ -3054,6 +3055,7 @@ export default function AdminPage({
       if (isSpecialDietary) {
         const entry = {
           name: attendeeName,
+          email: attendeeEntry.email,
           dietary: dietary,
         };
         if (isVegetarianDietary_(dietary)) {
@@ -3310,8 +3312,8 @@ export default function AdminPage({
 
     pushRow_(
       isRegistrationTravelEvent
-        ? ["出席名單", "交通方式", "飲食偏好", "停車", "攜伴", "自帶酒水"]
-        : ["出席名單", "飲食偏好", "停車", "攜伴", "自帶酒水"]
+        ? ["出席名單", "Email 帳號", "交通方式", "飲食偏好", "停車", "攜伴", "自帶酒水"]
+        : ["出席名單", "Email 帳號", "飲食偏好", "停車", "攜伴", "自帶酒水"]
     );
     if (attendingNameList.length) {
       attendingNameList.forEach((item) =>
@@ -3319,6 +3321,7 @@ export default function AdminPage({
           isRegistrationTravelEvent
             ? [
                 item.name,
+                item.email || "",
                 item.travelTransportation || "-",
                 item.dietary || "-",
                 item.parking || "-",
@@ -3327,6 +3330,7 @@ export default function AdminPage({
               ]
             : [
                 item.name,
+                item.email || "",
                 item.dietary || "-",
                 item.parking || "-",
                 item.companions || 0,
@@ -3335,23 +3339,23 @@ export default function AdminPage({
         )
       );
     } else {
-      pushRow_(isRegistrationTravelEvent ? ["(無資料)", "", "", "", "", ""] : ["(無資料)", "", "", "", ""]);
+      pushRow_(isRegistrationTravelEvent ? ["(無資料)", "", "", "", "", "", ""] : ["(無資料)", "", "", "", "", ""]);
     }
     pushRow_([]);
 
-    pushRow_(["素食/不吃肉名單", "飲食偏好"]);
+    pushRow_(["素食/不吃肉名單", "Email 帳號", "飲食偏好"]);
     if (vegetarianAttendeeList.length) {
-      vegetarianAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
+      vegetarianAttendeeList.forEach((item) => pushRow_([item.name, item.email || "", item.dietary]));
     } else {
-      pushRow_(["(無資料)", ""]);
+      pushRow_(["(無資料)", "", ""]);
     }
     pushRow_([]);
 
-    pushRow_(["其他特殊飲食/過敏名單", "飲食偏好"]);
+    pushRow_(["其他特殊飲食/過敏名單", "Email 帳號", "飲食偏好"]);
     if (specialDietAttendeeList.length) {
-      specialDietAttendeeList.forEach((item) => pushRow_([item.name, item.dietary]));
+      specialDietAttendeeList.forEach((item) => pushRow_([item.name, item.email || "", item.dietary]));
     } else {
-      pushRow_(["(無資料)", ""]);
+      pushRow_(["(無資料)", "", ""]);
     }
     return rows.join("\n");
   };
