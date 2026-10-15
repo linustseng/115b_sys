@@ -1,3 +1,4 @@
+import { isValidCompanionCount } from "../utils/registrationCompanions";
 import React, { useEffect, useRef, useState } from "react";
 
 function RegistrationPage({ shared }) {
@@ -482,6 +483,10 @@ function RegistrationPage({ shared }) {
       setSubmitError("請選擇旅遊交通方式。");
       return;
     }
+    if (allowCompanions && !isWorldCupPrediction && !isValidCompanionCount(customFields.companions)) {
+      setSubmitError("攜伴人數請填 0 或正整數。");
+      return;
+    }
     if (existingRegistration) {
       setUpdatePromptOpen(true);
       return;
@@ -516,6 +521,7 @@ function RegistrationPage({ shared }) {
       }
       setSubmitSuccess(true);
       setSubmitSuccessType("register");
+      bootstrapCacheRef.current = {};
     } catch (err) {
       const errorMessage = err.message || "報名失敗";
       if (String(errorMessage).toLowerCase().includes("duplicate")) {
@@ -532,6 +538,11 @@ function RegistrationPage({ shared }) {
   const handleUpdateRegistration = async () => {
     if (!existingRegistration || !existingRegistration.id) {
       setUpdatePromptOpen(false);
+      return;
+    }
+    if (allowCompanions && !isWorldCupPrediction && !isValidCompanionCount(customFields.companions)) {
+      setUpdatePromptOpen(false);
+      setSubmitError("攜伴人數請填 0 或正整數。");
       return;
     }
     setUpdateSubmitting(true);
@@ -572,6 +583,7 @@ function RegistrationPage({ shared }) {
       setUpdatePromptOpen(false);
       setSubmitSuccess(true);
       setSubmitSuccessType("update");
+      bootstrapCacheRef.current = {};
       await loadExistingRegistration(String(email || "").trim().toLowerCase());
     } catch (err) {
       setUpdatePromptOpen(false);
@@ -982,28 +994,6 @@ function RegistrationPage({ shared }) {
                       (next) => handleCustomFieldChange(gatheringFieldConfig.attendance.id, next)
                     )}
                   </div>
-                  {allowCompanions ? (
-                    <div className="grid gap-2">
-                      <label className="text-sm font-medium text-slate-700" htmlFor="companions">
-                        {gatheringFieldConfig.companions.label}
-                      </label>
-                      <input
-                        id="companions"
-                        type="number"
-                        placeholder={gatheringFieldConfig.companions.placeholder}
-                        value={customFields.companions || ""}
-                        inputMode="numeric"
-                        min="0"
-                        onChange={(event) =>
-                          handleCustomFieldChange(
-                            gatheringFieldConfig.companions.id,
-                            event.target.value
-                          )
-                        }
-                        className="input-base"
-                      />
-                    </div>
-                  ) : null}
                   <div className="grid gap-2">
                     <label className="text-sm font-medium text-slate-700" htmlFor="dietary">
                       {gatheringFieldConfig.dietary.label}
@@ -1095,13 +1085,23 @@ function RegistrationPage({ shared }) {
           </div>
 
           <div className="mt-10 border-t border-slate-200/70 pt-8">
+            {allowCompanions && !isWorldCupPrediction ? (
+              <div className="mb-6 grid gap-2">
+                <label className="text-sm font-medium text-slate-700" htmlFor="companions">攜伴人數</label>
+                <input id="companions" type="number" inputMode="numeric" min="0" step="1"
+                  placeholder="0" value={customFields.companions ?? ""}
+                  onChange={event => handleCustomFieldChange("companions", event.target.value)}
+                  aria-describedby="companions-help" className="input-base" />
+                <p id="companions-help" className="text-sm text-slate-500">不含本人；未攜伴可填 0。攜伴姓名與需求請填在下方備註。</p>
+              </div>
+            ) : null}
             <label className="text-sm font-medium text-slate-700" htmlFor="notes">
               備註 (選填)
             </label>
             <textarea
               id="notes"
               rows="4"
-              placeholder="有任何特殊需求請在此填寫"
+              placeholder={allowCompanions && !isWorldCupPrediction ? "攜伴姓名、飲食或其他特殊需求" : "有任何特殊需求請在此填寫"}
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               className="mt-2 w-full input-base"
