@@ -1,3 +1,4 @@
+import { registrationWindowLabel } from "../utils/registrationWindow";
 import { isValidCompanionCount } from "../utils/registrationCompanions";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -41,6 +42,7 @@ function RegistrationPage({ shared }) {
     address: "",
     startAt: "",
     endAt: "",
+    registrationOpenAt: "",
     registrationCloseAt: "",
     category: categoryParam || DEFAULT_EVENT.category,
     capacity: "",
@@ -348,7 +350,8 @@ function RegistrationPage({ shared }) {
             address: event.address || DEFAULT_EVENT.address,
             startAt: event.startAt || DEFAULT_EVENT.startAt,
             endAt: event.endAt || DEFAULT_EVENT.endAt,
-            registrationCloseAt: event.registrationCloseAt || DEFAULT_EVENT.registrationCloseAt,
+            registrationOpenAt: event.registrationOpenAt || "",
+            registrationCloseAt: event.registrationCloseAt || "",
             category: event.category || categoryParam || DEFAULT_EVENT.category,
             capacity: event.capacity || "",
             status: event.status || "",
@@ -672,7 +675,7 @@ function RegistrationPage({ shared }) {
             ) : null}
             {!eventLoading ? (
               <span className="hidden badge-muted sm:inline-flex">
-                {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"}
+                {registrationWindowLabel(eventInfo)}
                 {eventInfo.capacity ? ` · 名額 ${eventInfo.capacity}` : ""}
               </span>
             ) : null}
@@ -692,7 +695,7 @@ function RegistrationPage({ shared }) {
           ) : null}
           {!eventLoading ? (
             <span className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-slate-500 shadow-sm">
-              {eventInfo.status === "open" ? "報名進行中" : "報名狀態更新"}
+              {registrationWindowLabel(eventInfo)}
               {eventInfo.capacity ? ` · 名額 ${eventInfo.capacity}` : ""}
             </span>
           ) : null}

@@ -1,3 +1,4 @@
+import { isWithinWindow } from "./eventTimeWindow.js";
 import { canManageEventAttachments, isLegacyEventDocumentMime } from "./eventAttachmentAccess.js";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
@@ -357,21 +358,6 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function isWithinWindow(openAt, closeAt) {
-  if (!openAt && !closeAt) {
-    return true;
-  }
-  const now = Date.now();
-  const openMs = openAt ? Date.parse(String(openAt)) : NaN;
-  const closeMs = closeAt ? Date.parse(String(closeAt)) : NaN;
-  if (!Number.isNaN(openMs) && now < openMs) {
-    return false;
-  }
-  if (!Number.isNaN(closeMs) && now > closeMs) {
-    return false;
-  }
-  return true;
-}
 
 function firstText(value, fallback = "") {
   const text = String(value == null ? "" : value).trim();
