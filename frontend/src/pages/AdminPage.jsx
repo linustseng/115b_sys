@@ -3170,6 +3170,7 @@ export default function AdminPage({
       const companions = parseInt(String(fields.companions || "0").trim(), 10);
       return {
         name,
+        email: String(registration.userEmail || fields.email || "").trim(),
         studentId,
         group: String((student && student.group) || "").trim(),
         travelTransportation: String(fields.travelTransportation || "").trim(),
@@ -3383,6 +3384,7 @@ export default function AdminPage({
     const headers = [
       "序號",
       "姓名",
+      "Email 帳號",
       "學號",
       "組別",
       ...(isRegistrationTravelEvent ? ["交通方式"] : []),
@@ -3418,6 +3420,7 @@ export default function AdminPage({
         rows.push([
           index + 1,
           item.name,
+          item.email,
           item.studentId,
           item.group,
           ...(isRegistrationTravelEvent ? [item.travelTransportation] : []),
@@ -3456,7 +3459,7 @@ export default function AdminPage({
       ["匯出時間", new Date().toLocaleString()],
       ["狀態", statusLabel],
       [],
-      ["序號", "姓名", "學號", "組別", "Email", "備註", "報名時間", "更新時間"],
+      ["序號", "姓名", "學號", "組別", "備註", "報名時間", "更新時間"],
     ];
     const entries = registrationStatusExportRows.filter((item) => item.attendanceStatus === status);
     if (entries.length) {
@@ -3466,7 +3469,6 @@ export default function AdminPage({
           item.name,
           item.studentId,
           item.group,
-          item.email,
           item.notes,
           item.submittedAt,
           item.updatedAt,
