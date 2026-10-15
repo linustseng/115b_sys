@@ -2925,6 +2925,19 @@ export default function AdminPage({
     return Array.from(map.values());
   })();
 
+  const registrationNotes = dedupedActiveRegistrations.map((registration) => {
+    const fields = parseCustomFields_(registration.customFields);
+    const studentId = resolveRegistrationStudentId_(registration, fields);
+    const student = (studentId && studentByStudentId.get(studentId)) || null;
+    return {
+      id: registration.id,
+      studentId,
+      name: getChineseName_(student) || String(fields.name || registration.userName || "").trim() || "未命名",
+      notes: String(fields.notes || fields.note || ""),
+      attendance: normalizeAttendanceStatus_(fields.attendance),
+    };
+  }).filter((item) => item.notes.trim()).sort((a, b) => a.name.localeCompare(b.name, "zh-Hant"));
+
   const attendanceByStudentId = new Map();
   dedupedActiveRegistrations.forEach((registration) => {
     const fields = parseCustomFields_(registration.customFields);
@@ -5571,6 +5584,23 @@ export default function AdminPage({
                     </div>
                   </div>
                 </div>
+                <section className="rounded-2xl border border-slate-200 bg-white p-4" aria-label="報名備註／匯款資訊">
+                  <h3 className="text-sm font-semibold text-slate-900">報名備註／匯款資訊（{registrationNotes.length} 筆）</h3>
+                  <p className="mt-1 text-xs text-slate-500">顯示此活動未取消報名中有填備註者，包含不克出席與未定。匯款末 5 碼依備註原文顯示，仍需人工核對入帳。</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {registrationNotes.map((item) => (
+                      <div key={item.id || item.studentId} className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-800">{item.name}</span>
+                          <span className="text-xs text-slate-500">{item.studentId}</span>
+                          <span className="text-xs text-slate-500">{item.attendance === "attending" ? "出席" : item.attendance === "not_attending" ? "不克出席" : "未定"}</span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm text-slate-700 [overflow-wrap:anywhere]">{item.notes}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {!registrationNotes.length ? <p className="mt-3 text-sm text-slate-400">目前沒有報名備註。</p> : null}
+                </section>
                 <div className="flex items-center justify-between text-sm font-semibold text-slate-700">
                   <span>報名狀態</span>
                 </div>
