@@ -1,3 +1,4 @@
+import { isLegacyEventDocumentMime } from "./eventAttachmentAccess.js";
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { getConfig } from "./config.js";
@@ -213,7 +214,7 @@ export async function uploadAttachmentFile({
     throw new Error("Missing file buffer");
   }
   const normalizedMime = firstText(mimeType).toLowerCase();
-  if (!isAllowedAttachmentMime(normalizedMime)) {
+  if (!isAllowedAttachmentMime(normalizedMime) && !(entityType === "event" && isLegacyEventDocumentMime(normalizedMime))) {
     throw new Error("不支援的檔案格式（僅支援 pdf/jpg/png/heic/xlsx/docx/pptx）");
   }
   const maxSize = normalizeEntityType(entityType) === "cheerleading_video"

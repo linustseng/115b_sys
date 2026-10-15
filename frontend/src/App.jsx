@@ -3545,7 +3545,9 @@ function AppShell() {
           pageTitle="活動管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
-          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          API_V2_URL={API_V2_URL}
+          loadStoredAdminSession_={loadStoredAdminSession_}
+          loadStoredGoogleIdToken_={loadStoredGoogleIdToken_}
           getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
@@ -3572,7 +3574,9 @@ function AppShell() {
           pageTitle="訂餐管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
-          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          API_V2_URL={API_V2_URL}
+          loadStoredAdminSession_={loadStoredAdminSession_}
+          loadStoredGoogleIdToken_={loadStoredGoogleIdToken_}
           getGoogleIdTokenSilently_={getGoogleIdTokenSilently_}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
@@ -3630,7 +3634,9 @@ function AppShell() {
           pageTitle="系統管理 · 後台"
           apiRequest={apiRequest}
           API_URL={API_URL}
-          UPLOAD_FOLDER_ID={UPLOAD_FOLDER_ID}
+          API_V2_URL={API_V2_URL}
+          loadStoredAdminSession_={loadStoredAdminSession_}
+          loadStoredGoogleIdToken_={loadStoredGoogleIdToken_}
           buildGoogleMapsUrl_={buildGoogleMapsUrl_}
           formatDisplayDate_={formatDisplayDate_}
           getGroupLabel_={getGroupLabel_}

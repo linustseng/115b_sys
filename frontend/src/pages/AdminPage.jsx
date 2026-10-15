@@ -1,3 +1,5 @@
+import { uploadEventAttachment } from "../utils/eventAttachmentUpload";
+import { resolveAndOpenAttachment_ } from "../utils/attachments";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mapAppErrorMessage } from "../utils/errorMappings";
 import { downloadXlsx } from "../utils/xlsxExport";
@@ -21,8 +23,9 @@ import {
 export default function AdminPage({
   pageTitle = "系統管理 · 後台",
   apiRequest,
-  API_URL,
-  UPLOAD_FOLDER_ID,
+  API_V2_URL,
+  loadStoredAdminSession_,
+  loadStoredGoogleIdToken_,
   getGoogleIdTokenSilently_ = null,
   buildGoogleMapsUrl_,
   formatDisplayDate_,
@@ -181,26 +184,12 @@ export default function AdminPage({
   const [attachmentUrlInput, setAttachmentUrlInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const uploadFormRef = useRef(null);
   const uploadFileRef = useRef(null);
-  const uploadCompletedRef = useRef(false);
+  const uploadBusyRef = useRef(false);
+  const uploadContextRef = useRef(0);
   const directoryLoadedTokenRef = useRef("");
   const publicOrderLinkDraftTouchedRef = useRef(false);
   const publicOrderLinkLoadSeqRef = useRef(0);
-  const ALLOWED_UPLOAD_EXTENSIONS = [
-    "pdf",
-    "jpg",
-    "jpeg",
-    "png",
-    "webp",
-    "doc",
-    "docx",
-    "xls",
-    "xlsx",
-    "ppt",
-    "pptx",
-  ];
-
   const normalizeEventId_ = (value) => String(value || "").trim();
   const normalizeOrderId_ = (value) => String(value || "").trim();
 
@@ -1100,41 +1089,8 @@ export default function AdminPage({
   }, [activeTab, orderActiveId, orderPlans, isCreatingOrder]);
 
   useEffect(() => {
-    const handleUploadMessage = (event) => {
-      if (!event || !event.data || event.data.type !== "uploadResult") {
-        return;
-      }
-      if (uploadCompletedRef.current) {
-        return;
-      }
-      const payload = event.data.payload || {};
-      uploadCompletedRef.current = true;
-      setUploading(false);
-      if (!payload.ok) {
-        setUploadError(payload.error || "上傳失敗");
-        return;
-      }
-      const attachment = payload.data || {};
-      if (attachment.url) {
-        setForm((prev) => {
-          const current = parseEventAttachments_(prev.attachments);
-          const next = current.concat([
-            {
-              name: attachment.name || attachment.url,
-              url: attachment.url,
-              fileId: attachment.fileId || "",
-              size: attachment.size || 0,
-              contentType: attachment.contentType || "",
-            },
-          ]);
-          return { ...prev, attachments: JSON.stringify(next) };
-        });
-      }
-      setUploadError("");
-    };
-    window.addEventListener("message", handleUploadMessage);
-    return () => window.removeEventListener("message", handleUploadMessage);
-  }, []);
+    uploadContextRef.current += 1;
+  }, [form.id, isEventFormOpen]);
 
   const handleEdit = (event) => {
     setIsCreatingEvent(false);
@@ -2441,6 +2397,7 @@ export default function AdminPage({
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (uploadBusyRef.current) return;
     setSaving(true);
     setError("");
     try {
@@ -2689,43 +2646,28 @@ export default function AdminPage({
     });
   };
 
-  const handleUploadChange = (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (!file) {
-      return;
-    }
-    if (!form.id) {
-      setUploadError("請先儲存活動後再上傳");
-      if (uploadFileRef.current) {
-        uploadFileRef.current.value = "";
-      }
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError("檔案超過 10MB 上限");
-      if (uploadFileRef.current) {
-        uploadFileRef.current.value = "";
-      }
-      return;
-    }
-    const extension = String(file.name || "").includes(".")
-      ? String(file.name || "").split(".").pop().toLowerCase()
-      : "";
-    if (!ALLOWED_UPLOAD_EXTENSIONS.includes(extension)) {
-      setUploadError("檔案格式不支援");
-      if (uploadFileRef.current) {
-        uploadFileRef.current.value = "";
-      }
-      return;
-    }
-    if (!uploadFormRef.current) {
-      setUploadError("上傳表單未初始化");
-      return;
-    }
+  const handleUploadChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || uploadBusyRef.current) return;
+    uploadBusyRef.current = true;
     setUploading(true);
     setUploadError("");
-    uploadCompletedRef.current = false;
-    uploadFormRef.current.submit();
+    const context = uploadContextRef.current;
+    try {
+      const item = await uploadEventAttachment({
+        file, eventId: form.id, baseUrl: API_V2_URL,
+        sessionToken: loadStoredAdminSession_?.()?.token,
+        idToken: loadStoredGoogleIdToken_?.(),
+      });
+      if (context !== uploadContextRef.current) return;
+      setForm(prev => ({ ...prev, attachments: JSON.stringify([...parseEventAttachments_(prev.attachments), item]) }));
+    } catch (err) {
+      if (context === uploadContextRef.current) setUploadError(err.message || "附件上傳失敗");
+    } finally {
+      uploadBusyRef.current = false;
+      setUploading(false);
+      if (uploadFileRef.current) uploadFileRef.current.value = "";
+    }
   };
 
   const handleStartAtChange = (value) => {
@@ -6452,25 +6394,9 @@ export default function AdminPage({
                 收合
               </button>
             </div>
-            <form
-              ref={uploadFormRef}
-              action={API_URL}
-              method="post"
-              encType="multipart/form-data"
-              target="upload-frame"
-              className="hidden"
-            >
-              <input type="hidden" name="eventId" value={form.id} />
-              <input type="hidden" name="folderId" value={UPLOAD_FOLDER_ID || ""} />
-              <input
-                ref={uploadFileRef}
-                id="event-upload-file"
-                type="file"
-                name="file"
-                accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                onChange={handleUploadChange}
-              />
-            </form>
+            <input ref={uploadFileRef} id="event-upload-file" type="file" className="hidden"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+              disabled={uploading || saving} onChange={handleUploadChange} />
             <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">活動類別</label>
@@ -6549,14 +6475,13 @@ export default function AdminPage({
                       key={`${item.url}-${index}`}
                       className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200/70 bg-white px-3 py-2 text-xs text-slate-600"
                     >
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
+                      <button
+                        type="button"
+                        onClick={() => resolveAndOpenAttachment_(item, apiRequest).catch(err => setUploadError(err.message))}
                         className="font-semibold text-slate-700 hover:text-slate-900"
                       >
                         {item.name || item.url}
-                      </a>
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveAttachment(index)}
@@ -6570,7 +6495,7 @@ export default function AdminPage({
               ) : (
                 <p className="text-xs text-slate-400">尚未加入任何參考檔案。</p>
               )}
-              <iframe name="upload-frame" title="upload-frame" className="hidden" />
+              <p className="text-xs text-slate-400">單檔上限 10 MB；上傳後請儲存活動。</p>
             </div>
             <div className="grid gap-2">
               <label className="text-sm font-medium text-slate-700">開始時間</label>
@@ -6861,7 +6786,7 @@ export default function AdminPage({
             <div className="flex items-center gap-3 sm:col-span-2">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || uploading}
                 className="rounded-2xl bg-[#1e293b] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-slate-900/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? "儲存中..." : activeId ? "更新活動" : "新增活動"}

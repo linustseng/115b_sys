@@ -1,3 +1,4 @@
+import { canManageEventAttachments, isLegacyEventDocumentMime } from "./eventAttachmentAccess.js";
 import crypto from "node:crypto";
 import { Readable } from "node:stream";
 import express from "express";
@@ -224,6 +225,11 @@ async function canAccessAttachmentEntity_(auth, entityType, entityId, reqBody = 
     }
     return groupId === "A" && (role === "lead" || role === "deputy");
   });
+
+  if (entityType === "event") {
+    const canManage = canManageEventAttachments(memberships);
+    return { canView: true, canUpload: canManage, canDelete: canManage };
+  }
 
   if (entityType === "document_version") {
     if (isDocumentDraftEntity_(entityType, entityId)) {
@@ -1728,7 +1734,7 @@ async function handleAttachmentUpload_(req, res, defaults = {}) {
     }
 
     const mimetype = String(file.mimetype || "").trim();
-    if (!isAllowedAttachmentMime(mimetype)) {
+    if (!isAllowedAttachmentMime(mimetype) && !(entityType === "event" && isLegacyEventDocumentMime(mimetype))) {
       return res.status(400).json({
         ok: false,
         data: null,
@@ -1736,6 +1742,9 @@ async function handleAttachmentUpload_(req, res, defaults = {}) {
       });
     }
 
+    if (entityType === "event" && file.size > 10 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, data: null, error: "檔案超過 10MB 上限" });
+    }
     const access = await canAccessAttachmentEntity_(auth, entityType, entityId, mergedBody);
     if (!access.canUpload) {
       return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
