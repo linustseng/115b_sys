@@ -513,3 +513,17 @@ export async function hydrateAttachmentItems(query, value, { signUrls = true } =
   }
   return output;
 }
+
+// One metadata query for an authorized list; obtain signed URLs only on open.
+export async function hydrateAttachmentGroups(query, groups) {
+  const normalized = groups.map(normalizeAttachmentItems);
+  const ids = [...new Set(normalized.flatMap(items => items.map(item => item.attachmentId).filter(Boolean)))];
+  const result = ids.length
+    ? await query("select * from attachments where id = any($1::text[])", [ids])
+    : { rows: [] };
+  const byId = new Map(result.rows.map(row => [firstText(row.id), row]));
+  return Promise.all(normalized.map(items => hydrateAttachmentItems(
+    async (_, [itemIds]) => ({ rows: itemIds.map(id => byId.get(id)).filter(Boolean) }),
+    items, { signUrls: false }
+  )));
+}

@@ -15,6 +15,7 @@ import {
   createSignedReadUrlForAttachment,
   extractAttachmentIds,
   hydrateAttachmentItems,
+  hydrateAttachmentGroups,
   normalizeAttachmentItems,
 } from "./attachments.js";
 import { applyVersionedMutation } from "./versioning.js";
@@ -6926,12 +6927,9 @@ export async function dispatchNativeAction({
       for (const row of result.rows) {
         rows.push(await autoFixFinanceWorkflowIfNeeded_(query, row, financeRoles));
       }
-      const requests = [];
-      for (const row of rows) {
-        const mapped = mapFinanceRequestRow(row);
-        mapped.attachments = await hydrateAttachmentItems(query, mapped.attachments);
-        requests.push(mapped);
-      }
+      const requests = rows.map(mapFinanceRequestRow);
+      const attachmentGroups = await hydrateAttachmentGroups(query, requests.map(item => item.attachments));
+      requests.forEach((item, index) => { item.attachments = attachmentGroups[index]; });
       return { ok: true, data: { requests }, error: null };
     }
 
