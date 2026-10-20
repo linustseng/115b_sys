@@ -96,6 +96,7 @@ function FinanceAdminPage({ shared }) {
   const [fundPayerView, setFundPayerView] = useState("all");
   const [copyStatus, setCopyStatus] = useState("");
   const [initialLoading, setInitialLoading] = useState(true);
+  const [initialError, setInitialError] = useState("");
   const [manualRequestForm, setManualRequestForm] = useState(() => ({
     ...buildFinanceDraft_(),
     applicantId: "",
@@ -672,22 +673,35 @@ function FinanceAdminPage({ shared }) {
   };
 
   useEffect(() => {
+    let active = true;
+    let timer;
     setInitialLoading(true);
-    Promise.allSettled([
-      loadRequests(),
-      loadGroupMemberships(),
-      loadFinanceRoles(),
-      loadFinanceProjects(),
+    const actions = ["listFinanceRequests", "listGroupMemberships", "listFinanceRoles", "listFinanceProjects"];
+    Promise.race([
+      Promise.all(actions.map(async (action) => {
+        const { result } = await apiRequest({ action });
+        if (!result?.ok) throw new Error(result?.error || "財務資料讀取失敗");
+        return result.data || {};
+      })),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("財務後台載入超過 20 秒，可能是連線或系統回應較慢。請重新載入。")), 20000);
+      }),
     ])
-      .finally(() => {
-        setInitialLoading(false);
-        setTimeout(() => {
-          loadFinanceCategories();
-          loadStudents();
-          loadFundEvents();
-          loadFundSummary();
-        }, 0);
-      });
+      .then(([requestData, membershipData, roleData, projectData]) => {
+        if (!active) return;
+        setRequests(requestData.requests || []);
+        setGroupMemberships(membershipData.memberships || []);
+        setFinanceRoles((roleData.roles || []).map(normalizeFinanceRole_));
+        setFinanceProjects(projectData.projects || []);
+        loadFinanceCategories(); loadStudents(); loadFundEvents(); loadFundSummary();
+      })
+      .catch((err) => { if (active) setInitialError(mapAppErrorMessage(err.message, {
+        reauthMessage: "登入狀態已失效，請回首頁重新登入。",
+        forbiddenMessage: "目前帳號無法讀取財務資料，請回首頁確認登入帳號。",
+        fallbackMessage: err.message,
+      })); })
+      .finally(() => { clearTimeout(timer); if (active) setInitialLoading(false); });
+    return () => { active = false; clearTimeout(timer); };
   }, []);
 
   useEffect(() => {
@@ -2027,12 +2041,19 @@ function FinanceAdminPage({ shared }) {
             <p className="mt-1 text-xs text-sky-700">正在整理請款、簽核與角色資料，通常只要幾秒鐘。</p>
           </div>
         ) : null}
-        {!initialLoading && !hasFinanceAccess ? (
+        {initialError ? (
+          <div role="alert" className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <p>{initialError}</p>
+            <p className="mt-1 text-xs">資料尚未載入完成，不代表沒有案件或沒有權限。若重試仍失敗，請將此訊息傳給管理員。</p>
+            <button type="button" className="btn-chip mt-3" onClick={() => window.location.reload()}>重新載入財務後台</button>
+          </div>
+        ) : null}
+        {!initialLoading && !initialError && !hasFinanceAccess ? (
           <div className="alert alert-warning">
             目前帳號沒有財務後台權限，請確認是否屬於財務組、資管組正副組長或班代/副班代。
           </div>
         ) : null}
-        {!initialLoading && hasFinanceAccess ? (
+        {!initialLoading && !initialError && hasFinanceAccess ? (
         <>
         <section className="card p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 text-sm font-semibold text-slate-600">
