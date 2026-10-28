@@ -3090,6 +3090,14 @@ export default function AdminPage({
       specialDietAttendees: [],
     }
   );
+  const unmatchedAttendingRegistrations = dedupedActiveRegistrations.filter((registration) => {
+    const fields = parseCustomFields_(registration.customFields);
+    const studentId = resolveRegistrationStudentId_(registration, fields);
+    return normalizeAttendanceStatus_(fields.attendance) === "attending" &&
+      (!studentId || !studentByStudentId.has(studentId));
+  });
+  const matchedAttendingCount = prepStats.attendingTotal - unmatchedAttendingRegistrations.length;
+  const expectedAttendingTotal = prepStats.attendingTotal + prepStats.companionsTotal;
   const dietaryStatsList = Object.entries(prepStats.dietary).sort((a, b) => b[1] - a[1]);
   const parkingStatsList = Object.entries(prepStats.parking).sort((a, b) => b[1] - a[1]);
   const travelTransportationStatsList = (travelTransportationField.options || [])
@@ -3263,7 +3271,10 @@ export default function AdminPage({
     pushRow_([]);
 
     pushRow_(["摘要", "數值"]);
-    pushRow_(["出席人數", prepStats.attendingTotal]);
+    pushRow_(["出席報名者（不含攜伴）", prepStats.attendingTotal]);
+    pushRow_(["出席班級同學", matchedAttendingCount]);
+    pushRow_(["出席未對應名冊", unmatchedAttendingRegistrations.length]);
+    pushRow_(["含攜伴預計到場", expectedAttendingTotal]);
     if (isRegistrationTravelEvent) {
       travelTransportationStatsList.forEach(([label, count]) => {
         pushRow_([`交通方式：${label}`, count]);
@@ -5322,22 +5333,24 @@ export default function AdminPage({
                   </select>
                   <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-semibold text-slate-500">
                     <span className="badge-success">
-                      已報名 {registeredCount}
+                      班級同學已報名 {registeredCount}
                     </span>
                     <span className="btn-chip">
-                      未報名 {unregisteredCount}
+                      班級同學未報名 {unregisteredCount}
                     </span>
                     <span className="badge-success">
-                      出席 {attendanceCounts.attending}
+                      出席共 {prepStats.attendingTotal} 人（不含攜伴）
                     </span>
+                    <span className="btn-chip">出席班級同學 {matchedAttendingCount} 人</span>
+                    <span className="btn-chip">出席未對應名冊 {unmatchedAttendingRegistrations.length} 人</span>
                     <span className="badge-error">
-                      不克出席 {attendanceCounts.notAttending}
+                      班級同學不克出席 {attendanceCounts.notAttending}
                     </span>
                     <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-slate-600">
-                      未定 {attendanceCounts.unknown}
+                      班級同學未定 {attendanceCounts.unknown}
                     </span>
                     <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-                      總數 {totalStudents}
+                      班級同學總數 {totalStudents}
                     </span>
                   </div>
                 </div>
@@ -5348,7 +5361,7 @@ export default function AdminPage({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-semibold text-slate-800">活動準備統計（出席）</p>
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-slate-500">僅計算回覆「出席」的報名資料</span>
+                      <span className="text-xs text-slate-500">計入所有回覆「出席」的報名者；攜伴另外計算</span>
                       <button
                         type="button"
                         onClick={handleExportAttendanceExcel}
@@ -5366,9 +5379,22 @@ export default function AdminPage({
                       </button>
                     </div>
                   </div>
+                  {unmatchedAttendingRegistrations.length > 0 ? (
+                    <p className="mt-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+                      出席未對應名冊：{unmatchedAttendingRegistrations.map((registration) => {
+                        const fields = parseCustomFields_(registration.customFields);
+                        return String(fields.name || registration.userName || "未命名").trim();
+                      }).join("、")}。已納入出席人數，請管理員確認身分；不代表來賓。
+                    </p>
+                  ) : null}
+                  {prepStats.companionsTotal > 0 ? (
+                    <p className="mt-3 text-sm font-semibold text-slate-800">
+                      含攜伴預計到場共 {expectedAttendingTotal} 人（報名者 {prepStats.attendingTotal} 人＋攜伴 {prepStats.companionsTotal} 人）
+                    </p>
+                  ) : null}
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
-                      <p className="text-xs text-slate-500">出席人數</p>
+                      <p className="text-xs text-slate-500">出席報名者（不含攜伴）</p>
                       <p className="text-lg font-semibold text-slate-900">{prepStats.attendingTotal}</p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
