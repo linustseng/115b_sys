@@ -799,7 +799,7 @@ function resolveActivityAlbumBearerAuth(req) {
 }
 
 app.get("/health", async (_req, res) => {
-  res.json({ ok: true, service: "115b-sys-api", now: new Date().toISOString() });
+  res.json({ ok: true, service: "115b-sys-api", albumUploadLimiter: "admitted-v2", revision: process.env.RENDER_GIT_COMMIT || null, now: new Date().toISOString() });
 });
 
 const PUBLIC_NATIVE_ACTIONS = new Set(["verifyGoogle", "linkGoogleStudent", "refreshSession", "searchStudents"]);
@@ -2217,11 +2217,11 @@ app.post("/v1/activity-albums/:id/upload-intent", async (req, res) => {
   try {
     const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
     const rate = await recordAndCheckActivityUploadIntent({
-      query,
+      withTransaction,
       studentId: auth.studentId,
       ipHash: activityUploadIpHash(req.ip || req.socket?.remoteAddress || "unknown", config.sessionSecret),
     });
-    if (!rate.allowed) return res.set("Retry-After", "3600").status(429).json({ ok: false, data: null, error: "上傳意圖過於頻繁，請稍後再試" });
+    if (!rate.allowed) return res.set("Retry-After", String(rate.retryAfter)).status(429).json({ ok: false, data: null, error: "上傳意圖過於頻繁，請稍後再試" });
     if (!isAttachmentStorageConfigured() || config.supabaseActivityAlbumBucket !== "activity-albums") return res.status(503).json({ ok: false, data: null, error: "Private activity photo storage is not configured" });
     const album = await getActivityAlbum_(req.params.id);
     const mimeType = firstText(req.body && req.body.mimeType).toLowerCase();
