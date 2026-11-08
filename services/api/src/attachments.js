@@ -527,3 +527,9 @@ export async function hydrateAttachmentGroups(query, groups) {
     items, { signUrls: false }
   )));
 }
+
+export async function createSignedReadUrlsForAlbum(bucket, paths, ttlSeconds = 60) {
+  const { data, error } = await getSupabaseClient().storage.from(bucket).createSignedUrls(paths, ttlSeconds);
+  if (error) throw new Error("Unable to sign album photos");
+  return data;
+}

@@ -1,3 +1,4 @@
+import { signAlbumPhotoUrls } from "./activityAlbumReadUrls.js";
 import { isWithinWindow } from "./eventTimeWindow.js";
 import { canManageEventAttachments, isLegacyEventDocumentMime } from "./eventAttachmentAccess.js";
 import crypto from "node:crypto";
@@ -17,6 +18,7 @@ import {
   isAttachmentStorageConfigured,
   listAttachmentsByEntity,
   createSignedReadUrlForAttachment,
+  createSignedReadUrlsForAlbum,
   createSignedUploadUrl,
   toStorageSafeFilename,
   downloadStorageObject,
@@ -2208,7 +2210,8 @@ app.get("/v1/activity-albums/:id/photos", async (req, res) => {
     const includeHidden = auth.canManage && String(req.query.includeHidden || "") === "1";
     const result = await query(`select * from activity_photos where album_id=$1 and (status='ready' or ($2::boolean and status='hidden'))
       order by captured_at desc nulls last, created_at desc`, [album.id, includeHidden]);
-    const photos = await Promise.all(result.rows.map(async (row) => activityPhotoPayload_(row, await createSignedReadUrlForAttachment(row, 60))));
+    const urls = await signAlbumPhotoUrls(result.rows, createSignedReadUrlsForAlbum);
+    const photos = result.rows.map((row, index) => activityPhotoPayload_(row, urls[index]));
     return res.json({ ok: true, data: { album: { ...await hydrateActivityAlbum_(album, result.rows.filter((row) => row.status === "ready").length), canRename: auth.canManage || (album.status === "active" && String(album.created_by) === String(auth.studentId)) }, photos, canManage: auth.canManage }, error: null });
   } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity photos" }); }
 });

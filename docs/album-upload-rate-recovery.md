@@ -17,3 +17,13 @@ After release, users can reopen the page and select only previously failed files
 
 Validation: limiter boundary unit tests; existing auth/security route tests;
 rollback-only PostgreSQL temporary-table test of 600 admissions and request 601.
+
+## Large album read recovery
+677 ready rows exposed a false empty state while the photo request was pending.
+The old API fired one Storage signing request per photo at once. Now it signs
+authorized rows in sequential batches of 100 (677 photos = 7 calls), checks
+missing/failed signatures, and preserves row order. No photo/permission changes.
+The UI distinguishes loading/error/empty, offers retry, clears stale photos,
+and ignores responses from an album opened before the current selection.
+Verification: nine API tests; Vite production build; 390x844 Chromium fixture
+loading -> API failure -> retry -> rendered photo (no false empty state).
