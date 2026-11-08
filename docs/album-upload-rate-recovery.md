@@ -27,3 +27,14 @@ The UI distinguishes loading/error/empty, offers retry, clears stale photos,
 and ignores responses from an album opened before the current selection.
 Verification: nine API tests; Vite production build; 390x844 Chromium fixture
 loading -> API failure -> retry -> rendered photo (no false empty state).
+
+## Expired lazy-loaded image recovery
+Photo URLs expire after 60 seconds, while offscreen images use lazy loading.
+A browser can therefore first request an image after its URL has expired.
+AlbumPhotoImage retries image failure once using the existing authenticated
+per-photo download/read URL endpoint, retaining its status/membership checks.
+Both gallery and viewer use recovery; persistent failure shows manual retry.
+Refreshes are deduplicated per photo and limited to three concurrent lanes.
+No bucket publicity, TTL extension, or photo mutation.
+390x844 Chromium fixture: expired image 403 -> fresh URL -> decoded image;
+refresh 503 -> stops with retry button -> manual retry -> decoded image.
