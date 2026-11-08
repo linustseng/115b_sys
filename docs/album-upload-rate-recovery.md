@@ -6,7 +6,7 @@ There is no 60-photo album capacity limit.
 
 Migration 033 preserves all historical audit records, marking them non-admitted;
 the corrected quota starts fresh once at rollout. New admitted attempts alone
-consume 600/member/hour and 1,200/IP/hour. Validation failures after admission
+consume 3,000/member/hour and 6,000/IP/hour (raised by Linus on 2026-11-08). Validation failures after admission
 still consume quota. Rejected quota requests neither insert nor extend cooldown.
 A transaction/table lock serializes admission across processes/shared IPs.
 The API returns Retry-After and exposes admitted-v2 plus Render revision at /health.

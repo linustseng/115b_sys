@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
-export const ACTIVITY_UPLOAD_INTENTS_PER_MEMBER_PER_HOUR = 600;
-export const ACTIVITY_UPLOAD_INTENTS_PER_IP_PER_HOUR = 1200;
+export const ACTIVITY_UPLOAD_INTENTS_PER_MEMBER_PER_HOUR = 3000;
+export const ACTIVITY_UPLOAD_INTENTS_PER_IP_PER_HOUR = 6000;
 
 export function activityUploadIpHash(ip, secret) {
   return crypto.createHmac("sha256", String(secret || ""))

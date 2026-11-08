@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { activityUploadIpHash, recordAndCheckActivityUploadIntent } from "./activityAlbumUploadRateLimit.js";
 
 test("only admitted requests consume quota; both limits and cooldown are enforced", async () => {
-  for (const [member_count, ip_count, allowed] of [[0,0,true],[300,600,true],[599,1199,true],[600,700,false],[100,1200,false],[1408,1408,false]]) {
+  for (const [member_count, ip_count, allowed] of [[0,0,true],[1408,1408,true],[2999,5999,true],[3000,4000,false],[100,6000,false],[3001,6001,false]]) {
     const calls = [];
     const query = async (sql, params) => {
       calls.push({sql,params});
