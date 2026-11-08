@@ -2157,6 +2157,15 @@ app.get("/v1/activity-albums", async (req, res) => {
   } catch (error) { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity albums" }); }
 });
 
+async function writeUniqueAlbumTitle_(title, id, write) {
+  return withTransaction(async (client) => {
+    await client.query("LOCK TABLE activity_albums IN SHARE ROW EXCLUSIVE MODE");
+    const duplicate = await client.query("select id from activity_albums where lower(btrim(title))=lower(btrim($1)) and id <> $2 limit 1", [title, id || ""]);
+    if (duplicate.rows.length) { const error = new Error("相簿名稱已存在，請使用其他名稱"); error.status = 409; throw error; }
+    return write(client);
+  });
+}
+
 app.post("/v1/activity-albums", async (req, res) => {
   try {
     const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
@@ -2164,18 +2173,18 @@ app.post("/v1/activity-albums", async (req, res) => {
     const title = firstText(req.body && req.body.title).slice(0, 120);
     const eventDate = firstText(req.body && req.body.eventDate);
     if (!title || (eventDate && !/^\d{4}-\d{2}-\d{2}$/.test(eventDate))) return res.status(400).json({ ok: false, data: null, error: "Invalid album settings" });
-    const result = await query(`insert into activity_albums (id,title,description,event_date,location,created_by)
-      values ($1,$2,$3,$4,$5,$6) returning *`, [crypto.randomUUID(), title, firstText(req.body.description).slice(0, 1000), eventDate || null, firstText(req.body.location).slice(0, 160), auth.studentId]);
+    const result = await writeUniqueAlbumTitle_(title, "", (client) => client.query(`insert into activity_albums (id,title,description,event_date,location,created_by)
+      values ($1,$2,$3,$4,$5,$6) returning *`, [crypto.randomUUID(), title, firstText(req.body.description).slice(0, 1000), eventDate || null, firstText(req.body.location).slice(0, 160), auth.studentId]));
     return res.json({ ok: true, data: { album: activityAlbumPayload_(result.rows[0]) }, error: null });
-  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to create activity album" }); }
+  } catch (error) { return res.status(error.status || 500).json({ ok: false, data: null, error: error.status === 409 ? error.message : "Unable to create activity album" }); }
 });
 
 app.patch("/v1/activity-albums/:id", async (req, res) => {
   try {
     const auth = await requireActiveActivityAlbumMember_(req, res); if (!auth) return;
-    if (!auth.canManage) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     const existing = await getActivityAlbum_(req.params.id); if (!existing) return res.status(404).json({ ok: false, data: null, error: "Album not found" });
     const body = req.body && typeof req.body === "object" ? req.body : {};
+    if (!auth.canManage && (String(existing.created_by) !== String(auth.studentId) || existing.status !== "active" || Object.keys(body).some((key) => key !== "title"))) return res.status(403).json({ ok: false, data: null, error: "Forbidden" });
     const title = Object.hasOwn(body, "title") ? firstText(body.title).slice(0, 120) : existing.title;
     const eventDate = Object.hasOwn(body, "eventDate") ? firstText(body.eventDate) : firstText(existing.event_date);
     const status = Object.hasOwn(body, "status") ? firstText(body.status) : existing.status;
@@ -2185,10 +2194,10 @@ app.patch("/v1/activity-albums/:id", async (req, res) => {
       const cover = await query("select id from activity_photos where id = $1 and album_id = $2 and status = 'ready' limit 1", [coverPhotoId, existing.id]);
       if (!cover.rows[0]) return res.status(400).json({ ok: false, data: null, error: "Cover photo must be ready in this album" });
     }
-    const result = await query(`update activity_albums set title=$2,description=$3,event_date=$4,location=$5,status=$6,cover_photo_id=$7,updated_at=now()
-      where id=$1 returning *`, [existing.id, title, Object.hasOwn(body, "description") ? firstText(body.description).slice(0, 1000) : existing.description, eventDate || null, Object.hasOwn(body, "location") ? firstText(body.location).slice(0, 160) : existing.location, status, coverPhotoId || null]);
+    const result = await writeUniqueAlbumTitle_(title, existing.id, (client) => client.query(`update activity_albums set title=$2,description=$3,event_date=$4,location=$5,status=$6,cover_photo_id=$7,updated_at=now()
+      where id=$1 returning *`, [existing.id, title, Object.hasOwn(body, "description") ? firstText(body.description).slice(0, 1000) : existing.description, eventDate || null, Object.hasOwn(body, "location") ? firstText(body.location).slice(0, 160) : existing.location, status, coverPhotoId || null]));
     return res.json({ ok: true, data: { album: await hydrateActivityAlbum_(result.rows[0]) }, error: null });
-  } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to update activity album" }); }
+  } catch (error) { return res.status(error.status || 500).json({ ok: false, data: null, error: error.status === 409 ? error.message : "Unable to update activity album" }); }
 });
 
 app.get("/v1/activity-albums/:id/photos", async (req, res) => {
@@ -2199,7 +2208,7 @@ app.get("/v1/activity-albums/:id/photos", async (req, res) => {
     const result = await query(`select * from activity_photos where album_id=$1 and (status='ready' or ($2::boolean and status='hidden'))
       order by captured_at desc nulls last, created_at desc`, [album.id, includeHidden]);
     const photos = await Promise.all(result.rows.map(async (row) => activityPhotoPayload_(row, await createSignedReadUrlForAttachment(row, 60))));
-    return res.json({ ok: true, data: { album: await hydrateActivityAlbum_(album, result.rows.filter((row) => row.status === "ready").length), photos, canManage: auth.canManage }, error: null });
+    return res.json({ ok: true, data: { album: { ...await hydrateActivityAlbum_(album, result.rows.filter((row) => row.status === "ready").length), canRename: auth.canManage || (album.status === "active" && String(album.created_by) === String(auth.studentId)) }, photos, canManage: auth.canManage }, error: null });
   } catch { return res.status(500).json({ ok: false, data: null, error: "Unable to load activity photos" }); }
 });
 
