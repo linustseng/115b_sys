@@ -94,6 +94,7 @@ if (!config.googleClientId) {
 app.use(
   cors({
     origin: true,
+    exposedHeaders: ["Retry-After"],
     methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-id-token", "x-goog-id-token"],
   })
@@ -2220,7 +2221,7 @@ app.post("/v1/activity-albums/:id/upload-intent", async (req, res) => {
       studentId: auth.studentId,
       ipHash: activityUploadIpHash(req.ip || req.socket?.remoteAddress || "unknown", config.sessionSecret),
     });
-    if (!rate.allowed) return res.status(429).json({ ok: false, data: null, error: "上傳意圖過於頻繁，請稍後再試" });
+    if (!rate.allowed) return res.set("Retry-After", "3600").status(429).json({ ok: false, data: null, error: "上傳意圖過於頻繁，請稍後再試" });
     if (!isAttachmentStorageConfigured() || config.supabaseActivityAlbumBucket !== "activity-albums") return res.status(503).json({ ok: false, data: null, error: "Private activity photo storage is not configured" });
     const album = await getActivityAlbum_(req.params.id);
     const mimeType = firstText(req.body && req.body.mimeType).toLowerCase();
