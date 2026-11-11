@@ -6660,7 +6660,7 @@ export async function dispatchNativeAction({
         workflowCreatedByRole: firstText(row.raw && row.raw.workflowCreatedByRole, workflowCreatedByRole),
         submittedAt:
           normalizedAction === "submit" || row.status !== "draft"
-            ? firstText(row.raw && row.raw.submittedAt, firstText(existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : "", nowIso()))
+            ? nowIso()
             : firstText(row.raw && row.raw.submittedAt, existingRecord && existingRecord.submittedAt ? existingRecord.submittedAt : ""),
         createdAt: firstText(existingRecord && existingRecord.createdAt ? existingRecord.createdAt : "", row.createdAt),
         updatedAt: row.updatedAt,
@@ -6675,7 +6675,7 @@ export async function dispatchNativeAction({
         expectedRevision: body.expectedRevision,
         loadCurrent: async (txQuery) => rowOrNull(await txQuery(`select * from finance_requests where id = $1 limit 1 for update`, [row.id])),
         mutate: async ({ txQuery, current, nextRevision, batchId, actor }) => {
-          if (!current || !["draft", "returned"].includes(firstText(current.status))) {
+          if (!current || !["draft", "returned", "withdrawn"].includes(firstText(current.status))) {
             const error = new Error("案件已送出，請先退回補件再修改");
             error.statusCode = 409;
             throw error;

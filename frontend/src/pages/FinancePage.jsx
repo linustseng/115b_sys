@@ -1171,6 +1171,7 @@ function FinancePage({ shared }) {
       return "—";
     }
     const actions = getFinanceActionsForRequest_(request)
+      .filter((action) => !request.submittedAt || Date.parse(action.createdAt) >= Date.parse(request.submittedAt))
       .slice()
       .sort((a, b) => parseRequestCreatedAtMs_({ createdAt: a.createdAt }) - parseRequestCreatedAtMs_({ createdAt: b.createdAt }));
     const stepId = String(step.id || "").trim();
@@ -1736,7 +1737,7 @@ function FinancePage({ shared }) {
                       </div>
                       <span
                         className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                          String(myLatestRequest.status || "") === "returned"
+                          ["returned", "withdrawn"].includes(String(myLatestRequest.status || ""))
                             ? "border-rose-200 bg-rose-50 text-rose-700"
                             : String(myLatestRequest.status || "").startsWith("pending")
                             ? "border-amber-200 bg-amber-50 text-amber-700"
@@ -1782,7 +1783,7 @@ function FinancePage({ shared }) {
 
                     <div className="mt-4 flex flex-wrap items-center gap-2">
                       {String(myLatestRequest.status || "") === "draft" ||
-                      String(myLatestRequest.status || "") === "returned" ? (
+                      ["returned", "withdrawn"].includes(String(myLatestRequest.status || "")) ? (
                         <button
                           type="button"
                           onClick={() => {
@@ -1792,7 +1793,7 @@ function FinancePage({ shared }) {
                           }}
                           className="btn-primary"
                         >
-                          {String(myLatestRequest.status || "") === "returned"
+                          {["returned", "withdrawn"].includes(String(myLatestRequest.status || ""))
                             ? "補件並重送"
                             : "繼續填寫並送出"}
                         </button>
@@ -2362,7 +2363,7 @@ function FinancePage({ shared }) {
                     <div className="space-y-2">
                       {group.items.map((item) => {
                         const statusLabel = FINANCE_STATUS_LABELS[item.status] || item.status || "-";
-                        const canEdit = item.status === "draft" || item.status === "returned";
+                        const canEdit = ["draft", "returned", "withdrawn"].includes(item.status);
                         const canWithdraw = String(item.status || "").startsWith("pending");
                         const isEditing = editingId && editingId === item.id;
                         const caseSteps = getCaseStepsForRequest_(item);
@@ -2399,6 +2400,10 @@ function FinancePage({ shared }) {
                                 {item.projectId ? <p className="mt-1 text-xs text-slate-500">專案：{item.projectName} · 加簽：{item.projectApproverName}{item.projectSkipReason === "self" ? "（本人免加簽）" : ""}</p> : null}
                                 <p className="mt-1 text-[11px] text-slate-400">申請時間：{formatRequestSubmittedAt_(item)}</p>
                               </div>
+                              {canEdit && <button type="button" className="btn-primary shrink-0" onClick={(event) => {
+                                event.stopPropagation(); handleEditRequest(item);
+                                document.getElementById("finance-request-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }}>{item.status === "draft" ? "編輯草稿" : "編輯並重送"}</button>}
                               {canWithdraw ? (
                                 <button
                                   type="button"

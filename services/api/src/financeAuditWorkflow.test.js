@@ -85,6 +85,13 @@ function createFinanceWorkflowHarness() {
       current.last_changed_by_name = params[8];
       return { rows: [] };
     }
+    if (normalized.startsWith("update finance_requests set type=$2")) {
+      const current = financeRequests.get(params[0]);
+      current.raw = JSON.parse(params[22]);
+      current.status = params[17]; current.revision_no = params[23];
+      current.amount_actual = params[6]; current.attachments = JSON.parse(params[16]);
+      return { rows: [] };
+    }
     if (normalized.startsWith("insert into finance_actions")) {
       financeActions.push({
         id: params[0],
@@ -309,4 +316,37 @@ test("project assignee can return a request for supplementary documents", async 
     id: "project-return", expectedRevision: 1, requestAction: "return", actorRole: "project", note: "請補憑據",
   }, ...buildDeps(harness) });
   assert.equal(result.data.status, "returned"); assert.equal(harness.auditVersions.length, 1);
+});
+
+test("withdrawn owner can supplement original request and restart approval; submitted cases remain locked", async () => {
+  for (const status of ["withdrawn", "pending_accounting", "closed"]) {
+    const harness = createFinanceWorkflowHarness();
+    const row = seedFinanceRequest(harness, "resubmit", {status,applicant_id:"approver-1",raw:{status,applicantId:"approver-1"}});
+    const deps = buildDeps(harness);
+    const run = () => dispatchNativeAction({action:"updateFinanceRequest",payload:{
+      id:row.id, expectedRevision:1,requestAction:"submit",
+      data:{...row.raw,amountActual:72000,status:"pending_accounting"}
+    },...deps});
+    if(status!=="withdrawn") {await assert.rejects(run(),/案件已送出/);continue;}
+    const result=await run();
+    assert.equal(result.ok,true);
+    const updated=harness.financeRequests.get(row.id);
+    assert.equal(updated.status,"pending_rep");
+    assert.equal(updated.amount_actual,72000);
+    assert.equal(updated.revision_no,2);
+    assert.ok(Date.parse(updated.raw.submittedAt) > Date.parse("2026-04-13T00:00:00.000Z"));
+    assert.equal(harness.auditVersions.length,1);
+  }
+});
+
+
+test("unrelated member cannot edit a withdrawn request", async () => {
+  const harness = createFinanceWorkflowHarness();
+  const row = seedFinanceRequest(harness, "private-withdrawn", {status:"withdrawn",raw:{status:"withdrawn"}});
+  const deps = buildDeps(harness);
+  deps.auth = {studentId:"unrelated",profile:{}};
+  await assert.rejects(dispatchNativeAction({action:"updateFinanceRequest",payload:{
+    id:row.id,expectedRevision:1,requestAction:"submit",data:row.raw
+  },...deps}),/Unauthorized/);
+  assert.equal(harness.auditVersions.length,0);
 });
