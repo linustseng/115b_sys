@@ -30,6 +30,7 @@ export default function ActivityAlbumsPage({ shared }) {
   const [active, setActive] = useState(null);
   const [photos, setPhotos] = useState([]);
   const [visibleCount, setVisibleCount] = useState(40);
+  const loadMoreRef = useRef(null);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState("");
   const albumReadRef = useRef(0);
@@ -40,6 +41,17 @@ export default function ActivityAlbumsPage({ shared }) {
   const [search, setSearch] = useState("");
   const [viewerIndex, setViewerIndex] = useState(null);
   const viewerOpen = viewerIndex !== null;
+  useEffect(() => {
+    if (!active || photosLoading || viewerOpen || visibleCount >= photos.length || !window.IntersectionObserver) return;
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        observer.disconnect();
+        setVisibleCount(count => Math.min(count + 40, photos.length));
+      }
+    }, { rootMargin: "300px" });
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [active?.id, photosLoading, viewerOpen, visibleCount, photos.length]);
   const closeViewer = () => {
     setViewerIndex(null);
     window.requestAnimationFrame(() => viewerTriggerRef.current?.focus());
@@ -188,7 +200,7 @@ export default function ActivityAlbumsPage({ shared }) {
       </div>}
       {photosLoading ? <p role="status" className="py-10 text-center text-sm text-slate-500">照片載入中，請稍候…</p> : photosError ? <div role="alert" className="py-10 text-center text-sm text-rose-700"><p>照片載入失敗：{photosError}</p><button onClick={() => openAlbum(active)} className="mt-3 rounded-full border px-4 py-2">重新載入照片</button></div> : !photos.length ? <p className="py-10 text-center text-sm text-slate-500">尚無可瀏覽的照片。</p> : <div className="mt-6 columns-2 gap-3 sm:columns-3 lg:columns-4">{photos.slice(0, visibleCount).map((photo, index) => <article key={photo.id} className="group relative mb-3 break-inside-avoid overflow-hidden rounded-xl bg-slate-100"><AlbumPhotoImage photo={photo} refreshUrl={refreshPhotoUrl} onOpen={(event) => { viewerTriggerRef.current = event.currentTarget; setViewerIndex(index); }} label={`瀏覽照片 ${index + 1}：${photo.originalName}`} className="w-full transition duration-200 group-hover:scale-[1.02]" loading="lazy" />{photo.status === "hidden" && <span className="pointer-events-none absolute left-2 top-2 rounded bg-slate-900/75 px-2 py-1 text-xs text-white">一般同學看不到</span>}<div className="absolute inset-x-0 bottom-0 flex gap-1 bg-slate-950/70 p-2 text-xs text-white"><button onClick={() => download(photo)} className="rounded bg-white/20 px-2 py-1 hover:bg-white/30">下載</button>{canManage && <button onClick={() => updatePhoto(photo, photo.status === "hidden" ? "ready" : "hidden")} className="rounded bg-white/20 px-2 py-1 hover:bg-white/30">{photo.status === "hidden" ? "還原顯示" : "從相簿隱藏"}</button>}</div></article>)}</div>}
     </section>}
-    {active && !photosLoading && visibleCount < photos.length && <button type="button" className="my-4 rounded-full border px-5 py-3" onClick={() => setVisibleCount(count => count + 40)}>載入更多照片（已顯示 {Math.min(visibleCount, photos.length)} / {photos.length} 張）</button>}
+    {active && !photosLoading && visibleCount < photos.length && <div ref={loadMoreRef} className="my-4 text-center text-sm text-slate-500"><p role="status">往下滑會自動載入更多照片（已顯示 {Math.min(visibleCount, photos.length)} / {photos.length} 張）</p><details className="mt-2"><summary className="cursor-pointer">沒有自動載入？</summary><button type="button" className="mt-2 rounded-full border px-5 py-3" onClick={() => setVisibleCount(count => Math.min(count + 40, photos.length))}>載入更多照片</button></details></div>}
     {viewerIndex !== null && photos[viewerIndex] && <div ref={viewerRef} role="dialog" aria-modal="true" aria-label="照片瀏覽器" className="fixed inset-0 z-[100] flex flex-col bg-slate-950/95 text-white" onTouchStart={(event) => { touchStartXRef.current = event.touches[0]?.clientX ?? null; }} onTouchEnd={(event) => { const start = touchStartXRef.current; const end = event.changedTouches[0]?.clientX; touchStartXRef.current = null; if (start === null || end === undefined) return; if (start - end > 50) showNextPhoto(); if (end - start > 50) showPreviousPhoto(); }}>
       <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-3 sm:px-6"><p className="min-w-0 truncate text-sm text-slate-200"><span className="font-semibold text-white">{viewerIndex + 1} / {photos.length}</span><span className="ml-3 hidden sm:inline">{photos[viewerIndex].originalName}</span>{photos[viewerIndex].status === "hidden" && <span className="ml-3 rounded-full bg-amber-400/20 px-2 py-1 text-xs text-amber-200">一般同學看不到</span>}</p><div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => download(photos[viewerIndex])} className="min-h-11 rounded-full bg-white/10 px-4 text-sm font-semibold hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">下載</button><button ref={viewerCloseRef} type="button" onClick={closeViewer} className="flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-2xl hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="關閉照片瀏覽器">×</button></div></div>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-14 pb-4 sm:px-24"><AlbumPhotoImage key={photos[viewerIndex].id} photo={photos[viewerIndex]} refreshUrl={refreshPhotoUrl} className="max-h-full max-w-full select-none object-contain" />{photos.length > 1 && <><button type="button" onClick={showPreviousPhoto} className="absolute left-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:left-6" aria-label="上一張照片">‹</button><button type="button" onClick={showNextPhoto} className="absolute right-2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-3xl hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:right-6" aria-label="下一張照片">›</button></>}

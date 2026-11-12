@@ -25,11 +25,18 @@ await page.goto('http://127.0.0.1:4178/audit-upload');
 await page.getByText('大相簿',{exact:true}).click();
 await page.waitForFunction(()=>document.querySelector('article img')?.naturalWidth>0);
 assert.equal(await page.locator('article').count(),40);assert.ok(reads<=40);
-await page.getByRole('button',{name:/載入更多照片/}).click();
+await page.getByText(/往下滑會自動載入更多照片/).scrollIntoViewIfNeeded();
+await page.waitForFunction(()=>document.querySelectorAll('article').length===80);
 assert.equal(await page.locator('article').count(),80);
 await page.getByRole('button',{name:'瀏覽照片 1：photo0',exact:true}).click();
 await page.getByRole('dialog').waitFor();
 await page.getByRole('button',{name:'下一張照片',exact:true}).click();
+await page.getByRole('button',{name:'關閉照片瀏覽器'}).click();
+for(let count=80;count<677;count=Math.min(count+40,677)){
+ await page.getByText(/往下滑會自動載入更多照片/).scrollIntoViewIfNeeded();
+ await page.waitForFunction(n=>document.querySelectorAll('article').length===n,Math.min(count+40,677));
+}
+assert.equal(await page.getByText(/往下滑會自動載入更多照片/).count(),0);
 assert.deepEqual(errors,[]); console.log('PASS',width,'677 photos, 40/80 bounded cards, lazy URLs, viewer');
 await page.close();
 }} finally {await browser.close();}
